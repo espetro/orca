@@ -1,5 +1,6 @@
-import { opendir, readlink } from 'node:fs/promises'
+import { readlink } from 'node:fs/promises'
 import { posix } from 'node:path'
+import { OpenedDirectory } from './fs-opendir-scope'
 
 type LinuxProcSocketOwnerScannerDependencies = {
   readDirectoryNames: (directoryPath: string) => AsyncIterable<string>
@@ -7,12 +8,16 @@ type LinuxProcSocketOwnerScannerDependencies = {
 }
 
 async function* readNodeDirectoryNames(directoryPath: string): AsyncGenerator<string> {
+  // `await using` closes the handle even when the consumer breaks out of the
+  // for-await (the generator's return() runs disposal).
+  await using directory = await OpenedDirectory.open(directoryPath)
   try {
-    const directory = await opendir(directoryPath)
-    for await (const entry of directory) {
+    for await (const entry of directory.dir) {
       yield entry.name
     }
-  } catch {}
+  } catch {
+    // ignored
+  }
 }
 
 const defaultDependencies: LinuxProcSocketOwnerScannerDependencies = {
