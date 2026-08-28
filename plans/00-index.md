@@ -77,6 +77,15 @@ have zero maintainer replies) and external memory PRs sat 4+ days with no human 
 in flight BEFORE writing the PR; keep PRs small and independently mergeable; backchannel
 via X DM or neil@stably.ai if a PR stalls.
 
+## Patterns
+
+- `await using` is reserved for resource teardown (dir handles, locks, connections), never for
+  task supervision. TS 7 supports `using` / `await using`; verified via compiled probe.
+- Concurrency orchestration stays native: AbortController + `Promise.all` fail-fast. No custom
+  TaskGroup or structured-concurrency framework, no new dependencies (p-limit, p-map).
+- Renderer cleanup builds on the existing `DisposableStore` convention with `Symbol.dispose`,
+  not a parallel disposal mechanism or `FinalizationRegistry`.
+
 ## Measurement principles
 
 - SMART goals: each doc names a metric, a direction, and where it is sampled.

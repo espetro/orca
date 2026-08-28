@@ -78,10 +78,23 @@ Enforcement: new oxlint plugin (e.g. `no-raw-opendir.mjs`) in `config/oxlint-plu
 `fs.opendir` / `opendir(...)` imports and calls outside an allowlist containing exactly
 `src/shared/fs-opendir-scope.ts`.
 
+## Explicit resource management
+
+The repo now supports `using` / `await using` (TS 7, Electron 43; verified by compiling a probe).
+Internally, `withDir` / `listDirSafe` use `await using` over an AsyncDisposable wrapper for the
+handle teardown. The public callback API is unchanged, so every migrated call site remains a
+one-liner. For generator-shaped sites where the handle must survive across suspension, export a
+`DirScope`-style class implementing `Symbol.asyncDispose` so the site can hold it in a `try`
+block or hand it to an explicit scope.
+
 ## YAGNI
 
-- No generic `ResourceScope` / `ResourceT` monad or `using`-style abstraction. Two functions cover
-  the actual call sites.
+- No generic `ResourceScope` / `ResourceT` monad abstraction. Two functions plus a
+  `DirScope`-style class cover the actual call sites.
+- No TaskGroup or structured-concurrency framework. Fail-fast orchestration stays native
+  AbortController + `Promise.all`. Budget/cancellation dedup reuses existing AbortSignal
+  conventions (see `quick-open-readdir-budget.ts`). No new dependencies such as p-limit or
+  p-map; the repo does not depend on them today.
 - No new `readdir` API beyond what exists; we do not unify the relay and main workspace scans'
   injection interfaces, only their directory-iteration core.
 - No backpressure, pooling, or fd-count telemetry.

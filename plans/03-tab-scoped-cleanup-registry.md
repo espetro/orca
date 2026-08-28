@@ -61,6 +61,11 @@ Migration of the 10 registries happens in one PR: each module replaces direct ma
 registry calls, or keeps its map and registers a `dispose` that deletes its key. Behavior is
 unchanged for live tabs.
 
+The repo already has a `Disposable` / `DisposableStore` convention in the renderer (declared in
+`src/renderer/src/env.d.ts`). Registry entries should implement `Symbol.dispose` so they work
+with `DisposableStore.add()` today and with `using` adoption later; the registry itself dispatches
+on tab close rather than relying on scope exit. No `FinalizationRegistry`.
+
 Second PR: lint rule banning new module-level `*By(Tab|Leaf|Session|Worktree)Id` Maps outside an
 allowlist, so the pattern cannot regrow silently. Implemented as an oxlint plugin in
 `config/oxlint-plugins/` (four plugins already exist there as templates).
