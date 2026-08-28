@@ -173,6 +173,10 @@ export async function connectDockerSshRelayTarget(
         // rather than on anything a spec is about. Re-derive the live authority and retry; every
         // attempt still has to come back fully authoritative, so this widens when setup gives up,
         // never what it accepts.
+        //
+        // 60s is a conservative bound, not a measured settle time: nobody has timed the bounce.
+        // Every consumer of this helper pays it on the failing path, so size it down once the
+        // real settle time is known.
         const hydrationDeadline = Date.now() + 60_000
         let lastHydrationFailure = 'no hydration attempt was made'
         let worktreeId: string | null = null
