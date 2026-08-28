@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-23",
+  "updatedAt": "2026-08-28",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -16981,6 +16981,104 @@
         "The sentinel changes a pane title within an existing layout; concurrent split and close conflicts remain separate coverage."
       ],
       "demotionRule": "Demote if a failed push suppresses an identical retry, a successful equal write resumes redundant churn, or the routed observer journey flakes without a diagnosed cause."
+    },
+    {
+      "id": "fs-resource-lifetime.dir-handle-closure",
+      "title": "Directory handles are closed on every path including errors and cancellation",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "fs-resource-lifetime",
+      "layer": "shared-and-main-fs-iteration",
+      "surfaces": [
+        "grok session directory listing",
+        "skill plugin cache scan",
+        "skill package identity",
+        "clipboard remote file staging",
+        "daemon history reader"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Five directory-iteration sites close their opendir handle in a finally block, and the focused contracts above cover listing success and throw paths. The quick-open directory reader can still throw between opendir and its loop, and the Linux proc socket owner scanner relies on GC via a suspended async generator; those sites are not yet covered.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/12895"],
+      "invariant": "Every fs.opendir/opendirSync handle is closed via try/finally or a scoped helper on success, throw, early return, and consumer abort; garbage collection must never be the closer.",
+      "oracle": "Enumerate every directory-iteration site, require the handle to be released before the function returns or rejects regardless of outcome, and fail on any path where the descriptor outlives the iteration or closes only via GC.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/grok-session-paths.test.ts src/main/skills/skill-plugin-cache-scan.test.ts src/main/skills/skill-package-identity.test.ts src/main/window/clipboard-remote-file-staging-fs.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/history-reader-memory.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/shared/grok-session-paths.test.ts",
+        "src/main/skills/skill-plugin-cache-scan.test.ts",
+        "src/main/skills/skill-package-identity.test.ts",
+        "src/main/window/clipboard-remote-file-staging-fs.test.ts",
+        "src/main/daemon/history-reader.test.ts",
+        "src/main/daemon/history-reader-memory.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/grok-session-paths.test.ts",
+          "assertions": ["closes the directory handle when listing grok session paths completes or throws"]
+        },
+        {
+          "file": "src/main/skills/skill-plugin-cache-scan.test.ts",
+          "assertions": ["closes the directory handle when scanning plugin cache entries completes or throws"]
+        },
+        {
+          "file": "src/main/skills/skill-package-identity.test.ts",
+          "assertions": ["closes the directory handle when resolving package identity completes or throws"]
+        },
+        {
+          "file": "src/main/window/clipboard-remote-file-staging-fs.test.ts",
+          "assertions": ["closes the directory handle when staging remote clipboard files completes or throws"]
+        },
+        {
+          "file": "src/main/daemon/history-reader.test.ts",
+          "assertions": ["closes the directory handle when reading daemon history sessions completes or throws"]
+        },
+        {
+          "file": "src/main/daemon/history-reader-memory.test.ts",
+          "assertions": ["reading history does not retain directory handles across listing calls"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-28",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/grok-session-paths.test.ts src/main/skills/skill-plugin-cache-scan.test.ts src/main/skills/skill-package-identity.test.ts src/main/window/clipboard-remote-file-staging-fs.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/history-reader-memory.test.ts --reporter=dot",
+          "durationSeconds": 1,
+          "summary": "Six focused files passed 127 contracts across the five well-closed directory-iteration sites."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "six focused shared and main contracts covering the five well-closed sites"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The gate newly registers existing stable contracts; no route-specific CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "missing",
+        "evidence": "No red run yet; the covered sites already close in finally, so red/green requires a reverted-closure mutation or the not-yet-migrated gap sites."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Closing a handle in finally adds no extra syscalls on success paths and no polling or scanning."
+      },
+      "promotionCriteria": [
+        "Migrate the known-gap sites to a shared scoped-opendir helper and flip protection partial to active.",
+        "Collect CI soak history without unexplained flakes across macOS, Linux, and Windows."
+      ],
+      "knownGaps": [
+        "src/shared/quick-open-directory-reader.ts can throw between opendir and its iteration loop.",
+        "src/shared/linux-proc-socket-owner-scanner.ts relies on GC via a suspended async generator.",
+        "src/shared/node-markdown-document-discovery.ts, src/relay/workspace-space-scan.ts, src/main/workspace-space-local-scan.ts, src/main/warp-themes/theme-file-scanner.ts, and src/main/codex/codex-session-file-listing.ts are not yet asserted for explicit closure.",
+        "Promotion flips protection partial to active once a shared scoped-opendir helper migrates these sites."
+      ],
+      "demotionRule": "Demote if any covered site regresses to closing only via GC, or if a listed test file stops asserting handle closure on error paths."
     }
   ]
 }
