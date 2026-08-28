@@ -1,5 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 
+import type { DirectSshAuthority } from '../../../src/shared/ssh-types'
+
 import {
   DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -71,10 +73,49 @@ export async function connectDockerSshRelayTarget(
         labels.set(createdTarget.id, createdTarget.label)
         store.getState().setSshTargetLabels(labels)
         const executionHostId = `ssh:${encodeURIComponent(createdTarget.id)}` as const
-        const authority = {
-          targetId: createdTarget.id,
-          providerEpoch: state.providerEpoch,
-          connectionGeneration: state.connectionGeneration
+        const liveAuthority = (): DirectSshAuthority | null => {
+          const current = store.getState().sshConnectionStates.get(createdTarget.id)
+          const generation = current?.connectionGeneration
+          if (
+            current?.status !== 'connected' ||
+            !current.providerEpoch ||
+            typeof generation !== 'number' ||
+            !Number.isSafeInteger(generation) ||
+            generation < 0
+          ) {
+            return null
+          }
+          return {
+            targetId: createdTarget.id,
+            providerEpoch: current.providerEpoch,
+            connectionGeneration: generation
+          }
+        }
+        const waitForLiveAuthority = async (
+          deadline: number
+        ): Promise<DirectSshAuthority | null> => {
+          const immediate = liveAuthority()
+          if (immediate) {
+            return immediate
+          }
+          return await new Promise<DirectSshAuthority | null>((resolve) => {
+            const timer = window.setTimeout(
+              () => {
+                unsubscribe()
+                resolve(null)
+              },
+              Math.max(0, deadline - Date.now())
+            )
+            const unsubscribe = store.subscribe(() => {
+              const next = liveAuthority()
+              if (!next) {
+                return
+              }
+              window.clearTimeout(timer)
+              unsubscribe()
+              resolve(next)
+            })
+          })
         }
 
         const result = await window.api.repos.addRemote({
@@ -122,46 +163,63 @@ export async function connectDockerSshRelayTarget(
         }
         await store.getState().fetchRepos()
         await waitForRepoOwner()
-        const currentState = store.getState().sshConnectionStates.get(createdTarget.id)
-        if (
-          currentState?.providerEpoch !== authority.providerEpoch ||
-          currentState.connectionGeneration !== authority.connectionGeneration
-        ) {
-          throw new Error(`SSH authority rotated before worktree hydration for ${result.repo.path}`)
+
+        // Why hydration loops instead of sampling once: deploying the relay bounces the SSH
+        // transport on this fixture, and a listing issued while the target reads back as
+        // reconnecting resolves no authority at all -- fetchWorktrees then writes nothing and the
+        // caller sees an empty list. Wait for the transport to report a live authority, hydrate
+        // against that one, and re-derive if it rotated mid-flight, so setup finishes on the
+        // condition specs depend on rather than on the transport happening to hold still.
+        const hydrationDeadline = Date.now() + 60_000
+        let lastHydrationFailure = 'no hydration attempt was made'
+        let worktreeId: string | null = null
+        while (!worktreeId && Date.now() < hydrationDeadline) {
+          const authority = await waitForLiveAuthority(hydrationDeadline)
+          if (!authority) {
+            lastHydrationFailure = 'SSH target never reported a connected authority'
+            break
+          }
+          const worktreeResult = await store.getState().fetchWorktrees(result.repo.id, {
+            executionHostId,
+            directSshAuthority: authority,
+            requireAuthoritative: true
+          })
+          if (
+            worktreeResult.status !== 'complete' ||
+            worktreeResult.repoId !== result.repo.id ||
+            worktreeResult.authority.kind !== 'direct-ssh' ||
+            worktreeResult.authority.executionHostId !== executionHostId ||
+            worktreeResult.authority.targetId !== authority.targetId ||
+            worktreeResult.authority.providerEpoch !== authority.providerEpoch ||
+            worktreeResult.authority.connectionGeneration !== authority.connectionGeneration
+          ) {
+            lastHydrationFailure = `worktree hydration was not authoritative: ${JSON.stringify(worktreeResult)}`
+            await new Promise((resolve) => window.setTimeout(resolve, 250))
+            continue
+          }
+          worktreeId =
+            (store.getState().worktreesByRepo[result.repo.id] ?? []).find(
+              (candidate) => candidate.hostId === executionHostId
+            )?.id ?? null
+          if (!worktreeId) {
+            lastHydrationFailure = `authoritative listing carried no ${executionHostId} worktree`
+            await new Promise((resolve) => window.setTimeout(resolve, 250))
+          }
         }
-        const worktreeResult = await store.getState().fetchWorktrees(result.repo.id, {
-          executionHostId,
-          directSshAuthority: authority,
-          requireAuthoritative: true
-        })
-        if (
-          worktreeResult.status !== 'complete' ||
-          worktreeResult.repoId !== result.repo.id ||
-          worktreeResult.authority.kind !== 'direct-ssh' ||
-          worktreeResult.authority.executionHostId !== executionHostId ||
-          worktreeResult.authority.targetId !== authority.targetId ||
-          worktreeResult.authority.providerEpoch !== authority.providerEpoch ||
-          worktreeResult.authority.connectionGeneration !== authority.connectionGeneration
-        ) {
+        if (!worktreeId) {
           throw new Error(
-            `Remote worktree hydration was not authoritative: ${JSON.stringify(worktreeResult)}`
+            `No remote worktree found for ${result.repo.path}: ${lastHydrationFailure}`
           )
         }
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? []).find(
-          (candidate) => candidate.hostId === executionHostId
-        )
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if (seedInitialTab && (store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
+        store.getState().setActiveWorktree(worktreeId)
+        if (seedInitialTab && (store.getState().tabsByWorktree[worktreeId] ?? []).length === 0) {
+          store.getState().createTab(worktreeId)
         }
         store.getState().setActiveTabType('terminal')
         return {
           targetId: createdTarget.id,
           repoId: result.repo.id,
-          worktreeId: worktree.id
+          worktreeId
         }
       } finally {
         credentialUnsub()
