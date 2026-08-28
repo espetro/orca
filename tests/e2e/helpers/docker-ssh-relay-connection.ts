@@ -164,12 +164,12 @@ export async function connectDockerSshRelayTarget(
         await store.getState().fetchRepos()
         await waitForRepoOwner()
 
-        // Why hydration loops instead of sampling once: deploying the relay bounces the SSH
-        // transport on this fixture, and a listing issued while the target reads back as
-        // reconnecting resolves no authority at all -- fetchWorktrees then writes nothing and the
-        // caller sees an empty list. Wait for the transport to report a live authority, hydrate
-        // against that one, and re-derive if it rotated mid-flight, so setup finishes on the
-        // condition specs depend on rather than on the transport happening to hold still.
+        // Why hydration loops instead of sampling once: something in setup bounces the SSH
+        // transport on this fixture (cause unknown), and a listing whose authority rotates
+        // mid-flight comes back stale rather than complete, so one sample fails on fixture timing
+        // rather than on anything a spec is about. Re-derive the live authority and retry; every
+        // attempt still has to come back fully authoritative, so this widens when setup gives up,
+        // never what it accepts.
         const hydrationDeadline = Date.now() + 60_000
         let lastHydrationFailure = 'no hydration attempt was made'
         let worktreeId: string | null = null
