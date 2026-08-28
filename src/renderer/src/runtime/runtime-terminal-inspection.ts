@@ -10,20 +10,17 @@ import {
 } from './runtime-terminal-stream'
 import {
   inspectRuntimeTerminalProcess,
-  isTerminalGoneError
+  isTerminalGoneError,
+  type RuntimeTerminalProcessInspection
 } from './runtime-terminal-process-inspection'
 
 // Why: the inspection read moved to a store-free module so the cleanup store can
 // call it without a store->runtime import cycle. Re-exported so callers keep one
 // import site.
 export { inspectRuntimeTerminalProcess }
-
-export type RuntimeTerminalProcessInspection = {
-  foregroundProcess: string | null
-  hasChildProcesses: boolean
-  // Why: callers must not treat a stale remote handle as authoritative idle evidence.
-  unavailable?: true
-}
+// Why re-exported: the type now lives with the function in the leaf module, but many
+// callers still import it from here.
+export type { RuntimeTerminalProcessInspection }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const

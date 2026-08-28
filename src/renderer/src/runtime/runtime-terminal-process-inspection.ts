@@ -1,10 +1,16 @@
 import { RuntimeRpcCallError, callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeTerminalProcessInspection } from './runtime-terminal-inspection'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from './runtime-terminal-stream'
+
+export type RuntimeTerminalProcessInspection = {
+  foregroundProcess: string | null
+  hasChildProcesses: boolean
+  // Why: callers must not treat a stale remote handle as authoritative idle evidence.
+  unavailable?: true
+}
 
 export function isTerminalGoneError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
