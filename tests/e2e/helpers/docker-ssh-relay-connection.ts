@@ -99,20 +99,23 @@ export async function connectDockerSshRelayTarget(
             return immediate
           }
           return await new Promise<DirectSshAuthority | null>((resolve) => {
+            // Hoisted so the timeout arm cannot depend on the subscribe call having been
+            // evaluated first; today it always has, but the arm only runs on failure.
+            let unsubscribe: (() => void) | undefined
             const timer = window.setTimeout(
               () => {
-                unsubscribe()
+                unsubscribe?.()
                 resolve(null)
               },
               Math.max(0, deadline - Date.now())
             )
-            const unsubscribe = store.subscribe(() => {
+            unsubscribe = store.subscribe(() => {
               const next = liveAuthority()
               if (!next) {
                 return
               }
               window.clearTimeout(timer)
-              unsubscribe()
+              unsubscribe?.()
               resolve(next)
             })
           })
