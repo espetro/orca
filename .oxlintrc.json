@@ -17,6 +17,10 @@
     {
       "name": "renderer-scrollbar-style",
       "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
+    },
+    {
+      "name": "fs-opendir-boundary",
+      "specifier": "./config/oxlint-plugins/no-raw-opendir.mjs"
     }
   ],
   "categories": {
@@ -91,6 +95,7 @@
         ]
       }
     ],
+    "fs-opendir-boundary/no-raw-opendir": "error",
     "mobile-pairing/no-eager-qrcode-import": "error",
     "no-useless-return": "error",
     "prefer-template": "error",
