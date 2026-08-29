@@ -1,4 +1,6 @@
+import type { BrowserWindow } from 'electron'
 import { app } from 'electron'
+import { startMemoryPressureMonitor } from '../memory/memory-pressure-monitor'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -320,4 +322,45 @@ export function enableMainProcessGpuFeatures(): void {
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
   }
+}
+
+/**
+ * Memory-pressure response for the main process (candidate C2, fix F5).
+ *
+ * Polls host memory availability and, under system pressure (or when the
+ * user minimizes a window), clears the cache of background Electron
+ * sessions and emits a 'memory-pressure' signal other modules can
+ * subscribe to. Partition visibility isn't tracked centrally yet, so all
+ * sessions are treated as background (caches are regenerable; clearing is
+ * the safe direction under pressure).
+ */
+export function startMemoryPressureResponse(getWindows: () => BrowserWindow[]): void {
+  const monitor = startMemoryPressureMonitor({
+    listSessions: () =>
+      getWindows()
+        .filter((win) => !win.isDestroyed())
+        .flatMap((win) => {
+          const views = win.getBrowserViews()
+          const contents: { clearCache: () => Promise<void>; visible: boolean }[] = []
+          for (const view of views) {
+            contents.push({
+              clearCache: () => view.webContents.session.clearCache(),
+              visible: !win.isMinimized()
+            })
+          }
+          if (win.webContents?.session) {
+            contents.push({
+              clearCache: () => win.webContents.session.clearCache(),
+              visible: !win.isMinimized()
+            })
+          }
+          return contents
+        })
+  })
+
+  app.on('browser-window-created', (_event, win) => {
+    win.on('minimize', () => {
+      void monitor.purgeForMinimize()
+    })
+  })
 }
