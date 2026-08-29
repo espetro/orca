@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
@@ -12,10 +12,12 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
-runPnpmScript('build:computer-macos')
-runPnpmScript('build:keyboard-layout-macos')
-runPnpmScript('build:notification-status-macos')
-process.exit(0)
+const exitCodes = await Promise.all(
+  ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
+    (scriptName) => runPnpmScript(scriptName)
+  )
+)
+process.exit(Math.max(...exitCodes))
 
 function runPnpmScript(scriptName) {
   // npm_execpath is a JS entry under npm but the @pnpm/exe Mach-O binary under
@@ -34,14 +36,18 @@ function runPnpmScript(scriptName) {
     command = process.execPath
     args = [npmExecPath, 'run', scriptName]
   }
-  const result = spawnSync(command, args, { stdio: 'inherit' })
+  const child = spawn(command, args, { stdio: 'inherit' })
 
-  if (result.signal) {
-    process.kill(process.pid, result.signal)
-  }
-  if (result.status !== 0 || result.error) {
-    process.exit(result.status ?? 1)
-  }
+  return new Promise((resolve) => {
+    child.on('error', () => resolve(1))
+    child.on('close', (code, signal) => {
+      if (signal) {
+        child.kill(signal)
+        process.kill(process.pid, signal)
+      }
+      resolve(code ?? 1)
+    })
+  })
 }
 
 function runNodeScript(scriptPath) {
