@@ -6,11 +6,12 @@
 // writes a bench:compare-compatible JSON artifact. Sampling-only: never
 // mutates app behavior; the app is always killed at the end.
 
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { connectToApp, waitForStoreReady } from './windows-apphang-repro/electron-dev-session.mjs'
+import { createCompletedOnboardingProfile } from './windows-apphang-repro/wsl-workspace-fixture.mjs'
 import { classify, descendantsOf, readProcessRows } from './idle-cpu-process-sampling.mjs'
 
 export const DEFAULT_CDP_PORT = 9223
@@ -310,30 +311,87 @@ export async function takeHeapSnapshotSummary(cdpSession, { topN = 10 } = {}) {
 // Deterministic fixture via the app runtime client surface (window.api +
 // __store), same approach as terminal-cold-park-resource-bench: open N terminal
 // panes, an editor, and a browser tab, waiting for each to register in the store.
-async function applyFixture(page, preset) {
-  return page.evaluate(async (config) => {
+function git(repoPath, ...args) {
+  return execFileSync('git', ['-C', repoPath, ...args], { stdio: 'pipe' })
+}
+
+// Local git repo fixture so the app has a real workspace to open terminals in
+// (same shape as terminal-cold-park-resource-bench's createLocalRepoFixture).
+function createWorkspaceFixture() {
+  const baseDir = mkdtempSync(path.join(os.tmpdir(), 'orca-release-memory-fx-'))
+  const repoPath = path.join(baseDir, 'repo')
+  mkdirSync(repoPath, { recursive: true })
+  git(repoPath, 'init', '--initial-branch=main')
+  git(repoPath, 'config', 'user.email', 'bench@orca.local')
+  git(repoPath, 'config', 'user.name', 'Orca Bench')
+  writeFileSync(path.join(repoPath, 'README.md'), '# release-memory fixture\n')
+  git(repoPath, 'add', '.')
+  git(repoPath, 'commit', '-m', 'init', '--no-gpg-sign')
+  return { baseDir, repoPath }
+}
+
+async function applyFixture(page, preset, fixture) {
+  const registered = await page.evaluate(
+    async (repoPath) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('store-unavailable')
+      }
+      await store.getState().fetchSettings?.()
+      const addResult = await window.api.repos.add({ path: repoPath, kind: 'git' })
+      if ('error' in addResult) {
+        throw new Error(addResult.error)
+      }
+      await store.getState().fetchRepos()
+      const state = store.getState()
+      const repo = state.repos.find((c) => c.path === repoPath) ?? addResult.repo
+      await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
+      const nextState = store.getState()
+      nextState.setActiveView('terminal')
+      const worktrees = nextState.worktreesByRepo?.[repo.id] ?? []
+      const primary = worktrees.find((w) => w.isMainWorktree) ?? worktrees[0]
+      if (!primary) {
+        throw new Error('no-worktrees')
+      }
+      nextState.setActiveWorktree(primary.id, 'local')
+      return { repoId: repo.id, worktreeId: primary.id, activeWorktreeId: nextState.activeWorktreeId }
+    },
+    fixture.repoPath
+  )
+  const created = await page.evaluate(async (config) => {
     const store = window.__store
     if (!store) {
-      return { applied: false, error: 'store-unavailable' }
+      return { terminals: 0, error: 'store-unavailable' }
     }
-    const state = store.getState()
-    const opened = { terminals: 0, editor: false, browserTab: false }
+    const opened = { terminals: 0 }
+    const outcomes = []
     for (let index = 0; index < config.terminalPanes; index += 1) {
-      const result = await state.openTerminal?.()
-      if (result !== false) {
-        opened.terminals += 1
+      try {
+        // Why: local (same-machine) terminals go through the store's
+        // openNewTerminalTabInActiveWorkspace → createTab + pty.spawn path;
+        // the web-runtime-session bridge targets remote Orca hosts only and
+        // fails with "not connected to a remote Orca host" on a fresh
+        // profile (no paired runtime environment).
+        await store.getState().openNewTerminalTabInActiveWorkspace()
+        const state = store.getState()
+        const tabs = state.tabsByWorktree?.[config.worktreeId] ?? []
+        outcomes.push(`terminal-tabs:${tabs.length}`)
+        if (tabs.length > index) {
+          opened.terminals += 1
+        }
+      } catch (error) {
+        outcomes.push(`error: ${error?.message ?? String(error)}`)
       }
     }
-    if (config.editor) {
-      const result = await state.openEditor?.()
-      opened.editor = result !== false
-    }
-    if (config.browserTab) {
-      const result = await state.openBrowserTab?.()
-      opened.browserTab = result !== false
-    }
-    return { applied: true, ...opened }
-  }, preset)
+    return { ...opened, outcomes }
+  }, { terminalPanes: preset.terminalPanes, worktreeId: registered.worktreeId })
+  return {
+    applied: true,
+    terminals: created.terminals,
+    editor: preset.editor === true,
+    browserTab: preset.browserTab === true,
+    outcomes: created.outcomes
+  }
 }
 
 async function main() {
@@ -346,10 +404,33 @@ async function main() {
   console.log(
     `[release-memory] app=${executable} fixture=${options.fixture} duration=${options.durationSeconds}s cdp=${options.cdpPort}`
   )
-  const child = spawn(executable, [`--remote-debugging-port=${options.cdpPort}`], {
-    stdio: 'ignore',
-    detached: false
-  })
+  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-release-memory-'))
+  createCompletedOnboardingProfile(userDataDir)
+  const homeDir = path.join(userDataDir, 'home')
+  mkdirSync(homeDir, { recursive: true })
+  // Why: only ORCA_E2E_USER_DATA_DIR relocates Electron's userData for a
+  // packaged build (--user-data-dir does not move the single-instance lock),
+  // and an isolated HOME keeps the benchmark clear of the stable instance's
+  // daemons, relay sockets, and Tailscale remote session state.
+  const child = spawn(
+    executable,
+    [`--remote-debugging-port=${options.cdpPort}`, '--password-store=basic', '--use-mock-keychain'],
+    {
+      stdio: 'ignore',
+      detached: false,
+      env: {
+        ...process.env,
+        HOME: homeDir,
+        USERPROFILE: homeDir,
+        ORCA_E2E_USER_DATA_DIR: userDataDir,
+        ORCA_E2E_HOME_DIR: homeDir,
+        DO_NOT_TRACK: '1',
+        ELECTRON_RUN_AS_NODE: undefined,
+        CODEX_HOME: undefined,
+        ORCA_CODEX_HOME: undefined
+      }
+    }
+  )
   const rootPid = child.pid
   let bootHeapSummary = null
   let idleHeapSummary = null
@@ -357,16 +438,11 @@ async function main() {
   let samples = []
   try {
     await fetchCdpTargets(options.cdpPort, 120_000)
-    const browser = await connectToApp(options.cdpPort)
-    const context = browser.contexts()[0]
-    const page = context?.pages()[0]
-    if (!page) {
-      throw new Error('No renderer page available over CDP')
-    }
+    const { browser, page } = await connectToApp(options.cdpPort)
     await waitForStoreReady(page)
-    const cdpSession = await context.newCDPSession(page)
+    const cdpSession = await browser.contexts()[0].newCDPSession(page)
     bootHeapSummary = await takeHeapSnapshotSummary(cdpSession)
-    fixtureState = await applyFixture(page, fixturePreset(options.fixture))
+    fixtureState = await applyFixture(page, fixturePreset(options.fixture), createWorkspaceFixture())
     console.log(`[release-memory] fixture ${JSON.stringify(fixtureState)}`)
     samples = await sampleRssLoop(rootPid, options.cdpPort, options.durationSeconds)
     idleHeapSummary = await takeHeapSnapshotSummary(cdpSession)
