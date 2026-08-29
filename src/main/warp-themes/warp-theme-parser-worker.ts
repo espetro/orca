@@ -3,6 +3,7 @@ import { parseWarpThemeYaml } from './parser'
 import type { ParseWarpThemeOptions } from './parser'
 
 const data = workerData as {
+  id?: unknown
   content?: unknown
   fileLabel?: unknown
   options?: unknown
@@ -14,10 +15,12 @@ if (!parentPort) {
   throw new Error('Warp theme parser worker must run with a parent port.')
 }
 
-parentPort.postMessage(
-  parseWarpThemeYaml(
-    typeof data.content === 'string' ? data.content : '',
-    typeof data.fileLabel === 'string' ? data.fileLabel : 'theme.yaml',
-    options
-  )
+const request = typeof data.id === 'number' ? { id: data.id } : {}
+
+const result = parseWarpThemeYaml(
+  typeof data.content === 'string' ? data.content : '',
+  typeof data.fileLabel === 'string' ? data.fileLabel : 'theme.yaml',
+  options
 )
+
+parentPort.postMessage({ ...request, result })
