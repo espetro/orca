@@ -106,8 +106,8 @@ const winSpeechNativeResource = {
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: process.env.ORCA_PRODUCT_NAME || 'Orca',
+  protocols: [{ name: process.env.ORCA_PRODUCT_NAME || 'Orca', schemes: ['orca'] }],
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion
@@ -327,7 +327,7 @@ module.exports = {
     }
   },
   win: {
-    executableName: 'Orca',
+    executableName: process.env.ORCA_PRODUCT_NAME || 'Orca',
     // Why: Windows installers are signed after electron-builder packaging by
     // SignPath, so the packager cannot infer the updater publisherName.
     //
