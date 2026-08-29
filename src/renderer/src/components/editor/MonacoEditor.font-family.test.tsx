@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
@@ -19,6 +19,14 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
+vi.mock('@/lib/monaco-lazy', () => {
+  const monaco = { editor: {} }
+  return {
+    ensureMonaco: () => Promise.resolve(monaco),
+    getLoadedMonaco: () => monaco,
+    requireLoadedMonaco: () => monaco
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -65,7 +73,7 @@ afterEach(() => {
 })
 
 describe('MonacoEditor font family', () => {
-  it('follows the terminal font when no editor font override is set', () => {
+  it('follows the terminal font when no editor font override is set', async () => {
     storeState.current = {
       theme: 'dark',
       terminalFontSize: 13,
@@ -73,11 +81,13 @@ describe('MonacoEditor font family', () => {
       editorFontFamily: ''
     }
     renderEditor()
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
     const options = editorProps.current?.options as Record<string, unknown> | undefined
     expect(options?.fontFamily).toBe('D2Coding Nerd Font Mono')
   })
 
-  it('uses the opt-in editor font override instead of the terminal font', () => {
+  it('uses the opt-in editor font override instead of the terminal font', async () => {
     storeState.current = {
       theme: 'dark',
       terminalFontSize: 13,
@@ -85,6 +95,8 @@ describe('MonacoEditor font family', () => {
       editorFontFamily: 'D2Coding Nerd Font'
     }
     renderEditor()
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
     const options = editorProps.current?.options as Record<string, unknown> | undefined
     expect(options?.fontFamily).toBe('D2Coding Nerd Font')
   })

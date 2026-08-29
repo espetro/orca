@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
+import { useMonaco } from './use-monaco'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -70,6 +71,9 @@ export function DiffSectionBody({
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+  // Why: Monaco loads on demand (F3); DiffEditor mounts only once ready so
+  // loader.config always runs before @monaco-editor/react resolves it.
+  const monacoModule = useMonaco()
 
   return (
     <div
@@ -170,6 +174,12 @@ export function DiffSectionBody({
                 }
               : undefined
           }
+        />
+      ) : monacoModule === null ? (
+        <div
+          className="h-full w-full bg-muted/10"
+          style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
+          aria-hidden="true"
         />
       ) : (
         <DiffEditor

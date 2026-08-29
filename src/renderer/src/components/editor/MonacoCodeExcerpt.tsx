@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { monaco } from '@/lib/monaco-setup'
+import { useMonaco } from './use-monaco'
+import type { MonacoModule } from '@/lib/monaco-lazy'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
@@ -7,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 
-async function ensureColorizationLanguage(language: string): Promise<void> {
+async function ensureColorizationLanguage(monaco: MonacoModule, language: string): Promise<void> {
   if (language !== 'python') {
     return
   }
@@ -28,6 +29,25 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
       }
     )
   await pythonLanguageRegistrationPromise
+}
+
+function colorizeExcerpt(
+  monaco: MonacoModule,
+  code: string,
+  language: string,
+  lines: string[],
+  isCancelled: () => boolean,
+  onHtml: (htmlLines: string[]) => void
+): void {
+  void ensureColorizationLanguage(monaco, language)
+    .catch(() => undefined)
+    .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
+    .then((html) => {
+      if (isCancelled()) {
+        return
+      }
+      onHtml(html.split('<br/>').slice(0, lines.length))
+    })
 }
 
 type MonacoCodeExcerptProps = {
@@ -55,14 +75,20 @@ export default function MonacoCodeExcerpt({
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
+  const monaco = useMonaco()
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    if (monaco) {
+      monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    }
+  }, [monaco, isDark])
 
   useEffect(() => {
     if (lines.length === 0) {
       setHtmlLines([])
+      return
+    }
+    if (!monaco) {
       return
     }
 
@@ -70,21 +96,12 @@ export default function MonacoCodeExcerpt({
     // Why: notebook languages like Python are loaded lazily by Monaco. The
     // async colorizer waits for that tokenizer; colorizeModelLine can render
     // only default-token spans if called before the contribution finishes.
-    void ensureColorizationLanguage(language)
-      .catch(() => undefined)
-      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
-      .then((html) => {
-        if (cancelled) {
-          return
-        }
-        const nextLines = html.split('<br/>').slice(0, lines.length)
-        setHtmlLines(nextLines)
-      })
+    colorizeExcerpt(monaco, code, language, lines, () => cancelled, setHtmlLines)
 
     return () => {
       cancelled = true
     }
-  }, [code, language, lines])
+  }, [monaco, code, language, lines])
 
   return (
     <div

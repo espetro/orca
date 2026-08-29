@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
@@ -14,7 +14,14 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
-vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
+vi.mock('@/lib/monaco-lazy', () => {
+  const monaco = { editor: {} }
+  return {
+    ensureMonaco: () => Promise.resolve(monaco),
+    getLoadedMonaco: () => monaco,
+    requireLoadedMonaco: () => monaco
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -46,7 +53,7 @@ afterEach(() => {
 })
 
 describe('AutomationEditorPromptEditor', () => {
-  it('owns content through defaultValue so Monaco keeps undo history', () => {
+  it('owns content through defaultValue so Monaco keeps undo history', async () => {
     render(
       <AutomationEditorPromptEditor
         value="weekly audit"
@@ -55,6 +62,8 @@ describe('AutomationEditorPromptEditor', () => {
         onChange={vi.fn()}
       />
     )
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
 
     expect(editorProps.current?.defaultValue).toBe('weekly audit')
     expect(editorProps.current).not.toHaveProperty('value')
@@ -64,7 +73,7 @@ describe('AutomationEditorPromptEditor', () => {
     ).toBe('Prompt placeholder')
   })
 
-  it('installs find and syncs an external rewrite after mount', () => {
+  it('installs find and syncs an external rewrite after mount', async () => {
     const editorInstance = {
       getContainerDomNode: () => document.createElement('div'),
       onDidDispose: vi.fn()
@@ -77,6 +86,8 @@ describe('AutomationEditorPromptEditor', () => {
         onChange={vi.fn()}
       />
     )
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
 
     const onMount = editorProps.current?.onMount as (editor: typeof editorInstance) => void
     onMount(editorInstance)
@@ -96,7 +107,7 @@ describe('AutomationEditorPromptEditor', () => {
     expect(syncContentUpdate).toHaveBeenCalledWith(editorInstance, 'from template')
   })
 
-  it('dismisses on Escape only when find is closed', () => {
+  it('dismisses on Escape only when find is closed', async () => {
     const onDismiss = vi.fn()
     const editorDom = document.createElement('div')
     const editorInstance = {
@@ -112,6 +123,8 @@ describe('AutomationEditorPromptEditor', () => {
         onDismiss={onDismiss}
       />
     )
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
     const onMount = editorProps.current?.onMount as (editor: typeof editorInstance) => void
     onMount(editorInstance)
 
@@ -126,7 +139,7 @@ describe('AutomationEditorPromptEditor', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('does not render a custom placeholder overlay on an empty prompt', () => {
+  it('does not render a custom placeholder overlay on an empty prompt', async () => {
     const { container } = render(
       <AutomationEditorPromptEditor
         value=""
@@ -135,6 +148,8 @@ describe('AutomationEditorPromptEditor', () => {
         onChange={vi.fn()}
       />
     )
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
 
     expect(container.textContent).not.toContain('Prompt placeholder')
     expect(
@@ -176,7 +191,7 @@ describe('AutomationEditorPromptEditor', () => {
     background.remove()
   })
 
-  it('forwards typed edits to the draft', () => {
+  it('forwards typed edits to the draft', async () => {
     const onChange = vi.fn()
     render(
       <AutomationEditorPromptEditor
@@ -186,6 +201,8 @@ describe('AutomationEditorPromptEditor', () => {
         onChange={onChange}
       />
     )
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
 
     const handleChange = editorProps.current?.onChange as (value: string) => void
     handleChange('typed prompt')

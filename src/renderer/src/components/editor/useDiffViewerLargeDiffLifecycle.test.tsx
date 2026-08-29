@@ -19,7 +19,11 @@ const monacoFixture = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/lib/monaco-setup', () => ({ monaco: monacoFixture.monaco }))
+vi.mock('@/lib/monaco-lazy', () => ({
+  requireLoadedMonaco: () => monacoFixture.monaco,
+  getLoadedMonaco: () => monacoFixture.monaco,
+  ensureMonaco: () => Promise.resolve(monacoFixture.monaco)
+}))
 
 import { getDiffViewerMonacoModelPaths } from './diff-monaco-model-disposal'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'

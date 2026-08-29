@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { requireLoadedMonaco } from '@/lib/monaco-lazy'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
@@ -122,7 +122,9 @@ export function DiffSectionItem({
         left: modifiedEditor
           ? (getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current) ?? undefined)
           : undefined,
-        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
+        lineHeight: modifiedEditor
+          ? modifiedEditor.getOption(requireLoadedMonaco().editor.EditorOption.lineHeight)
+          : 0
       }),
     onDeleteComment: (id) => {
       if (worktreeId) {
@@ -139,7 +141,9 @@ export function DiffSectionItem({
       return
     }
     const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      const lineHeight = modifiedEditor.getOption(
+        requireLoadedMonaco().editor.EditorOption.lineHeight
+      )
       const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
       if (top == null) {
         setPopover(null)

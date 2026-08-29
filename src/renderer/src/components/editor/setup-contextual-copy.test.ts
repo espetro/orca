@@ -6,15 +6,15 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   formatShortcutLabel: () => 'Copy Context'
 }))
 
-vi.mock('@/lib/monaco-setup', () => ({
-  monaco: {
+vi.mock('@/lib/monaco-lazy', () => ({
+  requireLoadedMonaco: () => ({
     editor: {
       ContentWidgetPositionPreference: {
         ABOVE: 1,
         BELOW: 2
       }
     }
-  }
+  })
 }))
 
 vi.mock('@/store', () => ({
