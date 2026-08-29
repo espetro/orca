@@ -54,6 +54,26 @@ class SyncDatabase {
       readOnly: options.readonly,
       timeout: options.timeout
     })
+    if (!options.readonly && path !== ':memory:') {
+      this.applyMemoryPragmas()
+    }
+  }
+
+  // Why (C4/F2): node:sqlite defaults let the page cache grow unbounded per open DB;
+  // WAL plus a hard cache cap keeps the main-process footprint predictable.
+  private applyMemoryPragmas(): void {
+    try {
+      this.db.exec('PRAGMA journal_mode = WAL')
+    } catch {
+      // WAL needs a -wal/-shm pair the volume can host; network/9p shares cannot,
+      // so fall through with the default journal instead of failing the open.
+    }
+    try {
+      this.db.exec('PRAGMA mmap_size = 268435456')
+    } catch {
+      // mmap is an optimization only; ignore filesystems that refuse it.
+    }
+    this.db.exec('PRAGMA cache_size = -8000')
   }
 
   exec(sql: string): void {
