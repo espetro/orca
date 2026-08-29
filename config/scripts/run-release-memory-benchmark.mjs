@@ -359,20 +359,28 @@ async function applyFixture(page, preset, fixture) {
     fixture.repoPath
   )
   const created = await page.evaluate(async (config) => {
-    const bridge = window.__webRuntimeSessionE2E
-    if (!bridge) {
-      return { terminals: 0, error: 'terminal-bridge-unavailable' }
+    const store = window.__store
+    if (!store) {
+      return { terminals: 0, error: 'store-unavailable' }
     }
     const opened = { terminals: 0 }
     const outcomes = []
     for (let index = 0; index < config.terminalPanes; index += 1) {
-      const outcome = await bridge.createTerminal({
-        environmentId: null,
-        worktreeId: config.worktreeId
-      })
-      outcomes.push(outcome?.status ? (outcome.message ? `${outcome.status}: ${outcome.message}` : outcome.status) : String(outcome))
-      if (outcome?.status === 'created') {
-        opened.terminals += 1
+      try {
+        // Why: local (same-machine) terminals go through the store's
+        // openNewTerminalTabInActiveWorkspace → createTab + pty.spawn path;
+        // the web-runtime-session bridge targets remote Orca hosts only and
+        // fails with "not connected to a remote Orca host" on a fresh
+        // profile (no paired runtime environment).
+        await store.getState().openNewTerminalTabInActiveWorkspace()
+        const state = store.getState()
+        const tabs = state.tabsByWorktree?.[config.worktreeId] ?? []
+        outcomes.push(`terminal-tabs:${tabs.length}`)
+        if (tabs.length > index) {
+          opened.terminals += 1
+        }
+      } catch (error) {
+        outcomes.push(`error: ${error?.message ?? String(error)}`)
       }
     }
     return { ...opened, outcomes }
