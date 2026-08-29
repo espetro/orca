@@ -131,6 +131,7 @@
     "bench:wsl-hook-relay-reattach": "pnpm run build:relay && node config/scripts/wsl-hook-relay-reattach-benchmark.mjs",
     "bench:wsl-git-shell": "node config/scripts/wsl-git-shell-benchmark.mjs",
     "bench:hang-watchdog-memory": "pnpm run ensure:electron-runtime && node config/scripts/hang-watchdog-memory-benchmark.mjs",
+    "bench:release-memory": "pnpm run ensure:electron-runtime && node config/scripts/run-release-memory-benchmark.mjs",
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/main-thread-jank-bench.mjs",
     "bench:worktree-deletion": "node tests/tools/benchmarks/worktree-deletion-dev-bench.mjs",
     "bench:zustand-selector-fanout": "node config/scripts/zustand-selector-fanout-benchmark.mjs",
