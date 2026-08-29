@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { monaco } from '@/lib/monaco-setup'
+import { requireLoadedMonaco } from '@/lib/monaco-lazy'
+import type { MonacoModule } from '@/lib/monaco-lazy'
 import { disposeUnattachedMonacoModelPaths } from './diff-monaco-model-disposal'
+
+// Why: model disposal runs only after diff editors have mounted (their models
+// exist), so Monaco is guaranteed loaded; requireLoadedMonaco stays sync.
+const monaco = (): MonacoModule => requireLoadedMonaco()
 
 // Why: virtualized section rows own Monaco model paths for their lifetime;
 // dispose on unmount/collapse so remounts do not leak detached models.
@@ -13,7 +18,7 @@ export function useDiffSectionModelLifecycle(params: {
 } {
   const disposeDiffModels = useCallback(() => {
     window.setTimeout(() => {
-      disposeUnattachedMonacoModelPaths(monaco, [
+      disposeUnattachedMonacoModelPaths(monaco(), [
         `${params.modelPathBase}:original`,
         `${params.modelPathBase}:modified`
       ])

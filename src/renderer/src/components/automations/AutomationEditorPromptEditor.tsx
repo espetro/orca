@@ -6,10 +6,11 @@ import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monac
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
-import '@/lib/monaco-setup'
+
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { buildAutomationPromptEditorOptions } from './automation-editor-prompt-options'
+import { useMonaco } from '@/components/editor/use-monaco'
 
 export const AUTOMATION_PROMPT_EDITOR_SLOT = 'automation-prompt-editor'
 
@@ -62,6 +63,8 @@ export function AutomationEditorPromptEditor({
 }: AutomationEditorPromptEditorProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const editorFontZoomLevel = useAppStore((state) => state.editorFontZoomLevel)
+  // Why: Monaco loads on demand (F3); the Editor only mounts once ready.
+  const monacoModule = useMonaco()
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(value)
   const lastSyncedContentRef = useRef(value)
@@ -149,18 +152,22 @@ export function AutomationEditorPromptEditor({
       )}
     >
       <div className="absolute inset-0">
-        <Editor
-          height="100%"
-          defaultLanguage="plaintext"
-          // Why: defaultValue, not controlled value — this surface owns
-          // post-mount sync so React cannot wipe Monaco's undo stack.
-          defaultValue={value}
-          theme={isDark ? 'vs-dark' : 'vs'}
-          onChange={handleChange}
-          onMount={handleMount}
-          options={options}
-          loading={<div className="h-full w-full bg-editor-surface" aria-hidden="true" />}
-        />
+        {monacoModule === null ? (
+          <div className="h-full w-full bg-editor-surface" aria-hidden="true" />
+        ) : (
+          <Editor
+            height="100%"
+            defaultLanguage="plaintext"
+            // Why: defaultValue, not controlled value — this surface owns
+            // post-mount sync so React cannot wipe Monaco's undo stack.
+            defaultValue={value}
+            theme={isDark ? 'vs-dark' : 'vs'}
+            onChange={handleChange}
+            onMount={handleMount}
+            options={options}
+            loading={<div className="h-full w-full bg-editor-surface" aria-hidden="true" />}
+          />
+        )}
       </div>
     </div>
   )

@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { requireLoadedMonaco } from '@/lib/monaco-lazy'
+import type { MonacoModule } from '@/lib/monaco-lazy'
 import {
   disposeUnattachedDiffViewerMonacoModels,
   disposeUnattachedMonacoModelPaths,
   getDiffViewerMonacoModelPaths
 } from './diff-monaco-model-disposal'
+
+// Why: these effects run only once diff editors (and their models) exist, so
+// Monaco is guaranteed loaded; requireLoadedMonaco keeps the calls sync.
+const monaco = (): MonacoModule => requireLoadedMonaco()
 
 type DiffViewerLargeDiffLifecycleInput = {
   limited: boolean
@@ -61,23 +66,24 @@ export function useDiffViewerLargeDiffLifecycle({
     }
     const diffEditor = diffEditorRef.current
     if (diffEditor) {
-      const originalModel = monaco.editor.getModel(
-        monaco.Uri.parse(currentDiffModelPaths.originalModelPath)
+      const monacoModule = monaco()
+      const originalModel = monacoModule.editor.getModel(
+        monacoModule.Uri.parse(currentDiffModelPaths.originalModelPath)
       )
-      const modifiedModel = monaco.editor.getModel(
-        monaco.Uri.parse(currentDiffModelPaths.modifiedModelPath)
+      const modifiedModel = monacoModule.editor.getModel(
+        monacoModule.Uri.parse(currentDiffModelPaths.modifiedModelPath)
       )
       if (!originalModel || !modifiedModel) {
         return
       }
       const activeModels = diffEditor.getModel()
-      if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
+      if (activeModels?.original !== originalModel || activeModels?.modified !== modifiedModel) {
         // Why: @monaco-editor/react swaps the two child models separately, but
         // Monaco's diff widget must release its old pair before either is disposed.
         diffEditor.setModel({ original: originalModel, modified: modifiedModel })
       }
     }
-    disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
+    disposeUnattachedMonacoModelPaths(monaco(), supersededModelPaths)
   }, [currentDiffModelPaths, diffEditorRef])
 
   useEffect(() => {
@@ -92,7 +98,7 @@ export function useDiffViewerLargeDiffLifecycle({
     // Why: ordinary tab switches keep models for fast return; the safety
     // fallback must instead release huge detached models after unmount cleanup.
     const disposeTimer = window.setTimeout(() => {
-      disposeUnattachedDiffViewerMonacoModels(monaco, modelPathsToDispose)
+      disposeUnattachedDiffViewerMonacoModels(monaco(), modelPathsToDispose)
     }, 0)
     return () => window.clearTimeout(disposeTimer)
   }, [limited, onEnterFallback])

@@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
-import '@/lib/monaco-setup'
+
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -21,6 +21,7 @@ import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { useMonaco } from './use-monaco'
 
 type MonacoEditorProps = {
   fileId: string
@@ -73,6 +74,8 @@ export default function MonacoEditor({
   const languageRef = useRef(language)
   languageRef.current = language
   const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
+  // Why: Monaco loads on demand (F3); render its container only once ready.
+  const monacoModule = useMonaco()
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Why: hold the throttle timer in a ref so unmount cleanup can cancel a pending write before snapshotting the final scroll position.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -226,44 +229,52 @@ export default function MonacoEditor({
         setSelectionAnnotationTarget={annotations.setSelectionAnnotationTarget}
         onSubmitMarkdownComment={annotations.handleSubmitMarkdownComment}
       />
-      <Editor
-        height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
-        language={language}
-        // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
-        defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
-        onChange={contentSync.handleChange}
-        onMount={handleMount}
-        options={{
-          // Why: only the file editor honors this; Monaco 0.55 DiffEditor hard-overrides minimap.enabled=false on sub-editors (see diffEditorEditors._adjustOptionsForSubEditor).
-          minimap: { enabled: settings?.editorMinimapEnabled ?? false },
-          scrollBeyondLastLine: false,
-          ...buildFileEditorWordWrapOptions(editorWordWrap),
-          fontSize: editorFontSize,
-          fontFamily: editorFontFamily,
-          lineNumbers: 'on',
-          renderLineHighlight: 'line',
-          automaticLayout: true,
-          tabSize: 2,
-          readOnly,
-          scrollbar: autoHeight
-            ? {
-                vertical: autoHeightUsesInternalScroll ? 'auto' : 'hidden',
-                handleMouseWheel: autoHeightUsesInternalScroll
-              }
-            : undefined,
-          smoothScrolling: true,
-          cursorSmoothCaretAnimation: 'off',
-          padding: { top: 0 },
-          find: monacoFindOptions,
-          // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
-          selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
-        }}
-        path={filePath}
-        // Why: Orca owns cursor/scroll restoration, so disable @monaco-editor/react's competing view-state Map.
-        saveViewState={false}
-        keepCurrentModel
-      />
+      {monacoModule === null ? (
+        <div
+          className="h-full w-full bg-editor-surface"
+          style={{ height: renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px` }}
+          aria-hidden="true"
+        />
+      ) : (
+        <Editor
+          height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
+          language={language}
+          // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
+          defaultValue={content}
+          theme={isDark ? 'vs-dark' : 'vs'}
+          onChange={contentSync.handleChange}
+          onMount={handleMount}
+          options={{
+            // Why: only the file editor honors this; Monaco 0.55 DiffEditor hard-overrides minimap.enabled=false on sub-editors (see diffEditorEditors._adjustOptionsForSubEditor).
+            minimap: { enabled: settings?.editorMinimapEnabled ?? false },
+            scrollBeyondLastLine: false,
+            ...buildFileEditorWordWrapOptions(editorWordWrap),
+            fontSize: editorFontSize,
+            fontFamily: editorFontFamily,
+            lineNumbers: 'on',
+            renderLineHighlight: 'line',
+            automaticLayout: true,
+            tabSize: 2,
+            readOnly,
+            scrollbar: autoHeight
+              ? {
+                  vertical: autoHeightUsesInternalScroll ? 'auto' : 'hidden',
+                  handleMouseWheel: autoHeightUsesInternalScroll
+                }
+              : undefined,
+            smoothScrolling: true,
+            cursorSmoothCaretAnimation: 'off',
+            padding: { top: 0 },
+            find: monacoFindOptions,
+            // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
+            selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
+          }}
+          path={filePath}
+          // Why: Orca owns cursor/scroll restoration, so disable @monaco-editor/react's competing view-state Map.
+          saveViewState={false}
+          keepCurrentModel
+        />
+      )}
 
       {toastNode}
       <MonacoGutterContextMenu

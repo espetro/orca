@@ -4,7 +4,7 @@ import Markdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
-import { monaco } from '@/lib/monaco-setup'
+import { useMonaco } from './use-monaco'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
@@ -68,6 +68,8 @@ function IpynbCodeCellEditor({
   const editorHeight = getIpynbCodeCellEditorHeight(source, fontSize)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
+  // Why: Monaco loads on demand (F3); the Editor mounts only once ready.
+  const monacoModule = useMonaco()
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
     const cleanupSaveShortcut = installEditorSaveShortcut(
@@ -91,8 +93,10 @@ function IpynbCodeCellEditor({
   }, [])
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    if (monacoModule) {
+      monacoModule.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    }
+  }, [monacoModule, isDark])
 
   if (!active) {
     return (
@@ -120,27 +124,35 @@ function IpynbCodeCellEditor({
 
   return (
     <div className="bg-editor-surface focus-within:ring-1 focus-within:ring-ring">
-      <Editor
-        height={editorHeight}
-        defaultLanguage={cell.language}
-        language={cell.language}
-        theme={isDark ? 'vs-dark' : 'vs'}
-        value={source}
-        onMount={handleMount}
-        onChange={(value) => onChange(value ?? '')}
-        options={{
-          automaticLayout: true,
-          fontFamily: resolveEditorFontFamily(settings),
-          fontSize,
-          glyphMargin: false,
-          lineNumbersMinChars: 3,
-          minimap: { enabled: false },
-          overviewRulerLanes: 0,
-          renderLineHighlight: 'none',
-          scrollBeyondLastLine: false,
-          wordWrap: 'off'
-        }}
-      />
+      {monacoModule === null ? (
+        <div
+          style={{ height: editorHeight }}
+          className="w-full bg-editor-surface"
+          aria-hidden="true"
+        />
+      ) : (
+        <Editor
+          height={editorHeight}
+          defaultLanguage={cell.language}
+          language={cell.language}
+          theme={isDark ? 'vs-dark' : 'vs'}
+          value={source}
+          onMount={handleMount}
+          onChange={(value) => onChange(value ?? '')}
+          options={{
+            automaticLayout: true,
+            fontFamily: resolveEditorFontFamily(settings),
+            fontSize,
+            glyphMargin: false,
+            lineNumbersMinChars: 3,
+            minimap: { enabled: false },
+            overviewRulerLanes: 0,
+            renderLineHighlight: 'none',
+            scrollBeyondLastLine: false,
+            wordWrap: 'off'
+          }}
+        />
+      )}
     </div>
   )
 }

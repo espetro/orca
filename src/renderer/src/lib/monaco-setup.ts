@@ -17,6 +17,12 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 
+// Why: workers are instantiated lazily by getWorker on first language use —
+// importing the ?worker constructors here only bundles them, it does not spawn
+// them, so keeping this module heavy is safe. The whole module is only ever
+// loaded via the dynamic import in ./monaco-lazy (ensureMonaco), keeping
+// Monaco out of the startup bundle (F3).
+
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
     switch (label) {
@@ -43,7 +49,7 @@ globalThis.MonacoEnvironment = {
 // real code in their own IDE. The sandboxed TS worker cannot resolve imports
 // to project files, so semantic validation produces a long tail of false
 // positives (unresolved modules 2307/2792, unused-import fades 6133/6138/
-// 6192/6196/6198/6205, missing names 2304/2305, bogus type mismatches 2322/
+// 6196/6198/6205, missing names 2304/2305, bogus type mismatches 2322/
 // 2339/2345/2571/2724, implicit-any 7006/7016/7026/7031/7053/18046/18048).
 // Syntax validation is also noisy in the diff viewer: with `renderSideBySide`
 // off (or during partial hunks), Monaco feeds the worker concatenated
@@ -90,5 +96,5 @@ installMonacoContextMenuPaste(monaco)
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
 
-// Re-export for convenience
+// Re-export for convenience (module is loaded via ensureMonaco() in ./monaco-lazy)
 export { monaco }

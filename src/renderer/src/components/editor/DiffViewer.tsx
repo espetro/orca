@@ -3,7 +3,8 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { monaco } from '@/lib/monaco-setup'
+import { requireLoadedMonaco } from '@/lib/monaco-lazy'
+import { useMonaco } from './use-monaco'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
@@ -75,6 +76,8 @@ export default function DiffViewer({
   const diffBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  // Why: Monaco loads on demand (F3); DiffEditor mounts only once ready.
+  const monacoModule = useMonaco()
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
@@ -114,7 +117,9 @@ export default function DiffViewer({
         left: modifiedEditor
           ? (getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current) ?? undefined)
           : undefined,
-        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
+        lineHeight: modifiedEditor
+          ? modifiedEditor.getOption(requireLoadedMonaco().editor.EditorOption.lineHeight)
+          : 0
       }),
     onDeleteComment: (id) => {
       if (worktreeId) {
@@ -131,7 +136,9 @@ export default function DiffViewer({
       return
     }
     const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      const lineHeight = modifiedEditor.getOption(
+        requireLoadedMonaco().editor.EditorOption.lineHeight
+      )
       const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
       if (top == null) {
         setPopover(null)
@@ -402,6 +409,8 @@ export default function DiffViewer({
               saveContentAvailable: largeDiffSaveContentAvailable
             })}
           />
+        ) : monacoModule === null ? (
+          <div className="h-full w-full bg-muted/10" aria-hidden="true" />
         ) : (
           <DiffEditor
             height="100%"

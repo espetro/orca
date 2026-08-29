@@ -29,7 +29,10 @@ import {
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
 } from '@/runtime/runtime-git-client'
-import '@/lib/monaco-setup'
+import { ensureMonaco } from '@/lib/monaco-lazy'
+// Why: kick off the one-time Monaco setup (F3) as soon as the combined diff
+// surface mounts — its child DiffEditors need it ready before they render.
+void ensureMonaco()
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

@@ -1,6 +1,7 @@
 import type { editor } from 'monaco-editor'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
-import { monaco } from '@/lib/monaco-setup'
+import { requireLoadedMonaco } from '@/lib/monaco-lazy'
+import type { MonacoModule } from '@/lib/monaco-lazy'
 import { useAppStore } from '@/store'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
@@ -9,6 +10,9 @@ import {
   isPrimarySelectionEnabled,
   setPrimarySelectionText
 } from '@/lib/primary-selection'
+
+// Why: this setup runs from a Monaco onMount callback, so Monaco is loaded.
+const monaco = (): MonacoModule => requireLoadedMonaco()
 
 export function setupContextualCopy({
   editorInstance,
@@ -152,8 +156,8 @@ export function setupContextualCopy({
       },
       preference: [
         placeAbove
-          ? monaco.editor.ContentWidgetPositionPreference.ABOVE
-          : monaco.editor.ContentWidgetPositionPreference.BELOW
+          ? monaco().editor.ContentWidgetPositionPreference.ABOVE
+          : monaco().editor.ContentWidgetPositionPreference.BELOW
       ]
     }
     copyHintNode.style.display = 'block'

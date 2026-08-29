@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
@@ -11,6 +11,14 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
+vi.mock('@/lib/monaco-lazy', () => {
+  const monaco = { editor: {} }
+  return {
+    ensureMonaco: () => Promise.resolve(monaco),
+    getLoadedMonaco: () => monaco,
+    requireLoadedMonaco: () => monaco
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -41,7 +49,7 @@ afterEach(() => {
 })
 
 describe('MonacoEditor content ownership', () => {
-  it('initializes the wrapper without a controlled value updater', () => {
+  it('initializes the wrapper without a controlled value updater', async () => {
     render(
       <MonacoEditor
         fileId="file"
@@ -55,6 +63,8 @@ describe('MonacoEditor content ownership', () => {
         readOnly
       />
     )
+    // Why: the editor mounts only after lazy Monaco resolves (F3).
+    await act(async () => {})
 
     expect(editorProps.current?.defaultValue).toBe('initial content')
     expect(editorProps.current).not.toHaveProperty('value')
