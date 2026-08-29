@@ -190,7 +190,42 @@ Stay on Electron. The highest-ROI "alternative" is the in-repo trajectory: deepe
 
 ---
 
-## 5. Synthesis: the radical-but-acceptable architecture
+## 5. Verification (gap-finding + adversarial review, 2026-08-29)
+
+The two independent reviews (spot-verified against source) materially revised the resource assessment. Corrections:
+
+### Claims that broke
+1. **"Drop store scrollback while mounted" (~5-20MB)**: `pendingColdRestoreByPtyId` (`terminal-state.ts:114-120`) has **no writers anywhere** — the map is always empty; the real cold-restore path goes via `pty-transport-types.ts:96`. Meanwhile the *replayed* scrollback copy is already released while mounted (`replayed-scrollback-store-release.ts`, consumed at `use-terminal-pane-lifecycle.ts:132`). The win is fiction; the leftover is a trivial dead-code-removal PR.
+2. **"Dynamic-import orca-runtime out of index.ts (~20-40MB)"**: defers RSS, doesn't save it — main is long-lived and needs the runtime at startup. The only real version is moving work to the daemon-entry (already half-built), which shifts RSS between processes.
+3. **"Restorable retention 10,000 → 100-500"**: misattributed constant. The real retention caps are 4 worktrees / 6 tabs hot-retain + TTLs (`terminal-hidden-view-parking.ts:16-21`, `terminal-hidden-worktree-retention.ts:25-26`) — already aggressive.
+4. **"Dev build is 50-100MB higher"**: hand-waved, and inconsistent with our own harness-gap note (all benches run dev builds). Cheap falsifier exists: `--dir` packaged build vs `out/` under `bench:hang-watchdog-memory`. The one empirical anchor in-repo: `tests/e2e/terminal-parked-memory.spec.ts:409` measures a **~453MB renderer baseline (dev)** with a 5MB non-growth band.
+
+### Claims overstated
+- **WebGL cap**: already implemented — `MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = 6` with LRU eviction and `WEBGL_lose_context` release (`terminal-webgl-hidden-retention.ts:6-25`), Blink ceiling raised to 128 (`configure-process.ts:294`). The 20-50MB/context figure is folklore; realistic is ~5-25MB and dominated by the shared glyph atlas. User setting `terminalGpuAcceleration` already exists. DOM fallback for hot panes contradicts README's "Ghostty-class WebGL" positioning.
+- **Scrollback 5000→2000**: repo's own measurement is **~2.5MB V8 heap per pane at 5k rows** (`terminal-hidden-worktree-retention.ts:15`; ~19MB at 50k). So the cut saves ~1.5MB/pane. Presets are a user-facing settings surface; backlog cap scales with scrollback. Product discussion, not a small PR.
+- **Floor arithmetic**: the ~400MB target omits the **GPU process entirely** (60-150MB on macOS; orca carries a full gpu-crash-fallback subsystem). If the daemon alone can be 300-400MB (#12728), a 400MB *total* floor needs plan-05 dehydration to land. Floors are asserted, not derived.
+
+### What the reviews surfaced as genuinely new
+- **GPU process** absent from all accounting.
+- **Per-webview 250ms URL-sync interval** (`use-browser-page-webview-url-sync.ts:156`) — runs while any browser pane is open, even idle. Real idle-CPU item.
+- **Session partition proliferation**: `persist:orca-default/-local/-remote` + per-profile partitions, each with its own in-RAM networking stack — never analyzed disk vs RAM.
+- **SQLite orchestration DB** (`src/main/sqlite/sync-database.ts`) resident in main's RSS — missing from the main-process inventory.
+- Renderer tests import main directly (e.g. `worktree-name-suggestions.test.ts:2`) — "0 renderer→main imports" is a production-graph fact, not a structural guarantee.
+- `terminal-cold-park-reveal-bench.mjs` asserts **no reveal budget** — nothing would catch a reveal regression from any parking change.
+
+### Revised win ranking (survival × savings)
+| Rank | Win | Frame |
+|---|---|---|
+| 1 | Lazy Monaco setup + 5 workers out of boot graph (`monaco-setup.ts:1-9`) | memory, ~30-60MB, invisible to user |
+| 2 | Visibility-gate the 31 renderer setIntervals (incl. the 250ms webview URL-sync) | CPU |
+| 3 | Kill/reframe 250ms backlog probe → event-driven | CPU |
+| 4 | fs.watch for 2s worktree poller (watch folder-workspace regression) | CPU |
+| 5 | Dead-code: remove writer-less `pendingColdRestoreByPtyId` | hygiene |
+| — | WebGL cap, scrollback default, dynamic-import runtime, retention cut, federation timers | dropped/demoted (see above); federation consolidation folds into orca-runtime extraction (L) |
+
+Maintainer-rejection forecast: (3) scrollback and (2) WebGL near-certain reject (product constants with deliberate commented policy + 162 scrollback-touching test files); items 1-4 above accept-likely with data.
+
+## 6. Synthesis: the radical-but-acceptable architecture
 
 The through-line of both hypotheses is the same endpoint the repo is already pointed at:
 
