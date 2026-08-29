@@ -150,8 +150,8 @@ const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: process.env.ORCA_PRODUCT_NAME || 'Orca',
+  protocols: [{ name: process.env.ORCA_PRODUCT_NAME || 'Orca', schemes: ['orca'] }],
   toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
