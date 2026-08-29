@@ -63,8 +63,12 @@ import type * as ParserRunnerModule from './parser-runner'
 
 let parserRunner: typeof ParserRunnerModule
 
+function successResult(name: string): ParsedWarpThemeResult {
+  return { ok: true, theme: { name } as ParsedWarpThemeResult extends { ok: true; theme: infer T } ? T : never }
+}
+
 async function resolveFirstParse(
-  result: { ok: boolean; reason?: string },
+  result: ParsedWarpThemeResult,
   instanceIndex = 0
 ): Promise<void> {
   const worker = workerState.instances[instanceIndex]
@@ -137,8 +141,8 @@ describe('parseWarpThemeYamlWithTimeout', () => {
 
   it('tears down the worker after the idle period', async () => {
     const resultPromise = parse('name: Test', 'test.yaml')
-    await resolveFirstParse({ ok: true, themeName: 'Test' })
-    await expect(resultPromise).resolves.toEqual({ ok: true, themeName: 'Test' })
+    await resolveFirstParse(successResult('Test'))
+    await expect(resultPromise).resolves.toEqual(successResult('Test'))
     expect(workerState.instances[0]?.terminated).toBe(false)
 
     await vi.advanceTimersByTimeAsync(parserRunner.WARP_THEME_PARSER_IDLE_TEARDOWN_MS - 1)
@@ -150,7 +154,7 @@ describe('parseWarpThemeYamlWithTimeout', () => {
 
   it('respawns a fresh worker on the next parse after idle teardown', async () => {
     const first = parse('name: First', 'first.yaml')
-    await resolveFirstParse({ ok: true, themeName: 'First' })
+    await resolveFirstParse(successResult('First'))
     await first
     await vi.advanceTimersByTimeAsync(parserRunner.WARP_THEME_PARSER_IDLE_TEARDOWN_MS)
     expect(workerState.instances).toHaveLength(1)
@@ -161,18 +165,18 @@ describe('parseWarpThemeYamlWithTimeout', () => {
     expect(respawned?.terminated).toBe(false)
     expect((respawned?.posted[0] as { content?: string })?.content).toBe('name: Second')
 
-    await resolveFirstParse({ ok: true, themeName: 'Second' }, 1)
-    await expect(second).resolves.toEqual({ ok: true, themeName: 'Second' })
+    await resolveFirstParse(successResult('Second'), 1)
+    await expect(second).resolves.toEqual(successResult('Second'))
   })
 
   it('keeps the worker alive while idle timers keep resetting across parses', async () => {
     const first = parse('name: First', 'first.yaml')
-    await resolveFirstParse({ ok: true, themeName: 'First' })
+    await resolveFirstParse(successResult('First'))
     await first
 
     await vi.advanceTimersByTimeAsync(parserRunner.WARP_THEME_PARSER_IDLE_TEARDOWN_MS / 2)
     const second = parse('name: Second', 'second.yaml')
-    await resolveFirstParse({ ok: true, themeName: 'Second' })
+    await resolveFirstParse(successResult('Second'))
     await second
 
     await vi.advanceTimersByTimeAsync(parserRunner.WARP_THEME_PARSER_IDLE_TEARDOWN_MS / 2 - 1)

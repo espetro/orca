@@ -161,7 +161,8 @@ import {
   installDevParentWatchdog,
   isDevParentShutdownRequested,
   patchPackagedProcessPath,
-  shouldInstallManagedHooks
+  shouldInstallManagedHooks,
+  startMemoryPressureResponse
 } from './startup/configure-process'
 import {
   installUncaughtPipeErrorGuard,
@@ -2363,6 +2364,7 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 void app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
   installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
+  startMemoryPressureResponse(() => BrowserWindow.getAllWindows())
   const hangDetection = consumeHangDetectionMarker(
     hangDetectionMarkerPath(getCanonicalUserDataPath())
   )
