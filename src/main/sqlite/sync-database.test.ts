@@ -133,10 +133,33 @@ describe('SyncDatabase statement cache', () => {
     expect(statement.get('c')).toEqual({ label: 'gamma' })
   })
 
+  it('applies memory-capping pragmas on read/write open', async () => {
+    const db = await createDatabase()
+
+    expect(db.pragma('cache_size', { simple: true })).toBe(-8000)
+    expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
+    expect(db.pragma('mmap_size', { simple: true })).toBe(268435456)
+  })
+
+  it('leaves readonly opens untouched by the memory pragmas', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-'))
+    temporaryDirectories.push(directory)
+    const path = join(directory, 'readonly.db')
+    const writer = new SyncDatabase(path)
+    openDatabases.push(writer)
+    writer.exec('CREATE TABLE items (id TEXT PRIMARY KEY)')
+    writer.close()
+
+    const reader = new SyncDatabase(path, { readonly: true })
+    openDatabases.push(reader)
+
+    expect(reader.pragma('cache_size', { simple: true })).toBe(-2000)
+  })
+
   it('preserves pragma and exec behavior', async () => {
     const db = await createDatabase()
 
-    expect(db.pragma('journal_mode', { simple: true })).toBe('delete')
+    expect(db.pragma('journal_mode', { simple: true })).not.toBe('delete')
     expect(db.pragma('table_info(items)')).toEqual([
       expect.objectContaining({ name: 'id' }),
       expect.objectContaining({ name: 'label' })
