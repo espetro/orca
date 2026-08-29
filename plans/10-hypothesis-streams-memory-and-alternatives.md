@@ -107,4 +107,4 @@ Not candidates (checked): ipcMain registrations (flat map, closures needed anywa
 | plans/04+05 budget+dehydration | 100MB+ (daemon) | M-L | medium | via maintainer ack on #17033 |
 | Any framework/runtime swap (Deno/Electrobun/Tauri/bun) | **~0** | 4-7 eng-months | high | no |
 
-Recommended sequence: (1) measure packaged build (falsify/confirm dev-build confound), (2) issue-first for C7 + C4 (S, leaks/knobs), (3) propose C2 as the #16214 unblock with the pressure-signal design, (4) keep lazy-Monaco as the top renderer PR, (5) re-evaluate Deno Desktop + Tauri #9285 in ~12 months.
+Recommended sequence (updated: user confirms the ~600MB readings are from the RELEASE app, so there is no dev-build confound to falsify — the memory is real product waste): (1) issue-first for C7 + C4 (S, leaks/knobs), (2) propose C2 as the #16214 unblock with the pressure-signal design, (3) keep lazy-Monaco as the top renderer PR, (4) file the packaged-release memory benchmark as its own harness-gap issue (release numbers are what users see and nothing in CI tracks them), (5) re-evaluate Deno Desktop + Tauri #9285 in ~12 months.
