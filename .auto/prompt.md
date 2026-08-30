@@ -41,7 +41,7 @@ Reduce main-process RSS delta at idle (candidate vs pinned baseline app) in the 
 
 # What's Been Tried
 
-Baseline sanity (run 0 in log.jsonl): candidate vs pinned base with IDENTICAL code measured +19.17MB. That number is the machine noise floor, not a signal: per-run main RSS medians ranged 112-226MB across six identical runs. Treat |delta| < 20MB as noise unless the loop runs on a quieter machine; consider raising --runs for marginal candidates.
+Baseline sanity (run 0 in log.jsonl): candidate vs pinned base with IDENTICAL code measured +19.17MB. That number is the machine noise floor, not a signal: per-run main RSS medians ranged 112-226MB across six identical runs. Treat |delta| < 20MB as noise unless the loop runs on a quieter machine; consider raising --runs for marginal candidates. Known host-noise sources and the pre-run sweep are listed in ideas.md under "Host-noise issues"; sweep them before benchmarking and note machine load in asi.
 
 Priors with verdicts pending from separate bisects; treat as hypotheses, not facts (see ideas.md):
 - F1 warp theme worker teardown
