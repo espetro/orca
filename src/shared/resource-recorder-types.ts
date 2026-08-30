@@ -1,5 +1,11 @@
 // MERGE: replaced by exp/mem-obs-m1 (M1 owns this file; contract-exact copy).
-import type { AppProcessMetric } from 'electron'
+import type { ProcessMetric } from 'electron'
+
+export type HostMemory = {
+  availableMemoryBytes: number
+  availableMemorySource: string
+  loadAverage1m: number
+}
 
 export type ResourceProcessType = 'main' | 'renderer' | 'gpu' | 'utility' | 'zygote' | 'other'
 
@@ -63,7 +69,7 @@ export type RecorderOptions = {
   ringCapacity: number
   now: () => number
   execFile: (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }>
-  getAppMetrics: () => AppProcessMetric[]
+  getAppMetrics: () => ProcessMetric[]
   hostMemory: () => Promise<HostMemory>
 }
 
