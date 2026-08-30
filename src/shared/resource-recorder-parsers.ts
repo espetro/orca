@@ -1,4 +1,4 @@
-export type PsFootprintRow = { rssBytes: number; footprintBytes: number }
+export type PsFootprintRow = { rssBytes: number; footprintBytes: number | null }
 
 /**
  * Parses `ps -o pid=,rss=,phys_footprint= -p <pids>` stdout.
