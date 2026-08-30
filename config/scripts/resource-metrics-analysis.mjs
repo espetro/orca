@@ -4,20 +4,29 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 const ROLES = ['main', 'renderer', 'gpu', 'utility', 'zygote', 'other']
-const SAMPLE_METRICS = ['rssBytes', 'footprintBytes', 'cpuPercent']
+const SAMPLE_METRICS = ['rssBytes', 'footprintBytes', 'cpuPercent', 'workingSetKb']
 const DRIFT_THRESHOLD_BYTES_PER_MIN = 1024 * 1024
 const MARKER_STEP_RATIO = 0.05
 const STALE_TICK_FACTOR = 3
 const LOW_SAMPLE_COUNT = 10
 
 export function loadDump(jsonOrPath) {
-  if (typeof jsonOrPath === 'string') {
-    if (!existsSync(jsonOrPath)) {
-      throw new Error(`dump file not found: ${jsonOrPath}`)
+  const parsed =
+    typeof jsonOrPath === 'string'
+      ? existsSync(jsonOrPath)
+        ? JSON.parse(readFileSync(jsonOrPath, 'utf8'))
+        : (() => {
+            throw new Error(`dump file not found: ${jsonOrPath}`)
+          })()
+      : jsonOrPath
+  // Accept both a bare ResourceDump and a harness run artifact wrapping one.
+  if (parsed?.schema === 'orca.resource-bench-run') {
+    if (!parsed.dump) {
+      throw new Error('run artifact has no dump (recorder was disabled?)')
     }
-    return JSON.parse(readFileSync(jsonOrPath, 'utf8'))
+    return parsed.dump
   }
-  return jsonOrPath
+  return parsed
 }
 
 // Linear-interpolation percentile (standard method, R-7).

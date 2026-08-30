@@ -14,6 +14,13 @@ describe('parsePsFootprint', () => {
     expect(rows.size).toBe(2)
   })
 
+  it('accepts pid+rss rows (macOS without phys_footprint keyword) with null footprint', () => {
+    const rows = parsePsFootprint('  1234  51200\n  5678  25600\n')
+
+    expect(rows.get(1234)).toEqual({ rssBytes: 52_428_800, footprintBytes: null })
+    expect(rows.get(5678)).toEqual({ rssBytes: 26_214_400, footprintBytes: null })
+  })
+
   it('skips header and junk lines', () => {
     const stdout = [
       '  PID      RSS  FOOTPRINT',

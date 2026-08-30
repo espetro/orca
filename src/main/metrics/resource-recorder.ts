@@ -176,6 +176,8 @@ class ResourceRecorderImpl implements ResourceRecorder {
       }
     } catch {
       // ps failed this tick: leave footprintBytes (and unmapped rssBytes) as null/0 fallback.
+      // Note: modern macOS ps has no phys_footprint keyword, so the catch also covers
+      // "unsupported" - footprint stays null and RSS remains the primary per-process metric.
     }
   }
 
