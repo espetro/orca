@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  abOrder,
   aggregateHeapSnapshotRetainedByConstructor,
   buildReleaseMemoryArtifact,
+  buildResourceBenchArtifact,
   classifyCdpTargetRole,
   defaultArtifactPath,
   fixturePreset,
   median,
   parseReleaseMemoryBenchmarkArgs,
   resolveAppExecutable,
+  runArtifactPath,
   summarizeRoleRss
 } from './run-release-memory-benchmark.mjs'
 import { normalizeBenchmarkArtifact } from './compare-benchmark-artifacts.mjs'
@@ -40,7 +43,11 @@ describe('run-release-memory-benchmark helpers', () => {
     const parsed = parseReleaseMemoryBenchmarkArgs(['--app', '/tmp/Orca.app'])
     expect(parsed.app).toBe('/tmp/Orca.app')
     expect(parsed.fixture).toBe('standard')
-    expect(parsed.durationSeconds).toBe(600)
+    expect(parsed.settleSeconds).toBe(30)
+    expect(parsed.windowSeconds).toBe(120)
+    expect(parsed.runs).toBe(3)
+    expect(parsed.ab).toBeNull()
+    expect(parsed.recorder).toBe(true)
     expect(parsed.cdpPort).toBe(9223)
     expect(parsed.out).toBeNull()
 
@@ -54,8 +61,40 @@ describe('run-release-memory-benchmark helpers', () => {
       '--out',
       '/tmp/x.json'
     ])
-    expect(custom.durationSeconds).toBe(30)
+    expect(custom.windowSeconds).toBe(30)
     expect(custom.out).toBe('/tmp/x.json')
+  })
+
+  it('parses v2 args: --window-s alias, settle, no-editor, runs, recorder, ab', () => {
+    const parsed = parseReleaseMemoryBenchmarkArgs([
+      '--app',
+      '/tmp/Orca.app',
+      '--window-s',
+      '60',
+      '--settle-s',
+      '5',
+      '--no-editor',
+      '--runs',
+      '4',
+      '--no-recorder'
+    ])
+    expect(parsed.windowSeconds).toBe(60)
+    expect(parsed.settleSeconds).toBe(5)
+    expect(parsed.fixture).toBe('no-editor')
+    expect(parsed.runs).toBe(4)
+    expect(parsed.recorder).toBe(false)
+
+    const ab = parseReleaseMemoryBenchmarkArgs([
+      '--ab',
+      '/tmp/A.app',
+      '/tmp/B.app',
+      '--runs',
+      '3',
+      '--recorder'
+    ])
+    expect(ab.ab).toEqual(['/tmp/A.app', '/tmp/B.app'])
+    expect(ab.runs).toBe(3)
+    expect(ab.recorder).toBe(true)
   })
 
   it('rejects missing --app, unknown args, and invalid values', () => {
@@ -65,11 +104,73 @@ describe('run-release-memory-benchmark helpers', () => {
       'Unknown argument'
     )
     expect(() => parseReleaseMemoryBenchmarkArgs(['--app', 'a', '--duration', 'x'])).toThrow(
-      'Invalid --duration'
+      'Invalid --duration/--window-s'
     )
     expect(() => parseReleaseMemoryBenchmarkArgs(['--app', 'a', '--fixture', 'mega'])).toThrow(
       'Unknown fixture'
     )
+    expect(() => parseReleaseMemoryBenchmarkArgs(['--app', 'a', '--settle-s', '-1'])).toThrow(
+      'Invalid --settle-s'
+    )
+    expect(() => parseReleaseMemoryBenchmarkArgs(['--app', 'a', '--runs', '0'])).toThrow(
+      'Invalid --runs'
+    )
+    expect(() => parseReleaseMemoryBenchmarkArgs(['--ab', '/tmp/A.app'])).toThrow('Missing value')
+  })
+
+  it('enforces --runs >= 3 with --ab', () => {
+    expect(() =>
+      parseReleaseMemoryBenchmarkArgs(['--ab', '/tmp/A.app', '/tmp/B.app', '--runs', '2'])
+    ).toThrow('--ab requires --runs >= 3')
+    expect(parseReleaseMemoryBenchmarkArgs(['--ab', '/tmp/A.app', '/tmp/B.app']).runs).toBe(3)
+  })
+
+  it('orders A/B runs as interleaved A,B,B,A,A,B', () => {
+    expect(abOrder(['A', 'B'], 3)).toEqual(['A', 'B', 'B', 'A', 'A', 'B'])
+    expect(abOrder(['A', 'B'], 1)).toEqual(['A', 'B'])
+    expect(abOrder(['A', 'B'], 2)).toEqual(['A', 'B', 'B', 'A'])
+    expect(abOrder(undefined, 3)).toEqual(['A', 'B', 'B', 'A', 'A', 'B'])
+  })
+
+  it('builds a v2 resource-bench artifact with fixture/runIndex/dump', () => {
+    const dump = {
+      schema: 'orca.resource-dump',
+      schemaVersion: 1,
+      ticks: [],
+      markers: [{ timestamp: 1, name: 'fixture-ready' }]
+    }
+    const artifact = buildResourceBenchArtifact({
+      label: 'Orca',
+      fixture: 'no-editor',
+      runIndex: 2,
+      settleSeconds: 30,
+      windowSeconds: 120,
+      dump,
+      externalCrossCheck: { start: { atMs: 1 }, end: { atMs: 2 } },
+      heapBoot: { totalSelfBytes: 10 },
+      heapIdle: { totalSelfBytes: 20 },
+      gitCommit: 'abc123'
+    })
+    expect(artifact.schema).toBe('orca.resource-bench-run')
+    expect(artifact.schemaVersion).toBe(1)
+    expect(artifact.fixture).toBe('no-editor')
+    expect(artifact.runIndex).toBe(2)
+    expect(artifact.dump).toBe(dump)
+    expect(artifact.externalCrossCheck).toEqual({ start: { atMs: 1 }, end: { atMs: 2 } })
+    expect(artifact.gitCommit).toBe('abc123')
+    expect(() => buildResourceBenchArtifact({ label: 'x' })).toThrow('dump is required')
+  })
+
+  it('builds per-run artifact paths and exposes a no-editor preset', () => {
+    expect(runArtifactPath(null, 'Orca', 'A', 0)).toBe(
+      join('tests', 'tools', 'benchmarks', 'results', 'run-Orca-A-0.json')
+    )
+    expect(runArtifactPath('/tmp/out', 'Orca', 'B', 3)).toBe(join('/tmp/out', 'run-Orca-B-3.json'))
+    expect(fixturePreset('no-editor')).toEqual({
+      terminalPanes: 4,
+      editor: false,
+      browserTab: false
+    })
   })
 
   it('classifies CDP target roles', () => {
