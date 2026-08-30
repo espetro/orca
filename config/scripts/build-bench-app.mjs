@@ -142,7 +142,27 @@ export function createBenchBuild({
       log('step 1/5: skipped native builds (--renderer-only)')
     }
 
-    log('step 2/5: electron-vite build (VITE_EXPOSE_STORE=true)')
+    log('step 2/5: relay + cli builds')
+    const relayResult = runner(
+      process.execPath,
+      [
+        '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+        path.join(repoRoot, 'config', 'scripts', 'build-relay.mjs')
+      ],
+      { stdio: 'inherit', cwd: repoRoot }
+    )
+    if (relayResult.status !== 0) {
+      throw new Error(`relay build failed (exit ${relayResult.status})`)
+    }
+    const cliResult = runner('pnpm', ['run', 'build:cli'], {
+      stdio: 'inherit',
+      cwd: repoRoot
+    })
+    if (cliResult.status !== 0) {
+      throw new Error(`cli build failed (exit ${cliResult.status})`)
+    }
+
+    log('step 3/5: electron-vite build (VITE_EXPOSE_STORE=true)')
     const viteResult = runner(
       process.execPath,
       [path.join(repoRoot, 'config', 'scripts', 'run-electron-vite-build.mjs')],
@@ -156,7 +176,7 @@ export function createBenchBuild({
       throw new Error(`electron-vite build failed (exit ${viteResult.status})`)
     }
 
-    log('step 3/5: ensure electron runtime')
+    log('step 4/5: ensure electron runtime')
     const runtimeResult = runner('pnpm', ['run', 'ensure:electron-runtime'], {
       stdio: 'inherit',
       cwd: repoRoot
@@ -165,7 +185,7 @@ export function createBenchBuild({
       throw new Error(`ensure:electron-runtime failed (exit ${runtimeResult.status})`)
     }
 
-    log('step 4/5: electron-builder --dir')
+    log('step 5/5: electron-builder --dir')
     const builderResult = runner(
       'pnpm',
       ['exec', 'electron-builder', '--config', 'config/electron-builder.config.cjs', '--dir'],
@@ -178,7 +198,7 @@ export function createBenchBuild({
       throw new Error(`electron-builder failed (exit ${builderResult.status})`)
     }
 
-    log('step 5/5: verify renderer store exposure')
+    log('verify renderer store exposure')
     const assetsDir = rendererAssetsDir
     const storeAssets = existsSync(assetsDir)
       ? readdirSync(assetsDir).filter((name) => /^store-.*\.js$/.test(name))
