@@ -1,4 +1,5 @@
 import type { AppIdentity } from '../../shared/app-identity'
+import type { ResourceDump } from '../../shared/resource-recorder-types'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -88,4 +89,9 @@ export type PlatformApi = {
 
 export type E2EApi = {
   getConfig: () => E2EConfig
+}
+
+export type ResourceRecorderBridgeApi = {
+  dump: () => Promise<ResourceDump>
+  mark: (name: string) => void
 }

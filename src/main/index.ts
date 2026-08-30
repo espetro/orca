@@ -364,6 +364,8 @@ import {
 } from './crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
 import { installMainThreadHangWatchdog } from './hang-watchdog/main-thread-hang-watchdog'
+import { installResourceRecorderIpcHandlers } from './metrics/resource-recorder-ipc'
+import { startResourceRecorderIfEnabled } from './metrics/resource-recorder'
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath
@@ -2362,6 +2364,8 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 
 void app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
+  startResourceRecorderIfEnabled()
+  installResourceRecorderIpcHandlers()
   installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
   const hangDetection = consumeHangDetectionMarker(
     hangDetectionMarkerPath(getCanonicalUserDataPath())

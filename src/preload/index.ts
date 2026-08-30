@@ -2,6 +2,7 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
+import type { ResourceDump } from '../shared/resource-recorder-types'
 import { glApi } from './gitlab'
 import type {
   SkillDeletePlan,
@@ -5063,6 +5064,18 @@ const api = {
   e2e: {
     getConfig: () => preloadE2EConfig
   },
+
+  // Only present in e2e-mode builds: feeds the renderer __orcaE2E__ resource bridge.
+  ...(preloadE2EConfig.exposeStore
+    ? {
+        resources: {
+          dump: (): Promise<ResourceDump> => ipcRenderer.invoke('resources:dump'),
+          mark: (name: string): void => {
+            void ipcRenderer.invoke('resources:mark', name)
+          }
+        }
+      }
+    : {}),
 
   mobile: {
     listNetworkInterfaces: (): Promise<{
