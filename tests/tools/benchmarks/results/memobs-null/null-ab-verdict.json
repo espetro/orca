@@ -1,0 +1,418 @@
+{
+  "deviance": {
+    "a": {
+      "flags": [
+        {
+          "detail": "marker snapshot-taken present",
+          "kind": "snapshot-taken-in-window"
+        }
+      ],
+      "sampleCount": 177,
+      "staleTicks": 0
+    },
+    "b": {
+      "flags": [
+        {
+          "detail": "marker snapshot-taken present",
+          "kind": "snapshot-taken-in-window"
+        }
+      ],
+      "sampleCount": 173,
+      "staleTicks": 0
+    }
+  },
+  "metrics": [
+    {
+      "a": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 45,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "b": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 44,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "deltaMedian": 0,
+      "metric": "rssBytes",
+      "role": "main",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 0.07086,
+        "max": 6.887598,
+        "median": 0.077058,
+        "min": 0,
+        "n": 45,
+        "p10": 0.049426,
+        "p90": 1.262926,
+        "q1": 0.057533,
+        "q3": 0.128393
+      },
+      "b": {
+        "iqr": 0.032673,
+        "max": 10.302301,
+        "median": 0.073233,
+        "min": 0,
+        "n": 44,
+        "p10": 0.056368,
+        "p90": 0.763522,
+        "q1": 0.063027,
+        "q3": 0.0957
+      },
+      "deltaMedian": 0.003825,
+      "metric": "cpuPercent",
+      "role": "main",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 46528,
+        "max": 277264,
+        "median": 186336,
+        "min": 144848,
+        "n": 45,
+        "p10": 148339.2,
+        "p90": 211795.2,
+        "q1": 152784,
+        "q3": 199312
+      },
+      "b": {
+        "iqr": 9256,
+        "max": 251632,
+        "median": 221544,
+        "min": 159520,
+        "n": 44,
+        "p10": 163257.6,
+        "p90": 227163.2,
+        "q1": 216024,
+        "q3": 225280
+      },
+      "deltaMedian": -35208,
+      "metric": "workingSetKb",
+      "role": "main",
+      "verdict": "improved"
+    },
+    {
+      "a": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 44,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "b": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 43,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "deltaMedian": 0,
+      "metric": "rssBytes",
+      "role": "renderer",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 0.667454,
+        "max": 11.335942,
+        "median": 1.090871,
+        "min": 0,
+        "n": 44,
+        "p10": 0.130669,
+        "p90": 2.220686,
+        "q1": 0.797666,
+        "q3": 1.46512
+      },
+      "b": {
+        "iqr": 1.086722,
+        "max": 12.014172,
+        "median": 1.055477,
+        "min": 0.521124,
+        "n": 43,
+        "p10": 0.733987,
+        "p90": 3.742634,
+        "q1": 0.815269,
+        "q3": 1.901992
+      },
+      "deltaMedian": 0.035394,
+      "metric": "cpuPercent",
+      "role": "renderer",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 86152,
+        "max": 1190656,
+        "median": 259672,
+        "min": 209728,
+        "n": 44,
+        "p10": 229568,
+        "p90": 343568,
+        "q1": 244428,
+        "q3": 330580
+      },
+      "b": {
+        "iqr": 29016,
+        "max": 1287520,
+        "median": 283056,
+        "min": 178064,
+        "n": 43,
+        "p10": 259446.4,
+        "p90": 673216,
+        "q1": 262832,
+        "q3": 291848
+      },
+      "deltaMedian": -23384,
+      "metric": "workingSetKb",
+      "role": "renderer",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 44,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "b": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 43,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "deltaMedian": 0,
+      "metric": "rssBytes",
+      "role": "gpu",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 0.525376,
+        "max": 2.975876,
+        "median": 1.080608,
+        "min": 0.00505,
+        "n": 44,
+        "p10": 0.149313,
+        "p90": 1.460959,
+        "q1": 0.817035,
+        "q3": 1.342412
+      },
+      "b": {
+        "iqr": 0.414595,
+        "max": 2.01381,
+        "median": 1.100491,
+        "min": 0.090541,
+        "n": 43,
+        "p10": 0.813082,
+        "p90": 1.443621,
+        "q1": 0.922689,
+        "q3": 1.337284
+      },
+      "deltaMedian": -0.019883,
+      "metric": "cpuPercent",
+      "role": "gpu",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 32124,
+        "max": 122112,
+        "median": 88248,
+        "min": 62896,
+        "n": 44,
+        "p10": 75803.2,
+        "p90": 120374.4,
+        "q1": 84172,
+        "q3": 116296
+      },
+      "b": {
+        "iqr": 1952,
+        "max": 114656,
+        "median": 97296,
+        "min": 67088,
+        "n": 43,
+        "p10": 93011.2,
+        "p90": 112614.4,
+        "q1": 96576,
+        "q3": 98528
+      },
+      "deltaMedian": -9048,
+      "metric": "workingSetKb",
+      "role": "gpu",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 44,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "b": {
+        "iqr": 0,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "n": 43,
+        "p10": 0,
+        "p90": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "deltaMedian": 0,
+      "metric": "rssBytes",
+      "role": "utility",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 0.001691,
+        "max": 0.240835,
+        "median": 0,
+        "min": 0,
+        "n": 44,
+        "p10": 0,
+        "p90": 0.008904,
+        "q1": 0,
+        "q3": 0.001691
+      },
+      "b": {
+        "iqr": 0.001143,
+        "max": 0.304657,
+        "median": 0,
+        "min": 0,
+        "n": 43,
+        "p10": 0,
+        "p90": 0.011469,
+        "q1": 0,
+        "q3": 0.001143
+      },
+      "deltaMedian": 0,
+      "metric": "cpuPercent",
+      "role": "utility",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 3236,
+        "max": 50656,
+        "median": 46088,
+        "min": 38064,
+        "n": 44,
+        "p10": 40065.6,
+        "p90": 47536,
+        "q1": 43872,
+        "q3": 47108
+      },
+      "b": {
+        "iqr": 2672,
+        "max": 51296,
+        "median": 50176,
+        "min": 47328,
+        "n": 43,
+        "p10": 47894.4,
+        "p90": 51232,
+        "q1": 48528,
+        "q3": 51200
+      },
+      "deltaMedian": -4088,
+      "metric": "workingSetKb",
+      "role": "utility",
+      "verdict": "improved"
+    },
+    {
+      "a": {
+        "iqr": 23691404,
+        "max": 88468180,
+        "median": 61099552,
+        "min": 59767508,
+        "n": 45,
+        "p10": 60241902.4,
+        "p90": 87062668,
+        "q1": 60585528,
+        "q3": 84276932
+      },
+      "b": {
+        "iqr": 23594721,
+        "max": 88373128,
+        "median": 61306460,
+        "min": 59953324,
+        "n": 44,
+        "p10": 60459310.8,
+        "p90": 86996762.4,
+        "q1": 60743427,
+        "q3": 84338148
+      },
+      "deltaMedian": -206908,
+      "metric": "heapUsedBytes",
+      "role": "mainProcess",
+      "verdict": "inconclusive"
+    },
+    {
+      "a": {
+        "iqr": 171798692,
+        "max": 4982162063,
+        "median": 3951369912,
+        "min": 3521873183,
+        "n": 45,
+        "p10": 3779571220,
+        "p90": 4123168604,
+        "q1": 3865470566,
+        "q3": 4037269258
+      },
+      "b": {
+        "iqr": 193273528.5,
+        "max": 4810363372,
+        "median": 4294967296,
+        "min": 3865470566,
+        "n": 44,
+        "p10": 3951369912,
+        "p90": 4380866642,
+        "q1": 4123168604,
+        "q3": 4316442132.5
+      },
+      "deltaMedian": -343597384,
+      "metric": "availableMemoryBytes",
+      "role": "host",
+      "verdict": "improved"
+    }
+  ]
+}

@@ -1,0 +1,2901 @@
+{
+  "schema": "orca.resource-bench-run",
+  "schemaVersion": 1,
+  "label": "Orca.app",
+  "fixture": "standard",
+  "runIndex": 2,
+  "settleSeconds": 20,
+  "windowSeconds": 60,
+  "dump": {
+    "schema": "orca.resource-dump",
+    "schemaVersion": 1,
+    "recordedAt": 1788076466793,
+    "platform": "darwin",
+    "appVersion": "1.4.178-rc.2",
+    "appCommit": null,
+    "uptimeSeconds": 87,
+    "recorderConfig": {
+      "tickMs": 2000,
+      "ringCapacity": 3600,
+      "startedAt": 1788076379438
+    },
+    "ticks": [
+      {
+        "timestamp": 1788076379438,
+        "samples": [
+          {
+            "timestamp": 1788076379438,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 252544,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4982162063,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.46826171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 258637824,
+          "heapUsedBytes": 64083184,
+          "heapTotalBytes": 72941568,
+          "externalBytes": 16376333
+        }
+      },
+      {
+        "timestamp": 1788076381442,
+        "samples": [
+          {
+            "timestamp": 1788076381442,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 183616,
+            "footprintBytes": null,
+            "cpuPercent": 7.313175395282319
+          },
+          {
+            "timestamp": 1788076381442,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 59536,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076381442,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46640,
+            "footprintBytes": null,
+            "cpuPercent": 0.2887449852765043
+          },
+          {
+            "timestamp": 1788076381442,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 1025728,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4294967296,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.46826171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 188170240,
+          "heapUsedBytes": 66371528,
+          "heapTotalBytes": 119717888,
+          "externalBytes": 17991694
+        }
+      },
+      {
+        "timestamp": 1788076383442,
+        "samples": [
+          {
+            "timestamp": 1788076383442,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 220624,
+            "footprintBytes": null,
+            "cpuPercent": 4.9062939524400395
+          },
+          {
+            "timestamp": 1788076383442,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 109472,
+            "footprintBytes": null,
+            "cpuPercent": 2.7397989591544274
+          },
+          {
+            "timestamp": 1788076383442,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49632,
+            "footprintBytes": null,
+            "cpuPercent": 0.10649853663875015
+          },
+          {
+            "timestamp": 1788076383442,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 1089184,
+            "footprintBytes": null,
+            "cpuPercent": 9.40477660567215
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4294967296,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.4306640625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 225574912,
+          "heapUsedBytes": 78468948,
+          "heapTotalBytes": 122077184,
+          "externalBytes": 18255678
+        }
+      },
+      {
+        "timestamp": 1788076385443,
+        "samples": [
+          {
+            "timestamp": 1788076385443,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 218080,
+            "footprintBytes": null,
+            "cpuPercent": 0.6587022819119321
+          },
+          {
+            "timestamp": 1788076385443,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 117248,
+            "footprintBytes": null,
+            "cpuPercent": 2.3927518304720494
+          },
+          {
+            "timestamp": 1788076385443,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48864,
+            "footprintBytes": null,
+            "cpuPercent": 0.0020491260477406388
+          },
+          {
+            "timestamp": 1788076385443,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 1031200,
+            "footprintBytes": null,
+            "cpuPercent": 4.766738968548681
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4380866642,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.4306640625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 223330304,
+          "heapUsedBytes": 82659276,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18735800
+        }
+      },
+      {
+        "timestamp": 1788076387444,
+        "samples": [
+          {
+            "timestamp": 1788076387444,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 218720,
+            "footprintBytes": null,
+            "cpuPercent": 0.08095366870829536
+          },
+          {
+            "timestamp": 1788076387444,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116880,
+            "footprintBytes": null,
+            "cpuPercent": 0.9543667971655483
+          },
+          {
+            "timestamp": 1788076387444,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48864,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076387444,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 1033728,
+            "footprintBytes": null,
+            "cpuPercent": 1.0153208202096162
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4552665334,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.4306640625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 223969280,
+          "heapUsedBytes": 83115684,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18738966
+        }
+      },
+      {
+        "timestamp": 1788076389445,
+        "samples": [
+          {
+            "timestamp": 1788076389445,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 218784,
+            "footprintBytes": null,
+            "cpuPercent": 0.10512097251799057
+          },
+          {
+            "timestamp": 1788076389445,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116976,
+            "footprintBytes": null,
+            "cpuPercent": 1.4439103268909377
+          },
+          {
+            "timestamp": 1788076389445,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47904,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076389445,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 953152,
+            "footprintBytes": null,
+            "cpuPercent": 1.1689050637434648
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4552665334,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 11.83544921875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 224034816,
+          "heapUsedBytes": 83590760,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18747472
+        }
+      },
+      {
+        "timestamp": 1788076391446,
+        "samples": [
+          {
+            "timestamp": 1788076391446,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 218880,
+            "footprintBytes": null,
+            "cpuPercent": 0.1002951650486213
+          },
+          {
+            "timestamp": 1788076391446,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116976,
+            "footprintBytes": null,
+            "cpuPercent": 1.351323672231259
+          },
+          {
+            "timestamp": 1788076391446,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48064,
+            "footprintBytes": null,
+            "cpuPercent": 0.016535828794722922
+          },
+          {
+            "timestamp": 1788076391446,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 869136,
+            "footprintBytes": null,
+            "cpuPercent": 1.0262768231016632
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4552665334,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 11.83544921875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 224133120,
+          "heapUsedBytes": 84001860,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18749181
+        }
+      },
+      {
+        "timestamp": 1788076393447,
+        "samples": [
+          {
+            "timestamp": 1788076393447,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 217296,
+            "footprintBytes": null,
+            "cpuPercent": 0.08340561361585551
+          },
+          {
+            "timestamp": 1788076393447,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 117056,
+            "footprintBytes": null,
+            "cpuPercent": 1.3319872414991238
+          },
+          {
+            "timestamp": 1788076393447,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47840,
+            "footprintBytes": null,
+            "cpuPercent": 0.0003374613606742028
+          },
+          {
+            "timestamp": 1788076393447,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 698368,
+            "footprintBytes": null,
+            "cpuPercent": 0.8999197588265291
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4638564680,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.56884765625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 222511104,
+          "heapUsedBytes": 84337752,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18750890
+        }
+      },
+      {
+        "timestamp": 1788076395448,
+        "samples": [
+          {
+            "timestamp": 1788076395448,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 219552,
+            "footprintBytes": null,
+            "cpuPercent": 0.12818524119332986
+          },
+          {
+            "timestamp": 1788076395448,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 119520,
+            "footprintBytes": null,
+            "cpuPercent": 1.033941212027356
+          },
+          {
+            "timestamp": 1788076395448,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47840,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076395448,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 701136,
+            "footprintBytes": null,
+            "cpuPercent": 0.7868800497948361
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4552665334,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.56884765625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 224821248,
+          "heapUsedBytes": 84983568,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18884801
+        }
+      },
+      {
+        "timestamp": 1788076397449,
+        "samples": [
+          {
+            "timestamp": 1788076397449,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 219904,
+            "footprintBytes": null,
+            "cpuPercent": 0.06966633119222686
+          },
+          {
+            "timestamp": 1788076397449,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 118512,
+            "footprintBytes": null,
+            "cpuPercent": 0.899317292719055
+          },
+          {
+            "timestamp": 1788076397449,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47840,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076397449,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 702624,
+            "footprintBytes": null,
+            "cpuPercent": 0.5962962204066456
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4638564680,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.56884765625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 225181696,
+          "heapUsedBytes": 85305192,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18886510
+        }
+      },
+      {
+        "timestamp": 1788076399451,
+        "samples": [
+          {
+            "timestamp": 1788076399451,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 220224,
+            "footprintBytes": null,
+            "cpuPercent": 0.05141778949345889
+          },
+          {
+            "timestamp": 1788076399451,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 115872,
+            "footprintBytes": null,
+            "cpuPercent": 0.7219408568064034
+          },
+          {
+            "timestamp": 1788076399451,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47840,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076399451,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 699232,
+            "footprintBytes": null,
+            "cpuPercent": 0.6740456905441378
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.84326171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 225509376,
+          "heapUsedBytes": 85630676,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18888219
+        }
+      },
+      {
+        "timestamp": 1788076401451,
+        "samples": [
+          {
+            "timestamp": 1788076401451,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 220544,
+            "footprintBytes": null,
+            "cpuPercent": 0.05409382897799043
+          },
+          {
+            "timestamp": 1788076401451,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 115920,
+            "footprintBytes": null,
+            "cpuPercent": 1.3576684913847206
+          },
+          {
+            "timestamp": 1788076401451,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47840,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076401451,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 692144,
+            "footprintBytes": null,
+            "cpuPercent": 1.1112589066982572
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4638564680,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.84326171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 225837056,
+          "heapUsedBytes": 85955776,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18889928
+        }
+      },
+      {
+        "timestamp": 1788076403452,
+        "samples": [
+          {
+            "timestamp": 1788076403452,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 220880,
+            "footprintBytes": null,
+            "cpuPercent": 0.0646686869645815
+          },
+          {
+            "timestamp": 1788076403452,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 115984,
+            "footprintBytes": null,
+            "cpuPercent": 1.2936810496442561
+          },
+          {
+            "timestamp": 1788076403452,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47952,
+            "footprintBytes": null,
+            "cpuPercent": 0.007906700435230759
+          },
+          {
+            "timestamp": 1788076403452,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 668896,
+            "footprintBytes": null,
+            "cpuPercent": 1.0255183612290781
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4638564680,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 226181120,
+          "heapUsedBytes": 86277252,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18891637
+        }
+      },
+      {
+        "timestamp": 1788076405453,
+        "samples": [
+          {
+            "timestamp": 1788076405453,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 221264,
+            "footprintBytes": null,
+            "cpuPercent": 0.06863243899172163
+          },
+          {
+            "timestamp": 1788076405453,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116032,
+            "footprintBytes": null,
+            "cpuPercent": 1.4443049204088263
+          },
+          {
+            "timestamp": 1788076405453,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47952,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076405453,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 672304,
+            "footprintBytes": null,
+            "cpuPercent": 1.400243198950836
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 226574336,
+          "heapUsedBytes": 86595148,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18893346
+        }
+      },
+      {
+        "timestamp": 1788076407454,
+        "samples": [
+          {
+            "timestamp": 1788076407454,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 221584,
+            "footprintBytes": null,
+            "cpuPercent": 0.06119172858701691
+          },
+          {
+            "timestamp": 1788076407454,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 118096,
+            "footprintBytes": null,
+            "cpuPercent": 0.9446431872573658
+          },
+          {
+            "timestamp": 1788076407454,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47952,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076407454,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 612256,
+            "footprintBytes": null,
+            "cpuPercent": 0.578051179922138
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4638564680,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 12.375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 226902016,
+          "heapUsedBytes": 86916680,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18895055
+        }
+      },
+      {
+        "timestamp": 1788076409456,
+        "samples": [
+          {
+            "timestamp": 1788076409456,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 221936,
+            "footprintBytes": null,
+            "cpuPercent": 0.05576760707630358
+          },
+          {
+            "timestamp": 1788076409456,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116112,
+            "footprintBytes": null,
+            "cpuPercent": 0.8513967847972264
+          },
+          {
+            "timestamp": 1788076409456,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47952,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076409456,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 614576,
+            "footprintBytes": null,
+            "cpuPercent": 0.7733027404233551
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 11.5439453125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 227262464,
+          "heapUsedBytes": 87235284,
+          "heapTotalBytes": 123387904,
+          "externalBytes": 18896764
+        }
+      },
+      {
+        "timestamp": 1788076411457,
+        "samples": [
+          {
+            "timestamp": 1788076411457,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 240304,
+            "footprintBytes": null,
+            "cpuPercent": 1.0718102233322027
+          },
+          {
+            "timestamp": 1788076411457,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116144,
+            "footprintBytes": null,
+            "cpuPercent": 0.8554382057722705
+          },
+          {
+            "timestamp": 1788076411457,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49504,
+            "footprintBytes": null,
+            "cpuPercent": 0.016429743643543878
+          },
+          {
+            "timestamp": 1788076411457,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 556000,
+            "footprintBytes": null,
+            "cpuPercent": 3.230018389341476
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 11.5439453125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 246071296,
+          "heapUsedBytes": 60198168,
+          "heapTotalBytes": 68403200,
+          "externalBytes": 16948075
+        }
+      },
+      {
+        "timestamp": 1788076413459,
+        "samples": [
+          {
+            "timestamp": 1788076413459,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 241136,
+            "footprintBytes": null,
+            "cpuPercent": 0.11975692622848434
+          },
+          {
+            "timestamp": 1788076413459,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 116160,
+            "footprintBytes": null,
+            "cpuPercent": 1.151835626377613
+          },
+          {
+            "timestamp": 1788076413459,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49648,
+            "footprintBytes": null,
+            "cpuPercent": 0.0026734547431584545
+          },
+          {
+            "timestamp": 1788076413459,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 555904,
+            "footprintBytes": null,
+            "cpuPercent": 0.7503343147896065
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.859375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 246923264,
+          "heapUsedBytes": 60683948,
+          "heapTotalBytes": 68403200,
+          "externalBytes": 16949992
+        }
+      },
+      {
+        "timestamp": 1788076415459,
+        "samples": [
+          {
+            "timestamp": 1788076415459,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 241424,
+            "footprintBytes": null,
+            "cpuPercent": 0.06919708138671626
+          },
+          {
+            "timestamp": 1788076415459,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 114112,
+            "footprintBytes": null,
+            "cpuPercent": 1.4317549770015363
+          },
+          {
+            "timestamp": 1788076415459,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49648,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076415459,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 487632,
+            "footprintBytes": null,
+            "cpuPercent": 1.1786130987671477
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.859375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 247218176,
+          "heapUsedBytes": 61006000,
+          "heapTotalBytes": 68403200,
+          "externalBytes": 16951701
+        }
+      },
+      {
+        "timestamp": 1788076417460,
+        "samples": [
+          {
+            "timestamp": 1788076417460,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 241216,
+            "footprintBytes": null,
+            "cpuPercent": 0.06214354621840339
+          },
+          {
+            "timestamp": 1788076417460,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 114064,
+            "footprintBytes": null,
+            "cpuPercent": 1.29850289299059
+          },
+          {
+            "timestamp": 1788076417460,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49456,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076417460,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 327872,
+            "footprintBytes": null,
+            "cpuPercent": 1.902943703814048
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.859375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 247005184,
+          "heapUsedBytes": 60559372,
+          "heapTotalBytes": 68927488,
+          "externalBytes": 16949588
+        }
+      },
+      {
+        "timestamp": 1788076419461,
+        "samples": [
+          {
+            "timestamp": 1788076419461,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 236240,
+            "footprintBytes": null,
+            "cpuPercent": 0.9113197891152145
+          },
+          {
+            "timestamp": 1788076419461,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 114016,
+            "footprintBytes": null,
+            "cpuPercent": 1.2931542874163753
+          },
+          {
+            "timestamp": 1788076419461,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49456,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076419461,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 325536,
+            "footprintBytes": null,
+            "cpuPercent": 0.9780574290133714
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.06982421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 241909760,
+          "heapUsedBytes": 59977220,
+          "heapTotalBytes": 63422464,
+          "externalBytes": 16947593
+        }
+      },
+      {
+        "timestamp": 1788076421461,
+        "samples": [
+          {
+            "timestamp": 1788076421461,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 233344,
+            "footprintBytes": null,
+            "cpuPercent": 0.047988038539374306
+          },
+          {
+            "timestamp": 1788076421461,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 111472,
+            "footprintBytes": null,
+            "cpuPercent": 0.7831000578773699
+          },
+          {
+            "timestamp": 1788076421461,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49040,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076421461,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 308336,
+            "footprintBytes": null,
+            "cpuPercent": 0.5500602014913176
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.06982421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 238944256,
+          "heapUsedBytes": 60309196,
+          "heapTotalBytes": 63422464,
+          "externalBytes": 16949302
+        }
+      },
+      {
+        "timestamp": 1788076423462,
+        "samples": [
+          {
+            "timestamp": 1788076423462,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 233344,
+            "footprintBytes": null,
+            "cpuPercent": 0.04709103959421107
+          },
+          {
+            "timestamp": 1788076423462,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 111472,
+            "footprintBytes": null,
+            "cpuPercent": 0.9551228098935635
+          },
+          {
+            "timestamp": 1788076423462,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49040,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076423462,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 308448,
+            "footprintBytes": null,
+            "cpuPercent": 0.8472002179052113
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.34326171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 238944256,
+          "heapUsedBytes": 60626164,
+          "heapTotalBytes": 63422464,
+          "externalBytes": 16950921
+        }
+      },
+      {
+        "timestamp": 1788076425462,
+        "samples": [
+          {
+            "timestamp": 1788076425462,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 233568,
+            "footprintBytes": null,
+            "cpuPercent": 0.07698366513986668
+          },
+          {
+            "timestamp": 1788076425462,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 111472,
+            "footprintBytes": null,
+            "cpuPercent": 0.9719686258197024
+          },
+          {
+            "timestamp": 1788076425462,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49040,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076425462,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 308448,
+            "footprintBytes": null,
+            "cpuPercent": 0.6248671918162659
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.34326171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 239173632,
+          "heapUsedBytes": 60213460,
+          "heapTotalBytes": 62636032,
+          "externalBytes": 16949338
+        }
+      },
+      {
+        "timestamp": 1788076427463,
+        "samples": [
+          {
+            "timestamp": 1788076427463,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 233584,
+            "footprintBytes": null,
+            "cpuPercent": 0.060371018711891655
+          },
+          {
+            "timestamp": 1788076427463,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 111488,
+            "footprintBytes": null,
+            "cpuPercent": 1.4985326586545646
+          },
+          {
+            "timestamp": 1788076427463,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49040,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076427463,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 308064,
+            "footprintBytes": null,
+            "cpuPercent": 1.176834163268448
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.34326171875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 239190016,
+          "heapUsedBytes": 60527236,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16950957
+        }
+      },
+      {
+        "timestamp": 1788076429463,
+        "samples": [
+          {
+            "timestamp": 1788076429463,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 233712,
+            "footprintBytes": null,
+            "cpuPercent": 0.058739567962698594
+          },
+          {
+            "timestamp": 1788076429463,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 111488,
+            "footprintBytes": null,
+            "cpuPercent": 1.212461160253693
+          },
+          {
+            "timestamp": 1788076429463,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 49040,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076429463,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 308816,
+            "footprintBytes": null,
+            "cpuPercent": 1.8108764558068065
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4724464026,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.3564453125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 239337472,
+          "heapUsedBytes": 60200672,
+          "heapTotalBytes": 62636032,
+          "externalBytes": 16948363
+        }
+      },
+      {
+        "timestamp": 1788076431464,
+        "samples": [
+          {
+            "timestamp": 1788076431464,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 232160,
+            "footprintBytes": null,
+            "cpuPercent": 0.0657864162668595
+          },
+          {
+            "timestamp": 1788076431464,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 111152,
+            "footprintBytes": null,
+            "cpuPercent": 1.461986769924815
+          },
+          {
+            "timestamp": 1788076431464,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48976,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076431464,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 308368,
+            "footprintBytes": null,
+            "cpuPercent": 1.1564782218713225
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4638564680,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.3564453125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 237731840,
+          "heapUsedBytes": 60518720,
+          "heapTotalBytes": 62898176,
+          "externalBytes": 16950072
+        }
+      },
+      {
+        "timestamp": 1788076433466,
+        "samples": [
+          {
+            "timestamp": 1788076433466,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 202416,
+            "footprintBytes": null,
+            "cpuPercent": 0.06203808733803387
+          },
+          {
+            "timestamp": 1788076433466,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 104416,
+            "footprintBytes": null,
+            "cpuPercent": 0.8862048443224725
+          },
+          {
+            "timestamp": 1788076433466,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 47392,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076433466,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 289856,
+            "footprintBytes": null,
+            "cpuPercent": 0.4991909805575488
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4466765988,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.00732421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 207273984,
+          "heapUsedBytes": 60835004,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16951781
+        }
+      },
+      {
+        "timestamp": 1788076435467,
+        "samples": [
+          {
+            "timestamp": 1788076435467,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 199104,
+            "footprintBytes": null,
+            "cpuPercent": 0.06400025185342131
+          },
+          {
+            "timestamp": 1788076435467,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 101760,
+            "footprintBytes": null,
+            "cpuPercent": 0.7206869343652573
+          },
+          {
+            "timestamp": 1788076435467,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46864,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076435467,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 286752,
+            "footprintBytes": null,
+            "cpuPercent": 0.6907373178167442
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4466765988,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.00732421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 203882496,
+          "heapUsedBytes": 60505352,
+          "heapTotalBytes": 62898176,
+          "externalBytes": 16950164
+        }
+      },
+      {
+        "timestamp": 1788076437468,
+        "samples": [
+          {
+            "timestamp": 1788076437468,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 198560,
+            "footprintBytes": null,
+            "cpuPercent": 0.06453063518830804
+          },
+          {
+            "timestamp": 1788076437468,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 101696,
+            "footprintBytes": null,
+            "cpuPercent": 0.8725541578878736
+          },
+          {
+            "timestamp": 1788076437468,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46848,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076437468,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 286768,
+            "footprintBytes": null,
+            "cpuPercent": 0.8759413277936571
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4466765988,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.00732421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 203325440,
+          "heapUsedBytes": 60826384,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16951873
+        }
+      },
+      {
+        "timestamp": 1788076439469,
+        "samples": [
+          {
+            "timestamp": 1788076439469,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 200720,
+            "footprintBytes": null,
+            "cpuPercent": 0.08024397667283546
+          },
+          {
+            "timestamp": 1788076439469,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 101744,
+            "footprintBytes": null,
+            "cpuPercent": 1.1597285703361584
+          },
+          {
+            "timestamp": 1788076439469,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48272,
+            "footprintBytes": null,
+            "cpuPercent": 0.0051604977268819695
+          },
+          {
+            "timestamp": 1788076439469,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 288848,
+            "footprintBytes": null,
+            "cpuPercent": 1.0253705151324917
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4466765988,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.76611328125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 205537280,
+          "heapUsedBytes": 60497036,
+          "heapTotalBytes": 62898176,
+          "externalBytes": 16950436
+        }
+      },
+      {
+        "timestamp": 1788076441470,
+        "samples": [
+          {
+            "timestamp": 1788076441470,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 199488,
+            "footprintBytes": null,
+            "cpuPercent": 0.07021349144218098
+          },
+          {
+            "timestamp": 1788076441470,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 102656,
+            "footprintBytes": null,
+            "cpuPercent": 1.1273093231849451
+          },
+          {
+            "timestamp": 1788076441470,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48384,
+            "footprintBytes": null,
+            "cpuPercent": 0.0018109643022716736
+          },
+          {
+            "timestamp": 1788076441470,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 309232,
+            "footprintBytes": null,
+            "cpuPercent": 1.717265910103395
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4552665334,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.76611328125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 204275712,
+          "heapUsedBytes": 60855872,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16952169
+        }
+      },
+      {
+        "timestamp": 1788076443471,
+        "samples": [
+          {
+            "timestamp": 1788076443471,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 202096,
+            "footprintBytes": null,
+            "cpuPercent": 0.2296372328894588
+          },
+          {
+            "timestamp": 1788076443471,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 103184,
+            "footprintBytes": null,
+            "cpuPercent": 1.4538627413744853
+          },
+          {
+            "timestamp": 1788076443471,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48448,
+            "footprintBytes": null,
+            "cpuPercent": 0.002217625663788459
+          },
+          {
+            "timestamp": 1788076443471,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 307392,
+            "footprintBytes": null,
+            "cpuPercent": 1.2385000617194797
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4466765988,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.54443359375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 206946304,
+          "heapUsedBytes": 60810176,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 17016423
+        }
+      },
+      {
+        "timestamp": 1788076445473,
+        "samples": [
+          {
+            "timestamp": 1788076445473,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 202432,
+            "footprintBytes": null,
+            "cpuPercent": 0.061772625770065426
+          },
+          {
+            "timestamp": 1788076445473,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 103200,
+            "footprintBytes": null,
+            "cpuPercent": 0.9728687999944038
+          },
+          {
+            "timestamp": 1788076445473,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48448,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076445473,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 307536,
+            "footprintBytes": null,
+            "cpuPercent": 0.6786878135989391
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4552665334,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.54443359375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 207290368,
+          "heapUsedBytes": 61128632,
+          "heapTotalBytes": 63422464,
+          "externalBytes": 17018132
+        }
+      },
+      {
+        "timestamp": 1788076447474,
+        "samples": [
+          {
+            "timestamp": 1788076447474,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 195184,
+            "footprintBytes": null,
+            "cpuPercent": 0.06572998061512021
+          },
+          {
+            "timestamp": 1788076447474,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 100000,
+            "footprintBytes": null,
+            "cpuPercent": 0.781895990515251
+          },
+          {
+            "timestamp": 1788076447474,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 48016,
+            "footprintBytes": null,
+            "cpuPercent": 0.0003372430208181366
+          },
+          {
+            "timestamp": 1788076447474,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 298624,
+            "footprintBytes": null,
+            "cpuPercent": 0.6515860446060994
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4466765988,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.54443359375,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 199868416,
+          "heapUsedBytes": 60807268,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16950869
+        }
+      },
+      {
+        "timestamp": 1788076449476,
+        "samples": [
+          {
+            "timestamp": 1788076449476,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 161760,
+            "footprintBytes": null,
+            "cpuPercent": 0.04911096968594955
+          },
+          {
+            "timestamp": 1788076449476,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 95552,
+            "footprintBytes": null,
+            "cpuPercent": 0.7263291005190572
+          },
+          {
+            "timestamp": 1788076449476,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46512,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076449476,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 255744,
+            "footprintBytes": null,
+            "cpuPercent": 0.5468785513013342
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4380866642,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 11.26220703125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 165642240,
+          "heapUsedBytes": 61122072,
+          "heapTotalBytes": 63684608,
+          "externalBytes": 16952578
+        }
+      },
+      {
+        "timestamp": 1788076451476,
+        "samples": [
+          {
+            "timestamp": 1788076451476,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 160448,
+            "footprintBytes": null,
+            "cpuPercent": 0.08123233685667164
+          },
+          {
+            "timestamp": 1788076451476,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 94640,
+            "footprintBytes": null,
+            "cpuPercent": 0.9315889880077509
+          },
+          {
+            "timestamp": 1788076451476,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46608,
+            "footprintBytes": null,
+            "cpuPercent": 0.011623192593551704
+          },
+          {
+            "timestamp": 1788076451476,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 259776,
+            "footprintBytes": null,
+            "cpuPercent": 1.4263194809661597
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4380866642,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 11.26220703125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 164298752,
+          "heapUsedBytes": 60785948,
+          "heapTotalBytes": 64208896,
+          "externalBytes": 16949804
+        }
+      },
+      {
+        "timestamp": 1788076453477,
+        "samples": [
+          {
+            "timestamp": 1788076453477,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 152976,
+            "footprintBytes": null,
+            "cpuPercent": 0.07305725789967911
+          },
+          {
+            "timestamp": 1788076453477,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 91072,
+            "footprintBytes": null,
+            "cpuPercent": 1.429228216762948
+          },
+          {
+            "timestamp": 1788076453477,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46256,
+            "footprintBytes": null,
+            "cpuPercent": 0.00016241343363986995
+          },
+          {
+            "timestamp": 1788076453477,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 252544,
+            "footprintBytes": null,
+            "cpuPercent": 1.3568695719095334
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4294967296,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.60009765625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 156647424,
+          "heapUsedBytes": 61103048,
+          "heapTotalBytes": 64471040,
+          "externalBytes": 16951513
+        }
+      },
+      {
+        "timestamp": 1788076455479,
+        "samples": [
+          {
+            "timestamp": 1788076455479,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 152448,
+            "footprintBytes": null,
+            "cpuPercent": 0.07195834097275337
+          },
+          {
+            "timestamp": 1788076455479,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 88832,
+            "footprintBytes": null,
+            "cpuPercent": 1.229637604950176
+          },
+          {
+            "timestamp": 1788076455479,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 46272,
+            "footprintBytes": null,
+            "cpuPercent": 0.0008181229087904122
+          },
+          {
+            "timestamp": 1788076455479,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 248656,
+            "footprintBytes": null,
+            "cpuPercent": 0.8045298936911137
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4209067950,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.60009765625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 156106752,
+          "heapUsedBytes": 61419796,
+          "heapTotalBytes": 64733184,
+          "externalBytes": 16953222
+        }
+      },
+      {
+        "timestamp": 1788076457480,
+        "samples": [
+          {
+            "timestamp": 1788076457480,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 149488,
+            "footprintBytes": null,
+            "cpuPercent": 0.07320601230065901
+          },
+          {
+            "timestamp": 1788076457480,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 88224,
+            "footprintBytes": null,
+            "cpuPercent": 1.4902139010176862
+          },
+          {
+            "timestamp": 1788076457480,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 45472,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076457480,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 240032,
+            "footprintBytes": null,
+            "cpuPercent": 1.8578838438626306
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4209067950,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 10.60009765625,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 153075712,
+          "heapUsedBytes": 61026580,
+          "heapTotalBytes": 63946752,
+          "externalBytes": 16951695
+        }
+      },
+      {
+        "timestamp": 1788076459480,
+        "samples": [
+          {
+            "timestamp": 1788076459480,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 149792,
+            "footprintBytes": null,
+            "cpuPercent": 0.07067942715739377
+          },
+          {
+            "timestamp": 1788076459480,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 92832,
+            "footprintBytes": null,
+            "cpuPercent": 1.0009036421577056
+          },
+          {
+            "timestamp": 1788076459480,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 45472,
+            "footprintBytes": null,
+            "cpuPercent": 0.0001936726277851998
+          },
+          {
+            "timestamp": 1788076459480,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 240272,
+            "footprintBytes": null,
+            "cpuPercent": 0.8631726177802701
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4209067950,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.9111328125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 153387008,
+          "heapUsedBytes": 61346152,
+          "heapTotalBytes": 63946752,
+          "externalBytes": 16953404
+        }
+      },
+      {
+        "timestamp": 1788076461481,
+        "samples": [
+          {
+            "timestamp": 1788076461481,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 149152,
+            "footprintBytes": null,
+            "cpuPercent": 0.07303482532363717
+          },
+          {
+            "timestamp": 1788076461481,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 92592,
+            "footprintBytes": null,
+            "cpuPercent": 0.987549055083636
+          },
+          {
+            "timestamp": 1788076461481,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 45152,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076461481,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 239152,
+            "footprintBytes": null,
+            "cpuPercent": 0.7557465375830306
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4209067950,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.9111328125,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 152731648,
+          "heapUsedBytes": 61013200,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16951821
+        }
+      },
+      {
+        "timestamp": 1788076463482,
+        "samples": [
+          {
+            "timestamp": 1788076463482,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 148624,
+            "footprintBytes": null,
+            "cpuPercent": 0.06234642997806785
+          },
+          {
+            "timestamp": 1788076463482,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 92320,
+            "footprintBytes": null,
+            "cpuPercent": 0.6711564114495114
+          },
+          {
+            "timestamp": 1788076463482,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 44512,
+            "footprintBytes": null,
+            "cpuPercent": 0.0005685120776954845
+          },
+          {
+            "timestamp": 1788076463482,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 238720,
+            "footprintBytes": null,
+            "cpuPercent": 0.5606623618725854
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4294967296,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.357421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 152190976,
+          "heapUsedBytes": 61329248,
+          "heapTotalBytes": 63684608,
+          "externalBytes": 16953530
+        }
+      },
+      {
+        "timestamp": 1788076465483,
+        "samples": [
+          {
+            "timestamp": 1788076465483,
+            "pid": 2825,
+            "type": "main",
+            "rssBytes": 0,
+            "workingSetKb": 178928,
+            "footprintBytes": null,
+            "cpuPercent": 7.886489972306035
+          },
+          {
+            "timestamp": 1788076465483,
+            "pid": 2852,
+            "type": "gpu",
+            "rssBytes": 0,
+            "workingSetKb": 74272,
+            "footprintBytes": null,
+            "cpuPercent": 0.48913350388028465
+          },
+          {
+            "timestamp": 1788076465483,
+            "pid": 2853,
+            "type": "utility",
+            "rssBytes": 0,
+            "workingSetKb": 38096,
+            "footprintBytes": null,
+            "cpuPercent": 0
+          },
+          {
+            "timestamp": 1788076465483,
+            "pid": 2866,
+            "type": "renderer",
+            "rssBytes": 0,
+            "workingSetKb": 1269360,
+            "footprintBytes": null,
+            "cpuPercent": 12.54427945433319
+          }
+        ],
+        "host": {
+          "availableMemoryBytes": 4123168604,
+          "availableMemorySource": "memory-pressure",
+          "loadAverage1m": 9.357421875,
+          "thermal": null,
+          "pageinsDelta": null,
+          "pageoutsDelta": null
+        },
+        "mainProcess": {
+          "rssBytes": 183304192,
+          "heapUsedBytes": 60990976,
+          "heapTotalBytes": 63160320,
+          "externalBytes": 16950756
+        }
+      }
+    ],
+    "markers": [
+      {
+        "timestamp": 1788076383524,
+        "name": "fixture-ready"
+      },
+      {
+        "timestamp": 1788076466792,
+        "name": "snapshot-taken"
+      }
+    ],
+    "hostSamples": [
+      {
+        "availableMemoryBytes": 4982162063,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.46826171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4294967296,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.46826171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4294967296,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.4306640625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4380866642,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.4306640625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4552665334,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.4306640625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4552665334,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 11.83544921875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4552665334,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 11.83544921875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4638564680,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.56884765625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4552665334,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.56884765625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4638564680,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.56884765625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.84326171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4638564680,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.84326171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4638564680,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4638564680,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 12.375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 11.5439453125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 11.5439453125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.859375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.859375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.859375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.06982421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.06982421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.34326171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.34326171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.34326171875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4724464026,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.3564453125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4638564680,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.3564453125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4466765988,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.00732421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4466765988,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.00732421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4466765988,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.00732421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4466765988,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.76611328125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4552665334,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.76611328125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4466765988,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.54443359375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4552665334,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.54443359375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4466765988,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.54443359375,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4380866642,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 11.26220703125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4380866642,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 11.26220703125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4294967296,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.60009765625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4209067950,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.60009765625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4209067950,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 10.60009765625,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4209067950,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.9111328125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4209067950,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.9111328125,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4294967296,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.357421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      {
+        "availableMemoryBytes": 4123168604,
+        "availableMemorySource": "memory-pressure",
+        "loadAverage1m": 9.357421875,
+        "thermal": null,
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      }
+    ]
+  },
+  "externalCrossCheck": {
+    "start": {
+      "atMs": 1788076403558,
+      "pid": 2825,
+      "roles": {
+        "main": 226508800,
+        "daemon": 73039872,
+        "renderer": 684883968,
+        "utility": 49102848,
+        "gpu": 118767616
+      }
+    },
+    "end": {
+      "atMs": 1788076463594,
+      "pid": 2825,
+      "roles": {
+        "main": 150454272,
+        "daemon": 62898176,
+        "renderer": 242958336,
+        "utility": 43827200,
+        "gpu": 93143040
+      }
+    }
+  },
+  "heapBoot": {
+    "takenAt": "2026-08-30T07:53:02.626Z",
+    "totalSelfBytes": 2117876,
+    "nodeWidth": 6,
+    "topConstructors": [
+      {
+        "name": "Object",
+        "selfSizeBytes": 1189240
+      },
+      {
+        "name": "FiberNode",
+        "selfSizeBytes": 247312
+      },
+      {
+        "name": "Array",
+        "selfSizeBytes": 216240
+      },
+      {
+        "name": "Generator",
+        "selfSizeBytes": 36080
+      },
+      {
+        "name": "Map",
+        "selfSizeBytes": 27996
+      },
+      {
+        "name": "system / Context / scope @222561",
+        "selfSizeBytes": 19968
+      },
+      {
+        "name": "DefinedInfo",
+        "selfSizeBytes": 17496
+      },
+      {
+        "name": "system / Context / scope @589683",
+        "selfSizeBytes": 12900
+      },
+      {
+        "name": "system / Context / scope @589687",
+        "selfSizeBytes": 12900
+      },
+      {
+        "name": "system / Context / scope @514925",
+        "selfSizeBytes": 12288
+      }
+    ]
+  },
+  "heapIdle": {
+    "takenAt": "2026-08-30T07:54:26.786Z",
+    "totalSelfBytes": 4755092,
+    "nodeWidth": 6,
+    "topConstructors": [
+      {
+        "name": "Object",
+        "selfSizeBytes": 2616532
+      },
+      {
+        "name": "FiberNode",
+        "selfSizeBytes": 764712
+      },
+      {
+        "name": "Array",
+        "selfSizeBytes": 493904
+      },
+      {
+        "name": "system / Context / scope @222561",
+        "selfSizeBytes": 45672
+      },
+      {
+        "name": "Generator",
+        "selfSizeBytes": 38476
+      },
+      {
+        "name": "Map",
+        "selfSizeBytes": 33580
+      },
+      {
+        "name": "system / Context / scope @514925",
+        "selfSizeBytes": 28488
+      },
+      {
+        "name": "system / Context / scope @514963",
+        "selfSizeBytes": 27432
+      },
+      {
+        "name": "system / Context / scope @514995",
+        "selfSizeBytes": 23140
+      },
+      {
+        "name": "system / Context / scope @513501",
+        "selfSizeBytes": 21268
+      }
+    ]
+  },
+  "gitCommit": "508f7c8ecae6aafc71adbeb8ee4064bc4e8abd21"
+}
