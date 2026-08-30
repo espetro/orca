@@ -75,6 +75,7 @@
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/install-dev-cli.mjs",
     "test:repro:skills-cli-runtime": "pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli",
+    "build:bench-app": "node config/scripts/build-bench-app.mjs",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build:electron-vite:parallel": "node config/scripts/run-electron-vite-targets-in-parallel.mjs",
     "build:web": "node config/scripts/run-vite-web-build.mjs && node config/scripts/verify-web-build.mjs",
