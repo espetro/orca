@@ -17,6 +17,7 @@ import {
   saveStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
+import { installResourceE2EBridge } from '../lib/resource-e2e-bridge'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 
@@ -65,6 +66,7 @@ function WebRoot(): React.JSX.Element {
   }
 
   installWebPreloadApi()
+  installResourceE2EBridge()
   return (
     <Suspense fallback={<div className="min-h-dvh bg-background" />}>
       <App />
