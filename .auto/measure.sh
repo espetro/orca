@@ -4,8 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." # repo root (worktree)
 
-# Coordinator pre-builds the pre-loop baseline app here; override with ORCA_BENCH_BASE.
-BASE="${ORCA_BENCH_BASE:-$HOME/Documents/prjcts/_own/orca-mem-worktrees/memloop/.auto/base-app/Orca.app}"
+# Pinned pre-loop baseline app lives OUTSIDE the repo: electron-builder asar-packs
+# the repo directory, so a baseline stored under .auto/ would be embedded in the
+# candidate app and inflate its RSS. Override with ORCA_BENCH_BASE.
+BASE="${ORCA_BENCH_BASE:-$HOME/Documents/prjcts/_own/orca-mem-worktrees/bench-bases/orca-mem-rss/Orca.app}"
 if [[ ! -d "$BASE" ]]; then
   echo "ERROR: baseline app not found at $BASE" >&2
   echo "The coordinator must build it there first (bench build at the lane's starting commit), or set ORCA_BENCH_BASE." >&2
@@ -13,11 +15,12 @@ if [[ ! -d "$BASE" ]]; then
 fi
 
 # Renderer-only build when renderer assets already exist (skip slow native step); else full build.
+# Exclude the pinned baseline from the asar; paths outside the repo are ignored anyway.
 BUILD_ARGS=()
 if [[ -d out/renderer/assets ]]; then
   BUILD_ARGS+=(--renderer-only)
 fi
-CAND="$(node config/scripts/build-bench-app.mjs "${BUILD_ARGS[@]}")"
+CAND="$(node config/scripts/build-bench-app.mjs "${BUILD_ARGS[@]}" | tail -n 1)"
 if [[ ! -d "$CAND" ]]; then
   echo "ERROR: bench build did not yield an app path (got: '$CAND')" >&2
   exit 2
@@ -25,6 +28,12 @@ fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+KEEP=0
+if [[ "${MEASURE_KEEP_ARTIFACTS:-0}" == "1" ]]; then
+  KEEP=1
+  trap '' EXIT
+  echo "artifacts kept in $TMP" >&2
+fi
 
 analyze() { # $1=outdir ; prints MAIN/COMB/HEAP byte deltas
   # The comparison artifact omits mainProcess.rssBytes (samples-only roles), so
@@ -67,23 +76,19 @@ console.log(`HEAP_MB=${mb(heapA - heapB).toFixed(2)}`)
 EOF
 }
 
-# Stage 1 screen. NOTE: harness requires --runs >= 3 in --ab mode (MIN_AB_RUNS),
-# so the screen is 3 runs with a shortened window instead of the planned 1-run screen.
+# Protocol (empirical, from decay probes on this machine): the app needs ~2.5min
+# to reach steady-state RSS after the fixture (progressive GC), so a long settle
+# is mandatory; short-settle screens measured a transient, not idle RSS. One
+# honest 3-run A/B replaces the planned screen+escalate ladder; --runs 1 is not
+# possible (harness MIN_AB_RUNS=3) and pooled per-side medians already denoise.
+SETTLE_S="${MEASURE_SETTLE_S:-120}"
+WINDOW_S="${MEASURE_WINDOW_S:-60}"
 node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
-  --runs 3 --settle-s 15 --window-s 45 --no-editor --out "$TMP/s1"
+  --runs 3 --settle-s "$SETTLE_S" --window-s "$WINDOW_S" --no-editor --out "$TMP/s1"
 eval "$(analyze "$TMP/s1")"
 
-ESC=0
-if (( MAIN <= -3145728 )); then
-  # Confirmed: longer settle + full 60s window, fresh runs.
-  node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
-    --runs 3 --settle-s 20 --window-s 60 --no-editor --out "$TMP/s3"
-  eval "$(analyze "$TMP/s3")"
-  ESC=1
-fi
-
-mb() { node -e "console.log((process.argv[1]/1048576).toFixed(2))" "$1"; }
+mb() { awk -v b="$1" 'BEGIN{printf "%.2f", b/1048576}'; }
 echo "METRIC main_rss_delta_mb=$(mb "$MAIN")"
 echo "METRIC combined_rss_delta_mb=$(mb "$COMB")"
 echo "METRIC heap_used_delta_mb=$(mb "$HEAP")"
-if (( ESC )); then echo "# escalated"; fi
+echo "# settle=${SETTLE_S}s window=${WINDOW_S}s runs=3" >&2

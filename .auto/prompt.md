@@ -10,7 +10,7 @@ Reduce main-process RSS delta at idle (candidate vs pinned baseline app) in the 
 
 # How to Run
 
-`./.auto/measure.sh` builds the candidate via `config/scripts/build-bench-app.mjs` (renderer-only when `out/renderer/assets` exists, else full), benchmarks against the pinned baseline (`ORCA_BENCH_BASE` or `.auto/base-app/Orca.app`), and prints the three METRIC lines. Screen ~6-8 min; a primary improvement of >= 3 MB auto-escalates to a longer-window confirmation (~15-20 min).
+`./.auto/measure.sh` builds the candidate via `config/scripts/build-bench-app.mjs` (renderer-only when `out/renderer/assets` exists, else full), benchmarks against the pinned baseline (`ORCA_BENCH_BASE` or `../bench-bases/orca-mem-rss/Orca.app` outside the repo; it must not live under the repo because electron-builder packs the repo directory into the asar), and prints three METRIC lines: `main_rss_delta_mb` (primary), `combined_rss_delta_mb`, `heap_used_delta_mb`. One 3-run A/B with settle 120s / window 60s, roughly 16-18 min per iteration. There is NO screen-then-escalate ladder: the app needs about 2.5 min after the fixture to reach steady-state RSS (progressive GC), so short-settle screens measured a transient, not idle RSS. Do not shorten the settle.
 
 # Files in Scope
 
@@ -34,10 +34,14 @@ Reduce main-process RSS delta at idle (candidate vs pinned baseline app) in the 
 
 - `./.auto/checks.sh` runs automatically and must pass.
 - No new dependencies.
-- Do not change benchmark methodology: settle/window params and fixture stay as measure.sh sets them.
+- Do not change benchmark methodology: settle/window params, fixture, and the single 3-run protocol stay as measure.sh sets them.
+- If a keep decision looks marginal (delta within the run-to-run spread seen in log.jsonl), rerun measure.sh once before keeping.
 - Never build the app by hand or without `build-bench-app.mjs` (store exposure gotcha: VITE_EXPOSE_STORE is handled internally; a raw electron-vite build produces a broken bench app).
+- Never store app bundles under the repo directory: electron-builder asar-packs the repo, so any bundle inside it gets embedded in the candidate app and inflates its RSS (this polluted an early baseline run).
 
 # What's Been Tried
+
+Baseline sanity (run 0 in log.jsonl): candidate vs pinned base with IDENTICAL code measured +19.17MB. That number is the machine noise floor, not a signal: per-run main RSS medians ranged 112-226MB across six identical runs. Treat |delta| < 20MB as noise unless the loop runs on a quieter machine; consider raising --runs for marginal candidates.
 
 Priors with verdicts pending from separate bisects; treat as hypotheses, not facts (see ideas.md):
 - F1 warp theme worker teardown
@@ -46,4 +50,4 @@ Priors with verdicts pending from separate bisects; treat as hypotheses, not fac
 
 # Loop Rules
 
-Autoresearch defaults apply: loop until maxIterations, primary metric is king, annotate asi. Extra rule: any keep decided on the 3-run screen must be re-confirmed with a full-length (settle 20 / window 60) run before finalize; measure.sh does this automatically on escalation, but if you keep based on a screen-only result, rerun measure.sh before finalizing.
+Autoresearch defaults apply: loop until maxIterations, primary metric is king, annotate asi. Every run already uses the full settle 120 / window 60 protocol, so a single measure.sh result is decision-grade EXCEPT near the ~20MB noise floor documented in What's Been Tried; rerun once when a delta is inside it.
