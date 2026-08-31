@@ -15,7 +15,18 @@ const rendererOutput = resolve('out/renderer')
 const webOutput = resolve('out/web')
 const stagingOutput = resolve(dirname(webOutput), `.web-projection-${process.pid}`)
 const manifestPath = join(rendererOutput, '.vite', 'manifest.json')
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+// Vite build manifest shape (subset the projection consumes).
+type RendererManifestEntry = {
+  isEntry?: boolean
+  file?: string
+  css?: string[]
+  assets?: string[]
+  imports?: string[]
+  dynamicImports?: string[]
+}
+const manifest: Record<string, RendererManifestEntry | undefined> = JSON.parse(
+  readFileSync(manifestPath, 'utf8')
+)
 const selectedFiles = new Set(['web-index.html'])
 const visitedEntries = new Set()
 
@@ -31,7 +42,7 @@ function assertEntryIsolation() {
     const pending = [sourceEntry]
     while (pending.length > 0) {
       const key = pending.pop()
-      if (visited.has(key)) {
+      if (key === undefined || visited.has(key)) {
         continue
       }
       visited.add(key)
@@ -74,6 +85,9 @@ function visitManifestEntry(key) {
     throw new Error(`Renderer manifest is missing entry: ${key}`)
   }
 
+  if (entry.file === undefined) {
+    throw new Error(`Renderer manifest entry has no output file: ${key}`)
+  }
   addOutputPath(entry.file)
   for (const outputPath of [...(entry.css ?? []), ...(entry.assets ?? [])]) {
     addOutputPath(outputPath)

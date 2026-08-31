@@ -39,13 +39,15 @@ export function legacy7zaRelativePath(platform = process.platform, arch = proces
 // concurrent callers would each capture the other's patched function as their
 // "original" and the last `finally` would restore a diverting stub permanently.
 let stdoutDivertDepth = 0
-let originalStdoutWrite = null
+let originalStdoutWrite: typeof process.stdout.write | null = null
 
-async function withStdoutDivertedToStderr(run) {
+type StdoutWrite = typeof process.stdout.write
+
+async function withStdoutDivertedToStderr(run: () => Promise<unknown>) {
   if (stdoutDivertDepth === 0) {
     originalStdoutWrite = process.stdout.write
-    process.stdout.write = (chunk, encoding, callback) =>
-      process.stderr.write(chunk, encoding, callback)
+    process.stdout.write = ((chunk, encoding, callback) =>
+      process.stderr.write(chunk, encoding, callback)) as StdoutWrite
   }
   stdoutDivertDepth += 1
   try {
@@ -53,7 +55,7 @@ async function withStdoutDivertedToStderr(run) {
   } finally {
     stdoutDivertDepth -= 1
     if (stdoutDivertDepth === 0) {
-      process.stdout.write = originalStdoutWrite
+      process.stdout.write = originalStdoutWrite as StdoutWrite
       originalStdoutWrite = null
     }
   }
@@ -79,9 +81,11 @@ export async function resolve7zaPath(projectDir = process.cwd()) {
   try {
     // The toolset is cached after the first download, so a release build has
     // already paid this cost by the time the signing gate runs.
-    const { getPath7za } = require('app-builder-lib/out/toolsets/7zip.js')
+    const { getPath7za } = require('app-builder-lib/out/toolsets/7zip.js') as {
+      getPath7za: () => Promise<string>
+    }
     const toolsetPath = await withStdoutDivertedToStderr(() => getPath7za())
-    if (!existsSync(toolsetPath)) {
+    if (typeof toolsetPath !== 'string' || !existsSync(toolsetPath)) {
       throw new Error(`app-builder-lib returned a 7za path that does not exist: ${toolsetPath}`)
     }
     return toolsetPath
@@ -96,7 +100,8 @@ if (import.meta.filename === process.argv[1]) {
   try {
     process.stdout.write(`${await resolve7zaPath()}\n`)
   } catch (error) {
-    process.stderr.write(`Could not resolve a 7za executable: ${error.message}\n`)
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`Could not resolve a 7za executable: ${message}\n`)
     process.exit(1)
   }
 }

@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url)
 
 const [input, output] = process.argv.slice(2)
 if (!input || !output) {
-  console.error('usage: generate-windows-blockmap.mjs <input.exe> <output.exe.blockmap>')
+  console.error('usage: generate-windows-blockmap.mts <input.exe> <output.exe.blockmap>')
   process.exit(1)
 }
 

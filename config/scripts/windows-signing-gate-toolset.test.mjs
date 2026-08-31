@@ -182,14 +182,14 @@ describe('Windows signing gates resolve 7za through the toolset resolver (#6487)
       expect(workflowSource(name)).not.toContain('node_modules/7zip-bin')
     })
 
-    it(`${name} resolves 7za via resolve-7za-path.mjs`, () => {
-      expect(workflowSource(name)).toContain('node config/scripts/resolve-7za-path.mjs')
+    it(`${name} resolves 7za via resolve-7za-path.mts`, () => {
+      expect(workflowSource(name)).toContain('node config/scripts/resolve-7za-path.mts')
     })
 
     it(`${name} checks resolver failure before trimming its output`, () => {
       const source = workflowSource(name)
       const code = codeOf(source)
-      const resolveIndex = code.indexOf('$7zaOutput = node config/scripts/resolve-7za-path.mjs')
+      const resolveIndex = code.indexOf('$7zaOutput = node config/scripts/resolve-7za-path.mts')
       const exitCodeIndex = code.indexOf('$7zaExitCode = $LASTEXITCODE')
       const exitGuard = blockAfter(source, 'if ($7zaExitCode -ne 0)')
       const trimIndex = code.indexOf('$7za = ($7zaOutput | Out-String).Trim()')

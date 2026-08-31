@@ -972,7 +972,7 @@ jobs:
           native-runtime: node
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/install-electron-package-binary.mts
 
       - name: Run skill package, transaction, and compatibility suites
         env:
@@ -1024,7 +1024,7 @@ jobs:
           native-runtime: node
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/install-electron-package-binary.mts
 
       - name: Run skill package, transaction, and compatibility suites
         env:
@@ -1753,7 +1753,7 @@ jobs:
           }
 
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/generate-windows-blockmap.mts 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
           if ($LASTEXITCODE -ne 0) { throw "blockmap generation failed with exit code $LASTEXITCODE" }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'
@@ -1862,7 +1862,7 @@ jobs:
             # tree — 7z parses the NSIS exe directly as its embedded payload.
             # Resolve 7za via app-builder-lib; electron-builder 26.9+ dropped the
             # bundled 7zip-bin package the old hardcoded path relied on (#6487).
-            $7zaOutput = node config/scripts/resolve-7za-path.mjs
+            $7zaOutput = node config/scripts/resolve-7za-path.mts
             $7zaExitCode = $LASTEXITCODE
             if ($7zaExitCode -ne 0) {
               throw "The 7za resolver exited with code $7zaExitCode for the inner-binary evidence gate."

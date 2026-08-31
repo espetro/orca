@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 
 const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mjs', import.meta.url))
 const sourceInstallScriptPath = fileURLToPath(
-  new URL('./install-electron-package-binary.mjs', import.meta.url)
+  new URL('./install-electron-package-binary.mts', import.meta.url)
 )
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cjs', import.meta.url)
@@ -338,7 +338,7 @@ function mkTempProject() {
   copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.mjs'))
   copyFileSync(
     sourceInstallScriptPath,
-    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mjs')
+    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mts')
   )
   copyFileSync(
     sourceNodePtyJobOwnershipPath,

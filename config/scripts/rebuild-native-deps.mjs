@@ -255,7 +255,7 @@ function runElectronPackageBinaryInstall() {
 
   const result = spawnSync(
     process.execPath,
-    ['config/scripts/install-electron-package-binary.mjs'],
+    ['config/scripts/install-electron-package-binary.mts'],
     {
       cwd: projectDir,
       env,
@@ -268,7 +268,7 @@ function runElectronPackageBinaryInstall() {
   }
   if (result.status !== 0) {
     throw new Error(
-      `config/scripts/install-electron-package-binary.mjs exited with status ${result.status}`
+      `config/scripts/install-electron-package-binary.mts exited with status ${result.status}`
     )
   }
 }

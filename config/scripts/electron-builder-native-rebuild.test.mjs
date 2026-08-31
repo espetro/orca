@@ -83,7 +83,7 @@ describe('electron-builder native rebuild hook', () => {
     expect(calls).toEqual([
       [
         process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mjs'],
+        ['config/scripts/build-windows-cli-launcher.mts'],
         expect.objectContaining({ stdio: 'inherit' })
       ],
       [

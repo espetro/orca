@@ -475,7 +475,7 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
-    expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.mjs')
+    expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.mts')
   })
 
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {

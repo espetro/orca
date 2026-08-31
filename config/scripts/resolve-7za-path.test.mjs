@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { legacy7zaRelativePath, resolve7zaPath } from './resolve-7za-path.mjs'
+import { legacy7zaRelativePath, resolve7zaPath } from './resolve-7za-path.mts'
 
 const projectRoot = resolve(import.meta.dirname, '../..')
 
@@ -117,7 +117,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
   // cold release runner.
   it('ignores an override that points at a missing file, in a cold process', () => {
     const dangling = join(tmpdir(), 'orca-7za-does-not-exist')
-    const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mjs'], {
+    const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mts'], {
       cwd: projectRoot,
       encoding: 'utf8',
       env: { ...process.env, ELECTRON_BUILDER_7ZIP_PATH: dangling },
@@ -132,7 +132,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
   }, 120_000)
 
   it('prints exactly one clean line the PowerShell gate can consume', () => {
-    const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mjs'], {
+    const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mts'], {
       cwd: projectRoot,
       encoding: 'utf8',
       timeout: 120_000
@@ -152,7 +152,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     const cache = mkdtempSync(join(tmpdir(), 'orca 7za cold cache '))
     try {
       const { VITEST: _vitest, ...envWithoutVitest } = process.env
-      const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mjs'], {
+      const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mts'], {
         cwd: projectRoot,
         encoding: 'utf8',
         env: { ...envWithoutVitest, ELECTRON_BUILDER_CACHE: cache },

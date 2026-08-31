@@ -199,17 +199,26 @@ function getDownloadRetryDelays() {
   return delays
 }
 
-function isTransientDownloadError(error) {
+type DownloadErrorCandidate = {
+  code?: string
+  statusCode?: unknown
+  status?: unknown
+  response?: { statusCode?: unknown; status?: unknown }
+  cause?: unknown
+}
+
+function isTransientDownloadError(error: unknown) {
   for (const candidate of getErrorChain(error)) {
-    if (transientDownloadErrorCodes.has(candidate?.code)) {
+    if (candidate.code !== undefined && transientDownloadErrorCodes.has(candidate.code)) {
       return true
     }
     const statusCode = getDownloadErrorStatusCode(candidate)
     if (
-      statusCode === 408 ||
-      statusCode === 425 ||
-      statusCode === 429 ||
-      (statusCode >= 500 && statusCode < 600)
+      typeof statusCode === 'number' &&
+      (statusCode === 408 ||
+        statusCode === 425 ||
+        statusCode === 429 ||
+        (statusCode >= 500 && statusCode < 600))
     ) {
       return true
     }
@@ -217,30 +226,35 @@ function isTransientDownloadError(error) {
   return false
 }
 
-function getDownloadErrorStatusCode(error) {
+function getDownloadErrorStatusCode(error: DownloadErrorCandidate) {
   // @electron/get FetchDownloader uses Fetch Response.status; older got uses statusCode.
-  return (
-    error?.statusCode ?? error?.status ?? error?.response?.statusCode ?? error?.response?.status
-  )
+  const statusCode = error.statusCode ?? error.response?.statusCode
+  if (typeof statusCode === 'number') {
+    return statusCode
+  }
+  const status = error.status ?? error.response?.status
+  return typeof status === 'number' ? status : undefined
 }
 
-function getErrorChain(error) {
-  const errors = []
-  let candidate = error
-  while (candidate && errors.length < 5) {
-    errors.push(candidate)
-    candidate = candidate.cause
+function getErrorChain(error: unknown): DownloadErrorCandidate[] {
+  const errors: DownloadErrorCandidate[] = []
+  let candidate: unknown = error
+  while (candidate !== null && candidate !== undefined && errors.length < 5) {
+    const current: DownloadErrorCandidate =
+      typeof candidate === 'object' ? (candidate as DownloadErrorCandidate) : {}
+    errors.push(current)
+    candidate = current.cause
   }
   return errors
 }
 
-function formatDownloadError(error) {
+function formatDownloadError(error: unknown) {
   for (const candidate of getErrorChain(error)) {
     const statusCode = getDownloadErrorStatusCode(candidate)
-    if (statusCode) {
+    if (statusCode !== undefined) {
       return `HTTP ${statusCode}`
     }
-    if (candidate?.code) {
+    if (typeof candidate.code === 'string' && candidate.code) {
       return candidate.code
     }
   }
@@ -271,8 +285,9 @@ function moveExtractedElectronDist(extractDir, electronDistDir) {
     // Why: macOS Electron archives rely on framework symlinks. Moving the
     // verified tree preserves them exactly; copying has broken them in CI.
     renameSync(extractDir, electronDistDir)
-  } catch (/** @type {any} */ err) {
-    if (err?.code !== 'EXDEV') {
+  } catch (err) {
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : ''
+    if (code !== 'EXDEV') {
       throw err
     }
     cpSync(extractDir, electronDistDir, {

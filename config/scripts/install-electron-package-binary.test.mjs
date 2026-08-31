@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const sourceScriptPath = fileURLToPath(
-  new URL('./install-electron-package-binary.mjs', import.meta.url)
+  new URL('./install-electron-package-binary.mts', import.meta.url)
 )
 
 describe('install-electron-package-binary', () => {
@@ -287,13 +287,13 @@ function mkTempProject() {
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
   copyFileSync(
     sourceScriptPath,
-    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mjs')
+    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mts')
   )
   return projectDir
 }
 
 function runInstallScript(projectDir, extraEnv = {}) {
-  return spawnSync(process.execPath, ['config/scripts/install-electron-package-binary.mjs'], {
+  return spawnSync(process.execPath, ['config/scripts/install-electron-package-binary.mts'], {
     cwd: projectDir,
     encoding: 'utf8',
     env: {

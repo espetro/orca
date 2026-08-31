@@ -260,7 +260,7 @@ export function prepareMacDevElectronApp(repoRoot: string): void {
     execFileSync(
       process.execPath,
       [
-        path.join(repoRoot, 'config', 'scripts', 'build-notification-status-macos.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'build-notification-status-macos.mts'),
         '--bundle-id',
         bundleId,
         '--single-arch',
@@ -279,7 +279,7 @@ export function prepareMacDevElectronApp(repoRoot: string): void {
     execFileSync(
       process.execPath,
       [
-        path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mts'),
         '--single-arch',
         '--output',
         path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')

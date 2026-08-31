@@ -5,8 +5,8 @@ on:
     paths:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
-      - 'config/scripts/build-computer-macos.mjs'
-      - 'config/scripts/build-windows-cli-launcher.mjs'
+      - 'config/scripts/build-computer-macos.mts'
+      - 'config/scripts/build-windows-cli-launcher.mts'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'

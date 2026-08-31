@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createLocalBuildVersion } from './build-mac-local.mjs'
+import { createLocalBuildVersion } from './build-mac-local.mts'
 
 describe('createLocalBuildVersion', () => {
   it('creates unique valid prerelease versions without changing the release base', () => {
