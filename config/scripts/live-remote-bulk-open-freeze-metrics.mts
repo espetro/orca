@@ -6,7 +6,7 @@
 export const DEFAULT_SOFT_MS = 2000
 export const DEFAULT_HARD_MS = 5000
 
-export function readFreezeNumberEnv(name, fallback) {
+export function readFreezeNumberEnv(name: string, fallback: number) {
   const raw = process.env[name]
   if (raw == null || raw.trim() === '') {
     return fallback
@@ -18,25 +18,38 @@ export function readFreezeNumberEnv(name, fallback) {
   return value
 }
 
-export function extractTerminalHandle(result) {
+type TerminalHandleSource = {
+  handle?: unknown
+  terminalHandle?: unknown
+  agentTerminalHandle?: unknown
+  terminal?: unknown
+  startupTerminal?: unknown
+  tab?: unknown
+  [key: string]: unknown
+}
+
+export function extractTerminalHandle(result: unknown): string | null {
   if (!result || typeof result !== 'object') {
     return null
   }
+  const source = result as TerminalHandleSource
   const candidates = [
-    result.handle,
-    result.terminalHandle,
-    result.agentTerminalHandle,
-    typeof result.terminal === 'string' ? result.terminal : result.terminal?.handle,
-    result.startupTerminal?.handle,
-    result.tab?.terminal,
-    result.tab?.handle
+    source.handle,
+    source.terminalHandle,
+    source.agentTerminalHandle,
+    typeof source.terminal === 'string'
+      ? source.terminal
+      : (source.terminal as TerminalHandleSource | undefined)?.handle,
+    (source.startupTerminal as TerminalHandleSource | undefined)?.handle,
+    (source.tab as TerminalHandleSource | undefined)?.terminal,
+    (source.tab as TerminalHandleSource | undefined)?.handle
   ]
   for (const value of candidates) {
     if (typeof value === 'string' && value.startsWith('term_')) {
       return value
     }
   }
-  for (const value of Object.values(result)) {
+  for (const value of Object.values(source)) {
     if (typeof value === 'string' && value.startsWith('term_')) {
       return value
     }
@@ -51,7 +64,7 @@ export function extractTerminalHandle(result) {
   return null
 }
 
-export function worktreeSelector(wt) {
+export function worktreeSelector(wt: { id?: unknown; path?: unknown } | undefined | null) {
   if (typeof wt?.id === 'string' && wt.id.length > 0) {
     return `id:${wt.id}`
   }
@@ -72,6 +85,13 @@ export function evaluateFreezeSignals({
   memoryProbeMs = null,
   softMs = DEFAULT_SOFT_MS,
   hardMs = DEFAULT_HARD_MS
+}: {
+  maxSwitchMs?: number
+  maxBatchWallMs?: number
+  statusProbeMs?: number
+  memoryProbeMs?: number | null
+  softMs?: number
+  hardMs?: number
 }) {
   const peakLatencyMs = Math.max(maxSwitchMs, maxBatchWallMs)
   const softFreeze =
@@ -85,11 +105,11 @@ export function evaluateFreezeSignals({
   return { peakLatencyMs, softFreeze, hardFreeze }
 }
 
-export function shouldCapSwitchTargets(maxSwitchTargets) {
+export function shouldCapSwitchTargets(maxSwitchTargets: number) {
   return Number.isFinite(maxSwitchTargets) && maxSwitchTargets > 0
 }
 
-export function applySwitchTargetCap(targets, maxSwitchTargets) {
+export function applySwitchTargetCap<T>(targets: T[], maxSwitchTargets: number) {
   if (!shouldCapSwitchTargets(maxSwitchTargets)) {
     return targets
   }
@@ -119,6 +139,15 @@ export function evaluatePermanentLockup({
   /** Fraction of opens that must fail to count as lockup without status hang. */
   failRateThreshold = 0.25,
   minTimedOutOps = 3
+}: {
+  timedOutOps?: number
+  statusHangMs?: number
+  consecutiveSwitchFailures?: number
+  openFailed?: number
+  openTotal?: number
+  permanentTimeoutMs?: number
+  failRateThreshold?: number
+  minTimedOutOps?: number
 }) {
   const failRate = openTotal > 0 ? openFailed / openTotal : 0
   const permanentLockup =
@@ -149,6 +178,14 @@ export function evaluateRealisticFreezeSignals({
   memoryProbeMs = null,
   softMs = DEFAULT_SOFT_MS,
   hardMs = DEFAULT_HARD_MS
+}: {
+  maxOpenMs?: number
+  firstOpenMs?: number
+  reconnectRefreshMs?: number
+  statusProbeMs?: number
+  memoryProbeMs?: number | null
+  softMs?: number
+  hardMs?: number
 }) {
   const peakLatencyMs = Math.max(maxOpenMs, firstOpenMs, reconnectRefreshMs)
   return evaluateFreezeSignals({
@@ -161,7 +198,7 @@ export function evaluateRealisticFreezeSignals({
   })
 }
 
-export function humanPaceDelayMs(baseMs, jitterMs = 0) {
+export function humanPaceDelayMs(baseMs: number, jitterMs = 0) {
   const base = Math.max(0, baseMs)
   const jitter = Math.max(0, jitterMs)
   if (jitter === 0) {
@@ -178,12 +215,34 @@ export const DEFAULT_STATUS_SLOW_MS = 15_000
  * Analyze mid-storm status samples for a continuous unhealthy window.
  * Sample: { tMs, ms, ok, hang }
  */
+export type StatusSample = {
+  tMs?: number
+  ms?: number
+  ok?: boolean
+  hang?: boolean
+  infrastructureError?: boolean
+}
+
+type StatusSummary = {
+  sampleCount?: number
+  maxStatusMs?: number
+  unhealthySampleCount?: number
+  infrastructureErrorCount?: number
+  longestUnhealthyWindowMs?: number
+}
+
 export function evaluateFullAppFreeze({
   statusSamples = [],
   statusSummary = {},
   foreverWindowMs = DEFAULT_FOREVER_WINDOW_MS,
   statusSlowMs = DEFAULT_STATUS_SLOW_MS,
   killOnlyRecovery = false
+}: {
+  statusSamples?: StatusSample[]
+  statusSummary?: StatusSummary
+  foreverWindowMs?: number
+  statusSlowMs?: number
+  killOnlyRecovery?: boolean
 }) {
   const infrastructureErrors = statusSamples.filter((sample) => sample.infrastructureError)
   const infrastructureErrorCount = Math.max(
@@ -213,7 +272,7 @@ export function evaluateFullAppFreeze({
   })
 
   let longest = statusSummary.longestUnhealthyWindowMs ?? 0
-  let runStart = null
+  let runStart: number | null = null
   for (const s of unhealthy) {
     if (s.unhealthy) {
       runStart ??= s.tMs ?? 0

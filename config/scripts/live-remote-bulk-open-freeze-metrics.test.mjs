@@ -11,7 +11,7 @@ import {
   REALISTIC_SCENARIOS,
   shouldCapSwitchTargets,
   worktreeSelector
-} from './live-remote-bulk-open-freeze-metrics.mjs'
+} from './live-remote-bulk-open-freeze-metrics.mts'
 
 describe('live-remote-bulk-open-freeze-metrics', () => {
   it('extracts term_ handles from nested create payloads', () => {

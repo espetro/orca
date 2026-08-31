@@ -11,7 +11,7 @@ import {
   physicalFootprintBytes,
   sampleMemory,
   sampleProductionPerformance
-} from './hang-watchdog-process-metrics.mjs'
+} from './hang-watchdog-process-metrics.mts'
 
 const INTERNAL_ENV = 'ORCA_HANG_WATCHDOG_BENCH_INTERNAL'
 const BOUNDARY_ENV = 'ORCA_HANG_WATCHDOG_BENCH_BOUNDARY'
@@ -33,8 +33,8 @@ const scriptPath = import.meta.filename
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const entryPath = path.join(repoRoot, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
 function forceGc() {
@@ -87,7 +87,7 @@ async function verifyBlockedMainDetection(markerPath, sendHeartbeat) {
   return true
 }
 
-function startChild(markerPath, timeoutMs, checkIntervalMs) {
+function startChild(markerPath: string, timeoutMs: number, checkIntervalMs: number) {
   const startedAt = process.hrtime.bigint()
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
@@ -101,8 +101,9 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
     }
   })
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+  const pids: number[] = [process.pid, child.pid!]
   return {
-    pids: [process.pid, child.pid],
+    pids,
     startupMs,
     sendHeartbeat: () => child.send?.({ type: 'heartbeat' }),
     shutdown: async () => {
@@ -119,7 +120,7 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
   }
 }
 
-function startWorker(markerPath, timeoutMs, checkIntervalMs) {
+function startWorker(markerPath: string, timeoutMs: number, checkIntervalMs: number) {
   const startedAt = process.hrtime.bigint()
   const worker = new Worker(entryPath, {
     workerData: {
@@ -130,8 +131,9 @@ function startWorker(markerPath, timeoutMs, checkIntervalMs) {
     }
   })
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+  const pids: number[] = [process.pid]
   return {
-    pids: [process.pid],
+    pids,
     startupMs,
     sendHeartbeat: () => worker.postMessage({ type: 'heartbeat' }),
     shutdown: async () => {
@@ -313,9 +315,9 @@ function electronPath() {
   )
 }
 
-function runTrial(executable, boundary) {
+function runTrial(executable: string, boundary: string) {
   for (let attempt = 1; attempt <= MAX_LAUNCH_ATTEMPTS; attempt += 1) {
-    const env = { ...process.env, [INTERNAL_ENV]: '1', [BOUNDARY_ENV]: boundary }
+    const env: NodeJS.ProcessEnv = { ...process.env, [INTERNAL_ENV]: '1', [BOUNDARY_ENV]: boundary }
     delete env.ELECTRON_RUN_AS_NODE
     const launcherDir = mkdtempSync(path.join(tmpdir(), 'orca-watchdog-bench-launcher-'))
     writeFileSync(

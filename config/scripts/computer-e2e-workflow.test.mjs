@@ -150,10 +150,10 @@ describe('computer-use e2e workflow', () => {
       expect.arrayContaining([
         'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs',
         'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
-        'config/scripts/macos-computer-helper-owner-loss-metrics.mjs',
-        'config/scripts/macos-computer-helper-owner-loss-processes.mjs',
+        'config/scripts/macos-computer-helper-owner-loss-metrics.mts',
+        'config/scripts/macos-computer-helper-owner-loss-processes.mts',
         'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs',
-        'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'
+        'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mts'
       ])
     )
   })
@@ -187,7 +187,7 @@ describe('computer-use e2e workflow', () => {
       'utf8'
     )
     const cleanup = readFileSync(
-      join(projectDir, 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mjs'),
+      join(projectDir, 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mts'),
       'utf8'
     )
 

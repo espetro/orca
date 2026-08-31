@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { signalValidatedProcessGroup } from './macos-computer-helper-owner-loss-processes.mjs'
+import { signalValidatedProcessGroup } from './macos-computer-helper-owner-loss-processes.mts'
 
 describe('macOS helper owner-loss benchmark group recovery', () => {
   it('retains uncertain stop state across cleanup stage failures', () => {

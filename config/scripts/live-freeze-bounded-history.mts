@@ -1,17 +1,17 @@
-export class BoundedLiveFreezeHistory {
-  #entries = []
-  #limit
+export class BoundedLiveFreezeHistory<T> {
+  #entries: T[] = []
+  #limit: number
   #nextIndex = 0
   #totalCount = 0
 
-  constructor(limit) {
+  constructor(limit: number) {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error(`History limit must be a positive integer, got ${limit}`)
     }
     this.#limit = limit
   }
 
-  add(entry) {
+  add(entry: T) {
     this.#totalCount += 1
     if (this.#entries.length < this.#limit) {
       this.#entries.push(entry)

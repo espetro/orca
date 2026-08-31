@@ -1,4 +1,11 @@
-export async function installSyntheticVisibleSpinners(page, count, animation, steps) {
+import type { Page } from 'playwright-core'
+
+export async function installSyntheticVisibleSpinners(
+  page: Page,
+  count: number,
+  animation: string,
+  steps: number
+) {
   if (count <= 0) {
     return
   }

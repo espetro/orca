@@ -3,22 +3,22 @@ import { execFileSync } from 'node:child_process'
 const SAMPLE_COUNT = 5
 const SAMPLE_INTERVAL_MS = 200
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
-export function median(values) {
+export function median(values: number[]) {
   const sorted = [...values].sort((left, right) => left - right)
   const middle = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
-export function percentile(values, fraction) {
+export function percentile(values: number[], fraction: number) {
   const sorted = [...values].sort((left, right) => left - right)
   return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)]
 }
 
-function parseCpuTimeSeconds(value) {
+function parseCpuTimeSeconds(value: string) {
   const [dayOrTime, clock] = value.includes('-') ? value.split('-', 2) : [null, value]
   const days = dayOrTime === null ? 0 : Number(dayOrTime)
   const parts = clock.split(':').map(Number)
@@ -31,7 +31,7 @@ function parseCpuTimeSeconds(value) {
   return days * 86_400 + hours * 3_600 + minutes * 60 + seconds
 }
 
-export function processSnapshot(pid) {
+export function processSnapshot(pid: number) {
   const raw = execFileSync(
     'ps',
     ['-o', 'rss=', '-o', 'time=', '-o', 'command=', '-p', String(pid)],
@@ -48,15 +48,16 @@ export function processSnapshot(pid) {
   }
 }
 
-export async function sampleProcess(pid) {
-  const samples = []
+export async function sampleProcess(pid: number) {
+  const samples: { rssBytes: number; cpuTimeSeconds: number; command: string }[] = []
   for (let index = 0; index < SAMPLE_COUNT; index += 1) {
     samples.push(processSnapshot(pid))
     await sleep(SAMPLE_INTERVAL_MS)
   }
+  const last = samples.at(-1)
   return {
     rssBytes: median(samples.map((sample) => sample.rssBytes)),
-    cpuTimeSeconds: samples.at(-1).cpuTimeSeconds,
-    command: samples.at(-1).command
+    cpuTimeSeconds: last?.cpuTimeSeconds ?? 0,
+    command: last?.command ?? ''
   }
 }

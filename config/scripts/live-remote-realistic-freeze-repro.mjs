@@ -21,9 +21,9 @@
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { createOrcaRpc } from './live-remote-freeze-rpc.mjs'
-import { startStatusWatchdog } from './live-remote-status-watchdog.mjs'
-import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mjs'
+import { createOrcaRpc } from './live-remote-freeze-rpc.mts'
+import { startStatusWatchdog } from './live-remote-status-watchdog.mts'
+import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mts'
 import {
   DEFAULT_FOREVER_WINDOW_MS,
   DEFAULT_HARD_MS,
@@ -37,7 +37,7 @@ import {
   readFreezeNumberEnv,
   REALISTIC_SCENARIOS,
   worktreeSelector
-} from './live-remote-bulk-open-freeze-metrics.mjs'
+} from './live-remote-bulk-open-freeze-metrics.mts'
 
 const root = path.resolve(import.meta.dirname, '../..')
 const reportDir = path.join(root, 'test-results', 'freeze-repro')

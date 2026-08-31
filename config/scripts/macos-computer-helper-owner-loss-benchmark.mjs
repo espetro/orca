@@ -11,7 +11,7 @@ import {
   percentile,
   processSnapshot,
   sampleProcess
-} from './macos-computer-helper-owner-loss-metrics.mjs'
+} from './macos-computer-helper-owner-loss-metrics.mts'
 import {
   benchmarkTrialNeedsCleanup,
   parseBenchmarkTrialResult,
@@ -20,8 +20,8 @@ import {
   spawnBenchmarkProcess,
   throwBenchmarkTrialFailures,
   writeProcessRecord
-} from './macos-computer-helper-owner-loss-processes.mjs'
-import { cleanupOwnerLossTrial } from './macos-computer-helper-owner-loss-trial-cleanup.mjs'
+} from './macos-computer-helper-owner-loss-processes.mts'
+import { cleanupOwnerLossTrial } from './macos-computer-helper-owner-loss-trial-cleanup.mts'
 
 const INTERNAL_ENV = 'ORCA_COMPUTER_HELPER_OWNER_BENCH_INTERNAL'
 const EXPECTATION_ENV = 'ORCA_COMPUTER_HELPER_OWNER_BENCH_EXPECTATION'
@@ -36,14 +36,14 @@ const TRIAL_TIMEOUT_MS = OWNER_HOLD_MS + 4 * PROCESS_EXIT_TIMEOUT_MS + 120_000
 const MIB = 1024 * 1024
 const scriptPath = import.meta.filename
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
-const metricsPath = path.join(import.meta.dirname, 'macos-computer-helper-owner-loss-metrics.mjs')
+const metricsPath = path.join(import.meta.dirname, 'macos-computer-helper-owner-loss-metrics.mts')
 const processCleanupPath = path.join(
   import.meta.dirname,
-  'macos-computer-helper-owner-loss-processes.mjs'
+  'macos-computer-helper-owner-loss-processes.mts'
 )
 const trialCleanupPath = path.join(
   import.meta.dirname,
-  'macos-computer-helper-owner-loss-trial-cleanup.mjs'
+  'macos-computer-helper-owner-loss-trial-cleanup.mts'
 )
 const sidecarPath = path.join(repoRoot, 'out', 'main', 'computer-sidecar.js')
 const helperAppPath = path.join(

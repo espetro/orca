@@ -1991,7 +1991,7 @@ jobs:
       # (`IS_OFFICIAL_BUILD === false`) — the exact failure mode flagged
       # in PR #1385's deferred follow-up.
       - name: Verify telemetry constants present in app.asar
-        run: node config/scripts/verify-telemetry-constants.mjs
+        run: node config/scripts/verify-telemetry-constants.mts
 
   build-mac:
     needs:

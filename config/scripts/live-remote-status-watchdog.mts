@@ -3,13 +3,30 @@
  * Polls `orca status --json` on an interval while a load storm runs.
  */
 import { spawn } from 'node:child_process'
-import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mjs'
-import { resolveOrcaCliInvocation } from './live-remote-freeze-rpc.mjs'
+import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mts'
+import { resolveOrcaCliInvocation } from './live-remote-freeze-rpc.mts'
 
 /**
  * @param {{ intervalMs?: number, timeoutMs?: number, cliCommand?: string, sampleHistoryLimit?: number, statusSlowMs?: number }} opts
  */
-export function startStatusWatchdog(opts = {}) {
+type StatusSample = {
+  tMs?: number
+  ms?: number
+  ok?: boolean
+  hang?: boolean
+  infrastructureError?: boolean
+  error?: string
+}
+
+type StatusWatchdogOptions = {
+  intervalMs?: number
+  timeoutMs?: number
+  cliCommand?: string
+  sampleHistoryLimit?: number
+  statusSlowMs?: number
+}
+
+export function startStatusWatchdog(opts: StatusWatchdogOptions = {}) {
   const intervalMs = opts.intervalMs ?? 2000
   const timeoutMs = opts.timeoutMs ?? 30_000
   const cliInvocation = opts.cliCommand
@@ -22,11 +39,11 @@ export function startStatusWatchdog(opts = {}) {
   let infrastructureErrorCount = 0
   let longestUnhealthyWindowMs = 0
   let maxStatusMs = 0
-  let runStartMs = null
+  let runStartMs: number | null = null
   let unhealthySampleCount = 0
   const startedAt = performance.now()
 
-  const record = (sample) => {
+  const record = (sample: StatusSample) => {
     samples.add(sample)
     maxStatusMs = Math.max(maxStatusMs, sample.ms || 0)
     if (sample.infrastructureError) {
@@ -56,7 +73,7 @@ export function startStatusWatchdog(opts = {}) {
   })
 
   const probe = () =>
-    new Promise((resolve) => {
+    new Promise<StatusSample>((resolve) => {
       const t0 = performance.now()
       const child = spawn(
         cliInvocation.command,
@@ -67,7 +84,7 @@ export function startStatusWatchdog(opts = {}) {
         }
       )
       let settled = false
-      const finish = (result) => {
+      const finish = (result: StatusSample) => {
         if (settled) {
           return
         }
@@ -107,7 +124,7 @@ export function startStatusWatchdog(opts = {}) {
       })
     })
 
-  const tick = async ({ force = false } = {}) => {
+  const tick = async ({ force = false }: { force?: boolean } = {}) => {
     if ((!force && stopped) || inFlight) {
       return
     }

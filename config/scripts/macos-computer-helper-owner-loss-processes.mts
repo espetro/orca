@@ -1,4 +1,8 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import {
+  execFileSync,
+  spawnSync,
+  type SpawnSyncOptionsWithStringEncoding
+} from 'node:child_process'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 
 const PROCESS_EXIT_TIMEOUT_MS = 2_000
@@ -6,11 +10,27 @@ const PROCESS_POLL_MS = 25
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
 
 const processIdentityOperations = {
-  executePs: execFileSync,
-  signalProcess: process.kill.bind(process)
+  executePs: execFileSync as (
+    file: string,
+    args: readonly string[],
+    options: { encoding: string }
+  ) => string,
+  signalProcess: process.kill.bind(process) as (pid: number, signal: number) => void
 }
 
-export function processIdentity(pid, operations = processIdentityOperations) {
+export type ProcessIdentity = {
+  pid: number
+  pgid: number
+  command: string
+}
+
+export function processIdentity(
+  pid: number,
+  operations: {
+    executePs: (file: string, args: readonly string[], options: { encoding: string }) => string
+    signalProcess: (pid: number, signal: number) => void
+  } = processIdentityOperations
+): ProcessIdentity | null {
   if (!Number.isInteger(pid) || pid <= 0) {
     return null
   }
@@ -29,7 +49,12 @@ export function processIdentity(pid, operations = processIdentityOperations) {
     try {
       operations.signalProcess(pid, 0)
     } catch (lookupError) {
-      if (lookupError?.code === 'ESRCH') {
+      if (
+        lookupError &&
+        typeof lookupError === 'object' &&
+        'code' in lookupError &&
+        lookupError.code === 'ESRCH'
+      ) {
         return null
       }
     }
@@ -37,7 +62,10 @@ export function processIdentity(pid, operations = processIdentityOperations) {
   }
 }
 
-function matchingDetachedProcesses(identities, expectedCommandFragments) {
+function matchingDetachedProcesses(
+  identities: ProcessIdentity[],
+  expectedCommandFragments: string[]
+): ProcessIdentity[] {
   return identities.filter(
     (identity) =>
       identity.pgid === identity.pid &&
@@ -52,8 +80,16 @@ const matchingProcessOperations = {
 }
 
 export function killProcessMatchingCommand(
-  expectedCommandFragments,
-  operations = matchingProcessOperations
+  expectedCommandFragments: string[],
+  operations: {
+    processIdentities: (includeEnvironment?: boolean) => ProcessIdentity[]
+    signalProcessIdentity: (
+      identity: ProcessIdentity,
+      fragment: string,
+      signal: NodeJS.Signals
+    ) => boolean
+    waitForIdentityExit: (identity: ProcessIdentity) => boolean
+  } = matchingProcessOperations
 ) {
   const matches = matchingDetachedProcesses(
     operations.processIdentities(),
@@ -62,7 +98,7 @@ export function killProcessMatchingCommand(
   if (matches.length === 0) {
     return false
   }
-  const errors = []
+  const errors: unknown[] = []
   for (const match of matches) {
     try {
       if (operations.signalProcessIdentity(match, expectedCommandFragments[0], 'SIGKILL')) {
@@ -98,13 +134,18 @@ export function killProcessMatchingCommand(
   return true
 }
 
-function sleepSync(milliseconds) {
+function sleepSync(milliseconds: number) {
   Atomics.wait(sleepBuffer, 0, 0, milliseconds)
 }
 
-function validateDetachedIdentity(identity, expectedCommandFragment) {
+function validateDetachedIdentity(
+  identity: ProcessIdentity | null | undefined,
+  expectedCommandFragment: string
+): void {
   if (
-    !Number.isInteger(identity?.pid) ||
+    identity === null ||
+    identity === undefined ||
+    !Number.isInteger(identity.pid) ||
     identity.pid <= 0 ||
     identity.pgid !== identity.pid ||
     typeof identity.command !== 'string' ||
@@ -114,11 +155,11 @@ function validateDetachedIdentity(identity, expectedCommandFragment) {
   }
 }
 
-function sameIdentity(left, right) {
+function sameIdentity(left?: ProcessIdentity | null, right?: ProcessIdentity | null) {
   return left?.pid === right?.pid && left?.pgid === right?.pgid && left?.command === right?.command
 }
 
-function processIdentities(includeEnvironment = false) {
+function processIdentities(includeEnvironment = false): ProcessIdentity[] {
   const args = includeEnvironment
     ? ['eww', '-axo', 'pid=,pgid=,command=']
     : ['-axo', 'pid=,pgid=,command=']
@@ -129,7 +170,7 @@ function processIdentities(includeEnvironment = false) {
   return output
     .split('\n')
     .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/))
-    .filter(Boolean)
+    .filter((match): match is RegExpMatchArray => match !== null)
     .map((match) => ({
       pid: Number(match[1]),
       pgid: Number(match[2]),
@@ -137,7 +178,7 @@ function processIdentities(includeEnvironment = false) {
     }))
 }
 
-function waitForIdentityExit(identity) {
+function waitForIdentityExit(identity: ProcessIdentity) {
   const deadline = Date.now() + PROCESS_EXIT_TIMEOUT_MS
   while (Date.now() < deadline) {
     if (!processIdentityIsCurrent(identity)) {
@@ -148,16 +189,20 @@ function waitForIdentityExit(identity) {
   throw new Error(`Recorded benchmark helper ${identity.pid} did not exit`)
 }
 
-export function spawnBenchmarkProcess(executable, args, options) {
+export function spawnBenchmarkProcess(
+  executable: string,
+  args: readonly string[],
+  options: SpawnSyncOptionsWithStringEncoding
+) {
   return spawnSync(executable, args, {
     ...options,
     detached: true,
     killSignal: 'SIGKILL'
-  })
+  } as SpawnSyncOptionsWithStringEncoding)
 }
 
-export function runBenchmarkCleanupStages(stages) {
-  const errors = []
+export function runBenchmarkCleanupStages(stages: (() => void)[]) {
+  const errors: unknown[] = []
   for (const stage of stages) {
     try {
       stage()
@@ -173,7 +218,7 @@ export function runBenchmarkCleanupStages(stages) {
   }
 }
 
-export function throwBenchmarkTrialFailures(trialError, cleanupError) {
+export function throwBenchmarkTrialFailures(trialError: unknown, cleanupError: unknown) {
   if (trialError && cleanupError) {
     throw new AggregateError([trialError, cleanupError], 'Electron trial and cleanup failed')
   }
@@ -185,11 +230,14 @@ export function throwBenchmarkTrialFailures(trialError, cleanupError) {
   }
 }
 
-export function parseBenchmarkTrialResult(serializedResult) {
+export function parseBenchmarkTrialResult(serializedResult: string): unknown {
   return JSON.parse(serializedResult)
 }
 
-export function benchmarkTrialNeedsCleanup(spawnResult, parsedResultAvailable) {
+export function benchmarkTrialNeedsCleanup(
+  spawnResult: { status: number | null } | null | undefined,
+  parsedResultAvailable: boolean
+) {
   return spawnResult?.status !== 0 || !parsedResultAvailable
 }
 
@@ -198,19 +246,45 @@ const processGroupSignalOperations = {
   signalProcess: process.kill.bind(process)
 }
 
-function compensateStoppedGroup(pgid, groupState, operations) {
-  const errors = []
+type ProcessGroupState = {
+  stopped: boolean
+  anchorPid: number | null
+}
+
+type GroupSignalOperations = {
+  processIdentities: (includeEnvironment?: boolean) => ProcessIdentity[]
+  signalProcess: (pid: number, signal: NodeJS.Signals | number) => void
+}
+
+function isEsrch(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH'
+}
+
+function compensateStoppedGroup(
+  pgid: number,
+  groupState: ProcessGroupState,
+  operations: GroupSignalOperations
+): unknown[] {
+  const errors: unknown[] = []
   const targets = [
-    groupState.stopped ? [-pgid, 'stopped'] : null,
-    groupState.anchorPid ? [groupState.anchorPid, 'anchorPid'] : null
-  ].filter(Boolean)
+    groupState.stopped ? ([-pgid, 'stopped'] as const) : null,
+    groupState.anchorPid ? ([groupState.anchorPid, 'anchorPid'] as const) : null
+  ].filter((target): target is readonly [number, 'stopped' | 'anchorPid'] => target !== null)
   for (const [pid, stateKey] of targets) {
     try {
       operations.signalProcess(pid, 'SIGCONT')
-      groupState[stateKey] = stateKey === 'stopped' ? false : null
+      if (stateKey === 'stopped') {
+        groupState.stopped = false
+      } else {
+        groupState.anchorPid = null
+      }
     } catch (error) {
-      if (error?.code === 'ESRCH') {
-        groupState[stateKey] = stateKey === 'stopped' ? false : null
+      if (isEsrch(error)) {
+        if (stateKey === 'stopped') {
+          groupState.stopped = false
+        } else {
+          groupState.anchorPid = null
+        }
       } else {
         errors.push(error)
       }
@@ -220,12 +294,12 @@ function compensateStoppedGroup(pgid, groupState, operations) {
 }
 
 export function signalValidatedProcessGroup(
-  pgid,
-  environmentFragment,
-  signal,
-  groupState = { stopped: false, anchorPid: null },
-  operations = processGroupSignalOperations
-) {
+  pgid: number,
+  environmentFragment: string,
+  signal: NodeJS.Signals,
+  groupState: ProcessGroupState = { stopped: false, anchorPid: null },
+  operations: GroupSignalOperations = processGroupSignalOperations
+): boolean {
   if (!Number.isInteger(pgid) || pgid <= 0) {
     return false
   }
@@ -265,7 +339,7 @@ export function signalValidatedProcessGroup(
       operations.signalProcess(groupState.anchorPid, 'SIGCONT')
       groupState.anchorPid = null
     } catch (error) {
-      if (error?.code === 'ESRCH') {
+      if (isEsrch(error)) {
         groupState.anchorPid = null
       } else {
         throw new AggregateError([error], 'Benchmark pending anchor recovery failed')
@@ -311,21 +385,21 @@ export function signalValidatedProcessGroup(
         'Benchmark process group signal recovery failed'
       )
     }
-    if (error.code === 'ESRCH') {
+    if (isEsrch(error)) {
       return false
     }
     throw error
   }
 }
 
-export function writeProcessRecord(recordPath, processIdentity) {
+export function writeProcessRecord(recordPath: string, processIdentity: ProcessIdentity) {
   const temporaryPath = `${recordPath}.${process.pid}.tmp`
   writeFileSync(temporaryPath, JSON.stringify(processIdentity))
   renameSync(temporaryPath, recordPath)
 }
 
-export function processIdentityIsCurrent(identity) {
-  return sameIdentity(processIdentity(identity?.pid), identity)
+export function processIdentityIsCurrent(identity: ProcessIdentity) {
+  return sameIdentity(processIdentity(identity.pid), identity)
 }
 
 const processSignalOperations = {
@@ -333,12 +407,17 @@ const processSignalOperations = {
   signalProcess: process.kill.bind(process)
 }
 
+type IdentitySignalOperations = {
+  processIdentity: (pid: number) => ProcessIdentity | null
+  signalProcess: (pid: number, signal: NodeJS.Signals | number) => void
+}
+
 export function signalProcessIdentity(
-  identity,
-  expectedCommandFragment,
-  signal,
-  operations = processSignalOperations
-) {
+  identity: ProcessIdentity,
+  expectedCommandFragment: string,
+  signal: NodeJS.Signals,
+  operations: IdentitySignalOperations = processSignalOperations
+): boolean {
   validateDetachedIdentity(identity, expectedCommandFragment)
   const currentIdentity = operations.processIdentity(identity.pid)
   if (!currentIdentity) {
@@ -362,12 +441,12 @@ export function signalProcessIdentity(
     stopped = false
     return true
   } catch (error) {
-    let resumeError
+    let resumeError: unknown
     if (stopped) {
       try {
         operations.signalProcess(identity.pid, 'SIGCONT')
       } catch (caught) {
-        if (caught?.code !== 'ESRCH') {
+        if (!isEsrch(caught)) {
           resumeError = caught
         }
       }
@@ -375,30 +454,30 @@ export function signalProcessIdentity(
     if (resumeError) {
       throw new AggregateError([error, resumeError], 'Benchmark helper signal recovery failed')
     }
-    if (error.code === 'ESRCH') {
+    if (isEsrch(error)) {
       return false
     }
     throw error
   }
 }
 
-export function killRecordedProcess(recordPath, expectedCommandFragment) {
+export function killRecordedProcess(recordPath: string, expectedCommandFragment: string): boolean {
   if (!existsSync(recordPath)) {
     return false
   }
-  const record = JSON.parse(readFileSync(recordPath, 'utf8'))
-  if (!signalProcessIdentity(record, expectedCommandFragment, 'SIGKILL')) {
+  const record: unknown = JSON.parse(readFileSync(recordPath, 'utf8'))
+  if (!signalProcessIdentity(record as ProcessIdentity, expectedCommandFragment, 'SIGKILL')) {
     return false
   }
-  return waitForIdentityExit(record)
+  return waitForIdentityExit(record as ProcessIdentity)
 }
 
 export function killRecordedAndMatchingProcesses(
-  recordPath,
-  recordedCommandFragment,
-  matchingCommandFragments
-) {
-  const errors = []
+  recordPath: string,
+  recordedCommandFragment: string,
+  matchingCommandFragments: string[]
+): void {
+  const errors: unknown[] = []
   try {
     killRecordedProcess(recordPath, recordedCommandFragment)
   } catch (error) {

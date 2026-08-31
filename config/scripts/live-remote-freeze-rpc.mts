@@ -3,7 +3,18 @@ import path from 'node:path'
 
 export const MAX_ORCA_RPC_OUTPUT_BYTES = 20 * 1024 * 1024
 
-export function appendOrcaRpcOutput(output, chunk, bytes, limit = MAX_ORCA_RPC_OUTPUT_BYTES) {
+export type OrcaRpcOutput = {
+  output: string
+  bytes: number
+  exceeded: boolean
+}
+
+export function appendOrcaRpcOutput(
+  output: string,
+  chunk: string,
+  bytes: number,
+  limit = MAX_ORCA_RPC_OUTPUT_BYTES
+): OrcaRpcOutput {
   const nextBytes = bytes + Buffer.byteLength(chunk)
   return {
     output: nextBytes > limit ? output : output + chunk,
@@ -12,7 +23,21 @@ export function appendOrcaRpcOutput(output, chunk, bytes, limit = MAX_ORCA_RPC_O
   }
 }
 
-export function resolveOrcaCliCommand({ env = process.env, platform = process.platform } = {}) {
+type CliEnv = {
+  ORCA_CLI_COMMAND?: string
+  ORCA_DEV_REPO_ROOT?: string
+  APPDATA?: string
+  USERPROFILE?: string
+  ORCA_USER_DATA_PATH?: string
+  ORCA_DEV_USER_DATA_PATH?: string
+  ORCA_APP_EXECUTABLE?: string
+  [key: string]: string | undefined
+}
+
+export function resolveOrcaCliCommand({
+  env = process.env as CliEnv,
+  platform = process.platform
+}: { env?: CliEnv; platform?: string } = {}) {
   if (env.ORCA_CLI_COMMAND?.trim()) {
     return env.ORCA_CLI_COMMAND.trim()
   }
@@ -22,11 +47,17 @@ export function resolveOrcaCliCommand({ env = process.env, platform = process.pl
   return platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
+export type OrcaCliInvocation = {
+  command: string
+  prefixArgs: string[]
+  env?: NodeJS.ProcessEnv
+}
+
 export function resolveOrcaCliInvocation({
-  env = process.env,
+  env = process.env as CliEnv,
   platform = process.platform,
   nodeExecutable = process.execPath
-} = {}) {
+}: { env?: CliEnv; platform?: string; nodeExecutable?: string } = {}): OrcaCliInvocation {
   const command = resolveOrcaCliCommand({ env, platform })
   const commandName = platform === 'win32' ? path.win32.basename(command).toLowerCase() : command
   if (
@@ -67,19 +98,35 @@ export function createOrcaRpc({
   cliCommand,
   env = process.env,
   platform = process.platform
+}: {
+  envName: string
+  cliCommand?: string
+  env?: NodeJS.ProcessEnv
+  platform?: string
 }) {
   const cliInvocation = cliCommand
     ? { command: cliCommand, prefixArgs: [] }
     : resolveOrcaCliInvocation({ env, platform })
   const commandLabel = cliCommand ?? resolveOrcaCliCommand({ env, platform })
-  const commandArgs = (args, local) => [
+  const commandArgs = (args: string[], local?: boolean) => [
     ...cliInvocation.prefixArgs,
     ...args,
     ...(local ? [] : ['--environment', envName]),
     '--json'
   ]
 
-  function orcaJsonSync(args, opts = {}) {
+  type OrcaJsonOptions = {
+    local?: boolean
+    timeoutMs?: number
+  }
+
+  type OrcaJsonResult = {
+    parsed: { ok?: boolean; result?: unknown; [key: string]: unknown }
+    elapsedMs: number
+    result: unknown
+  }
+
+  function orcaJsonSync(args: string[], opts: OrcaJsonOptions = {}): OrcaJsonResult {
     const started = performance.now()
     const result = spawnSync(cliInvocation.command, commandArgs(args, opts.local), {
       encoding: 'utf8',
@@ -96,16 +143,18 @@ export function createOrcaRpc({
         `${commandLabel} ${args.join(' ')} failed (${result.status}): ${result.stderr || result.stdout}`
       )
     }
-    const parsed = JSON.parse(result.stdout)
+    const parsed: { ok?: boolean; result?: unknown; [key: string]: unknown } = JSON.parse(
+      result.stdout
+    )
     if (parsed.ok === false) {
       throw new Error(`${commandLabel} ${args.join(' ')} ok=false: ${JSON.stringify(parsed)}`)
     }
     return { parsed, elapsedMs, result: parsed.result }
   }
 
-  function orcaJsonAsync(args, opts = {}) {
+  function orcaJsonAsync(args: string[], opts: OrcaJsonOptions = {}): Promise<OrcaJsonResult> {
     const started = performance.now()
-    return new Promise((resolve, reject) => {
+    return new Promise<OrcaJsonResult>((resolve, reject) => {
       const child = spawn(cliInvocation.command, commandArgs(args, opts.local), {
         env: cliInvocation.env,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -114,8 +163,8 @@ export function createOrcaRpc({
       let stderr = ''
       let outputBytes = 0
       let settled = false
-      let timer
-      const fail = (error) => {
+      let timer: NodeJS.Timeout | undefined
+      const fail = (error: Error) => {
         if (settled) {
           return
         }
@@ -123,7 +172,7 @@ export function createOrcaRpc({
         clearTimeout(timer)
         reject(error)
       }
-      const append = (stream, chunk) => {
+      const append = (stream: string, chunk: string): string => {
         if (settled) {
           return stream
         }
@@ -171,7 +220,8 @@ export function createOrcaRpc({
           return
         }
         try {
-          const parsed = JSON.parse(stdout)
+          const parsed: { ok?: boolean; result?: unknown; [key: string]: unknown } =
+            JSON.parse(stdout)
           if (parsed.ok === false) {
             fail(
               new Error(
@@ -196,7 +246,7 @@ export function createOrcaRpc({
     })
   }
 
-  async function runReconnectRefreshStorm(notes) {
+  async function runReconnectRefreshStorm(notes: string[]) {
     const started = performance.now()
     const jobs = [
       () => orcaJsonAsync(['status'], { timeoutMs: 90_000 }),

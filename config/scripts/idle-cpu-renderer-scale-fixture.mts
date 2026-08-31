@@ -1,18 +1,73 @@
-export async function configureRendererScaleFixture(page, options, repoPath) {
+import type { Page } from 'playwright-core'
+import type { Worktree } from '../../src/shared/worktree/types'
+import type { WorktreeLineage } from '../../src/shared/worktree/lineage-types'
+import type { TypingScaleCensus } from '../../src/renderer/src/lib/typing-latency-diagnostic-summary'
+import type { TerminalTab } from '../../src/shared/terminal-tab-types'
+
+// Minimal slice of the renderer store this fixture drives; avoids importing AppStore,
+// whose type graph pulls src/renderer files that use import.meta.env (a Vite global the
+// scripts tsconfig does not declare).
+type FixtureWorktreeState = {
+  worktreesByRepo: Record<string, Worktree[]>
+  worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+  collapsedGroups: Set<string>
+  agentStatusByPaneKey?: Record<string, unknown>
+  retainedAgentsByPaneKey?: Record<string, unknown>
+  tabsByWorktree: Record<string, TerminalTab[]>
+  setActiveView(view: string): void
+  setSidebarOpen(open: boolean): void
+  setGroupBy(grouping: string): void
+  setSortBy(sort: string): void
+  setShowActiveOnly(show: boolean): void
+  setShowSleepingWorkspaces(show: boolean): void
+  setHideDefaultBranchWorkspace(hide: boolean): void
+  setFilterRepoIds(repoIds: string[]): void
+  setWorktreeCardMode(mode: string): void
+  setAgentActivityDisplayMode(mode: string): void
+  createTab(
+    worktreeId: string,
+    targetGroupId: undefined,
+    shellOverride: undefined,
+    options: { activate: boolean; id: string }
+  ): { id: string }
+  setAgentStatus(
+    paneKey: string,
+    payload: { state: string; prompt: string; agentType: string },
+    terminalTitle: string,
+    timing: { updatedAt: number; stateStartedAt: number },
+    routing: { tabId: string; worktreeId: string }
+  ): void
+}
+
+type FixtureRendererStore = {
+  getState(): FixtureWorktreeState
+  setState(partial: Partial<FixtureWorktreeState>): void
+}
+
+type RendererScaleFixtureOptions = {
+  agentsPerWorktree: number
+  lineageDepth: number
+}
+
+export async function configureRendererScaleFixture(
+  page: Page,
+  options: RendererScaleFixtureOptions,
+  repoPath: string
+) {
   return page.evaluate(
     ({ agentsPerWorktree, lineageDepth, repoPath }) => {
-      const store = window.__store
+      const store = (window as { __store?: FixtureRendererStore }).__store
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      const normalizePath = (value) =>
+      const normalizePath = (value: string | null | undefined) =>
         String(value ?? '')
           .replaceAll('\\', '/')
           .toLowerCase()
       const primaryPath = normalizePath(repoPath)
-      const compare = (left, right) => (left < right ? -1 : left > right ? 1 : 0)
+      const compare = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0)
       const state = store.getState()
-      const worktrees = Object.values(state.worktreesByRepo)
+      const worktrees: Worktree[] = Object.values(state.worktreesByRepo)
         .flat()
         .filter((worktree) => !worktree.isArchived)
         .sort((left, right) => {
@@ -45,8 +100,10 @@ export async function configureRendererScaleFixture(page, options, repoPath) {
       state.setHideDefaultBranchWorkspace(false)
       state.setFilterRepoIds([])
 
-      const lineageById = { ...store.getState().worktreeLineageById }
-      const lineageParentIds = new Set()
+      const lineageById: Record<string, WorktreeLineage> = {
+        ...store.getState().worktreeLineageById
+      }
+      const lineageParentIds = new Set<string>()
       if (appliedLineageDepth > 0) {
         for (const worktree of worktrees) {
           delete lineageById[worktree.id]
@@ -60,9 +117,9 @@ export async function configureRendererScaleFixture(page, options, repoPath) {
           lineageParentIds.add(parent.id)
           lineageById[child.id] = {
             worktreeId: child.id,
-            worktreeInstanceId: child.instanceId,
+            worktreeInstanceId: child.instanceId!,
             parentWorktreeId: parent.id,
-            parentWorktreeInstanceId: parent.instanceId,
+            parentWorktreeInstanceId: parent.instanceId!,
             origin: 'manual',
             capture: { source: 'manual-action', confidence: 'explicit' },
             createdAt: 1_700_000_000_000 + index
@@ -123,18 +180,18 @@ export async function configureRendererScaleFixture(page, options, repoPath) {
   )
 }
 
-export async function collectRendererCensus(page, configuredLineageDepth) {
+export async function collectRendererCensus(page: Page, configuredLineageDepth: number) {
   return page.evaluate((configuredDepth) => {
-    const state = window.__store?.getState()
+    const state = (window as { __store?: FixtureRendererStore }).__store?.getState()
     if (!state) {
       throw new Error('window.__store is not available')
     }
-    const worktrees = Object.values(state.worktreesByRepo).flat()
+    const worktrees: Worktree[] = Object.values(state.worktreesByRepo).flat()
     const worktreeIds = new Set(worktrees.map((worktree) => worktree.id))
-    const lineageDepthById = new Map()
-    const getDepth = (worktreeId, trail = new Set()) => {
+    const lineageDepthById = new Map<string, number>()
+    const getDepth = (worktreeId: string, trail: Set<string> = new Set<string>()): number => {
       if (lineageDepthById.has(worktreeId)) {
-        return lineageDepthById.get(worktreeId)
+        return lineageDepthById.get(worktreeId)!
       }
       const lineage = state.worktreeLineageById[worktreeId]
       if (!lineage || !worktreeIds.has(lineage.parentWorktreeId) || trail.has(worktreeId)) {
@@ -165,9 +222,12 @@ export async function collectRendererCensus(page, configuredLineageDepth) {
         element.classList.contains('group/agent-row') ||
         element.classList.contains('compact-agent-row')
     ).length
-    let diagnosticCensus = null
+    const diagnosticHost = (
+      window as { __orcaTypingDiagnostic?: { report: () => { census: TypingScaleCensus } } }
+    ).__orcaTypingDiagnostic
+    let diagnosticCensus: TypingScaleCensus | null = null
     try {
-      diagnosticCensus = window.__orcaTypingDiagnostic?.report().census ?? null
+      diagnosticCensus = diagnosticHost?.report().census ?? null
     } catch {}
     const collapsedLineageGroups = [...lineageParentIds].filter((parentId) =>
       state.collapsedGroups.has(`lineage:${parentId}`)

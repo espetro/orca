@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mjs'
+import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mts'
 
 describe('telemetry bundle constant patterns', () => {
   it.each(['const', 'let', 'var'])('accepts %s declarations', (declaration) => {

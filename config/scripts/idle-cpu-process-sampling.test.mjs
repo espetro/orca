@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sampleProcessTreeUntilWorkloadsComplete } from './idle-cpu-process-sampling.mjs'
+import { sampleProcessTreeUntilWorkloadsComplete } from './idle-cpu-process-sampling.mts'
 
 function createClock(workloadCompletesAt) {
   let currentMs = 0

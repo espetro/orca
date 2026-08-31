@@ -1,6 +1,22 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 
-function parseCpuTimeSeconds(value) {
+export type ProcessRow = {
+  pid: number
+  ppid: number
+  percentCpu: number
+  rssBytes: number
+  cpuTimeSeconds: number | null
+  command: string
+}
+
+type WindowsProcessEntry = {
+  ProcessId?: number | string
+  ParentProcessId?: number | string
+  WorkingSetSize?: number | string
+  CommandLine?: string
+}
+
+function parseCpuTimeSeconds(value: string | number | null | undefined) {
   const trimmed = String(value || '').trim()
   if (!trimmed) {
     return null
@@ -23,8 +39,8 @@ function parseCpuTimeSeconds(value) {
   return null
 }
 
-function parseUnixProcesses(stdout) {
-  const rows = []
+function parseUnixProcesses(stdout: string): ProcessRow[] {
+  const rows: ProcessRow[] = []
   for (const raw of stdout.split('\n')) {
     const line = raw.trim()
     if (!line) {
@@ -55,7 +71,7 @@ function readUnixProcesses() {
   return parseUnixProcesses(stdout)
 }
 
-function readWindowsProcesses() {
+function readWindowsProcesses(): ProcessRow[] {
   const script =
     'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,CommandLine | ConvertTo-Json -Compress'
   const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], {
@@ -65,7 +81,7 @@ function readWindowsProcesses() {
   if (result.status !== 0) {
     throw new Error(result.stderr || 'PowerShell process enumeration failed')
   }
-  const parsed = JSON.parse(result.stdout || '[]')
+  const parsed = JSON.parse(result.stdout || '[]') as WindowsProcessEntry | WindowsProcessEntry[]
   const entries = Array.isArray(parsed) ? parsed : [parsed]
   return entries.map((entry) => ({
     pid: Number(entry.ProcessId),
@@ -81,19 +97,19 @@ export function readProcessRows() {
   return process.platform === 'win32' ? readWindowsProcesses() : readUnixProcesses()
 }
 
-export function descendantsOf(rows, rootPid) {
-  const children = new Map()
+export function descendantsOf(rows: ProcessRow[], rootPid: number) {
+  const children = new Map<number, ProcessRow[]>()
   for (const row of rows) {
     const list = children.get(row.ppid) ?? []
     list.push(row)
     children.set(row.ppid, list)
   }
-  const result = []
+  const result: ProcessRow[] = []
   const stack = [rootPid]
-  const seen = new Set()
+  const seen = new Set<number>()
   while (stack.length > 0) {
     const pid = stack.pop()
-    if (seen.has(pid)) {
+    if (pid === undefined || seen.has(pid)) {
       continue
     }
     seen.add(pid)
@@ -108,7 +124,17 @@ export function descendantsOf(rows, rootPid) {
   return result
 }
 
-export function classify(row, rootPid) {
+export type ProcessKind =
+  | 'main'
+  | 'daemon'
+  | 'gpu'
+  | 'renderer'
+  | 'utility'
+  | 'electron-other'
+  | 'agent-or-node'
+  | 'other-descendant'
+
+export function classify(row: ProcessRow, rootPid: number): ProcessKind {
   const command = row.command.toLowerCase()
   if (row.pid === rootPid) {
     return 'main'
@@ -136,6 +162,35 @@ export function classify(row, rootPid) {
 
 const DEFAULT_WORKLOAD_OVERRUN_LIMIT_MS = 120_000
 
+export type SampleProcessTreeOptions = {
+  rootPid: number
+  requestedDurationMs: number
+  intervalMs: number
+  workloadPromise: Promise<unknown>
+  maxWorkloadOverrunMs?: number
+  readRows?: () => ProcessRow[]
+  now?: () => number
+  wait?: (ms: number) => Promise<void>
+}
+
+type ClassifiedProcess = ProcessRow & {
+  kind: ProcessKind
+  cpu: number
+}
+
+type SampleSnapshot = {
+  at: number
+  processes: ClassifiedProcess[]
+}
+
+type Sample = {
+  at: number
+  elapsedMs: number
+  totalCpuPercent: number
+  totalRssBytes: number
+  processes: ClassifiedProcess[]
+}
+
 export async function sampleProcessTreeUntilWorkloadsComplete({
   rootPid,
   requestedDurationMs,
@@ -145,14 +200,14 @@ export async function sampleProcessTreeUntilWorkloadsComplete({
   readRows = readProcessRows,
   now = Date.now,
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-}) {
+}: SampleProcessTreeOptions) {
   const samplingStartedAt = now()
   const requestedDeadline = samplingStartedAt + requestedDurationMs
   const hardDeadline = requestedDeadline + maxWorkloadOverrunMs
   let workloadSettled = false
-  let workloadResult
-  let workloadError
-  let workloadSettledAt = null
+  let workloadResult: unknown
+  let workloadError: unknown
+  let workloadSettledAt: number | null = null
   void workloadPromise.then(
     (result) => {
       workloadResult = result
@@ -165,8 +220,8 @@ export async function sampleProcessTreeUntilWorkloadsComplete({
       workloadSettledAt = now()
     }
   )
-  const samples = []
-  let previousSnapshot = null
+  const samples: Sample[] = []
+  let previousSnapshot: SampleSnapshot | null = null
   const needsFinalWorkloadSample = () =>
     workloadSettledAt !== null && (previousSnapshot?.at ?? -Infinity) < workloadSettledAt
   while (
@@ -188,17 +243,25 @@ export async function sampleProcessTreeUntilWorkloadsComplete({
       )
     }
     const processRows = descendantsOf(readRows(), rootPid)
-    const rawProcesses = processRows.map((row) => ({ ...row, kind: classify(row, rootPid) }))
+    const rawProcesses: ClassifiedProcess[] = processRows.map((row) => ({
+      ...row,
+      kind: classify(row, rootPid),
+      cpu: 0
+    }))
     if (previousSnapshot) {
       const elapsedSeconds = Math.max(0.001, (sampledAt - previousSnapshot.at) / 1000)
-      const previousByPid = new Map(previousSnapshot.processes.map((proc) => [proc.pid, proc]))
+      const previousByPid = new Map<number, ClassifiedProcess>(
+        previousSnapshot.processes.map((proc) => [proc.pid, proc])
+      )
       const processes = rawProcesses.map((row) => {
         const previous = previousByPid.get(row.pid)
-        const canComputeDelta =
-          typeof row.cpuTimeSeconds === 'number' && typeof previous?.cpuTimeSeconds === 'number'
-        const cpu = canComputeDelta
-          ? Math.max(0, ((row.cpuTimeSeconds - previous.cpuTimeSeconds) / elapsedSeconds) * 100)
-          : row.percentCpu
+        const rowCpuSeconds = typeof row.cpuTimeSeconds === 'number' ? row.cpuTimeSeconds : null
+        const previousCpuSeconds =
+          typeof previous?.cpuTimeSeconds === 'number' ? previous.cpuTimeSeconds : null
+        const cpu =
+          rowCpuSeconds !== null && previousCpuSeconds !== null
+            ? Math.max(0, ((rowCpuSeconds - previousCpuSeconds) / elapsedSeconds) * 100)
+            : row.percentCpu
         return { ...row, cpu }
       })
       samples.push({
@@ -234,11 +297,11 @@ export async function sampleProcessTreeUntilWorkloadsComplete({
   }
 }
 
-function mean(values) {
+function mean(values: number[]) {
   return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function percentile(sorted, fraction) {
+function percentile(sorted: number[], fraction: number) {
   if (sorted.length === 0) {
     return 0
   }
@@ -246,8 +309,15 @@ function percentile(sorted, fraction) {
   return sorted[index]
 }
 
-export function summarizeSamples(samples) {
-  const byKind = new Map()
+export function summarizeSamples(samples: Sample[]) {
+  const byKind = new Map<
+    ProcessKind,
+    {
+      cpuValues: number[]
+      rssValues: number[]
+      maxProcessCount: number
+    }
+  >()
   for (const sample of samples) {
     for (const proc of sample.processes) {
       const bucket = byKind.get(proc.kind) ?? { cpuValues: [], rssValues: [], maxProcessCount: 0 }
@@ -255,15 +325,18 @@ export function summarizeSamples(samples) {
       bucket.rssValues.push(proc.rssBytes)
       byKind.set(proc.kind, bucket)
     }
-    const counts = new Map()
+    const counts = new Map<ProcessKind, number>()
     for (const proc of sample.processes) {
       counts.set(proc.kind, (counts.get(proc.kind) ?? 0) + 1)
     }
     for (const [kind, count] of counts) {
-      byKind.get(kind).maxProcessCount = Math.max(byKind.get(kind).maxProcessCount, count)
+      const bucket = byKind.get(kind)
+      if (bucket) {
+        bucket.maxProcessCount = Math.max(bucket.maxProcessCount, count)
+      }
     }
   }
-  const summary = {}
+  const summary: Record<string, unknown> = {}
   for (const [kind, values] of byKind) {
     const cpuSorted = [...values.cpuValues].sort((a, b) => a - b)
     const rssSumBySample = samples.map((sample) =>
@@ -290,10 +363,17 @@ export function summarizeSamples(samples) {
   return summary
 }
 
-export function summarizeProcessInventory(samples) {
-  const inventory = {}
+export function summarizeProcessInventory(samples: Sample[]) {
+  const inventory: Record<
+    string,
+    {
+      maxProcessCount: number
+      maxCpuPercent: number
+      commandSamples: string[]
+    }
+  > = {}
   for (const sample of samples) {
-    const counts = new Map()
+    const counts = new Map<ProcessKind, number>()
     for (const proc of sample.processes) {
       counts.set(proc.kind, (counts.get(proc.kind) ?? 0) + 1)
       const entry = inventory[proc.kind] ?? {
@@ -314,7 +394,7 @@ export function summarizeProcessInventory(samples) {
   return inventory
 }
 
-export function terminateProcesses(processes) {
+export function terminateProcesses(processes: { pid: number }[]) {
   for (const proc of processes) {
     try {
       process.kill(proc.pid)

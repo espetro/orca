@@ -1,15 +1,25 @@
 import { execFileSync } from 'node:child_process'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 
-export function median(values) {
+export function median(values: number[]) {
   const sorted = [...values].sort((left, right) => left - right)
   const middle = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
-export async function sampleMemory(readRss, readPhysicalFootprint, options) {
-  const rssSamples = []
-  const physicalFootprintSamples = []
+export type SampleMemoryOptions = {
+  sampleCount: number
+  sampleIntervalMs: number
+  sleep: (ms: number) => Promise<void>
+}
+
+export async function sampleMemory(
+  readRss: () => number,
+  readPhysicalFootprint: () => number,
+  options: SampleMemoryOptions
+) {
+  const rssSamples: number[] = []
+  const physicalFootprintSamples: number[] = []
   for (let index = 0; index < options.sampleCount; index += 1) {
     rssSamples.push(readRss())
     physicalFootprintSamples.push(readPhysicalFootprint())
@@ -21,7 +31,7 @@ export async function sampleMemory(readRss, readPhysicalFootprint, options) {
   }
 }
 
-export function childRssBytes(pid) {
+export function childRssBytes(pid: number) {
   const raw = execFileSync('ps', ['-o', 'rss=', '-p', String(pid)], {
     encoding: 'utf8'
   }).trim()
@@ -32,7 +42,7 @@ export function childRssBytes(pid) {
   return rssKiB * 1024
 }
 
-export function parsePhysicalFootprintBytes(output, processCount) {
+export function parsePhysicalFootprintBytes(output: string, processCount: number) {
   const match =
     processCount > 1
       ? output.match(/^Summary Footprint:\s+(\d+) B$/m)
@@ -41,7 +51,7 @@ export function parsePhysicalFootprintBytes(output, processCount) {
   return Number.isFinite(bytes) && bytes > 0 ? bytes : null
 }
 
-export function physicalFootprintBytes(pids) {
+export function physicalFootprintBytes(pids: number[]) {
   const pidArgs = pids.flatMap((pid) => ['--pid', String(pid)])
   const output = execFileSync(
     '/usr/bin/footprint',
@@ -55,7 +65,7 @@ export function physicalFootprintBytes(pids) {
   return bytes
 }
 
-export function parseProcessCpuTimeMs(raw) {
+export function parseProcessCpuTimeMs(raw: string) {
   if (!raw.trim()) {
     return null
   }
@@ -68,7 +78,7 @@ export function parseProcessCpuTimeMs(raw) {
   return milliseconds >= 0 ? milliseconds : null
 }
 
-function processCpuTimeMs(pid) {
+function processCpuTimeMs(pid: number) {
   const raw = execFileSync('ps', ['-o', 'time=', '-p', String(pid)], {
     encoding: 'utf8'
   }).trim()
@@ -79,11 +89,26 @@ function processCpuTimeMs(pid) {
   return milliseconds
 }
 
-function combinedCpuTimeMs(pids) {
+function combinedCpuTimeMs(pids: number[]) {
   return pids.reduce((total, pid) => total + processCpuTimeMs(pid), 0)
 }
 
-export async function sampleProductionPerformance(boundary, options) {
+export type WatchdogBoundary = {
+  pids: number[]
+  sendHeartbeat: () => void
+  shutdown: () => Promise<void>
+}
+
+export type SampleProductionPerformanceOptions = {
+  heartbeatIntervalMs: number
+  sampleMs: number
+  sleep: (ms: number) => Promise<void>
+}
+
+export async function sampleProductionPerformance(
+  boundary: WatchdogBoundary,
+  options: SampleProductionPerformanceOptions
+) {
   const loopDelay = monitorEventLoopDelay({ resolution: 10 })
   let heartbeatCount = 0
   const heartbeat = setInterval(() => {

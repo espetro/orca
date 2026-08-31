@@ -1,20 +1,44 @@
+import type { Page } from 'playwright-core'
+
 const RENDERER_TIMER_INTERVAL_MS = 100
 
-export async function startRendererTimingProbe(page) {
+type LongTaskEntry = {
+  startTime: number
+  duration: number
+  name: string
+}
+
+type RendererTimingProbe = {
+  snapshot: () => Record<string, unknown>
+  stop: () => Record<string, unknown>
+}
+
+type ProbeStore = {
+  setState(partial: Record<string, never>): void
+}
+
+const readTimingProbe = (window: Window & typeof globalThis): RendererTimingProbe | undefined =>
+  (window as { __orcaIdleCpuTimingProbe?: RendererTimingProbe }).__orcaIdleCpuTimingProbe
+
+const readProbeStore = (window: Window & typeof globalThis): ProbeStore | undefined =>
+  (window as { __store?: ProbeStore }).__store
+
+export async function startRendererTimingProbe(page: Page) {
   await page.evaluate((timerIntervalMs) => {
     const maxSamples = 5_000
     const maxEntries = 80
     let phaseStartedAt = performance.now()
     let phaseStartedAtIso = new Date().toISOString()
-    let timerId = null
+    let timerId: ReturnType<typeof setTimeout> | null = null
     let driftCount = 0
-    let driftSamples = []
-    let longTaskEntries = []
-    let observer = null
+    let driftSamples: number[] = []
+    let longTaskEntries: LongTaskEntry[] = []
+    let observer: PerformanceObserver | null = null
     let longTaskSupported = false
 
-    const round = (value) => Math.round(value * 100) / 100
-    const summarize = (values, totalCount = values.length) => {
+    const round = (value: number | null | undefined) =>
+      value == null ? null : Math.round(value * 100) / 100
+    const summarize = (values: number[], totalCount = values.length) => {
       const sorted = [...values].sort((left, right) => left - right)
       const percentile = (fraction) =>
         sorted.length === 0
@@ -32,7 +56,7 @@ export async function startRendererTimingProbe(page) {
         max: sorted.length === 0 ? null : round(sorted.at(-1))
       }
     }
-    const recordLongTasks = (entries) => {
+    const recordLongTasks = (entries: LongTaskEntry[]) => {
       for (const entry of entries) {
         longTaskEntries.push({
           startTime: entry.startTime,
@@ -67,7 +91,7 @@ export async function startRendererTimingProbe(page) {
     }
     const snapshot = (reset) => {
       if (observer) {
-        recordLongTasks(observer.takeRecords())
+        recordLongTasks(observer.takeRecords() as unknown as LongTaskEntry[])
       }
       const capturedAt = performance.now()
       const phaseLongTasks = longTaskEntries.filter((entry) => entry.startTime >= phaseStartedAt)
@@ -99,8 +123,7 @@ export async function startRendererTimingProbe(page) {
       }
       return result
     }
-    scheduleTimer()
-    window.__orcaIdleCpuTimingProbe = {
+    ;(window as { __orcaIdleCpuTimingProbe?: RendererTimingProbe }).__orcaIdleCpuTimingProbe = {
       snapshot: () => snapshot(true),
       stop: () => {
         if (timerId !== null) {
@@ -111,22 +134,23 @@ export async function startRendererTimingProbe(page) {
         return result
       }
     }
+    scheduleTimer()
   }, RENDERER_TIMER_INTERVAL_MS)
 }
 
-export async function snapshotRendererTimingProbe(page) {
-  return page.evaluate(() => window.__orcaIdleCpuTimingProbe?.snapshot() ?? null)
+export async function snapshotRendererTimingProbe(page: Page) {
+  return page.evaluate(() => readTimingProbe(window)?.snapshot() ?? null)
 }
 
-export async function stopRendererTimingProbe(page) {
-  return page.evaluate(() => window.__orcaIdleCpuTimingProbe?.stop() ?? null)
+export async function stopRendererTimingProbe(page: Page) {
+  return page.evaluate(() => readTimingProbe(window)?.stop() ?? null)
 }
 
-export async function runZustandPublications(page, count, intervalMs) {
+export async function runZustandPublications(page: Page, count: number, intervalMs: number) {
   return page.evaluate(
     ({ count, intervalMs }) =>
-      new Promise((resolve, reject) => {
-        const store = window.__store
+      new Promise<Record<string, unknown>>((resolve, reject) => {
+        const store = readProbeStore(window)
         if (!store) {
           reject(new Error('window.__store is not available'))
           return
@@ -134,15 +158,16 @@ export async function runZustandPublications(page, count, intervalMs) {
         const maxSamples = 5_000
         const startedAt = performance.now()
         const startedAtIso = new Date().toISOString()
-        const schedulingDriftMs = []
+        const schedulingDriftMs: number[] = []
         let completed = 0
         const finish = () => {
           const sorted = [...schedulingDriftMs].sort((left, right) => left - right)
-          const percentile = (fraction) =>
+          const percentile = (fraction: number) =>
             sorted.length === 0
               ? null
               : sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]
-          const round = (value) => Math.round(value * 100) / 100
+          const round = (value: number | null | undefined) =>
+            value == null ? null : Math.round(value * 100) / 100
           resolve({
             requested: count,
             completed,

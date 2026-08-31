@@ -38,7 +38,7 @@ import { join, resolve } from 'node:path'
 // `node_modules`). If electron-builder ever drops it, promote this to a
 // direct devDependency in package.json.
 import { extractFile, listPackage } from '@electron/asar'
-import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mjs'
+import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mts'
 
 // Why resolve from import.meta.url instead of cwd: a release runner (or a
 // developer debugging locally) may invoke this script from a non-root cwd.
@@ -47,7 +47,7 @@ import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-pat
 // file-not-found error, and decouples the script from the caller's cwd.
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 
-function findAsar(rootDir) {
+function findAsar(rootDir: string): string[] {
   // Why: electron-builder produces one `app.asar` per platform-arch combo.
   // Linux/Windows targets ship one (`dist/linux-unpacked/resources/app.asar`,
   // `dist/win-unpacked/resources/app.asar`); macOS dual-arch ships two
@@ -58,10 +58,13 @@ function findAsar(rootDir) {
   // build, so the constants are identical across them — but verifying every
   // match catches the regression where one arch's pack drifts (e.g. a future
   // arch-specific bundle split that forgets to thread the `define` block).
-  const matches = []
-  const stack = [rootDir]
+  const matches: string[] = []
+  const stack: string[] = [rootDir]
   while (stack.length > 0) {
     const dir = stack.pop()
+    if (dir === undefined) {
+      continue
+    }
     let entries
     try {
       entries = readdirSync(dir, { withFileTypes: true })
@@ -122,7 +125,13 @@ for (const m of asarMatches) {
 // then assigns those into module-local declarations named `BUILD_IDENTITY`
 // and `WRITE_KEY`. Rollup may preserve `const` or lower it to `var`.
 
-function verifyAsar(asarPath) {
+type AsarVerifyResult = {
+  asarPath: string
+  buildIdentity: string
+  writeKey: string
+}
+
+function verifyAsar(asarPath: string): AsarVerifyResult | null {
   console.log(`Verifying ${asarPath}`)
 
   // Why list-then-extract (not a hardcoded path): future electron-vite
@@ -134,7 +143,7 @@ function verifyAsar(asarPath) {
   // (`\out\main\index.js`); normalize to forward slashes for the filter
   // and strip the leading separator (of either kind) before passing the
   // entry to extractFile.
-  const allEntries = listPackage(asarPath)
+  const allEntries = listPackage(asarPath, { isPack: false })
   const mainJsEntries = allEntries.filter((p) => {
     const normalized = p.replace(/\\/g, '/').replace(/^\/+/, '')
     return normalized.startsWith('out/main/') && normalized.endsWith('.js')
@@ -174,7 +183,7 @@ function verifyAsar(asarPath) {
     return null
   }
 
-  return { asarPath, buildIdentity: buildIdentityMatch[1], writeKey: writeKeyMatch[1] }
+  return { asarPath, buildIdentity: buildIdentityMatch[1] ?? '', writeKey: writeKeyMatch[1] ?? '' }
 }
 
 // Why verify every match (not just the first): macOS dual-arch produces one
@@ -188,7 +197,7 @@ function verifyAsar(asarPath) {
 // matrix shipped inconsistent build-identity claims, or (worse) per-arch
 // PostHog keys that would split events across projects, both of which are
 // release bugs.
-const results = []
+const results: AsarVerifyResult[] = []
 for (const asarPath of asarMatches) {
   const result = verifyAsar(asarPath)
   if (!result) {
@@ -215,9 +224,9 @@ if (distinctWriteKeys.size > 1) {
   process.exit(1)
 }
 
-const [first] = results
+const first = results[0]
 console.log(
   `Telemetry constants verified across ${results.length} asar(s): ` +
-    `BUILD_IDENTITY="${first.buildIdentity}", ` +
-    `WRITE_KEY="${first.writeKey.slice(0, 8)}..." (length=${first.writeKey.length})`
+    `BUILD_IDENTITY="${first?.buildIdentity}", ` +
+    `WRITE_KEY="${first?.writeKey.slice(0, 8)}..." (length=${first?.writeKey.length})`
 )
