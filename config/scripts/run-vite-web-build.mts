@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { appendBuildOldSpaceOption } from './node-old-space-limit.mjs'
+import { appendBuildOldSpaceOption } from './node-old-space-limit.mts'
 
 const require = createRequire(import.meta.url)
 const vitePackageJson = require.resolve('vite/package.json')

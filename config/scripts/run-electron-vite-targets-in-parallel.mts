@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-const buildScript = fileURLToPath(new URL('./run-electron-vite-build.mjs', import.meta.url))
+const buildScript = fileURLToPath(new URL('./run-electron-vite-build.mts', import.meta.url))
 const targetConfig = fileURLToPath(new URL('../electron-vite-target.config.ts', import.meta.url))
 const targets = ['main', 'preload', 'renderer']
 
 function buildTarget(target) {
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(
       process.execPath,
       [buildScript, '--config', targetConfig, '--ignoreConfigWarning'],

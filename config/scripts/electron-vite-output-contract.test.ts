@@ -10,7 +10,7 @@ import {
   DEV_BUNDLE_ID,
   DEV_HELPER_BUNDLE_ID,
   getDevHelperPlistPatches
-} from './dev-electron-bundle-identity.mjs'
+} from './dev-electron-bundle-identity.mts'
 import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
@@ -20,7 +20,6 @@ import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
 const targetConfig = readFileSync('config/electron-vite-target.config.ts', 'utf8')
-const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
 
 type BootstrapProcessMock = EventEmitter & {
   env: Record<string, string>
@@ -219,12 +218,13 @@ describe('Electron Vite output contract', () => {
 
   it('gives the dev terminal daemon helper the TCC identity watched by Orca', () => {
     // Asserted on the values rather than the source text: the ids moved into
-    // dev-electron-bundle-identity.mjs so every dev bundle signs to one cdhash.
+    // dev-electron-bundle-identity.mts so every dev bundle signs to one cdhash.
     expect(DEV_HELPER_BUNDLE_ID).toBe(`${DEV_BUNDLE_ID}.helper`)
     expect(getDevHelperPlistPatches()).toEqual([
       { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
     ])
-    expect(devRunner).toContain("'Electron Helper.app',")
-    expect(devRunner).toContain('setPlistValue(helperPlistPath, key, value)')
+    const macAppPrepare = readFileSync('config/scripts/dev-electron-macos-app-prepare.mts', 'utf8')
+    expect(macAppPrepare).toContain("'Electron Helper.app',")
+    expect(macAppPrepare).toContain('setPlistValue(helperPlistPath, key, value)')
   })
 })

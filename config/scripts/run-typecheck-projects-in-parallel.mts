@@ -17,7 +17,7 @@ const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', impor
 const concurrent = availableParallelism() > 1
 
 function checkProject(project) {
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(process.execPath, [tsc, '--noEmit', '-p', `config/${project}`], {
       cwd: repoRoot,
       stdio: 'inherit'
@@ -36,7 +36,7 @@ function checkProject(project) {
   })
 }
 
-let failures = []
+let failures: unknown[] = []
 if (concurrent) {
   const results = await Promise.allSettled(projects.map(checkProject))
   failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
@@ -52,7 +52,11 @@ if (concurrent) {
 
 if (failures.length > 0) {
   for (const failure of failures) {
-    console.error(failure.message ?? failure)
+    console.error(
+      typeof failure === 'object' && failure !== null && 'message' in failure
+        ? failure.message
+        : failure
+    )
   }
   process.exit(1)
 }

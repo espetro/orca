@@ -152,8 +152,8 @@ describe('Electron runtime package contract', () => {
   })
 
   it('runs the web build through the heap-sized Vite wrapper', () => {
-    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.mjs')
-    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.mjs')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.mts')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.mts')
   })
 
   it('guards release publishing before electron-builder runs', () => {
