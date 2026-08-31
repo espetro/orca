@@ -61,7 +61,7 @@ describe('Codex primary-home tripwire', () => {
       [primaryHome]
     )
     expect(status.clean).toBe(false)
-    expect(status.events[0].changedPaths).toContain('hooks.json')
+    expect(status.events[0]!.changedPaths).toContain('hooks.json')
     expect(JSON.stringify(status)).not.toContain('not-read')
   })
 

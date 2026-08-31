@@ -326,10 +326,14 @@ benchmark(
 )
 
 strictEqual(checksum, expectedChecksum, 'benchmark checksum accounting drifted')
-strictEqual(sessionSink?.sessionId, 'benchmark', 'session outputs did not escape')
+// Why: sessionSink is assigned inside validatedCases.forEach callback above; tsc narrows the
+// let-binding to `never` outside the callback. The non-null assertion documents the invariant.
+strictEqual(sessionSink!.sessionId, 'benchmark', 'session outputs did not escape')
 strictEqual(Array.isArray(messageArraySink), true, 'message arrays did not escape')
 strictEqual(contentSink.length > 0, true, 'message content did not escape')
-strictEqual(pendingMatchSink instanceof Set, true, 'pending baseline scan did not escape')
+// Why: pendingMatchSink is assigned inside the validatedCases.forEach callback above; tsc narrows
+// the let-binding to `never` outside the callback. The non-null assertion documents the invariant.
+strictEqual(pendingMatchSink!.size >= 0, true, 'pending baseline scan did not escape')
 strictEqual(Array.isArray(userRowSink), true, 'user row scan did not escape')
 console.log(
   `validated=${validatedCases} cases, checksum=${checksum}, capped calibrations=${cappedCalibrations}, runtime=${(

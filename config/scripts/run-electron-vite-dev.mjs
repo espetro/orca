@@ -16,7 +16,7 @@ import {
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mts'
 import { isDevBundleInUse, selectStaleDevBundleDirs } from './dev-electron-bundle-cache.mjs'
 import {
   DEV_BUNDLE_ID,

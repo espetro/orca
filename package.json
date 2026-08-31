@@ -6,7 +6,7 @@
   "author": "stablyai",
   "bin": {
     "orca": "./out/cli/index.js",
-    "orca-dev": "./config/scripts/orca-dev.mjs"
+    "orca-dev": "./config/scripts/orca-dev.mts"
   },
   "main": "./out/main/index.js",
   "scripts": {
@@ -44,10 +44,12 @@
     "tc:node": "pnpm run typecheck:node",
     "tc:cli": "pnpm run typecheck:cli",
     "tc:web": "pnpm run typecheck:web",
+    "tc:scripts": "tsc --noEmit -p config/tsconfig.scripts.json",
     "tc": "pnpm run typecheck",
     "typecheck:node": "tsc --noEmit -p config/tsconfig.node.json",
     "typecheck:cli": "tsc --noEmit -p config/tsconfig.tc.cli.json",
     "typecheck:web": "tsc --noEmit -p config/tsconfig.tc.web.json",
+    "typecheck:scripts": "tsc --noEmit -p config/tsconfig.scripts.json",
     "typecheck:e2e": "tsc --noEmit -p config/tsconfig.e2e.json",
     "typecheck": "node config/scripts/run-typecheck-projects-in-parallel.mjs",
     "typecheck:tsc:node": "tsc --noEmit -p config/tsconfig.node.json --composite false",

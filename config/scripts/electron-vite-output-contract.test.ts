@@ -98,12 +98,20 @@ describe('Electron Vite output contract', () => {
     expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
     expect(external('psl', undefined, false)).toBe(false)
     expect(external('zod', undefined, false)).toBe(false)
-    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('psl')
-    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
+    const mainExternalizeDeps = electronViteConfig.main?.build?.externalizeDeps
+    if (typeof mainExternalizeDeps !== 'object' || mainExternalizeDeps === null) {
+      throw new Error('Expected main-process externalizeDeps object')
+    }
+    expect(mainExternalizeDeps.exclude).toContain('psl')
+    expect(mainExternalizeDeps.exclude).toContain('zod')
   })
 
   it('bundles validation dependencies used by the sandboxed preload', () => {
-    expect(electronViteConfig.preload?.build?.externalizeDeps?.exclude).toContain('zod')
+    const preloadExternalizeDeps = electronViteConfig.preload?.build?.externalizeDeps
+    if (typeof preloadExternalizeDeps !== 'object' || preloadExternalizeDeps === null) {
+      throw new Error('Expected preload externalizeDeps object')
+    }
+    expect(preloadExternalizeDeps.exclude).toContain('zod')
   })
 
   it('exits when a static import fails before source error guards load', () => {
@@ -136,7 +144,7 @@ describe('Electron Vite output contract', () => {
 
     expect(processMock.exitCode).toBe(1)
     expect(scheduledExit).not.toBeNull()
-    scheduledExit?.()
+    scheduledExit!()
     expect(exitedWith).toBe(1)
     expect(context).toHaveProperty(BOOTSTRAP_FATAL_EXIT_GUARD_KEY)
     expect(stderrWrites.join('')).toContain("Cannot find module 'zod'")

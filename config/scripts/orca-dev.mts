@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mts'
 
 const scriptPath = realpathSync(import.meta.filename)
 const scriptDir = path.dirname(scriptPath)

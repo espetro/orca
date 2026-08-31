@@ -154,6 +154,18 @@
       }
     },
     {
+      "files": ["**/*.mts"],
+      "rules": {
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["**/*.cts"],
+      "rules": {
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
       "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]

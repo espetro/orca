@@ -55,7 +55,7 @@ function runPrepared(message: JsonRpcNotification, targets: number, iteration: n
 }
 
 function consume(frame: Buffer): void {
-  checksum = (checksum + frame.length + frame[0] + frame.at(-1)!) >>> 0
+  checksum = (checksum + frame.length + frame[0]! + frame.at(-1)!) >>> 0
 }
 
 function measure(operation: (iteration: number) => void, iterations: number): number {
@@ -68,7 +68,7 @@ function measure(operation: (iteration: number) => void, iterations: number): nu
 
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((left, right) => left - right)
-  return sorted[Math.floor(sorted.length / 2)]
+  return sorted[Math.floor(sorted.length / 2)]!
 }
 
 function benchmarkCase(entry: BenchmarkCase): BenchmarkResult {

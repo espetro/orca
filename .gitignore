@@ -117,6 +117,7 @@ docs/**
 !docs/reference/worktree-scan-fingerprint.md
 !docs/reference/wsl-command-execution.md
 !docs/reference/xterm-patch-regeneration.md
+!docs/reference/scripts-migration.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
