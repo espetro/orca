@@ -41,9 +41,10 @@ Reduce main-process RSS delta at idle (candidate vs pinned baseline app) in the 
 
 # What's Been Tried
 
-Baseline sanity (run 0 in log.jsonl): candidate vs pinned base with IDENTICAL code measured +19.17MB. That number is the machine noise floor, not a signal: per-run main RSS medians ranged 112-226MB across six identical runs. Treat |delta| < 20MB as noise unless the loop runs on a quieter machine; consider raising --runs for marginal candidates. Known host-noise sources and the pre-run sweep are listed in ideas.md under "Host-noise issues"; sweep them before benchmarking and note machine load in asi.
+Noise floor re-measured 2026-08-31 with prod Orca CLOSED (run 1 in log.jsonl): identical-code A/B still measured +17.43MB. The prior +19.17MB floor (run 0, prod Orca open) was NOT dominated by prod Orca. Per-run main RSS medians (A,B,B,A,A,B): 244.1/127.4/107.7/124.6/117.9/124.5 MB - the first run after a sweep is a consistent warmup outlier (244 vs 108-127 cluster), and RSS decays through the 60s window in every run. Working guidance: treat |delta| < 18MB as noise; discount or discard the first run after a process sweep; consider a warmup run in measure.sh or a max-abs side-median outlier discard before trusting near-floor deltas. Known host-noise sources and the pre-run sweep are listed in ideas.md under "Host-noise issues"; sweep them before benchmarking and note machine load in asi.
 
 Priors with verdicts pending from separate bisects; treat as hypotheses, not facts (see ideas.md):
+- 2026-08-31: fresh noise floor +17.43MB with prod Orca closed; first-run-after-sweep warmup outlier is the dominant term (see What's Been Tried).
 - F1 warp theme worker teardown
 - F2 sqlite WAL + page-cache cap in sync-database.ts
 - F3 lazy Monaco loading

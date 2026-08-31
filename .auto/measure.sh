@@ -67,9 +67,15 @@ for (const r of ROLES) {
   comb += stat(bySide.A, (t) => t.samples?.find((s) => s.type === r)?.workingSetKb) * 1024
   comb -= stat(bySide.B, (t) => t.samples?.find((s) => s.type === r)?.workingSetKb) * 1024
 }
+// CPU secondary: MEAN of the main-role sample cpuPercent (not median, so a
+// sustained load difference shows up instead of averaging away).
+const mean = (xs) => { const s = xs.filter((v) => typeof v === 'number'); return s.length ? s.reduce((a, b) => a + b, 0) / s.length : 0 }
+const cpuA = mean(bySide.A.flatMap((d) => (d.ticks ?? []).map((t) => t.samples?.find((s) => s.type === 'main')?.cpuPercent)))
+const cpuB = mean(bySide.B.flatMap((d) => (d.ticks ?? []).map((t) => t.samples?.find((s) => s.type === 'main')?.cpuPercent)))
 console.log(`MAIN=${Math.round((mainA - mainB))}`)
 console.log(`COMB=${Math.round(comb)}`)
 console.log(`HEAP=${Math.round((heapA - heapB))}`)
+console.log(`CPU=${(cpuA - cpuB).toFixed(3)}`)
 console.log(`MAIN_MB=${mb(mainA - mainB).toFixed(2)}`)
 console.log(`COMB_MB=${mb(comb).toFixed(2)}`)
 console.log(`HEAP_MB=${mb(heapA - heapB).toFixed(2)}`)
@@ -83,6 +89,13 @@ EOF
 # possible (harness MIN_AB_RUNS=3) and pooled per-side medians already denoise.
 SETTLE_S="${MEASURE_SETTLE_S:-120}"
 WINDOW_S="${MEASURE_WINDOW_S:-60}"
+# Warmup discard run: the first spawn after a sweep measures a cold-cache boot
+# transient (median ~2x the steady cluster, see log.jsonl run 1). Harness
+# MIN_AB_RUNS=3 so the warmup is one extra cheap A pair; its artifacts go to a
+# separate dir and are never analyzed. Their only job is to dirty the page
+# cache and do the first-run warmup so measured runs 1-3 land on steady state.
+node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
+  --runs 1 --settle-s 30 --window-s 15 --out "$TMP/warmup" >/dev/null 2>&1 || true
 node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
   --runs 3 --settle-s "$SETTLE_S" --window-s "$WINDOW_S" --no-editor --out "$TMP/s1"
 eval "$(analyze "$TMP/s1")"
@@ -91,4 +104,5 @@ mb() { awk -v b="$1" 'BEGIN{printf "%.2f", b/1048576}'; }
 echo "METRIC main_rss_delta_mb=$(mb "$MAIN")"
 echo "METRIC combined_rss_delta_mb=$(mb "$COMB")"
 echo "METRIC heap_used_delta_mb=$(mb "$HEAP")"
-echo "# settle=${SETTLE_S}s window=${WINDOW_S}s runs=3" >&2
+echo "METRIC main_cpu_delta_pct=$CPU"
+echo "# settle=${SETTLE_S}s window=${WINDOW_S}s runs=3 (+1 warmup discard)" >&2
