@@ -89,13 +89,13 @@ EOF
 # possible (harness MIN_AB_RUNS=3) and pooled per-side medians already denoise.
 SETTLE_S="${MEASURE_SETTLE_S:-120}"
 WINDOW_S="${MEASURE_WINDOW_S:-60}"
-# Warmup discard run: the first spawn after a sweep measures a cold-cache boot
+# Warmup discard: the first spawn after a sweep measures a cold-cache boot
 # transient (median ~2x the steady cluster, see log.jsonl run 1). Harness
-# MIN_AB_RUNS=3 so the warmup is one extra cheap A pair; its artifacts go to a
-# separate dir and are never analyzed. Their only job is to dirty the page
-# cache and do the first-run warmup so measured runs 1-3 land on steady state.
+# MIN_AB_RUNS=3, so the warmup is the minimum 3-run A/B at a short settle.
+# Its artifacts go to a separate dir and are never analyzed; their only job
+# is to dirty the page cache and get first-launch warmup out of the way.
 node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
-  --runs 1 --settle-s 30 --window-s 15 --out "$TMP/warmup" >/dev/null 2>&1 || true
+  --runs 3 --settle-s 30 --window-s 15 --out "$TMP/warmup" >/dev/null 2>&1 || true
 node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
   --runs 3 --settle-s "$SETTLE_S" --window-s "$WINDOW_S" --no-editor --out "$TMP/s1"
 eval "$(analyze "$TMP/s1")"
