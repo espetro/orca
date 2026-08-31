@@ -8,7 +8,7 @@ import {
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   SSH_SOURCE_ROUTE_IDS
-} from './pr-e2e-source-routing.mjs'
+} from './pr-e2e-source-routing.mts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))

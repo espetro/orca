@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const cleanupPaths: string[] = []
-const tripwireScriptPath = path.resolve('config/scripts/codex-primary-home-tripwire.mjs')
+const tripwireScriptPath = path.resolve('config/scripts/codex-primary-home-tripwire.mts')
 const tripwireModuleUrl = pathToFileURL(tripwireScriptPath).href
 // Why: native Windows process startup can exceed two seconds under a loaded test worker.
 const STANDALONE_START_TIMEOUT_MS = 10_000

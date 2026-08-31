@@ -22,11 +22,11 @@ import { pathToFileURL } from 'node:url'
 import {
   classifyCodexHomeTripwireEvent,
   startCodexPrimaryHomeTripwire
-} from './codex-primary-home-tripwire.mjs'
+} from './codex-primary-home-tripwire.mts'
 import {
   cleanupValidationDaemons,
   closeValidationElectronApp
-} from './codex-validation-process-shutdown.mjs'
+} from './codex-validation-process-shutdown.mts'
 
 const RESTRICTED_ENV_KEYS = [
   'HOME',
