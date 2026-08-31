@@ -18,6 +18,7 @@ import {
 import { createCompletedOnboardingProfile } from './windows-apphang-repro/wsl-workspace-fixture.mjs'
 import { classify, descendantsOf, readProcessRows } from './idle-cpu-process-sampling.mjs'
 import { reapLeftovers } from './bench-process-reap.mjs'
+import { applyFixture, createWorkspaceFixture } from './release-memory-bench-fixture.mjs'
 import {
   forceTerminateProcessTree,
   signalProcessTree
