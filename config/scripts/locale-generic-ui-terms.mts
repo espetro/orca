@@ -84,8 +84,8 @@ export function canonicalGenericRenderings(locale) {
   )
 }
 
-function spansOf(value, needle) {
-  const spans = []
+function spansOf(value: string, needle: string): [number, number][] {
+  const spans: [number, number][] = []
   for (let at = value.indexOf(needle); at !== -1; at = value.indexOf(needle, at + 1)) {
     spans.push([at, at + needle.length])
   }

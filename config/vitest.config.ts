@@ -28,6 +28,7 @@ export default defineConfig({
       'src/**/*.test.tsx',
       'config/scripts/**/*.test.ts',
       'config/scripts/**/*.test.mjs',
+      'config/scripts/**/*.test.mts',
       'tests/tools/**/*.test.mjs',
       'tests/e2e/**/*.unit.test.ts'
     ],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairCatalog } from './locale-translation-policy.mjs'
+import { repairCatalog } from './locale-translation-policy.mts'
 
 // Regression: en.json routinely carries keys a locale catalog has not been bootstrapped with yet
 // (~190 per locale at the time of writing), which crashed the whole repair run before it did any work.

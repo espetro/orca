@@ -1,21 +1,36 @@
-import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mjs'
+import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mts'
 import {
   isCanonicalGenericRendering,
   overlapsCanonicalRendering
-} from './locale-generic-ui-terms.mjs'
-import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
-import { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
-import { isStyleValue } from './locale-style-values.mjs'
-import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
-import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
-import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
-import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
+} from './locale-generic-ui-terms.mts'
+import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mts'
+import { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mts'
+import { isStyleValue } from './locale-style-values.mts'
+import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mts'
+import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mts'
+import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mts'
+import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mts'
 
-export { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
-export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
-export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
-export { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
-export { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
+export { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mts'
+export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mts'
+export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mts'
+export { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mts'
+export { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mts'
+
+type BrandMistranslations = Record<string, string[]>
+
+type LocaleCatalog = {
+  [key: string]: LocaleCatalogValue
+}
+
+type LocaleCatalogValue = string | LocaleCatalog | LocaleCatalogArray | null | undefined
+
+type LocaleCatalogArray = LocaleCatalogValue[]
+
+type StringLeaf = {
+  key: string
+  value: string
+}
 
 const AGENT_CATALOG_PREFIX = 'auto.lib.agent.catalog.'
 const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
@@ -24,7 +39,7 @@ const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATALOG_PREFIX]
 
 // Only genuine brand, product, and code tokens belong here. Ordinary UI words that happen to
-// name a product (agent, terminal, commit, repo, Continue) live in locale-generic-ui-terms.mjs
+// name a product (agent, terminal, commit, repo, Continue) live in locale-generic-ui-terms.mts
 // and are translated; their product sense is pinned by ENGLISH_ONLY_KEY_PREFIXES instead.
 export const NEVER_TRANSLATE_VALUES = new Set([
   'Aider',
@@ -270,7 +285,8 @@ function replaceMistranslatedForm(value, wrong, brand, locale) {
 
 function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
-  const mistranslations = BRAND_MISTRANSLATIONS[locale] ?? {}
+  const mistranslations: BrandMistranslations =
+    (BRAND_MISTRANSLATIONS as Record<string, BrandMistranslations>)[locale] ?? {}
 
   for (const [brand, wrongForms] of Object.entries(mistranslations).sort(
     ([left], [right]) => right.length - left.length
@@ -424,7 +440,11 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   return result
 }
 
-export function collectStringLeaves(value, prefix = '', leaves = []) {
+export function collectStringLeaves(
+  value: unknown,
+  prefix = '',
+  leaves: StringLeaf[] = []
+): StringLeaf[] {
   if (typeof value === 'string') {
     leaves.push({ key: prefix, value })
     return leaves
@@ -432,27 +452,39 @@ export function collectStringLeaves(value, prefix = '', leaves = []) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return leaves
   }
-  for (const [key, child] of Object.entries(value)) {
+  for (const [key, child] of Object.entries(value as LocaleCatalog)) {
     collectStringLeaves(child, prefix ? `${prefix}.${key}` : key, leaves)
   }
   return leaves
 }
 
-export function setLeaf(catalog, key, translatedValue) {
+export function setLeaf(catalog: LocaleCatalog, key: string, translatedValue: string): void {
   const parts = key.split('.')
-  let cursor = catalog
+  let cursor: LocaleCatalog = catalog
   for (let index = 0; index < parts.length - 1; index += 1) {
-    cursor = cursor[parts[index]]
+    cursor = cursor[parts[index]] as LocaleCatalog
   }
-  cursor[parts.at(-1)] = translatedValue
+  cursor[parts.at(-1) as string] = translatedValue
 }
 
-export function repairCatalog(enCatalog, localeCatalog, locale) {
+export function repairCatalog(
+  enCatalog: LocaleCatalog,
+  localeCatalog: LocaleCatalog,
+  locale: string
+): number {
   const leaves = collectStringLeaves(enCatalog)
   let repaired = 0
 
   for (const leaf of leaves) {
-    const current = leaf.key.split('.').reduce((cursor, part) => cursor?.[part], localeCatalog)
+    const current = leaf.key
+      .split('.')
+      .reduce<unknown>(
+        (cursor, part) =>
+          typeof cursor === 'object' && cursor !== null
+            ? (cursor as Record<string, unknown>)[part]
+            : undefined,
+        localeCatalog
+      )
     // Why: en.json carries keys the locale catalog has not been bootstrapped with yet; repair only
     // rewrites values that already exist, so skip instead of crashing on undefined.
     if (typeof current !== 'string') {
@@ -470,33 +502,41 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
     }
   }
 
-  if (localeCatalog.settings?.appearance?.language) {
-    for (const [labelKey, label] of Object.entries(NATIVE_PICKER_LABELS[locale] ?? {})) {
-      if (localeCatalog.settings.appearance.language[labelKey] !== label) {
-        localeCatalog.settings.appearance.language[labelKey] = label
-        repaired += 1
+  const settings = localeCatalog.settings as LocaleCatalog | undefined
+  if (settings?.appearance) {
+    const language = (settings.appearance as LocaleCatalog).language as
+      | Record<string, string>
+      | undefined
+    if (language) {
+      const pickerLabels = (NATIVE_PICKER_LABELS[locale] ?? {}) as Record<string, string>
+      for (const [labelKey, label] of Object.entries(pickerLabels)) {
+        if (language[labelKey] !== label) {
+          language[labelKey] = label
+          repaired += 1
+        }
       }
     }
   }
 
-  if (localeCatalog.menu) {
+  const menu = localeCatalog.menu as LocaleCatalog | undefined
+  if (menu) {
     if (locale === 'zh') {
-      if (localeCatalog.menu.exploreOrca !== '探索 Orca') {
-        localeCatalog.menu.exploreOrca = '探索 Orca'
+      if (menu.exploreOrca !== '探索 Orca') {
+        menu.exploreOrca = '探索 Orca'
         repaired += 1
       }
-      if (localeCatalog.menu.gettingStarted !== 'Orca 入门') {
-        localeCatalog.menu.gettingStarted = 'Orca 入门'
+      if (menu.gettingStarted !== 'Orca 入门') {
+        menu.gettingStarted = 'Orca 入门'
         repaired += 1
       }
     }
     if (locale === 'ko') {
-      if (localeCatalog.menu.exploreOrca !== 'Orca 둘러보기') {
-        localeCatalog.menu.exploreOrca = 'Orca 둘러보기'
+      if (menu.exploreOrca !== 'Orca 둘러보기') {
+        menu.exploreOrca = 'Orca 둘러보기'
         repaired += 1
       }
-      if (localeCatalog.menu.gettingStarted !== 'Orca 시작하기') {
-        localeCatalog.menu.gettingStarted = 'Orca 시작하기'
+      if (menu.gettingStarted !== 'Orca 시작하기') {
+        menu.gettingStarted = 'Orca 시작하기'
         repaired += 1
       }
     }

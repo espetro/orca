@@ -1,4 +1,4 @@
-import { mergeLocaleKeyOverrides } from './locale-key-override-merge.mjs'
+import { mergeLocaleKeyOverrides } from './locale-key-override-merge.mts'
 
 // Key-specific overrides from high-visibility UI audit (P0/P1/P2).
 // Why: some fixes depend on full key context, not English value alone.

@@ -1,6 +1,6 @@
-import { JA_VALUE_OVERRIDES } from './locale-ja-value-overrides.mjs'
-import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mjs'
-import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mjs'
+import { JA_VALUE_OVERRIDES } from './locale-ja-value-overrides.mts'
+import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mts'
+import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mts'
 
 export const LOCALE_VALUE_OVERRIDES = {
   es: {
@@ -61,7 +61,6 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Saving...': '저장 중...',
     'Report Crash...': '크래시 신고...',
     Mobile: '모바일',
-    Checks: '검사',
     Assignees: '담당자',
     Assignee: '담당자',
     assignee: '담당자',
@@ -190,7 +189,6 @@ export const LOCALE_VALUE_OVERRIDES = {
     Disconnect: '断开连接',
     Cancel: '取消',
     Copy: '复制',
-    Done: '完成',
     Next: '下一步',
     Beta: '测试版',
     Dismiss: '关闭',
@@ -403,7 +401,6 @@ export const LOCALE_VALUE_OVERRIDES = {
     Agents: 'エージェント',
     agents: 'エージェント',
     orchestration: 'オーケストレーション',
-    conflict: 'コンフリクト',
     Disconnect: '切断',
     Cancel: 'キャンセル',
     Copy: 'コピー',
@@ -437,7 +434,6 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Report Crash...': 'クラッシュを報告...',
     Mobile: 'モバイル',
     Checks: 'チェック',
-    Assignees: '担当者',
     Assignee: '担当者',
     assignee: '担当者',
     '+ Assignee': '+ 担当者',
@@ -486,7 +482,6 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Open workspace': 'ワークスペースを開く',
     'Search Linear issues...': 'Linear イシューを検索...',
     'Search Linear projects...': 'Linear プロジェクトを検索...',
-    'Launch agent': 'エージェントを起動',
     'Git AI Author': 'Git AI Author',
     'Copy reference ID': '参照 ID をコピー',
     'Try Again': '再試行',

@@ -1,4 +1,4 @@
-import { KO_PHRASE_FIXES_ROUND5 } from './locale-ko-phrase-fixes-round5.mjs'
+import { KO_PHRASE_FIXES_ROUND5 } from './locale-ko-phrase-fixes-round5.mts'
 
 // Korean phrase fixes from high-visibility UI audit round 4.
 export const KO_PHRASE_FIXES_ROUND4 = [

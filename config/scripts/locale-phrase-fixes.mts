@@ -1,7 +1,7 @@
-import { KO_PHRASE_FIXES_ROUND4 } from './locale-ko-phrase-fixes.mjs'
-import { ZH_PHRASE_FIXES_ROUND5 } from './locale-zh-phrase-fixes-round5.mjs'
+import { KO_PHRASE_FIXES_ROUND4 } from './locale-ko-phrase-fixes.mts'
+import { ZH_PHRASE_FIXES_ROUND5 } from './locale-zh-phrase-fixes-round5.mts'
 
-import { JA_PHRASE_FIXES } from './locale-ja-phrase-fixes.mjs'
+import { JA_PHRASE_FIXES } from './locale-ja-phrase-fixes.mts'
 
 export const LOCALE_PHRASE_FIXES = {
   ko: [

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { LOCALIZABLE_GENERIC_TERMS } from './locale-overrides.mjs'
-import { NEVER_TRANSLATE_VALUES, repairTranslatedValue } from './locale-translation-policy.mjs'
+import { LOCALIZABLE_GENERIC_TERMS } from './locale-overrides.mts'
+import { NEVER_TRANSLATE_VALUES, repairTranslatedValue } from './locale-translation-policy.mts'
 
 // Why: #12113 — repair-locale-catalog rewrote ~2000 translated values back to English because
 // generic UI words (agent, terminal, commit, repo, Continue) were treated as brands. These pin

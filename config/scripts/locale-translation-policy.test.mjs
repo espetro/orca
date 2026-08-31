@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairTranslatedValue, shouldPreserveEnglishValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue, shouldPreserveEnglishValue } from './locale-translation-policy.mts'
 
 describe('locale-translation-policy', () => {
   it('keeps agent catalog labels in English', () => {

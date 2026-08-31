@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 describe('locale-translation-policy ja round 5', () => {
   it('fixes inline, launch, action, MR, and status chip regressions', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairTranslatedValue, shouldPreserveEnglishValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue, shouldPreserveEnglishValue } from './locale-translation-policy.mts'
 
 const ja = (enValue, localeValue, key = 'auto.test.relocalization') =>
   repairTranslatedValue({ key, enValue, localeValue, locale: 'ja' })

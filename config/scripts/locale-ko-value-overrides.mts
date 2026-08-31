@@ -1,5 +1,5 @@
 // Korean value overrides from high-visibility UI audit rounds 2–4.
-// Why: keep locale-value-overrides.mjs under max-lines while preserving exact-match repairs.
+// Why: keep locale-value-overrides.mts under max-lines while preserving exact-match repairs.
 export const KO_VALUE_OVERRIDES = {
   issue: '이슈',
   issues: '이슈',

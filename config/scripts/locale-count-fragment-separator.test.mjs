@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 // The theme-picker count row renders "Showing {count}" immediately followed by one of these
 // fragments, so translations must keep a leading separator or the numbers fuse ("표시 중 3030 중").

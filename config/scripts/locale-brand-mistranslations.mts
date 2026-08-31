@@ -1,6 +1,6 @@
 // Per-locale renderings that are machine-translation errors for a brand or product name, and get
 // reverted to the Latin original. Ordinary vocabulary that merely looks like a brand lives in
-// locale-generic-ui-terms.mjs and stays translated.
+// locale-generic-ui-terms.mts and stays translated.
 export const BRAND_MISTRANSLATIONS = {
   ko: {
     Codex: ['사본', '코덱스'],

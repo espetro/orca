@@ -6,8 +6,8 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 
-import { canonicalGenericRenderings } from './locale-overrides.mjs'
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { canonicalGenericRenderings } from './locale-overrides.mts'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
@@ -363,7 +363,7 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
       console.error('')
       console.error(
         'repair-locale-catalog would rewrite these translated terms back to English.',
-        'Treat the term as generic in config/scripts/locale-generic-ui-terms.mjs',
+        'Treat the term as generic in config/scripts/locale-generic-ui-terms.mts',
         'instead of listing its translation as a mistranslation.'
       )
       console.error(formatGenericTermRegressions(genericTermRegressions.slice(0, 20)))

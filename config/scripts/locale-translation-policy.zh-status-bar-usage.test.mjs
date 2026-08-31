@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 // #12881 — the status bar item menu renders "<Brand> Usage" for every provider in one dropdown, so
 // zh has to settle on a single word. Registering it here, not only in the catalog, is what makes a

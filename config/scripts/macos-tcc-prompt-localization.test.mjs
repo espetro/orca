@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 const LOCALES = ['es', 'ja', 'ko', 'zh']
 const KEYS = [

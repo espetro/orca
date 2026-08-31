@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 describe('locale-translation-policy ko round 5', () => {
   it('fixes Korean round 5 review, integration, and search keyword regressions', () => {

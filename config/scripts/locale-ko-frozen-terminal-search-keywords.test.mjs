@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mts'
 
 // The frozen-terminal recovery entry is searchable only if both halves of the pair use the
 // UI's "stopped" sense; MT rendered `unfreeze` as 녹이다 (thawing ice), splitting them.

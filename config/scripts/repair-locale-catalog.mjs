@@ -3,7 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-import { repairCacheMap, repairCatalog } from './locale-translation-policy.mjs'
+import { repairCacheMap, repairCatalog } from './locale-translation-policy.mts'
 
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
 

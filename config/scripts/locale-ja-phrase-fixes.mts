@@ -1,5 +1,5 @@
 // Japanese phrase fixes from high-visibility UI audit rounds 1–4.
-// Why: keep locale-phrase-fixes.mjs under max-lines while preserving repair coverage.
+// Why: keep locale-phrase-fixes.mts under max-lines while preserving repair coverage.
 
 const JA_SENTENCE_CHAR = '[぀-ヿ一-龯、。・「」（）]'
 

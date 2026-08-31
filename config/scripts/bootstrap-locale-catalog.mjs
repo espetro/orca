@@ -9,7 +9,7 @@ import {
   repairTranslatedValue,
   setLeaf,
   shouldPreserveEnglishValue
-} from './locale-translation-policy.mjs'
+} from './locale-translation-policy.mts'
 
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')

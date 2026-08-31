@@ -1,7 +1,7 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-import { main as bootstrapLocaleCatalog } from './bootstrap-locale-catalog.mjs'
+import { main as bootstrapLocaleCatalog } from './bootstrap-locale-catalog.mts'
 
 export async function main(root = process.cwd()) {
   return bootstrapLocaleCatalog(root, 'zh')
