@@ -43,6 +43,56 @@ analyze() { # $1=outdir ; prints MAIN/COMB/HEAP byte deltas
 // workingSetKb medians summed (sample rssBytes is 0 on macOS; workingSetKb is
 // the per-role proxy; mainProcess rss is NOT added to avoid double-counting).
 const fs = require('node:fs')
+// Rank-based two-sided Mann-Whitney U (exact enumeration, tie-aware) and
+// Cliff's delta; inlined here because the analysis runs in plain node.
+const mwU = (xs, ys) => {
+  const nX = xs.length
+  const nY = ys.length
+  const all = [...xs.map((v) => ({ v, g: 0 })), ...ys.map((v) => ({ v, g: 1 }))]
+  all.sort((a, b) => a.v - b.v)
+  const ranks = new Array(all.length)
+  let i = 0
+  while (i < all.length) {
+    let j = i
+    while (j + 1 < all.length && all[j + 1].v === all[i].v) j += 1
+    const avg = (i + j) / 2 + 1
+    for (let k = i; k <= j; k += 1) ranks[k] = avg
+    i = j + 1
+  }
+  const uOf = (groups) => {
+    const r = groups.reduce((acc, g, idx) => acc + (g === 0 ? ranks[idx] : 0), 0)
+    const ux = r - (nX * (nX + 1)) / 2
+    return Math.min(ux, nX * nY - ux)
+  }
+  const observed = uOf(all.map((e) => e.g))
+  let count = 0
+  let hits = 0
+  const perm = (arr, start) => {
+    if (start === arr.length) {
+      count += 1
+      if (uOf(arr) <= observed) hits += 1
+      return
+    }
+    for (let k = start; k < arr.length; k += 1) {
+      ;[arr[start], arr[k]] = [arr[k], arr[start]]
+      perm(arr, start + 1)
+      ;[arr[start], arr[k]] = [arr[k], arr[start]]
+    }
+  }
+  perm(all.map((e) => e.g), 0)
+  return hits / count
+}
+const cliffs = (xs, ys) => {
+  let gt = 0
+  let lt = 0
+  for (const x of xs)
+    for (const y of ys) {
+      if (x > y) gt += 1
+      else if (x < y) lt += 1
+    }
+  const total = xs.length * ys.length
+  return total === 0 ? 0 : (gt - lt) / total
+}
 const bySide = { A: [], B: [] }
 for (const f of process.argv.slice(2)) {
   const m = /-(A|B)-\d+\.json$/.exec(f)
@@ -58,8 +108,36 @@ const median = (xs) => {
 const ROLES = ['main', 'renderer', 'gpu', 'utility', 'zygote', 'other']
 const stat = (dumps, pick) => median(dumps.flatMap((d) => (d.ticks ?? []).map(pick).filter((v) => v != null)))
 const mb = (bytes) => bytes / 1048576
-const mainA = stat(bySide.A, (t) => t.mainProcess?.rssBytes)
-const mainB = stat(bySide.B, (t) => t.mainProcess?.rssBytes)
+// Per-run medians (3 per side) replace pooled tick medians: primary
+// main_rss_delta_mb = median(A run medians) - median(B run medians).
+const runMedians = (side, pick) =>
+  bySide[side]
+    .map((d) => median((d.ticks ?? []).map(pick).filter((v) => v != null)))
+    .filter((v) => typeof v === 'number' && !Number.isNaN(v))
+// Post-GC tail: last 5 ticks of each run (postGc tail wait is 10s at 2s ticks).
+const runTailMedians = (side, pick) =>
+  bySide[side]
+    .map((d) => {
+      const vals = (d.ticks ?? []).map(pick).filter((v) => v != null)
+      return median(vals.slice(-5))
+    })
+    .filter((v) => typeof v === 'number' && !Number.isNaN(v))
+const mainRunA = runMedians('A', (t) => t.mainProcess?.rssBytes)
+const mainRunB = runMedians('B', (t) => t.mainProcess?.rssBytes)
+const mainA = median(mainRunA)
+const mainB = median(mainRunB)
+const postA = median(runTailMedians('A', (t) => t.mainProcess?.rssBytes))
+const postB = median(runTailMedians('B', (t) => t.mainProcess?.rssBytes))
+// Sanity check vs historical identical-code artifacts (expected p=1, cliffs ~0):
+//   MEASURE_KEEP_ARTIFACTS=1 node config/scripts/run-release-memory-benchmark.mjs \
+//     --ab <appA> <appA> --runs 3 --settle-s 120 --window-s 60 --no-editor --out /tmp/same && \
+//   node - /tmp/same/run-*.json   (feed this same inline script; p should be 1, cliffs_delta ~0)
+let pval = 1
+let cliffsVal = 0
+if (mainRunA.length > 0 && mainRunB.length > 0) {
+  pval = mwU(mainRunA, mainRunB)
+  cliffsVal = cliffs(mainRunA, mainRunB)
+}
 const heapA = stat(bySide.A, (t) => t.mainProcess?.heapUsedBytes)
 const heapB = stat(bySide.B, (t) => t.mainProcess?.heapUsedBytes)
 let comb = 0
@@ -79,6 +157,9 @@ console.log(`CPU=${(cpuA - cpuB).toFixed(3)}`)
 console.log(`MAIN_MB=${mb(mainA - mainB).toFixed(2)}`)
 console.log(`COMB_MB=${mb(comb).toFixed(2)}`)
 console.log(`HEAP_MB=${mb(heapA - heapB).toFixed(2)}`)
+console.log(`P=${pval.toFixed(4)}`)
+console.log(`CLIFFS=${cliffsVal.toFixed(3)}`)
+console.log(`POSTGC_MB=${mb(postA - postB).toFixed(2)}`)
 EOF
 }
 
@@ -105,4 +186,7 @@ echo "METRIC main_rss_delta_mb=$(mb "$MAIN")"
 echo "METRIC combined_rss_delta_mb=$(mb "$COMB")"
 echo "METRIC heap_used_delta_mb=$(mb "$HEAP")"
 echo "METRIC main_cpu_delta_pct=$CPU"
+echo "METRIC main_rss_postgc_delta_mb=$(mb "$POSTGC")"
+echo "METRIC main_rss_pvalue=$P"
+echo "METRIC main_rss_cliffs_delta=$CLIFFS"
 echo "# settle=${SETTLE_S}s window=${WINDOW_S}s runs=3 (+1 warmup discard)" >&2

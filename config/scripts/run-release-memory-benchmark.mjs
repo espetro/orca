@@ -300,6 +300,7 @@ export function buildResourceBenchArtifact({
   externalCrossCheck,
   heapBoot,
   heapIdle,
+  postGc = null,
   gitCommit = null
 }) {
   if (!dump) {
@@ -320,6 +321,7 @@ export function buildResourceBenchArtifact({
     },
     heapBoot: heapBoot ?? null,
     heapIdle: heapIdle ?? null,
+    postGc,
     gitCommit
   }
 }
@@ -350,6 +352,35 @@ export function resolveAppExecutable(appPath, platform = process.platform) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Forced GC protocol constants: identical for every spawn so sides stay
+// comparable. Recorder ticks at 2s, so POST_GC_TAIL_S ~= 5 tail ticks.
+const FORCED_GC_CALLS = 3
+const FORCED_GC_GAP_S = 1.5
+const POST_GC_TAIL_S = 10
+
+// Force V8 GC over CDP after the sampling window, then let the recorder
+// capture a post-GC tail before the idle snapshot and dump.
+export async function forceGcOverCdp(cdpSession) {
+  let applied = true
+  for (let i = 0; i < FORCED_GC_CALLS; i += 1) {
+    try {
+      await cdpSession.send('HeapProfiler.collectGarbage')
+    } catch (error) {
+      // Retry once, then degrade loudly instead of silently skipping GC.
+      try {
+        await cdpSession.send('HeapProfiler.collectGarbage')
+      } catch {
+        applied = false
+        console.warn(`[release-memory] collectGarbage failed: ${error}`)
+      }
+    }
+    if (i < FORCED_GC_CALLS - 1) {
+      await sleep(FORCED_GC_GAP_S * 1_000)
+    }
+  }
+  return { applied, ticks: FORCED_GC_CALLS, startedAt: new Date().toISOString() }
 }
 
 async function fetchCdpTargets(cdpPort, timeoutMs = 60_000) {
@@ -488,6 +519,7 @@ async function main() {
     let idleHeapSummary = null
     let fixtureState = null
     let externalCrossCheck = { start: null, end: null }
+    let postGc = null
     let dump = null
     // Hoisted so the finally block can detach Playwright before killing the
     // tree; a live CDP connection is what triggers the "target closed" class.
@@ -519,6 +551,8 @@ async function main() {
       externalCrossCheck.start = externalSweep(rootPid)
       await settle(options.windowSeconds)
       externalCrossCheck.end = externalSweep(rootPid)
+      postGc = await forceGcOverCdp(cdpSession)
+      await settle(POST_GC_TAIL_S)
       idleHeapSummary = await takeHeapSnapshotSummary(cdpSession)
       if (bridgeReady) {
         await page.evaluate(() => window.__orcaE2E__.resources.mark('snapshot-taken'))
@@ -534,6 +568,7 @@ async function main() {
         externalCrossCheck,
         heapBoot: bootHeapSummary,
         heapIdle: idleHeapSummary,
+        postGc,
         gitCommit: gitCommit()
       })
       mkdirSync(path.dirname(path.resolve(artifactPath)), { recursive: true })

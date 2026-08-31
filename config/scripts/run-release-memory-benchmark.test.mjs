@@ -15,6 +15,7 @@ import {
   takeHeapSnapshotSummary
 } from './run-release-memory-benchmark.mjs'
 import { reapLeftovers } from './bench-process-reap.mjs'
+import { cliffsDelta, mannWhitneyU } from './bench-rank-stats.mjs'
 import { normalizeBenchmarkArtifact } from './compare-benchmark-artifacts.mjs'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -290,6 +291,23 @@ describe('run-release-memory-benchmark helpers', () => {
         alive = false
       }
       expect(alive).toBe(false)
+    })
+  })
+
+  describe('statistics (per-run medians, Work Item 3)', () => {
+    it('mannWhitneyU yields exact values on known inputs', () => {
+      // Complete separation: minimum U. Two-sided exact min for 3 vs 3 is 2/20 = 0.1.
+      expect(mannWhitneyU([1, 2, 3], [10, 11, 12])).toBe(0.1)
+      // Identical distributions (all ties): p = 1.
+      expect(mannWhitneyU([5, 5, 5], [5, 5, 5])).toBe(1)
+      expect(mannWhitneyU([1, 2, 3], [1, 2, 3])).toBe(1)
+    })
+
+    it('cliffsDelta yields exact values on known inputs', () => {
+      expect(cliffsDelta([1, 2, 3], [10, 11, 12])).toBe(-1)
+      expect(cliffsDelta([10, 11, 12], [1, 2, 3])).toBe(1)
+      expect(cliffsDelta([5, 5, 5], [5, 5, 5])).toBe(0)
+      expect(cliffsDelta([], [1])).toBe(0)
     })
   })
 })
