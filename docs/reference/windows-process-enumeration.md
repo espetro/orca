@@ -208,8 +208,8 @@ The addon is Windows-only, so it follows the same contract as
 - an `optionalDependency`, so a macOS/Linux install tolerates its absence;
 - **not** in `pnpm.onlyBuiltDependencies` — pnpm installs optional dependencies
   on every host, and macOS/Linux must never run `node-gyp` for it;
-- listed in the win32 branch of `rebuild-native-deps.mjs` and
-  `ensure-native-runtime.mjs`;
+- listed in the win32 branch of `rebuild-native-deps.mts` and
+  `ensure-native-runtime.mts`;
 - copied into the packaged `node_modules` for win32 only.
 
 ## What the snapshot does not provide
@@ -320,7 +320,7 @@ on Windows yields a node-pty without the job-object exports — and
 `terminatePtyJob` then reports `unavailable` on every call, which is
 indistinguishable from a correctly degraded build.
 
-Packaging is unaffected: `rebuild-native-deps.mjs` rebuilds node-pty from source
+Packaging is unaffected: `rebuild-native-deps.mts` rebuilds node-pty from source
 for Electron and restores the ConPTY runtime files that a bare `node-gyp
 rebuild` skips. The gap is the **node-runtime test environment**, which is why
 the Windows CI job rebuilds from source before running the win32 suites.
@@ -329,6 +329,6 @@ the Windows CI job rebuilds from source before running the win32 suites.
 it is true before asserting anything else, so an unpatched binary fails loudly
 instead of passing every case vacuously. That guard is what caught this.
 
-`requiresPatchedNodePtySourceBuild()` in `ensure-native-runtime.mjs` now covers
+`requiresPatchedNodePtySourceBuild()` in `ensure-native-runtime.mts` now covers
 win32 as well, and `pnpm rebuild node-pty` sets `npm_config_build_from_source`
 so the patched source build actually replaces the upstream prebuild.

@@ -683,7 +683,7 @@ jobs:
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
             node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mts', 'config/scripts/rebuild-native-deps.mts', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Test Windows-specific boundaries
         run: >-
@@ -736,10 +736,10 @@ jobs:
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
             node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mts', 'config/scripts/rebuild-native-deps.mts', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Prepare Electron native runtime
-        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+        run: node config/scripts/ensure-native-runtime.mts --runtime=electron
 
       - name: Package unpacked app
         env:

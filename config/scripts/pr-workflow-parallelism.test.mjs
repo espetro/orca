@@ -306,7 +306,7 @@ describe('PR workflow parallelism', () => {
       (step) => step.name === 'Prepare native runtime'
     )
     expect(prepareRuntime.if).toBe("inputs.native-runtime != 'none'")
-    expect(prepareRuntime.run).toContain('ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"')
+    expect(prepareRuntime.run).toContain('ensure-native-runtime.mts --runtime="$NATIVE_RUNTIME"')
   })
 
   it('reuses native preparation after the dependency action gate', () => {
@@ -354,8 +354,8 @@ describe('PR workflow parallelism', () => {
         'config/patches/@vscode__windows-process-tree@0.8.0.patch'
       )
       expect(cacheStep.with.key).toContain('.github/actions/install-node-dependencies/action.yml')
-      expect(cacheStep.with.key).toContain('config/scripts/ensure-native-runtime.mjs')
-      expect(cacheStep.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
+      expect(cacheStep.with.key).toContain('config/scripts/ensure-native-runtime.mts')
+      expect(cacheStep.with.key).toContain('config/scripts/rebuild-native-deps.mts')
       expect(cacheStep.with.path).toContain('node-pty@*/node_modules/node-pty/build')
       expect(cacheStep.with.path).toContain('windows-native-registry@')
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tree@')

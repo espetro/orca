@@ -140,7 +140,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node config/scripts/ensure-native-runtime.mts --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}

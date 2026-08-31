@@ -85,7 +85,7 @@ jobs:
       - name: Package unpacked Windows app
         shell: pwsh
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/ensure-native-runtime.mts --runtime=electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --dir --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

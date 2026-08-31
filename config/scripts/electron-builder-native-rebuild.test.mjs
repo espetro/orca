@@ -15,7 +15,7 @@ describe('electron-builder native rebuild hook', () => {
         arch: 'x64'
       })
     ).toEqual([
-      'config/scripts/rebuild-native-deps.mjs',
+      'config/scripts/rebuild-native-deps.mts',
       '--platform=darwin',
       '--arch=x64',
       '--force'
@@ -36,7 +36,7 @@ describe('electron-builder native rebuild hook', () => {
     expect(calls).toEqual([
       [
         process.execPath,
-        ['config/scripts/rebuild-native-deps.mjs', '--platform=linux', '--arch=arm64', '--force'],
+        ['config/scripts/rebuild-native-deps.mts', '--platform=linux', '--arch=arm64', '--force'],
         expect.objectContaining({ stdio: 'inherit' })
       ]
     ])
@@ -57,7 +57,7 @@ describe('electron-builder native rebuild hook', () => {
         },
         runtime
       )
-    ).toEqual(['config/scripts/rebuild-native-deps.mjs', '--platform=linux', '--arch=x64'])
+    ).toEqual(['config/scripts/rebuild-native-deps.mts', '--platform=linux', '--arch=x64'])
     expect(
       buildNativeRebuildArgs(
         {
@@ -88,7 +88,7 @@ describe('electron-builder native rebuild hook', () => {
       ],
       [
         process.execPath,
-        ['config/scripts/rebuild-native-deps.mjs', '--platform=win32', '--arch=x64', '--force'],
+        ['config/scripts/rebuild-native-deps.mts', '--platform=win32', '--arch=x64', '--force'],
         expect.objectContaining({ stdio: 'inherit' })
       ]
     ])

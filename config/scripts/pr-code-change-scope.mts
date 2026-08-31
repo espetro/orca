@@ -130,8 +130,8 @@ const NATIVE_CACHE_FILES = new Set([
   'package.json',
   'pnpm-lock.yaml',
   '.github/actions/install-node-dependencies/action.yml',
-  'config/scripts/ensure-native-runtime.mjs',
-  'config/scripts/rebuild-native-deps.mjs'
+  'config/scripts/ensure-native-runtime.mts',
+  'config/scripts/rebuild-native-deps.mts'
 ])
 
 const NATIVE_CACHE_PREFIXES = [

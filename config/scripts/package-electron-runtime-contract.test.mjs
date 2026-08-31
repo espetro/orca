@@ -25,17 +25,17 @@ describe('Electron runtime package contract', () => {
   })
 
   it('keeps root postinstall as the single Electron binary install owner', () => {
-    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
+    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mts')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
   })
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
     const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      join(projectDir, 'config/scripts/rebuild-native-deps.mts'),
       'utf8'
     )
     const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      join(projectDir, 'config/scripts/ensure-native-runtime.mts'),
       'utf8'
     )
     expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
@@ -70,11 +70,11 @@ describe('Electron runtime package contract', () => {
 
   it('keeps the native Windows process-table addon optional and platform-gated', () => {
     const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      join(projectDir, 'config/scripts/rebuild-native-deps.mts'),
       'utf8'
     )
     const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      join(projectDir, 'config/scripts/ensure-native-runtime.mts'),
       'utf8'
     )
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
@@ -177,7 +177,7 @@ describe('Electron runtime package contract', () => {
 
     expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'win'])
     for (const command of [...releaseCommands.values(), macReleaseCommand]) {
-      expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
+      expect(command).toContain('node config/scripts/ensure-native-runtime.mts --runtime=electron')
       expect(command).toContain('electron-builder')
       expect(command.indexOf('ensure-native-runtime')).toBeLessThan(
         command.indexOf('electron-builder')

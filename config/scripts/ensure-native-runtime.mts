@@ -7,7 +7,7 @@ import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cts')
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
@@ -37,11 +37,11 @@ if (runtime === 'node') {
 } else if (runtime === 'electron') {
   ensureElectronRuntime()
 } else {
-  console.error('Usage: node config/scripts/ensure-native-runtime.mjs --runtime=node|electron')
+  console.error('Usage: node config/scripts/ensure-native-runtime.mts --runtime=node|electron')
   process.exit(2)
 }
 
-function readRuntimeArg() {
+function readRuntimeArg(): string | null {
   const inline = process.argv.find((arg) => arg.startsWith('--runtime='))
   if (inline) {
     return inline.slice('--runtime='.length)
@@ -49,7 +49,7 @@ function readRuntimeArg() {
 
   const runtimeIndex = process.argv.indexOf('--runtime')
   if (runtimeIndex !== -1) {
-    return process.argv[runtimeIndex + 1]
+    return process.argv[runtimeIndex + 1] ?? null
   }
 
   return null
@@ -115,7 +115,7 @@ function ensureElectronRuntime() {
     )
     printCheckError(initial)
   }
-  runNodeScript(['config/scripts/rebuild-native-deps.mjs'])
+  runNodeScript(['config/scripts/rebuild-native-deps.mts'])
 
   const final = runElectronCheck()
   if (!final.ok) {
@@ -158,12 +158,15 @@ function runElectronCheck() {
   return parseChildCheckResult(result)
 }
 
-function resolveInstalledElectronExecutable() {
+function resolveInstalledElectronExecutable():
+  | { ok: true; path: string }
+  | { ok: false; error: unknown } {
   const electronPackageDir = resolve(projectDir, 'node_modules/electron')
   try {
-    const electronVersion = JSON.parse(
+    const electronPackageJson = JSON.parse(
       readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
-    ).version
+    ) as { version?: string }
+    const electronVersion: string = electronPackageJson.version ?? ''
     const platformPath = getElectronPlatformPath()
     const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
       .trim()
@@ -215,7 +218,30 @@ function getElectronPlatformPath() {
   }
 }
 
-function parseChildCheckResult(result) {
+// Minimal shape of node-pty/lib/utils loadNativeModule results used here.
+type NodePtyNative = {
+  dir?: string
+  module?: NodePtyJobExports | null
+}
+
+type NodePtyJobExports = Record<string, unknown>
+
+type CheckFailure = {
+  moduleName: string
+  message: string
+  cause?: unknown
+}
+
+type NativeCheckResult = {
+  ok: boolean
+  status: number | null
+  stdout?: string | Buffer | null
+  stderr?: string | Buffer | null
+  error?: Error | null
+  failures: CheckFailure[]
+}
+
+function parseChildCheckResult(result: ReturnType<typeof spawnSync>): NativeCheckResult {
   const failures = parseCheckFailures(result.stderr)
 
   return {
@@ -228,9 +254,9 @@ function parseChildCheckResult(result) {
   }
 }
 
-function parseCheckFailures(stderr) {
-  const failures = []
-  for (const line of (stderr ?? '').split(/\r?\n/)) {
+function parseCheckFailures(stderr: string | Buffer | null | undefined): CheckFailure[] {
+  const failures: CheckFailure[] = []
+  for (const line of String(stderr ?? '').split(/\r?\n/)) {
     const match = /^([^:]+):\s*(.*)$/.exec(line)
     if (match && NATIVE_MODULES.includes(match[1])) {
       failures.push({ moduleName: match[1], message: match[2] })
@@ -239,8 +265,8 @@ function parseCheckFailures(stderr) {
   return failures
 }
 
-function collectNativeModuleFailures() {
-  const failures = []
+function collectNativeModuleFailures(): CheckFailure[] {
+  const failures: CheckFailure[] = []
   for (const moduleName of NATIVE_MODULES) {
     try {
       loadNativeModule(moduleName)
@@ -281,12 +307,12 @@ function loadNodePtyNativeModule() {
   const nativeName = getNodePtyNativeModuleName()
   // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
-  const native = loadNativeModule(nativeName)
+  const native = loadNativeModule(nativeName) as NodePtyNative | undefined
   assertNodePtyWindowsConptyRuntime(native?.dir)
   assertNodePtyJobOwnership({ nativeName, native })
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
-      `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
+      `node-pty resolved to ${native?.dir}; expected build/Release so Orca's node-pty patch is active`
     )
   }
 }

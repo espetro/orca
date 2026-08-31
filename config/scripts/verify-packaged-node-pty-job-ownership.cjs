@@ -1,6 +1,6 @@
 const { createRequire } = require('node:module')
 const { join } = require('node:path')
-const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cts')
 
 function loadPackagedConpty(resourcesDir) {
   const packagedRequire = createRequire(join(resourcesDir, 'package.json'))

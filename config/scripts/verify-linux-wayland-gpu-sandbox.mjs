@@ -75,7 +75,7 @@ function assertWaylandHost() {
 }
 
 function ensureElectronRuntime() {
-  run(process.execPath, ['config/scripts/ensure-native-runtime.mjs', '--runtime=electron'])
+  run(process.execPath, ['config/scripts/ensure-native-runtime.mts', '--runtime=electron'])
 }
 
 function buildAppIfNeeded() {

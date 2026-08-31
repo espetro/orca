@@ -2,7 +2,22 @@
 
 const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurrentProcessToJob']
 
-function assertNodePtyJobOwnership({ nativeName, native, platform = process.platform }) {
+type NodePtyJobExports = Record<string, unknown>
+
+type NativeRef = {
+  module?: NodePtyJobExports | null
+  dir?: string
+}
+
+function assertNodePtyJobOwnership({
+  nativeName,
+  native,
+  platform = process.platform
+}: {
+  nativeName: string
+  native?: NativeRef | null
+  platform?: string
+}): void {
   if (platform !== 'win32' || nativeName !== 'conpty') {
     return
   }

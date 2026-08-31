@@ -34,7 +34,12 @@ import { platform as osPlatform } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const projectDir = process.cwd()
-let cliOptions
+type RebuildCliOptions = {
+  force: boolean
+  platform?: string
+  arch?: string
+}
+let cliOptions: RebuildCliOptions
 try {
   cliOptions = readCliOptions(process.argv.slice(2))
 } catch (error) {
@@ -44,9 +49,12 @@ try {
 const rebuildPlatform = cliOptions.platform ?? osPlatform()
 const rebuildArch = cliOptions.arch ?? process.arch
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
-const electronVersion = JSON.parse(
-  readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
-).version
+const electronVersion: string =
+  (
+    JSON.parse(readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')) as {
+      version?: string
+    }
+  ).version ?? ''
 
 const ignoreModules = ['cpu-features']
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
@@ -125,8 +133,11 @@ if (!ignoreModules.includes('cpu-features')) {
       })
       writeFileSync(gypiPath, out)
       console.log(`[rebuild] Generated ${relDir}/buildcheck.gypi`)
-    } catch (/** @type {any} */ err) {
-      console.error(`[rebuild] Failed to generate ${relDir}/buildcheck.gypi:`, err?.message ?? err)
+    } catch (err) {
+      console.error(
+        `[rebuild] Failed to generate ${relDir}/buildcheck.gypi:`,
+        err instanceof Error ? err.message : err
+      )
       process.exit(1)
     }
   }
@@ -136,7 +147,7 @@ try {
   await rebuild({
     buildPath: projectDir,
     electronVersion,
-    platform: rebuildPlatform,
+    platform: rebuildPlatform as NodeJS.Platform,
     arch: rebuildArch,
     ignoreModules,
     onlyModules: modulesToRebuild,
@@ -148,8 +159,8 @@ try {
     force: true
   })
   restoreNodePtyWindowsConptyRuntime()
-} catch (/** @type {any} */ err) {
-  console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
+} catch (err) {
+  console.error('[rebuild] Native module rebuild failed:', err instanceof Error ? err.message : err)
   if (isWindowsNativeLockError(err)) {
     console.error(
       '[rebuild] A Windows process appears to be using a native .node file. ' +
@@ -210,8 +221,11 @@ function ensureElectronPackageInstalled() {
   resetPartialElectronInstall()
   try {
     runElectronPackageBinaryInstall()
-  } catch (/** @type {any} */ err) {
-    console.error('[rebuild] Electron install retry failed:', err?.message ?? err)
+  } catch (err) {
+    console.error(
+      '[rebuild] Electron install retry failed:',
+      err instanceof Error ? err.message : err
+    )
     logElectronInstallDiagnostics()
     if (continuePostinstallWithoutElectron()) {
       process.exit(0)
@@ -287,7 +301,7 @@ function continuePostinstallWithoutElectron() {
   console.error(
     '[rebuild] Continuing postinstall because Electron binary installation failed. ' +
       'Electron-consuming package scripts and release jobs run ' +
-      'config/scripts/ensure-native-runtime.mjs --runtime=electron before launching Electron.'
+      'config/scripts/ensure-native-runtime.mts --runtime=electron before launching Electron.'
   )
   return true
 }
@@ -344,8 +358,8 @@ function getElectronPlatformPath() {
   }
 }
 
-function readCliOptions(args) {
-  const options = { force: false }
+function readCliOptions(args: string[]): RebuildCliOptions {
+  const options: RebuildCliOptions = { force: false }
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === '--force') {
@@ -482,7 +496,7 @@ function loadNativeModule(moduleName) {
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
     const { assertNodePtyJobOwnership } = projectRequire(
-      './config/scripts/node-pty-job-ownership.cjs'
+      './config/scripts/node-pty-job-ownership.cts'
     )
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
     const nativeName = getNodePtyNativeModuleName()

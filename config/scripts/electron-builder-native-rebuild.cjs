@@ -37,7 +37,7 @@ function buildNativeRebuildArgs(
     arch === hostArch
 
   return [
-    'config/scripts/rebuild-native-deps.mjs',
+    'config/scripts/rebuild-native-deps.mts',
     `--platform=${platform}`,
     `--arch=${arch}`,
     ...(canReusePreparedRuntime ? [] : ['--force'])
