@@ -1,5 +1,11 @@
 # Ideas
 
+## Metric upgrades (do these BEFORE trusting any loop verdict - RSS primary is too noisy)
+
+- Switch primary to phys_footprint: `ps -o phys_footprint=` silently fails on modern macOS (keyword removed). Use `/usr/bin/footprint -p <pid>` per tick in `src/main/metrics/resource-recorder.ts:165` (replaces the ps fallback; works on this host) or proc_pidinfo(PROC_PIDTASKINFO). This is the Chromium/Slack-recommended macOS metric (pre-compression, stable under GC).
+- Force GC before sampling: CDP `HeapProfiler.collectGarbage` at window end (or `--js-flags=--expose-gc` in the bench app), then a single post-GC snapshot as the metric - Chrome memory-infra's deterministic-dump practice. Kills the decay-transient (last<boot) problem.
+- Noise: half-spread of per-run medians ~38MB >> deltas; consider Mann-Whitney U + Cliff's delta over per-run medians instead of pooled tick medians (skew-robust, standard for perf A/B), and --runs 5 for confirm runs.
+
 - sqlite `mmap_size=0` variant of F2: page-cache cap alone may leave mmap'd pages counted in main RSS; try disabling mmap reads entirely in `src/main/sqlite/sync-database.ts`
 - WAL checkpoint tuning: aggressive `wal_checkpoint(TRUNCATE)` on idle to shrink the WAL mapped region
 - V8 heap limit flags: `--max-old-space-size` / `--max-semi-space-size` in main process args to bound heap growth at idle

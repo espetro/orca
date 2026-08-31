@@ -41,14 +41,20 @@ Reduce main-process RSS delta at idle (candidate vs pinned baseline app) in the 
 
 # What's Been Tried
 
-Noise floor re-measured 2026-08-31 with prod Orca CLOSED (run 1 in log.jsonl): identical-code A/B still measured +17.43MB. The prior +19.17MB floor (run 0, prod Orca open) was NOT dominated by prod Orca. Per-run main RSS medians (A,B,B,A,A,B): 244.1/127.4/107.7/124.6/117.9/124.5 MB - the first run after a sweep is a consistent warmup outlier (244 vs 108-127 cluster), and RSS decays through the 60s window in every run. Working guidance: treat |delta| < 18MB as noise; discount or discard the first run after a process sweep; consider a warmup run in measure.sh or a max-abs side-median outlier discard before trusting near-floor deltas. Known host-noise sources and the pre-run sweep are listed in ideas.md under "Host-noise issues"; sweep them before benchmarking and note machine load in asi.
+Clean floor (run 3, log.jsonl): harness group-kill fix + warmup discard (3-run short-settle A/B, MIN_AB_RUNS-compliant) + no UI interaction during runs gave main_rss_delta_mb=-15.38 on identical code - noise, not signal. Warmup outlier is gone (medians 172.0/168.5/205.6/128.9/170.0/175.6) but the half-spread of per-run medians is still ~38MB: a single 3-run A/B cannot resolve deltas below that. RSS decays through the 60s window in every spawn (last < boot) - we sample a draining transient. Earlier floors: +17.43 (run 1, prod Orca closed, no warmup), +22.91 (run 2, harness pre-fix, UI clicks during run). Treat |delta| < 38MB as unresolved in a 3-run A/B; rerun or raise --runs when near it.
+
+Measurement-metric assessment (2026-08-31, research-backed):
+- RSS on macOS is the wrong primary: Chromium/Electron docs say resident set "is not what one would expect" (compressed pages); our footprintBytes is null because `ps -o phys_footprint=` is not a valid keyword on modern macOS (resource-recorder.ts:165 falls back to null - this is a keyword problem, NOT an entitlement problem).
+- `/usr/bin/footprint -p <pid>` works on this host and reports real phys_footprint (dirty+clean). Best upgrade: sample it per tick in resource-recorder alongside ps. Second-best: proc_pidinfo(PROC_PIDTASKINFO) via a small native/FFI helper (returns ~96 bytes struct; phys_footprint field).
+- heap_used_delta_mb misses native memory (sqlite mmap, buffers, scrollback); workingSetKb per role is the best per-role proxy we currently collect.
+- Chrome team practice: force GC before the dump (CDP HeapProfiler.collectGarbage or --js-flags=--expose-gc), then measure - kills the decay-transient problem at the source. Worth wiring into the window protocol: measure right after a forced GC instead of averaging the drain.
 
 Priors with verdicts pending from separate bisects; treat as hypotheses, not facts (see ideas.md):
-- 2026-08-31: fresh noise floor +17.43MB with prod Orca closed; first-run-after-sweep warmup outlier is the dominant term (see What's Been Tried).
+- 2026-08-31: clean floor -15.38MB (noise); half-spread ±38MB dominates (see What's Been Tried).
 - F1 warp theme worker teardown
 - F2 sqlite WAL + page-cache cap in sync-database.ts
 - F3 lazy Monaco loading
 
 # Loop Rules
 
-Autoresearch defaults apply: loop until maxIterations, primary metric is king, annotate asi. Every run already uses the full settle 120 / window 60 protocol, so a single measure.sh result is decision-grade EXCEPT near the ~20MB noise floor documented in What's Been Tried; rerun once when a delta is inside it.
+Autoresearch defaults apply: loop until maxIterations, primary metric is king, annotate asi. Every run already uses the full settle 120 / window 60 protocol plus a warmup discard. A single 3-run result is decision-grade ONLY above ~38MB (the per-run median half-spread, run 3); rerun once (or use --runs 5 via MEASURE extra runs) when a delta is inside that. Never click into or interact with the app while measure runs - UI interaction measurably perturbed run 2.
