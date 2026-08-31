@@ -34,7 +34,8 @@ function makeRecorder(module: RecorderModule, overrides: Record<string, unknown>
   })
 }
 
-const PS_STDOUT = '  111  51200  104857600\n  222  25600  52428800\n'
+const PS_STDOUT = '  111  51200\n  222  25600\n'
+const FOOTPRINT_STDOUT = 'Footprint: 1361 KB (16384 bytes per page)\n ...table...'
 const THERMAL_STDOUT = 'CPU_Speed_Limit = 100\n'
 const VM_STAT_1 = 'Page ins: 1000.\nPage outs: 500.\n'
 const VM_STAT_2 = 'Page ins: 1030.\nPage outs: 505.\n'
@@ -62,6 +63,9 @@ describe('resource recorder', () => {
       }
       if (file === 'vm_stat') {
         return Promise.resolve({ stdout: VM_STAT_2, stderr: '' })
+      }
+      if (file === '/usr/bin/footprint') {
+        return Promise.resolve({ stdout: FOOTPRINT_STDOUT, stderr: '' })
       }
       return Promise.resolve({ stdout: '', stderr: '' })
     })
@@ -95,7 +99,7 @@ describe('resource recorder', () => {
       pid: 111,
       type: 'main',
       rssBytes: 52_428_800,
-      footprintBytes: 104_857_600,
+      footprintBytes: 1_393_664,
       cpuPercent: 1.5
     })
     expect(tick.samples[1].type).toBe('renderer')
@@ -115,7 +119,7 @@ describe('resource recorder', () => {
     recorder.stop()
   })
 
-  it('runs exactly one batched ps exec per tick', async () => {
+  it('runs one batched ps exec and one footprint probe per sample per tick', async () => {
     const module = await loadRecorder()
     const recorder = makeRecorder(module)
 
@@ -125,7 +129,12 @@ describe('resource recorder', () => {
 
     const psCalls = execFileMock.mock.calls.filter((call) => call[0] === 'ps')
     expect(psCalls).toHaveLength(2)
-    expect(psCalls[0][1]).toEqual(['-o', 'pid=,rss=,phys_footprint=', '-p', '111,222'])
+    expect(psCalls[0][1]).toEqual(['-o', 'pid=,rss=', '-p', '111,222'])
+    const footprintCalls = execFileMock.mock.calls.filter(
+      (call) => call[0] === '/usr/bin/footprint'
+    )
+    expect(footprintCalls).toHaveLength(4)
+    expect(footprintCalls[0][1]).toEqual(['-p', '111'])
     recorder.stop()
   })
 
@@ -154,10 +163,13 @@ describe('resource recorder', () => {
     recorder.stop()
   })
 
-  it('marks footprintBytes null on all samples when ps fails', async () => {
+  it('marks footprintBytes null on all samples when the footprint tool fails', async () => {
     execFileMock.mockImplementation((file: string) => {
       if (file === 'ps') {
-        return Promise.reject(new Error('ps failed'))
+        return Promise.resolve({ stdout: PS_STDOUT, stderr: '' })
+      }
+      if (file === '/usr/bin/footprint') {
+        return Promise.reject(new Error('footprint failed'))
       }
       return Promise.resolve({ stdout: '', stderr: '' })
     })

@@ -15,6 +15,7 @@ import type {
 import { execFileAsync } from '../../shared/child-process/exec-file'
 import {
   parseDarwinThermal,
+  parseFootprintTool,
   parsePsFootprint,
   parseVmStatDeltas
 } from '../../shared/resource-recorder-parsers'
@@ -160,24 +161,28 @@ class ResourceRecorderImpl implements ResourceRecorder {
   private async applyFootprints(samples: ResourceSample[]): Promise<void> {
     const pids = [...new Set(samples.map((sample) => sample.pid))].join(',')
     try {
-      const { stdout } = await this.options.execFile('ps', [
-        '-o',
-        'pid=,rss=,phys_footprint=',
-        '-p',
-        pids
-      ])
+      const { stdout } = await this.options.execFile('ps', ['-o', 'pid=,rss=', '-p', pids])
       const rows = parsePsFootprint(stdout)
       for (const sample of samples) {
         const row = rows.get(sample.pid)
         if (row) {
           sample.rssBytes = row.rssBytes
-          sample.footprintBytes = row.footprintBytes
         }
       }
     } catch {
-      // ps failed this tick: leave footprintBytes (and unmapped rssBytes) as null/0 fallback.
-      // Note: modern macOS ps has no phys_footprint keyword, so the catch also covers
-      // "unsupported" - footprint stays null and RSS remains the primary per-process metric.
+      // ps failed this tick: rssBytes stays 0 fallback.
+    }
+    // phys_footprint is not a ps keyword on modern macOS; probe per pid instead.
+    for (const sample of samples) {
+      try {
+        const { stdout } = await this.options.execFile('/usr/bin/footprint', [
+          '-p',
+          String(sample.pid)
+        ])
+        sample.footprintBytes = parseFootprintTool(stdout)
+      } catch {
+        sample.footprintBytes = null
+      }
     }
   }
 

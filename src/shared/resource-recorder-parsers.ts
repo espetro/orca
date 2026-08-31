@@ -15,7 +15,7 @@ export function parsePsFootprint(stdout: string): Map<number, PsFootprintRow> {
     }
     const pid = Number(fields[0])
     const rssKb = Number(fields[1])
-    const footprintBytes = fields.length === 3 ? Number(fields[2]) : NaN
+    const footprintBytes = fields.length === 3 ? Number(fields[2]) : Number.NaN
     if (!Number.isFinite(pid) || !Number.isFinite(rssKb)) {
       continue
     }
@@ -28,6 +28,12 @@ export function parsePsFootprint(stdout: string): Map<number, PsFootprintRow> {
     })
   }
   return rows
+}
+
+/** Parses `/usr/bin/footprint -p <pid>` stdout: `Footprint: <N> KB` line, in bytes. */
+export function parseFootprintTool(stdout: string): number | null {
+  const match = stdout.match(/^\s*Footprint:\s+(\d+)\s+KB\b/m)
+  return match ? Number(match[1]) * 1024 : null
 }
 
 /** Parses `pmset -g therm`; null on n/a, unsupported output, or missing line. */
