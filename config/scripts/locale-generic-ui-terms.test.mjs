@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LOCALIZABLE_GENERIC_TERMS } from './locale-generic-ui-terms.mjs'
+import { LOCALIZABLE_GENERIC_TERMS } from './locale-overrides.mjs'
 import { NEVER_TRANSLATE_VALUES, repairTranslatedValue } from './locale-translation-policy.mjs'
 
 // Why: #12113 — repair-locale-catalog rewrote ~2000 translated values back to English because

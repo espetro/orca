@@ -6,7 +6,7 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 
-import { canonicalGenericRenderings } from './locale-generic-ui-terms.mjs'
+import { canonicalGenericRenderings } from './locale-overrides.mjs'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
