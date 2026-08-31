@@ -11,8 +11,10 @@ import {
   parseReleaseMemoryBenchmarkArgs,
   resolveAppExecutable,
   runArtifactPath,
-  summarizeRoleRss
+  summarizeRoleRss,
+  takeHeapSnapshotSummary
 } from './run-release-memory-benchmark.mjs'
+import { reapLeftovers } from './bench-process-reap.mjs'
 import { normalizeBenchmarkArtifact } from './compare-benchmark-artifacts.mjs'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -244,5 +246,50 @@ describe('run-release-memory-benchmark helpers', () => {
     expect(defaultArtifactPath(new Date('2026-08-29T10:20:30.400Z'))).toBe(
       join('tests', 'tools', 'benchmarks', 'results', 'release-memory-2026-08-29-10-20-30.json')
     )
+  })
+
+  describe('run lifecycle hardening (orphaned-bench-procs fix)', () => {
+    it('degrades heap snapshot failures to null instead of throwing', async () => {
+      const failingSession = {
+        on: () => undefined,
+        send: async () => {
+          throw new Error('Target page, context or browser has been closed')
+        },
+        detach: async () => undefined
+      }
+      await expect(takeHeapSnapshotSummary(failingSession)).resolves.toBeNull()
+    })
+
+    it('reapLeftovers is a no-op on win32 and tolerates empty sweeps', async () => {
+      if (process.platform === 'win32') {
+        expect(reapLeftovers('C:/x/Orca.app')).toBeUndefined()
+        return
+      }
+      // No matching processes: pgrep exits 1, reapLeftovers must swallow it.
+      expect(() => reapLeftovers('/tmp/orca-no-such-marker-8f3/Orca.app')).not.toThrow()
+    })
+
+    it('reapLeftovers SIGKILLs stray processes matching the executable basename', async () => {
+      if (process.platform === 'win32') {
+        return
+      }
+      const { spawn: nodeSpawn } = await import('node:child_process')
+      // argv[0] rewrite makes the sleeper match the marker for pgrep -f.
+      const sleeper = nodeSpawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+        stdio: 'ignore',
+        detached: true,
+        argv0: '/tmp/orca-reap-marker/Orca.app'
+      })
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      reapLeftovers('/tmp/orca-reap-marker/Orca.app')
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+      let alive = true
+      try {
+        process.kill(sleeper.pid, 0)
+      } catch {
+        alive = false
+      }
+      expect(alive).toBe(false)
+    })
   })
 })

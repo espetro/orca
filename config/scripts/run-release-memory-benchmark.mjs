@@ -10,9 +10,18 @@ import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { connectToApp, waitForStoreReady } from './windows-apphang-repro/electron-dev-session.mjs'
+import {
+  connectToApp,
+  pickFreePort,
+  waitForStoreReady
+} from './windows-apphang-repro/electron-dev-session.mjs'
 import { createCompletedOnboardingProfile } from './windows-apphang-repro/wsl-workspace-fixture.mjs'
 import { classify, descendantsOf, readProcessRows } from './idle-cpu-process-sampling.mjs'
+import { reapLeftovers } from './bench-process-reap.mjs'
+import {
+  forceTerminateProcessTree,
+  signalProcessTree
+} from '../../src/shared/child-process/process-tree-termination.ts'
 
 export const DEFAULT_CDP_PORT = 9223
 export const DEFAULT_SETTLE_SECONDS = 30
@@ -405,96 +414,24 @@ export async function takeHeapSnapshotSummary(cdpSession, { topN = 10 } = {}) {
   cdpSession.on('HeapProfiler.addHeapSnapshotChunk', (event) => {
     chunks.push(event.chunk)
   })
-  await cdpSession.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false })
+  try {
+    await cdpSession.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false })
+  } catch (error) {
+    // Renderer crash / page close mid-snapshot must degrade to null, not throw
+    // (a thrown runOnce used to leak the whole Electron tree).
+    try {
+      await cdpSession.detach()
+    } catch {
+      /* already detached */
+    }
+    console.warn(
+      `[release-memory] heap snapshot failed (degraded to null): ${error?.message ?? error}`
+    )
+    return null
+  }
   const snapshot = JSON.parse(chunks.join(''))
   const summary = aggregateHeapSnapshotRetainedByConstructor(snapshot, topN)
   return { takenAt: new Date().toISOString(), ...summary }
-}
-
-// Deterministic fixture via the app runtime client surface (window.api +
-// __store), same approach as terminal-cold-park-resource-bench: open N terminal
-// panes, an editor, and a browser tab, waiting for each to register in the store.
-function git(repoPath, ...args) {
-  return execFileSync('git', ['-C', repoPath, ...args], { stdio: 'pipe' })
-}
-
-// Local git repo fixture so the app has a real workspace to open terminals in
-// (same shape as terminal-cold-park-resource-bench's createLocalRepoFixture).
-function createWorkspaceFixture() {
-  const baseDir = mkdtempSync(path.join(os.tmpdir(), 'orca-release-memory-fx-'))
-  const repoPath = path.join(baseDir, 'repo')
-  mkdirSync(repoPath, { recursive: true })
-  git(repoPath, 'init', '--initial-branch=main')
-  git(repoPath, 'config', 'user.email', 'bench@orca.local')
-  git(repoPath, 'config', 'user.name', 'Orca Bench')
-  writeFileSync(path.join(repoPath, 'README.md'), '# release-memory fixture\n')
-  git(repoPath, 'add', '.')
-  git(repoPath, 'commit', '-m', 'init', '--no-gpg-sign')
-  return { baseDir, repoPath }
-}
-
-async function applyFixture(page, preset, fixture) {
-  const registered = await page.evaluate(async (repoPath) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('store-unavailable')
-    }
-    await store.getState().fetchSettings?.()
-    const addResult = await window.api.repos.add({ path: repoPath, kind: 'git' })
-    if ('error' in addResult) {
-      throw new Error(addResult.error)
-    }
-    await store.getState().fetchRepos()
-    const state = store.getState()
-    const repo = state.repos.find((c) => c.path === repoPath) ?? addResult.repo
-    await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
-    const nextState = store.getState()
-    nextState.setActiveView('terminal')
-    const worktrees = nextState.worktreesByRepo?.[repo.id] ?? []
-    const primary = worktrees.find((w) => w.isMainWorktree) ?? worktrees[0]
-    if (!primary) {
-      throw new Error('no-worktrees')
-    }
-    nextState.setActiveWorktree(primary.id, 'local')
-    return { repoId: repo.id, worktreeId: primary.id, activeWorktreeId: nextState.activeWorktreeId }
-  }, fixture.repoPath)
-  const created = await page.evaluate(
-    async (config) => {
-      const store = window.__store
-      if (!store) {
-        return { terminals: 0, error: 'store-unavailable' }
-      }
-      const opened = { terminals: 0 }
-      const outcomes = []
-      for (let index = 0; index < config.terminalPanes; index += 1) {
-        try {
-          // Why: local (same-machine) terminals go through the store's
-          // openNewTerminalTabInActiveWorkspace → createTab + pty.spawn path;
-          // the web-runtime-session bridge targets remote Orca hosts only and
-          // fails with "not connected to a remote Orca host" on a fresh
-          // profile (no paired runtime environment).
-          await store.getState().openNewTerminalTabInActiveWorkspace()
-          const state = store.getState()
-          const tabs = state.tabsByWorktree?.[config.worktreeId] ?? []
-          outcomes.push(`terminal-tabs:${tabs.length}`)
-          if (tabs.length > index) {
-            opened.terminals += 1
-          }
-        } catch (error) {
-          outcomes.push(`error: ${error?.message ?? String(error)}`)
-        }
-      }
-      return { ...opened, outcomes }
-    },
-    { terminalPanes: preset.terminalPanes, worktreeId: registered.worktreeId }
-  )
-  return {
-    applied: true,
-    terminals: created.terminals,
-    editor: preset.editor === true,
-    browserTab: preset.browserTab === true,
-    outcomes: created.outcomes
-  }
 }
 
 async function main() {
@@ -517,6 +454,7 @@ async function main() {
     // packaged build (--user-data-dir does not move the single-instance lock),
     // and an isolated HOME keeps the benchmark clear of the stable instance's
     // daemons, relay sockets, and Tailscale remote session state.
+    reapLeftovers(executable)
     const child = spawn(
       executable,
       [
@@ -526,7 +464,9 @@ async function main() {
       ],
       {
         stdio: 'ignore',
-        detached: false,
+        // Own pgid so signalProcessTree can group-kill the whole Electron tree
+        // (root-only child.kill orphaned gpu/renderer/utility/pty descendants).
+        detached: process.platform !== 'win32',
         env: {
           ...process.env,
           HOME: homeDir,
@@ -541,15 +481,20 @@ async function main() {
         }
       }
     )
+    activeChildren.add(child)
     const rootPid = child.pid
     let bootHeapSummary = null
     let idleHeapSummary = null
     let fixtureState = null
     let externalCrossCheck = { start: null, end: null }
     let dump = null
+    // Hoisted so the finally block can detach Playwright before killing the
+    // tree; a live CDP connection is what triggers the "target closed" class.
+    let browserRef = {}
     try {
       await fetchCdpTargets(options.cdpPort, 120_000)
       const { browser, page } = await connectToApp(options.cdpPort)
+      browserRef = browser
       await waitForStoreReady(page)
       const cdpSession = await browser.contexts()[0].newCDPSession(page)
       bootHeapSummary = await takeHeapSnapshotSummary(cdpSession)
@@ -595,16 +540,41 @@ async function main() {
       console.log(`[release-memory] wrote ${artifactPath}`)
       return artifactPath
     } finally {
-      child.kill('SIGTERM')
-      await sleep(250)
+      activeChildren.delete(child)
+      try {
+        await browserRef.close?.()
+      } catch {
+        /* connection already gone */
+      }
+      await signalProcessTree(child, 'SIGTERM')
+      await sleep(500)
       if (child.exitCode === null) {
-        child.kill('SIGKILL')
+        await forceTerminateProcessTree(child)
       }
     }
   }
 
   const options = parseReleaseMemoryBenchmarkArgs(process.argv.slice(2))
   const artifactDir = options.out ?? 'tests/tools/benchmarks/results'
+  // Fixed port made a prior leaked tree poison every later run; pick free.
+  if (!process.argv.slice(2).some((arg) => arg.startsWith('--cdp-port'))) {
+    options.cdpPort = await pickFreePort()
+  }
+  const activeChildren = new Set()
+  const reapActive = () => {
+    for (const child of activeChildren) {
+      void signalProcessTree(child, 'SIGTERM')
+    }
+  }
+  process.on('SIGINT', () => {
+    reapActive()
+    process.exit(130)
+  })
+  process.on('SIGTERM', () => {
+    reapActive()
+    process.exit(143)
+  })
+  process.on('exit', reapActive)
   if (options.ab) {
     const sides = { A: options.ab[0], B: options.ab[1] }
     const labels = { A: path.basename(options.ab[0]), B: path.basename(options.ab[1]) }
@@ -613,15 +583,14 @@ async function main() {
     const written = []
     for (let index = 0; index < order.length; index += 1) {
       const side = order[index]
-      written.push(
-        await runOnce({
-          appPath: sides[side],
-          label: labels[side],
-          side,
-          runIndex: index,
-          options: { ...options, out: artifactDir }
-        })
-      )
+      const childPromise = runOnce({
+        appPath: sides[side],
+        label: labels[side],
+        side,
+        runIndex: index,
+        options: { ...options, out: artifactDir }
+      })
+      written.push(await childPromise)
     }
     console.log(`[release-memory] artifacts: ${written.join(' ')}`)
   } else {
