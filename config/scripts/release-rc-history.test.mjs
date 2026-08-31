@@ -7,7 +7,7 @@ import {
   highestRcForBase,
   rcNumberFromReleaseSubject,
   rcNumberFromTag
-} from './release-rc-history.mjs'
+} from './release-rc-history.mts'
 
 function git(cwd, args) {
   return execFileSync('git', args, {

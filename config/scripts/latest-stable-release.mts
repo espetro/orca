@@ -52,7 +52,7 @@ export async function fetchReleases(repo, token, fetchImpl = fetch) {
     throw new Error('token is required')
   }
 
-  const releases = []
+  const releases: unknown[] = []
   for (let page = 1; ; page += 1) {
     const pageReleases = await githubJson(
       fetchImpl,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   readPublishedVersionsFromEnv,
   resolveDevChannelBaseVersion
-} from './dev-channel-base-version.mjs'
+} from './dev-channel-base-version.mts'
 
 describe('dev channel base version', () => {
   it('falls back to package.json when no tags are supplied', () => {

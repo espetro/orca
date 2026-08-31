@@ -8,7 +8,7 @@ import {
   isReleaseCutDraft,
   publishCompleteDraftReleases,
   writeGithubOutputs
-} from './publish-complete-draft-releases.mjs'
+} from './publish-complete-draft-releases.mts'
 
 function git(cwd, args) {
   return execFileSync('git', args, {

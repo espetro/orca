@@ -64,7 +64,12 @@ function githubHeaders(token) {
   }
 }
 
-async function githubJson(fetchImpl, url, token, options = {}) {
+async function githubJson(
+  fetchImpl: typeof fetch,
+  url: string,
+  token: string,
+  options: { headers?: Record<string, string>; method?: string; body?: string } = {}
+) {
   const res = await fetchImpl(url, {
     ...options,
     headers: {
@@ -80,7 +85,7 @@ async function githubJson(fetchImpl, url, token, options = {}) {
 }
 
 async function fetchRepoReleases(repo, token, fetchImpl) {
-  const releases = []
+  const releases: unknown[] = []
   for (let page = 1; ; page += 1) {
     const pageReleases = await githubJson(
       fetchImpl,

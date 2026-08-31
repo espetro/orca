@@ -3,7 +3,7 @@ import {
   fetchReleases,
   latestStableDesktopReleaseTag,
   parseDesktopStableTag
-} from './latest-stable-release.mjs'
+} from './latest-stable-release.mts'
 
 function jsonResponse(body, init = {}) {
   return {

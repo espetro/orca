@@ -236,10 +236,10 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
             --json tagName --jq '.[].tagName' || true)"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
-            node config/scripts/adhoc-build-version.mjs \
+            node config/scripts/adhoc-build-version.mts \
             >"$RUNNER_TEMP/adhoc-identity.txt"
           if ! grep -q '^name=' "$RUNNER_TEMP/adhoc-identity.txt"; then
-            echo "::error::adhoc-build-version.mjs emitted no release name; $REF's copy of the script is out of sync with this workflow."
+            echo "::error::adhoc-build-version.mts emitted no release name; $REF's copy of the script is out of sync with this workflow."
             exit 1
           fi
           cat "$RUNNER_TEMP/adhoc-identity.txt" >>"$GITHUB_OUTPUT"

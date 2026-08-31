@@ -3,7 +3,7 @@ import {
   extractManifestAssetNames,
   getRequiredReleaseAssetNames,
   verifyRequiredReleaseAssets
-} from './verify-release-required-assets.mjs'
+} from './verify-release-required-assets.mts'
 
 function jsonResponse(body) {
   return {

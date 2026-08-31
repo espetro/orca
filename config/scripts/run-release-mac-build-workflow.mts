@@ -1,9 +1,19 @@
+type DateNow = () => number
+type Sleep = (ms: number) => Promise<unknown>
+
+type WorkflowDeps = {
+  now?: DateNow
+  sleep?: Sleep
+  fetch?: typeof fetch
+  dispatchStartedAtMs?: number
+}
+
 const DEFAULT_API_VERSION = '2026-03-10'
 const DEFAULT_TIMEOUT_MINUTES = 90
 const DEFAULT_POLL_SECONDS = 30
 const RUN_DISCOVERY_TIMEOUT_SECONDS = 120
 
-export function readReleaseMacBuildWorkflowOptions(env = process.env) {
+export function readReleaseMacBuildWorkflowOptions(env: NodeJS.ProcessEnv = process.env) {
   return {
     apiBaseUrl: env.GITHUB_API_URL ?? 'https://api.github.com',
     pollSeconds: readPositiveInteger(env.RELEASE_MAC_BUILD_POLL_SECONDS, DEFAULT_POLL_SECONDS),
@@ -27,7 +37,10 @@ export function expectedReleaseMacBuildRunTitle({ releaseRunId, tag }) {
   return `Mac release build ${tag} (${releaseRunId})`
 }
 
-export async function runReleaseMacBuildWorkflow(options, deps = {}) {
+export async function runReleaseMacBuildWorkflow(
+  options: ReturnType<typeof readReleaseMacBuildWorkflowOptions>,
+  deps: WorkflowDeps = {}
+) {
   const api = createGitHubApiClient(options, deps)
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? sleepMilliseconds
@@ -62,7 +75,10 @@ export async function runReleaseMacBuildWorkflow(options, deps = {}) {
   return completedRun
 }
 
-export async function dispatchReleaseMacBuildWorkflow(api, options) {
+export async function dispatchReleaseMacBuildWorkflow(
+  api: ReturnType<typeof createGitHubApiClient>,
+  options: ReturnType<typeof readReleaseMacBuildWorkflowOptions>
+) {
   const body = {
     inputs: {
       release_run_id: options.releaseRunId,
@@ -80,7 +96,11 @@ export async function dispatchReleaseMacBuildWorkflow(api, options) {
   )
 }
 
-export async function findDispatchedReleaseMacBuildRun(api, options, deps = {}) {
+export async function findDispatchedReleaseMacBuildRun(
+  api: ReturnType<typeof createGitHubApiClient>,
+  options: ReturnType<typeof readReleaseMacBuildWorkflowOptions>,
+  deps: WorkflowDeps & { dispatchStartedAtMs: number } = { dispatchStartedAtMs: 0 }
+) {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? sleepMilliseconds
   const deadlineMs = now() + RUN_DISCOVERY_TIMEOUT_SECONDS * 1000
@@ -112,7 +132,12 @@ export async function findDispatchedReleaseMacBuildRun(api, options, deps = {}) 
   )
 }
 
-export async function waitForReleaseMacBuildRun(api, workflowRunId, options, deps = {}) {
+export async function waitForReleaseMacBuildRun(
+  api: ReturnType<typeof createGitHubApiClient>,
+  workflowRunId: number,
+  options: ReturnType<typeof readReleaseMacBuildWorkflowOptions>,
+  deps: WorkflowDeps = {}
+) {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? sleepMilliseconds
   const deadlineMs = now() + options.timeoutMinutes * 60 * 1000
@@ -138,7 +163,10 @@ export async function waitForReleaseMacBuildRun(api, workflowRunId, options, dep
   )
 }
 
-export function createGitHubApiClient(options, deps = {}) {
+export function createGitHubApiClient(
+  options: ReturnType<typeof readReleaseMacBuildWorkflowOptions>,
+  deps: WorkflowDeps = {}
+) {
   const fetchImpl = deps.fetch ?? globalThis.fetch
   if (typeof fetchImpl !== 'function') {
     throw new Error('A fetch implementation is required.')
@@ -152,7 +180,7 @@ export function createGitHubApiClient(options, deps = {}) {
   return {
     owner,
     repo,
-    async request(method, path, body) {
+    async request(method: string, path: string, body?: unknown) {
       const response = await fetchImpl(`${options.apiBaseUrl}${path}`, {
         body: body == null ? undefined : JSON.stringify(body),
         headers: {

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
+import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mts'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 export const OXLINT_SCANS = [

@@ -1,15 +1,15 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { formatReleaseTitleTimestamp } from './release-title-timestamp.mjs'
+import { formatReleaseTitleTimestamp } from './release-title-timestamp.mts'
 import {
   readPublishedVersionsFromEnv,
   resolveDevChannelBaseVersion
-} from './dev-channel-base-version.mjs'
+} from './dev-channel-base-version.mts'
 
 /** `1.4.160-hourly.202607281400` — UTC to the minute, so tags sort chronologically
  *  by semver and every build is uniquely versioned. */
-export function createHourlyBuildVersion(baseVersion, date) {
+export function createHourlyBuildVersion(baseVersion: string, date: Date) {
   const match = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(baseVersion)
   if (!match) {
     throw new Error(`Package version is not valid semver: ${baseVersion}`)
@@ -46,7 +46,7 @@ export function createHourlyBuildVersion(baseVersion, date) {
  * already in use. Titles that predate this naming simply do not match, which is
  * how the first build of a version lands on 01.
  */
-export function nextHourlyBuildNumber(baseVersion, releaseNames = []) {
+export function nextHourlyBuildNumber(baseVersion: string, releaseNames: string[] = []) {
   const prefix = `${baseVersion} • `
   const highest = releaseNames.reduce((max, entry) => {
     const name = String(entry ?? '')
@@ -63,7 +63,12 @@ export function nextHourlyBuildNumber(baseVersion, releaseNames = []) {
  * `1.4.163 • 01 • Jul 31, 1:54PM • e698241` — the human-facing release title,
  * shown verbatim in both the GitHub releases list and the in-app build picker.
  */
-export function formatHourlyReleaseName(version, buildNumber, commit, date) {
+export function formatHourlyReleaseName(
+  version: string,
+  buildNumber: number,
+  commit: string,
+  date: Date
+) {
   if (!Number.isInteger(buildNumber) || buildNumber < 1) {
     throw new Error(`Hourly build number must be a positive integer: ${buildNumber}`)
   }
@@ -79,7 +84,13 @@ export function formatHourlyReleaseName(version, buildNumber, commit, date) {
 // base version, and the base is only known once the published tags have been
 // resolved just above. Computing it outside meant numbering against whatever
 // version the caller guessed.
-export function getHourlyBuildIdentity(now = new Date(), { publishedVersions, releaseNames } = {}) {
+export function getHourlyBuildIdentity(
+  now: Date = new Date(),
+  {
+    publishedVersions,
+    releaseNames
+  }: { publishedVersions?: string[]; releaseNames?: string[] } = {}
+) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'

@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { formatReleaseTitleTimestamp } from './release-title-timestamp.mjs'
+import { formatReleaseTitleTimestamp } from './release-title-timestamp.mts'
 import {
   readPublishedVersionsFromEnv,
   resolveDevChannelBaseVersion
-} from './dev-channel-base-version.mjs'
+} from './dev-channel-base-version.mts'
 
 /** Long enough to name a feature, short enough that a picker row stays readable. */
 export const ADHOC_LABEL_MAX_LENGTH = 32
@@ -20,7 +20,7 @@ export const ADHOC_LABEL_MAX_LENGTH = 32
  * minute-resolution tag would collide and fail the second build after its whole
  * pack-and-notarize run.
  */
-export function createAdhocBuildVersion(baseVersion, date) {
+export function createAdhocBuildVersion(baseVersion: string, date: Date) {
   const match = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(baseVersion)
   if (!match) {
     throw new Error(`Package version is not valid semver: ${baseVersion}`)
@@ -87,7 +87,11 @@ export function formatAdhocReleaseName(version, label, commit, date) {
   ].join(' • ')
 }
 
-export function getAdhocBuildIdentity(now = new Date(), label = '', publishedVersions = []) {
+export function getAdhocBuildIdentity(
+  now: Date = new Date(),
+  label: string = '',
+  publishedVersions: string[] = []
+) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'

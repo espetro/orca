@@ -1,6 +1,13 @@
+type VersionTriple = {
+  major: number
+  minor: number
+  patch: number
+  prerelease: string | null
+}
+
 const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/
 
-function parseVersionTriple(value) {
+function parseVersionTriple(value: unknown): VersionTriple | null {
   const match = SEMVER.exec(String(value ?? '').trim())
   if (!match) {
     return null
@@ -13,7 +20,7 @@ function parseVersionTriple(value) {
   }
 }
 
-function compareTriples(a, b) {
+function compareTriples(a: VersionTriple, b: VersionTriple): number {
   return a.major - b.major || a.minor - b.minor || a.patch - b.patch
 }
 
@@ -28,7 +35,14 @@ function compareTriples(a, b) {
  * already running. Published tags are the only honest answer to "what number is
  * taken"; package.json is a floor, not a source of truth.
  */
-export function resolveDevChannelBaseVersion(packageVersion, publishedVersions = []) {
+function notNull<T>(value: T | null): value is T {
+  return value !== null
+}
+
+export function resolveDevChannelBaseVersion(
+  packageVersion: string,
+  publishedVersions: string[] = []
+) {
   const fromPackage = parseVersionTriple(packageVersion)
   if (!fromPackage) {
     throw new Error(`Package version is not valid semver: ${packageVersion}`)
@@ -36,7 +50,7 @@ export function resolveDevChannelBaseVersion(packageVersion, publishedVersions =
 
   // Unparseable tags are skipped rather than fatal: the main repo carries old tags
   // that predate the current scheme, and one of them must not fail every build.
-  const published = publishedVersions.map(parseVersionTriple).filter(Boolean)
+  const published = publishedVersions.map(parseVersionTriple).filter(notNull)
 
   let base = fromPackage
   if (published.length > 0) {
@@ -59,7 +73,9 @@ export function resolveDevChannelBaseVersion(packageVersion, publishedVersions =
 }
 
 /** Tag list the workflow reads out of the main repo, newline separated. */
-export function readPublishedVersionsFromEnv(value = process.env.ORCA_PUBLISHED_VERSIONS) {
+export function readPublishedVersionsFromEnv(
+  value: string | undefined = process.env.ORCA_PUBLISHED_VERSIONS
+): string[] {
   return String(value ?? '')
     .split(/\s+/)
     .filter(Boolean)

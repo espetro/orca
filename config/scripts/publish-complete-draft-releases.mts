@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
+import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mts'
 
 const API_VERSION = '2022-11-28'
 const RELEASE_CUT_AUTHOR = 'github-actions[bot]'
@@ -44,7 +44,12 @@ export function isTagBuiltFromCurrentRef(tag, { cwd = process.cwd() } = {}) {
   }
 }
 
-async function githubJson(fetchImpl, url, token, options = {}) {
+async function githubJson(
+  fetchImpl: typeof fetch,
+  url: string,
+  token: string,
+  options: { headers?: Record<string, string>; method?: string; body?: string } = {}
+) {
   const res = await fetchImpl(url, {
     ...options,
     headers: {
@@ -78,8 +83,18 @@ export async function publishCompleteDraftReleases({
   token,
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
-  isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
+  isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag) as boolean,
   log = console.log
+}: {
+  repo: string
+  token: string
+  fetchImpl?: typeof fetch
+  verifyReleaseAssets?: typeof verifyRequiredReleaseAssets
+  isDraftBuiltFromCurrentRef?: (input: {
+    tag: string
+    release: unknown
+  }) => boolean | Promise<boolean>
+  log?: (...args: unknown[]) => void
 }) {
   if (!repo) {
     throw new Error('repo is required')
@@ -93,8 +108,8 @@ export async function publishCompleteDraftReleases({
     .filter(isReleaseCutDraft)
     .sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime())
 
-  const published = []
-  const skipped = []
+  const published: string[] = []
+  const skipped: { tag: string; reason: string }[] = []
 
   for (const release of candidates) {
     const tag = release.tag_name
@@ -158,7 +173,7 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
 async function main() {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
-  const result = await publishCompleteDraftReleases({ repo, token })
+  const result = await publishCompleteDraftReleases({ repo: repo ?? '', token: token ?? '' })
   writeGithubOutputs(result)
 }
 

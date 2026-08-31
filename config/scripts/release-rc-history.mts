@@ -48,7 +48,7 @@ export function rcNumberFromReleaseSubject(base, subject) {
 }
 
 export function highestRcForBase(base, { cwd = process.cwd() } = {}) {
-  const numbers = []
+  const numbers: number[] = []
 
   for (const tag of gitLines(['tag', '--list', `v${base}-rc.*`], cwd)) {
     const rcNumber = rcNumberFromTag(base, tag)
@@ -75,7 +75,7 @@ export function highestRcForBase(base, { cwd = process.cwd() } = {}) {
 function main() {
   const base = process.argv[2]
   if (!base) {
-    throw new Error('Usage: node config/scripts/release-rc-history.mjs <base-version>')
+    throw new Error('Usage: node config/scripts/release-rc-history.mts <base-version>')
   }
 
   const highest = highestRcForBase(base)

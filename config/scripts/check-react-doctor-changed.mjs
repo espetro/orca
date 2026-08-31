@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
+import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mts'
 
 const requestedBase =
   process.argv.slice(2).find((argument) => argument !== '--') ??

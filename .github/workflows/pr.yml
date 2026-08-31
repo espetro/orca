@@ -62,7 +62,7 @@ jobs:
           CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE_SHA" "$HEAD_SHA")"
           echo "Changed paths:"
           printf '%s\n' "$CHANGED"
-          printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs | tee -a "$GITHUB_OUTPUT"
+          printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mts | tee -a "$GITHUB_OUTPUT"
 
   static_analysis:
     name: static analysis

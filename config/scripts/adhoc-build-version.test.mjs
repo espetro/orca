@@ -3,8 +3,8 @@ import {
   createAdhocBuildVersion,
   formatAdhocReleaseName,
   normalizeAdhocLabel
-} from './adhoc-build-version.mjs'
-import { createHourlyBuildVersion } from './hourly-build-version.mjs'
+} from './adhoc-build-version.mts'
+import { createHourlyBuildVersion } from './hourly-build-version.mts'
 import { compareAppVersions } from '../../src/shared/app-version'
 
 describe('createAdhocBuildVersion', () => {

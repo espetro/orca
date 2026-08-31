@@ -4,7 +4,7 @@ import {
   expectedReleaseMacBuildRunTitle,
   readReleaseMacBuildWorkflowOptions,
   runReleaseMacBuildWorkflow
-} from './run-release-mac-build-workflow.mjs'
+} from './run-release-mac-build-workflow.mts'
 
 const baseOptions = {
   apiBaseUrl: 'https://api.github.test',

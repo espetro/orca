@@ -9,7 +9,7 @@ const RELEASE_NAME_TIME_ZONE = 'America/Los_Angeles'
  * builds compare equal. A title is only ever read, so it uses the timezone the
  * people reading it are in. The two therefore disagree by the current offset.
  */
-export function formatReleaseTitleTimestamp(date) {
+export function formatReleaseTitleTimestamp(date: Date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new Error('Release title timestamp is invalid.')
   }

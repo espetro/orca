@@ -316,7 +316,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseWorkflowText).not.toContain('blacksmith-')
     expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
     expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
-    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mjs')
+    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mts')
     expect(macDispatchStep.env.RELEASE_MAC_BUILD_WORKFLOW).toBe('release-mac-build.yml')
     expect(macDispatchStep.env.RELEASE_MAC_BUILD_TAG).toBe('${{ needs.cut.outputs.tag }}')
     expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
@@ -428,7 +428,7 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Compute next version'
     )
 
-    expect(versionStep.run).toContain('node config/scripts/release-rc-history.mjs "$1"')
+    expect(versionStep.run).toContain('node config/scripts/release-rc-history.mts "$1"')
     expect(versionStep.run).toContain('tag_matches_current_ref')
     expect(versionStep.run).toContain('cutting the next version instead of reusing stale artifacts')
     expect(versionStep.run).toContain('git rev-parse "$existing_rc_tag"')

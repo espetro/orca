@@ -322,7 +322,7 @@ jobs:
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/publish-complete-draft-releases.mjs
+        run: node config/scripts/publish-complete-draft-releases.mts
 
       - name: Compute next version
         id: version
@@ -359,7 +359,7 @@ jobs:
           # stable after older releases. On 2026-06-04, v1.4.44 existed but
           # the list returned v1.4.42 first, causing a manual RC cut to reopen
           # the already-shipped 1.4.43 series as v1.4.43-rc.0.
-          latest_stable="$(node config/scripts/latest-stable-release.mjs)"
+          latest_stable="$(node config/scripts/latest-stable-release.mts)"
           latest_stable="${latest_stable#v}"
           echo "Latest stable: ${latest_stable:-<none>}"
 
@@ -394,7 +394,7 @@ jobs:
           }
 
           highest_rc_for_base() {
-            node config/scripts/release-rc-history.mjs "$1"
+            node config/scripts/release-rc-history.mts "$1"
           }
 
           require_valid_version_suffix() {
@@ -815,7 +815,7 @@ jobs:
             exit 0
           fi
 
-          node config/scripts/create-draft-release.mjs "$TAG"
+          node config/scripts/create-draft-release.mts "$TAG"
 
   terminal-rendering-golden:
     needs: cut
@@ -2015,7 +2015,7 @@ jobs:
           node-version-file: package.json
 
       - name: Run isolated macOS release build
-        run: node config/scripts/run-release-mac-build-workflow.mjs
+        run: node config/scripts/run-release-mac-build-workflow.mts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
@@ -2070,7 +2070,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/verify-release-required-assets.mjs "$TAG"
+        run: node config/scripts/verify-release-required-assets.mts "$TAG"
 
       - name: Publish release
         # Why: derive `--prerelease` from the tag shape (not from whatever

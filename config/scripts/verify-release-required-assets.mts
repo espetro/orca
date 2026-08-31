@@ -30,8 +30,8 @@ export function getRequiredReleaseAssetNames(tag) {
   ]
 }
 
-export function extractManifestAssetNames(manifestText) {
-  const names = new Set()
+export function extractManifestAssetNames(manifestText: string): string[] {
+  const names = new Set<string>()
   for (const line of manifestText.split(/\r?\n/)) {
     const match = line.match(/^\s*(?:-\s*)?(?:url|path):\s*['"]?([^'"]+)['"]?\s*$/)
     if (!match) {
@@ -85,9 +85,30 @@ async function fetchAssetText(repo, asset, token) {
   return res.text()
 }
 
-export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
-  const release = await fetchRelease(repo, tag, token)
-  const assetsByName = new Map(release.assets.map((asset) => [asset.name, asset]))
+type ReleaseAsset = {
+  id: number
+  name: string
+  size: number
+  state?: string
+}
+
+export async function verifyRequiredReleaseAssets({
+  repo,
+  tag,
+  token
+}: {
+  repo: string
+  tag: string
+  token: string
+}) {
+  const release = (await fetchRelease(repo, tag, token)) as {
+    assets: ReleaseAsset[]
+    draft?: boolean
+    prerelease?: boolean
+  }
+  const assetsByName = new Map<string, ReleaseAsset>(
+    release.assets.map((asset) => [asset.name, asset])
+  )
 
   const requiredNames = new Set(getRequiredReleaseAssetNames(tag))
   const manifestNames = [
@@ -111,12 +132,14 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
   const missing = [...requiredNames].filter((name) => !assetsByName.has(name)).sort()
   const notUploaded = [...requiredNames]
     .map((name) => assetsByName.get(name))
-    .filter((asset) => asset && asset.state && asset.state !== 'uploaded')
+    .filter((asset): asset is ReleaseAsset =>
+      Boolean(asset && asset.state && asset.state !== 'uploaded')
+    )
     .map((asset) => `${asset.name}:${asset.state}`)
     .sort()
   const empty = [...requiredNames]
     .map((name) => assetsByName.get(name))
-    .filter((asset) => asset && asset.size === 0)
+    .filter((asset): asset is ReleaseAsset => Boolean(asset && asset.size === 0))
     .map((asset) => asset.name)
     .sort()
 
@@ -144,7 +167,7 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
 async function main() {
   const tag = process.argv[2]
   if (!tag) {
-    throw new Error('Usage: node config/scripts/verify-release-required-assets.mjs <tag>')
+    throw new Error('Usage: node config/scripts/verify-release-required-assets.mts <tag>')
   }
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   if (!token) {
