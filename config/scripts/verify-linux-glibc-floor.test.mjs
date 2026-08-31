@@ -16,7 +16,7 @@ const {
   findMissingProviderDeps,
   collectNativeBinaries,
   verifyLinuxGlibcFloor
-} = require('./verify-linux-glibc-floor.cjs')
+} = require('./verify-linux-glibc-floor.cts')
 
 // 0x7f 'E' 'L' 'F' + class/data/version padding — enough for the magic check.
 const ELF_HEADER = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00])

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   nodeGypRebuildInvocation,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR
-} from './windows-process-tree-gyp-rebuild.mjs'
+} from './windows-process-tree-gyp-rebuild.mts'
 
 describe('windows-process-tree node-gyp rebuild', () => {
   it("resolves node-addon-api's gyp target from the rebuild cwd", () => {

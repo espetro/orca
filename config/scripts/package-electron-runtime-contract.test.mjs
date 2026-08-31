@@ -225,7 +225,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('packages and release-gates the SSH relay watcher child', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mts'), 'utf8')
     const builderConfig = readFileSync(
       join(projectDir, 'config/electron-builder.config.cjs'),
       'utf8'
@@ -271,7 +271,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('packages and verifies the Windows SSH node-pty console-list fallback', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mts'), 'utf8')
     const relayDeploy = readFileSync(join(projectDir, 'src/main/ssh/ssh-relay-deploy.ts'), 'utf8')
     const patchAsset = readFileSync(
       join(projectDir, 'config/relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs'),

@@ -2,6 +2,30 @@ const { readdirSync, openSync, readSync, closeSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
 const { join, relative } = require('node:path')
 
+/** One required symbol-version node parsed from `objdump -p` Version References. */
+type VersionNeed = {
+  library: string | null
+  name: string
+  weak: boolean
+}
+
+/** A relocated symbol imported while its providing DSO is missing from DT_NEEDED. */
+type MissingProviderDep = {
+  symbol: string
+  library: string
+}
+
+/** One offending binary plus the reasons it will not load on the floor OS. */
+type FloorOffender = {
+  filePath: string
+  floorViolations: VersionNeed[]
+  providerViolations: MissingProviderDep[]
+}
+
+type VerifyGlibcFloorOptions = {
+  objdumpPath?: string
+}
+
 // Why: v1.4.150 shipped a Linux build whose node-pty pty.node required
 // GLIBC_2.34 (openpty/forkpty were relocated into libc by glibc's
 // libutil/libpthread merge), so the app crashed on startup on Ubuntu 20.04
@@ -62,7 +86,7 @@ function compareGlibcVersions(a, b) {
  * block loading on an older glibc. Each entry: `0xHASH 0xFLAGS <n> <NAME>`.
  */
 function parseVersionNeeds(objdumpOutput) {
-  const needs = []
+  const needs: VersionNeed[] = []
   let library = null
   let inSection = false
   for (const line of objdumpOutput.split('\n')) {
@@ -155,7 +179,7 @@ const RELOCATED_SYMBOL_PROVIDERS = Object.freeze({
  * DT_NEEDED — meaning they resolve at build time but not on the floor OS.
  */
 function findMissingProviderDeps(importedSymbols, neededLibraries) {
-  const missing = []
+  const missing: MissingProviderDep[] = []
   for (const [symbol, library] of Object.entries(RELOCATED_SYMBOL_PROVIDERS)) {
     if (importedSymbols.has(symbol) && !neededLibraries.has(library)) {
       missing.push({ symbol, library })
@@ -182,7 +206,7 @@ function isElfFile(filePath) {
 
 /** Recursively collect ELF native binaries (`.node`, `.so[.N]`, executables). */
 function collectNativeBinaries(rootDir) {
-  const binaries = []
+  const binaries: string[] = []
   const walk = (dir) => {
     let entries
     try {
@@ -310,7 +334,7 @@ function readImportedSymbols(filePath, objdumpPath) {
  * on Linux: a missing objdump throws, because a silent skip would defeat the
  * regression gate on exactly the host where it matters.
  */
-function verifyLinuxGlibcFloor(rootDir, options = {}) {
+function verifyLinuxGlibcFloor(rootDir, options: VerifyGlibcFloorOptions = {}) {
   const binaries = collectNativeBinaries(rootDir)
   if (binaries.length === 0) {
     console.log(`[verify-linux-glibc-floor] OK — no bundled native binaries under ${rootDir}`)
@@ -327,7 +351,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     )
   }
 
-  const offenders = []
+  const offenders: FloorOffender[] = []
   for (const filePath of binaries) {
     const { versionNeeds, neededLibraries } = readDynamicInfo(filePath, objdumpPath)
     const floorViolations = findFloorViolations(versionNeeds, filePath)
@@ -346,7 +370,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   if (offenders.length > 0) {
     const detail = offenders
       .map(({ filePath, floorViolations, providerViolations }) => {
-        const reasons = []
+        const reasons: string[] = []
         if (floorViolations.length > 0) {
           const nodes = [...new Set(floorViolations.map((v) => v.name))].sort()
           const libraries = [...new Set(floorViolations.map((v) => v.library).filter(Boolean))]

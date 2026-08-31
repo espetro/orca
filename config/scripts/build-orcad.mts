@@ -9,6 +9,7 @@
  */
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
+import type { Metafile } from 'esbuild'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -59,7 +60,7 @@ const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 // that does not exist.
 const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
 
-/** Why: the UMD build's relative dynamic requires do not bundle. Same fix build-relay.mjs uses. */
+/** Why: the UMD build's relative dynamic requires do not bundle. Same fix build-relay.mts uses. */
 const jsoncParserEsm = {
   name: 'jsonc-parser-esm',
   setup(pluginBuild) {
@@ -126,18 +127,23 @@ const result = await build({
   logLevel: 'error'
 })
 
-const output = Object.values(result.metafile.outputs).find(
+const output = Object.values(result.metafile?.outputs ?? {}).find(
   (o) => o.entryPoint === 'src/main/orcad/main.ts'
 )
-// Why check `original` and not just `path`: when electron is bundleable, esbuild
-// rewrites `path` to the resolved file under node_modules and the naive check passes
-// while the package is very much in the bundle.
-// Why both metafiles: the forked children ship in the same deployment and run under the
-// same plain Node. A daemon-entry that reached electron would fail at fork time, on the
-// path whose whole point is that terminals survive.
-function collectImporters(metafiles, matches) {
-  const importers = new Set()
+/**
+ * Why check `original` and not just `path`: when electron is bundleable, esbuild
+ * rewrites `path` to the resolved file under node_modules and the naive check passes
+ * while the package is very much in the bundle.
+ * Why both metafiles: the forked children ship in the same deployment and run under the
+ * same plain Node. A daemon-entry that reached electron would fail at fork time, on the
+ * path whose whole point is that terminals survive.
+ */
+function collectImporters(metafiles: (Metafile | undefined)[], matches) {
+  const importers = new Set<string>()
   for (const metafile of metafiles) {
+    if (!metafile) {
+      continue
+    }
     for (const [file, info] of Object.entries(metafile.inputs)) {
       for (const imported of info.imports ?? []) {
         if (matches(imported.original ?? imported.path)) {
@@ -149,14 +155,21 @@ function collectImporters(metafiles, matches) {
   return importers
 }
 
-const metafiles = [result.metafile, ...childResults.map((child) => child.metafile)]
+const metafile = result.metafile
+if (!metafile) {
+  throw new Error('[build-orcad] esbuild returned no metafile')
+}
+const metafiles: (Metafile | undefined)[] = [
+  metafile,
+  ...childResults.map((child) => child.metafile)
+]
 const electronImporters = collectImporters(
   metafiles,
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
 )
 const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
 
-const graphErrors = []
+const graphErrors: string[] = []
 if (electronImporters.size > 0) {
   graphErrors.push(
     `${electronImporters.size} module(s) in the bundle import electron:\n${[...electronImporters]
@@ -260,7 +273,7 @@ if (process.exitCode !== 1) {
   const fullVersion = `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
   writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
   console.log(
-    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
+    `[build-orcad] ok — ${fullVersion}, ${((output?.bytes ?? 0) / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output?.inputs ?? {}).length} modules, zero electron and node:sqlite imports.`
   )
 }
 
@@ -291,7 +304,12 @@ async function smokeLoadWatcherChild() {
         resolve(failure)
       }
       child.on('message', (message) => {
-        if (message?.op === 'subscribe-started') {
+        if (
+          typeof message === 'object' &&
+          message !== null &&
+          'op' in message &&
+          message.op === 'subscribe-started'
+        ) {
           child.disconnect()
         }
       })

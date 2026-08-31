@@ -16,7 +16,7 @@
  * Node headers, not Electron: the relay runs under the host's own `node`. The
  * addon is N-API, so one build serves every Node the remote might have.
  *
- *   node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+ *   node config/scripts/build-windows-process-tree-relay-addon.mts --arch=arm64
  */
 import { execFileSync } from 'node:child_process'
 import {
@@ -35,7 +35,7 @@ import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-arti
 import {
   nodeGypRebuildInvocation,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
-} from './windows-process-tree-gyp-rebuild.mjs'
+} from './windows-process-tree-gyp-rebuild.mts'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
 const SUPPORTED_ARCHES = ['x64', 'arm64']

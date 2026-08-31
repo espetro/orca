@@ -238,8 +238,8 @@ jobs:
       - name: Build Windows process-table addon for the relay
         shell: bash
         run: |
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+          node config/scripts/build-windows-process-tree-relay-addon.mts --arch=x64
+          node config/scripts/build-windows-process-tree-relay-addon.mts --arch=arm64
 
       - name: Build app
         shell: bash

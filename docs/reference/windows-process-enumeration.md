@@ -151,7 +151,7 @@ The scan is the floor, not the destination: it costs ~1.4 s and a `powershell.ex
 where the addon costs ~57 ms. Release builds therefore compile the addon and ship
 it as an optional relay artifact.
 
-`config/scripts/build-windows-process-tree-relay-addon.mjs` builds it from the
+`config/scripts/build-windows-process-tree-relay-addon.mts` builds it from the
 source pnpm has already patched, on a Windows runner, and refuses to run if
 any patch hunk is missing — the Spectre hunk fails loudly, the 1024-process
 hunk fails _silently_, and the relative gyp path dies at configure on Windows.

@@ -79,7 +79,7 @@ function stageWindowsProcessTreeAddon(platform, outDir) {
   if (!existsSync(source)) {
     if (REQUIRED_ADDON_ARCHES.includes(arch) || REQUIRED_ADDON_ARCHES.includes('all')) {
       throw new Error(
-        `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch} (Windows only).`
+        `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mts --arch=${arch} (Windows only).`
       )
     }
     console.log(

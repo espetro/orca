@@ -20,8 +20,8 @@
  * the glibc/musl distinction is recorded from the container rather than detected.
  *
  * Usage:
- *   node config/scripts/build-orcad-prebuilds.mjs [--slot=linux-x64-musl]
- *   node config/scripts/build-orcad-prebuilds.mjs --require-slots   # release gate
+ *   node config/scripts/build-orcad-prebuilds.mts [--slot=linux-x64-musl]
+ *   node config/scripts/build-orcad-prebuilds.mts --require-slots   # release gate
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -54,9 +54,18 @@ export function detectLibc(platform = process.platform, header = readReportHeade
   return header && typeof header === 'object' && 'glibcVersionRuntime' in header ? 'glibc' : 'musl'
 }
 
-function readReportHeader() {
+/** Minimal shape of `process.report.getReport().header` the libc detection reads. */
+type NodeReportHeader = {
+  glibcVersionRuntime?: string
+}
+
+function readReportHeader(): NodeReportHeader | object | undefined {
   try {
-    return process.report?.getReport?.()?.header
+    const report = process.report?.getReport?.()
+    if (typeof report !== 'object' || report === null || !('header' in report)) {
+      return undefined
+    }
+    return report.header as NodeReportHeader
   } catch {
     return undefined
   }
@@ -79,7 +88,7 @@ export function slotName(argv = process.argv, platform = process.platform, arch 
 export function assertNodePtyPatchApplied(nodePtyDir) {
   const bindingGyp = readFileSync(join(nodePtyDir, 'binding.gyp'), 'utf8')
   const ptySource = readFileSync(join(nodePtyDir, 'src', 'unix', 'pty.cc'), 'utf8')
-  const missing = []
+  const missing: string[] = []
   if (!bindingGyp.includes('--no-as-needed,-l:libutil.so.1')) {
     missing.push("binding.gyp is missing the '--no-as-needed,-l:libutil.so.1' ldflag")
   }
@@ -192,7 +201,7 @@ function build() {
   // The static floor gate, applied to the artifact we are about to ship rather than only
   // to the packaged desktop app. objdump is Linux-only, which is where the floor lives.
   if (process.platform === 'linux') {
-    const { verifyLinuxGlibcFloor } = require('./verify-linux-glibc-floor.cjs')
+    const { verifyLinuxGlibcFloor } = require('./verify-linux-glibc-floor.cts')
     verifyLinuxGlibcFloor(slotDir)
   }
 
@@ -207,7 +216,7 @@ function build() {
   )
 }
 
-if (process.argv[1] && process.argv[1].endsWith('build-orcad-prebuilds.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('build-orcad-prebuilds.mts')) {
   if (process.argv.includes('--require-slots')) {
     requireSlots()
   } else {
