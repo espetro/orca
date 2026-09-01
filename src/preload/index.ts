@@ -58,7 +58,6 @@ import type {
 } from '../shared/filesystem-entry-types'
 import type { TuiAgent } from '../shared/tui-agent'
 import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
-import type { WorktreeSetupLaunch } from '../shared/worktree/launch-types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
 import type {
@@ -117,12 +116,6 @@ import type {
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
-  CodexRateLimitResetResult,
-  GrokAccountStatus,
-  RateLimitRuntimeTarget,
-  RateLimitState
-} from '../shared/rate-limit-types'
-import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -131,9 +124,6 @@ import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-i
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
-  NativeChatAppendedPayload,
-  NativeChatReadSessionResult,
-  NativeChatSubscriptionFrame,
   PluginHostInstallResult,
   PluginHostInstallSource,
   PluginHostListEntry,
@@ -149,7 +139,6 @@ import {
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
 import { readBrowserClientHostIdArgument } from '../shared/browser-client-host-id-argument'
-import type { ExecutionHostId } from '../shared/execution-host'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult,
@@ -166,18 +155,6 @@ import type {
   ScopedExternalManagerUpdateRequest
 } from '../shared/external-automation-scope'
 import type { AutomationsChangedPayload } from '../shared/runtime-client-events'
-import type {
-  AiVaultDeleteSessionArgs,
-  AiVaultDeleteSessionResult
-} from '../shared/ai-vault-session-deletion'
-import type {
-  AiVaultFirstUserPromptArgs,
-  AiVaultListArgs,
-  AiVaultSubagentListArgs
-} from '../shared/ai-vault-types'
-import type { AiVaultSessionTitlesArgs } from '../shared/ai-vault-session-title'
-import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
-import type { AgentType } from '../shared/native-chat-types'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -218,6 +195,17 @@ import {
   codexConfigSyncBridge
 } from './bridge/agent-accounts-bridges'
 import { preflightBridge, agentHooksBridge } from './bridge/preflight-agent-hooks-bridges'
+import {
+  exportBridge,
+  hooksBridge,
+  ephemeralVmBridge,
+  notebookBridge,
+  aiVaultBridge,
+  nativeChatBridge,
+  rateLimitsBridge,
+  minimaxCredentialsBridge,
+  grokAccountsBridge
+} from './bridge/misc-domain-bridges'
 import {
   localhostWorktreeLabelsBridge,
   agentTrustBridge,
@@ -882,14 +870,6 @@ const api: PreloadApi = {
    }
  },
 
-  export: {
-    htmlToPdf: (args: {
-      html: string
-      title: string
-    }): Promise<
-      { success: true; filePath: string } | { success: false; cancelled?: boolean; error?: string }
-    > => ipcRenderer.invoke('export:html-to-pdf', args)
-  },
 
   hostedReview: hostedReviewBridge,
   bitbucket: bitbucketBridge,
@@ -1536,77 +1516,15 @@ const api: PreloadApi = {
     }
   },
 
-  hooks: {
-    check: (args: { repoId: string; hostId?: ExecutionHostId }) =>
-      ipcRenderer.invoke('hooks:check', args),
-
-    inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>
-      ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
-
-    createIssueCommandRunner: (args: {
-      repoId: string
-      worktreePath: string
-      command: string
-    }): Promise<WorktreeSetupLaunch> => ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
-
-    readIssueCommand: (args: {
-      repoId: string
-      hostId?: ExecutionHostId
-    }): Promise<{
-      status?: 'ok' | 'error'
-      localContent: string | null
-      sharedContent: string | null
-      effectiveContent: string | null
-      localFilePath: string
-      source: 'local' | 'shared' | 'none'
-    }> => ipcRenderer.invoke('hooks:readIssueCommand', args),
-
-    writeIssueCommand: (args: {
-      repoId: string
-      content: string
-      hostId?: ExecutionHostId
-    }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
-  },
 
   cache: cacheBridge,
   session: sessionBridge,
   remoteWorkspace: remoteWorkspaceBridge,
-  ephemeralVm: {
-    listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
-    listRecipeCatalog: () => ipcRenderer.invoke('ephemeralVm:listRecipeCatalog'),
-    doctor: (args) => ipcRenderer.invoke('ephemeralVm:doctor', args),
-    provision: (args) => ipcRenderer.invoke('ephemeralVm:provision', args),
-    cancelProvision: (args) => ipcRenderer.invoke('ephemeralVm:cancelProvision', args),
-    onProvisionEvent: (callback) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }
-      ): void => callback(event)
-      ipcRenderer.on('ephemeralVm:provisionEvent', listener)
-      return () => ipcRenderer.removeListener('ephemeralVm:provisionEvent', listener)
-    },
-    listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
-    attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),
-    suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
-    resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
-    cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
-    stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
-    getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
-  } satisfies PreloadApi['ephemeralVm'],
 
 
 
 
 
-  notebook: {
-    runPythonCell: (args: {
-      filePath: string
-      code: string
-      preamble?: string
-      connectionId?: string | null
-    }): Promise<{ stdout: string; stderr: string; exitCode: number | null; error?: string }> =>
-      ipcRenderer.invoke('notebook:runPythonCell', args)
-  },
 
   fs: {
     readDir: (args: {
@@ -1824,59 +1742,7 @@ const api: PreloadApi = {
 
 
 
-  aiVault: {
-    listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
-    resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
-      ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
-    cancelListSessions: (args: { requestToken: string }): Promise<void> =>
-      ipcRenderer.invoke('aiVault:cancelListSessions', args),
-    prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
-      ipcRenderer.invoke('aiVault:prepareSessionResume', args),
-    listSubagentSessions: (args: AiVaultSubagentListArgs) =>
-      ipcRenderer.invoke('aiVault:listSubagentSessions', args),
-    getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) =>
-      ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
-    deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
-      ipcRenderer.invoke('aiVault:deleteSession', args),
-    onWindowFocused: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('aiVault:windowFocused', listener)
-      return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
-    }
-  },
 
-  nativeChat: {
-    readSession: (
-      agent: AgentType,
-      sessionId: string,
-      limit?: number,
-      transcriptPath?: string
-    ): Promise<NativeChatReadSessionResult> =>
-      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
-    /** Start live tailing; onAppended fires with only newly-appended messages. Returns an unsubscribe fn that closes the watcher. */
-    subscribe: (
-      args: {
-        subscriptionId: string
-        agent: AgentType
-        sessionId: string
-        transcriptPath?: string
-        limit?: number
-      },
-      onFrame: (frame: NativeChatSubscriptionFrame) => void
-    ): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: NativeChatAppendedPayload) => {
-        if (payload.subscriptionId === args.subscriptionId) {
-          onFrame(payload.frame)
-        }
-      }
-      ipcRenderer.on('nativeChat:appended', listener)
-      ipcRenderer.send('nativeChat:subscribe', args)
-      return () => {
-        ipcRenderer.removeListener('nativeChat:appended', listener)
-        ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
-      }
-    }
-  },
 
   runtime: {
     syncWindowGraph: (
@@ -2075,43 +1941,18 @@ const api: PreloadApi = {
       subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks)
   },
 
-  rateLimits: {
-    get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
-    refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
-    refreshCodexForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
-      ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
-    consumeCodexResetCredit: (): Promise<CodexRateLimitResetResult> =>
-      ipcRenderer.invoke('rateLimits:consumeCodexResetCredit'),
-    refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
-      ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
-    setPollingInterval: (ms: number): Promise<void> =>
-      ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
-    fetchInactiveClaudeAccounts: (): Promise<void> =>
-      ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
-    fetchInactiveCodexAccounts: (): Promise<void> =>
-      ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
-    refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
-    refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
-    onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
-      ipcRenderer.on('rateLimits:update', listener)
-      return () => ipcRenderer.removeListener('rateLimits:update', listener)
-    }
-  },
 
-  minimaxCredentials: {
-    getStatus: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('minimaxCredentials:getStatus'),
-    saveCookie: (cookie: string): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
-    clearCookie: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('minimaxCredentials:clearCookie')
-  },
 
-  grokAccounts: {
-    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
-  },
 
+  export: exportBridge,
+  hooks: hooksBridge,
+  ephemeralVm: ephemeralVmBridge,
+  notebook: notebookBridge,
+  aiVault: aiVaultBridge,
+  nativeChat: nativeChatBridge,
+  rateLimits: rateLimitsBridge,
+  minimaxCredentials: minimaxCredentialsBridge,
+  grokAccounts: grokAccountsBridge,
   ssh: {
     listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
 
