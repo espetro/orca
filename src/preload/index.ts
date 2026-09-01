@@ -1,11 +1,6 @@
 /* eslint-disable max-lines -- Why: preload is the audited renderer/Electron IPC contract; co-locating the surface eases security and type-drift review. */
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type {
-  SkillDeletePlan,
-  SkillDeleteRequest,
-  SkillDeleteResult
-} from '../shared/skill-delete-contract'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
@@ -35,12 +30,6 @@ import {
   admitSshDetectedPorts
 } from '../shared/ssh-retained-payload-admission'
 import type {
-  PluginPanelActionOutcome,
-  PluginPanelEntry
-} from '../shared/plugins/plugin-panel-bridge'
-import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
-import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
-import type {
   BrowserCaptureSelectionScreenshotArgs,
   BrowserExtractHoverArgs,
   BrowserSetGrabModeArgs
@@ -67,44 +56,6 @@ import type {
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../shared/terminal-render-desync-evidence'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
-import type {
-  ShellOpenExternalEditorRequest,
-  ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
-} from '../shared/shell-open-types'
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
-import type {
-  SkillCloudOwnedShare,
-  SkillCloudOperation,
-  SkillCloudPackageDetails
-} from '../shared/skill-cloud-contract'
-import type {
-  SkillBundleInstallPreviewInput,
-  SkillBundleInstallPreviewOperation,
-  SkillBundlePackageVersionInstallInput,
-  SkillBundleShareInstallInput,
-  SkillBundleShareInstallOperation,
-  SkillInstallPreviewInput,
-  SkillInstallPreviewOperation,
-  ManagedSkillInstallListOperation,
-  SkillPackageVersionInstallInput,
-  SkillRemoveInput,
-  SkillRemoveOperation,
-  SkillShareInstallInput,
-  SkillShareInstallOperation,
-  SkillInstallCancelInput,
-  SkillInstallProgress,
-  SkillSharePreview,
-  SkillShareProgress,
-  SkillSharePublishInput,
-  SkillSharePublishOperation,
-  SkillShareResolvedOperation
-} from '../shared/skill-sharing-contract'
-import type {
-  SkillFreshnessInventory,
-  SkillUpdateRun,
-  SkillUpdateStartResult
-} from '../shared/skill-freshness'
 import type { ClientHostedBrowserRowsEvent } from '../shared/client-hosted-browser-rows'
 import type {
   RuntimeBrowserDriverState,
@@ -124,10 +75,6 @@ import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-i
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
-  PluginHostInstallResult,
-  PluginHostInstallSource,
-  PluginHostListEntry,
-  PluginHostLogLine,
   ExternalAutomationManagerResult,
   PreloadApi
 } from './api-types'
@@ -195,6 +142,12 @@ import {
   codexConfigSyncBridge
 } from './bridge/agent-accounts-bridges'
 import { preflightBridge, agentHooksBridge } from './bridge/preflight-agent-hooks-bridges'
+import {
+  orcaProfilesBridge,
+  pluginsBridge,
+  shellBridge
+} from './bridge/profiles-plugins-shell-bridges'
+import { skillsBridge } from './bridge/skills-bridge'
 import {
   exportBridge,
   hooksBridge,
@@ -441,76 +394,11 @@ const api: PreloadApi = {
       ipcRenderer.invoke('terminal:writeRenderDesyncEvidence', args)
   },
 
-  orcaProfiles: {
-    list: () => ipcRenderer.invoke('orcaProfiles:list'),
-    authStatus: () => ipcRenderer.invoke('orcaProfiles:authStatus'),
-    createLocal: (args) => ipcRenderer.invoke('orcaProfiles:createLocal', args),
-    createCloudLinked: (args) => ipcRenderer.invoke('orcaProfiles:createCloudLinked', args),
-    switchProfile: (args) => ipcRenderer.invoke('orcaProfiles:switch', args),
-    transferProject: (args) => ipcRenderer.invoke('orcaProfiles:transferProject', args),
-    findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
-    connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
-    refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
-    signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
-    selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),
-    orgMembersList: (args) => ipcRenderer.invoke('orcaProfiles:orgMembersList', args),
-    orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
-    orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
-    orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
-    orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
-  } satisfies PreloadApi['orcaProfiles'],
 
 
 
 
 
-  plugins: {
-    list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
-    listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
-    consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
-      ipcRenderer.invoke('plugins:consent', args),
-    setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>
-      ipcRenderer.invoke('plugins:setEnabled', args),
-    readPanelEntry: (args: {
-      pluginKey: string
-      panelId: string
-    }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
-    invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
-      ipcRenderer.invoke('plugins:invokeCommand', args),
-    panelAction: (args: {
-      sessionToken: string
-      action: string
-      params?: unknown
-    }): Promise<PluginPanelActionOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
-    install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
-      ipcRenderer.invoke('plugins:install', source),
-    listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),
-    addMarketplace: (source) => ipcRenderer.invoke('plugins:addMarketplace', source),
-    removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
-    refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
-    listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
-    previewMarketplacePlugin: (args) =>
-      ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
-    installMarketplacePlugin: (preview) =>
-      ipcRenderer.invoke('plugins:installMarketplacePlugin', preview),
-    previewMarketplaceUpdate: (args) =>
-      ipcRenderer.invoke('plugins:previewMarketplaceUpdate', args),
-    rollbackMarketplacePlugin: (args) =>
-      ipcRenderer.invoke('plugins:rollbackMarketplacePlugin', args),
-    remove: (args: { pluginKey: string }): Promise<PluginHostListEntry[]> =>
-      ipcRenderer.invoke('plugins:remove', args),
-    getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>
-      ipcRenderer.invoke('plugins:getLogs', args),
-    refresh: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:refresh'),
-    onChanged: (callback): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, change: PluginChangeEvent): void =>
-        callback(change)
-      ipcRenderer.on('plugins:changed', listener)
-      return () => {
-        ipcRenderer.removeListener('plugins:changed', listener)
-      }
-    }
-  } satisfies PreloadApi['plugins'],
 
 
 
@@ -875,6 +763,10 @@ const api: PreloadApi = {
   bitbucket: bitbucketBridge,
   linear: linearBridge,
   jira: jiraBridge,
+  orcaProfiles: orcaProfilesBridge,
+  plugins: pluginsBridge,
+  shell: shellBridge,
+  skills: skillsBridge,
   gh: {
     ...ghBridge,
     ...ghProjectsBridge
@@ -922,132 +814,7 @@ const api: PreloadApi = {
   macosTccPrompts: macosTccPromptsBridge,
   developerPermissions: developerPermissionsBridge,
   computerUsePermissions: computerUsePermissionsBridge,
-  shell: {
-    openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
-    openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
-      ipcRenderer.invoke('shell:openInFileManager', path),
-
-    openInExternalEditor: (
-      request: ShellOpenExternalEditorRequest
-    ): Promise<ShellOpenExternalEditorResult> =>
-      ipcRenderer.invoke('shell:openInExternalEditor', request),
-
-    openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
-
-    openFilePath: (path: string): Promise<boolean> =>
-      ipcRenderer.invoke('shell:openFilePath', path),
-
-    openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
-
-    pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
-
-    pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
-
-    pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
-
-    pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
-      ipcRenderer.invoke('shell:pickRepoIconImage'),
-
-    pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
-
-    pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
-      ipcRenderer.invoke('shell:pickDirectory', args),
-
-    copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
-      ipcRenderer.invoke('shell:copyFile', args)
-  },
-
-  skills: {
-    discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
-      ipcRenderer.invoke('skills:discover', target),
-    freshnessInventory: (): Promise<SkillFreshnessInventory> =>
-      ipcRenderer.invoke('skills:freshnessInventory'),
-    startUpdateRun: (names: string[]): Promise<SkillUpdateStartResult> =>
-      ipcRenderer.invoke('skills:startUpdateRun', names),
-    cancelUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:cancelUpdateRun'),
-    acknowledgeUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:acknowledgeUpdateRun'),
-    getUpdateRun: (): Promise<SkillUpdateRun> => ipcRenderer.invoke('skills:getUpdateRun'),
-    prepareShare: (input: {
-      skillIds: string[]
-      bundleName: string
-      target?: SkillDiscoveryTarget
-      packageId?: string
-    }): Promise<SkillSharePreview> => ipcRenderer.invoke('skills:prepareShare', input),
-    publishShare: (input: SkillSharePublishInput): Promise<SkillSharePublishOperation> =>
-      ipcRenderer.invoke('skills:publishShare', input),
-    cancelShare: (preparationId: string): Promise<void> =>
-      ipcRenderer.invoke('skills:cancelShare', preparationId),
-    releaseShare: (preparationId: string): Promise<void> =>
-      ipcRenderer.invoke('skills:releaseShare', preparationId),
-    resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
-      ipcRenderer.invoke('skills:resolveShare', shareId),
-    installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installShare', input),
-    installBundleShare: (
-      input: SkillBundleShareInstallInput
-    ): Promise<SkillBundleShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installBundleShare', input),
-    installBundlePackageVersion: (
-      input: SkillBundlePackageVersionInstallInput
-    ): Promise<SkillBundleShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installBundlePackageVersion', input),
-    installPackageVersion: (
-      input: SkillPackageVersionInstallInput
-    ): Promise<SkillShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installPackageVersion', input),
-    cancelInstall: (input: SkillInstallCancelInput): Promise<{ cancelled: boolean }> =>
-      ipcRenderer.invoke('skills:cancelInstall', input),
-    previewInstall: (input: SkillInstallPreviewInput): Promise<SkillInstallPreviewOperation> =>
-      ipcRenderer.invoke('skills:previewInstall', input),
-    previewBundleInstall: (
-      input: SkillBundleInstallPreviewInput
-    ): Promise<SkillBundleInstallPreviewOperation> =>
-      ipcRenderer.invoke('skills:previewBundleInstall', input),
-    removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
-      ipcRenderer.invoke('skills:removeInstall', input),
-    // Desktop always registers the delete IPC handlers in its own main process.
-    deleteSupported: (): Promise<boolean> => Promise.resolve(true),
-    previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
-      ipcRenderer.invoke('skills:previewDelete', request),
-    delete: (request: SkillDeleteRequest): Promise<SkillDeleteResult> =>
-      ipcRenderer.invoke('skills:delete', request),
-    listManagedInstalls: (environmentId?: string): Promise<ManagedSkillInstallListOperation> =>
-      ipcRenderer.invoke('skills:listManagedInstalls', environmentId),
-    getPackage: (packageId: string): Promise<SkillCloudOperation<SkillCloudPackageDetails>> =>
-      ipcRenderer.invoke('skills:getPackage', packageId),
-    listOwnedShares: (): Promise<SkillCloudOperation<SkillCloudOwnedShare[]>> =>
-      ipcRenderer.invoke('skills:listOwnedShares'),
-    revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
-      ipcRenderer.invoke('skills:revokeShare', shareId),
-    deletePackageVersion: (input: {
-      packageId: string
-      versionId: string
-    }): Promise<SkillCloudOperation<void>> =>
-      ipcRenderer.invoke('skills:deletePackageVersion', input),
-    deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
-      ipcRenderer.invoke('skills:deletePackage', packageId),
-    listWslDistros: (environmentId?: string): Promise<string[]> =>
-      ipcRenderer.invoke('skills:listWslDistros', environmentId),
-    onInstallProgress: (callback: (progress: SkillInstallProgress) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, progress: SkillInstallProgress): void =>
-        callback(progress)
-      ipcRenderer.on('skills:installProgress', listener)
-      return () => ipcRenderer.removeListener('skills:installProgress', listener)
-    },
-    onShareProgress: (callback: (progress: SkillShareProgress) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, progress: SkillShareProgress): void =>
-        callback(progress)
-      ipcRenderer.on('skills:shareProgress', listener)
-      return () => ipcRenderer.removeListener('skills:shareProgress', listener)
-    },
-    onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void =>
-        callback(run)
-      ipcRenderer.on('skills:updateRun', listener)
-      return () => ipcRenderer.removeListener('skills:updateRun', listener)
-    }
-  },
 
 
   browser: {
