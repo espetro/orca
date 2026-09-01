@@ -64,11 +64,11 @@ export function AgentTerminalPreview({
   const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
-  // Why: keys and appearance must read live values without remounting the
-  // terminal (a remount reconnects the pty and repaints from a new snapshot).
-  const settingsRef = useRef(settings)
-  const macOptionAsAltRef = useRef(macOptionAsAlt)
-  const terminalInputRef = useRef(terminalInput)
+  // Why: keys and appearance must read live values inside long-lived effect
+  // closures without remounting the terminal (a remount reconnects the pty and
+  // repaints from a new snapshot). Seeded at mount, refreshed on commit —
+  // render-phase assignment trips react-compiler.
+  const latestRef = useRef({ settings, macOptionAsAlt, terminalInput })
   const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -82,20 +82,25 @@ export function AgentTerminalPreview({
   }, [settings, systemPrefersDark])
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
+  // Keyed by ptyId so a different pty starts fresh without an effect-time
+  // setState reset (which also blocked react-compiler from memoizing this
+  // component).
   const [ptyGone, setPtyGone] = useState(false)
+  const [seenPtyId, setSeenPtyId] = useState(ptyId)
+  if (ptyId !== seenPtyId) {
+    setSeenPtyId(ptyId)
+    setPtyGone(false)
+  }
 
   // Why: refs are seeded at first render and refreshed on commit — assigning
   // during render trips react-compiler. Layout, not passive: xterm's keydown is
   // a native listener, so React would not flush a passive effect before the
   // next keystroke and a just-relayed profile could miss it.
   useLayoutEffect(() => {
-    settingsRef.current = settings
-    macOptionAsAltRef.current = macOptionAsAlt
-    terminalInputRef.current = terminalInput
+    latestRef.current = { settings, macOptionAsAlt, terminalInput }
   }, [settings, macOptionAsAlt, terminalInput])
 
   useEffect(() => {
-    setPtyGone(false)
     const container = containerRef.current
     if (!container) {
       return
@@ -201,7 +206,7 @@ export function AgentTerminalPreview({
       ptyId,
       container,
       getTerminal: () => terminal,
-      getTerminalInput: () => terminalInputRef.current,
+      getTerminalInput: () => latestRef.current.terminalInput,
       isDisposed: () => disposed
     })
 
@@ -233,11 +238,11 @@ export function AgentTerminalPreview({
         sendInput: (data) => terminal?.input(data),
         getShortcutContext: () => ({
           clientPlatform: getShortcutPlatform(),
-          macOptionAsAlt: macOptionAsAltRef.current,
+          macOptionAsAlt: latestRef.current.macOptionAsAlt,
           keybindings: useAppStore.getState().keybindings,
-          terminalInput: terminalInputRef.current,
+          terminalInput: latestRef.current.terminalInput,
           getKittyKeyboardFlags: () => kittyKeyboardModes.flags,
-          terminalShortcutPolicy: settingsRef.current?.terminalShortcutPolicy
+          terminalShortcutPolicy: latestRef.current.settings?.terminalShortcutPolicy
         })
       })
     }
@@ -247,7 +252,7 @@ export function AgentTerminalPreview({
         return
       }
       disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
-        getSettings: () => settingsRef.current
+        getSettings: () => latestRef.current.settings
       })
     }
 
@@ -281,9 +286,9 @@ export function AgentTerminalPreview({
       if (!terminal) {
         terminal = new Terminal(
           buildPreviewTerminalOptions({
-            settings: settingsRef.current,
-            terminalInput: terminalInputRef.current,
-            macOptionIsMeta: macOptionAsAltRef.current === 'true',
+            settings: latestRef.current.settings,
+            terminalInput: latestRef.current.terminalInput,
+            macOptionIsMeta: latestRef.current.macOptionAsAlt === 'true',
             theme: terminalTheme,
             themeMode: terminalMode,
             cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
