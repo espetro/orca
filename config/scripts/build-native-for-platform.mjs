@@ -18,13 +18,22 @@ runPnpmScript('build:notification-status-macos')
 process.exit(0)
 
 function runPnpmScript(scriptName) {
+  // npm_execpath is a JS entry under npm but the @pnpm/exe Mach-O binary under
+  // standalone pnpm; node cannot execute a binary, so exec it directly instead.
   const npmExecPath = process.env.npm_execpath
-  const command = npmExecPath
-    ? process.execPath
-    : process.platform === 'win32'
-      ? 'pnpm.cmd'
-      : 'pnpm'
-  const args = npmExecPath ? [npmExecPath, 'run', scriptName] : ['run', scriptName]
+  const isBinaryEntry = Boolean(npmExecPath && !/\.[cm]?js$/.test(npmExecPath))
+  let command
+  let args
+  if (!npmExecPath) {
+    command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+    args = ['run', scriptName]
+  } else if (isBinaryEntry) {
+    command = npmExecPath
+    args = ['run', scriptName]
+  } else {
+    command = process.execPath
+    args = [npmExecPath, 'run', scriptName]
+  }
   const result = spawnSync(command, args, { stdio: 'inherit' })
 
   if (result.signal) {
