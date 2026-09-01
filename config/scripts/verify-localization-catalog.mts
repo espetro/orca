@@ -528,10 +528,7 @@ export async function main(
   const localeFiles = (await fs.readdir(localesDir))
     .filter(
       (fileName) =>
-        fileName.endsWith('.json') &&
-        fileName !== 'en.json' &&
-        !fileName.startsWith('.') &&
-        !fileName.includes('-catalog-cache')
+        fileName.endsWith('.json') && fileName !== 'en.json' && !fileName.startsWith('.')
     )
     .sort()
 
