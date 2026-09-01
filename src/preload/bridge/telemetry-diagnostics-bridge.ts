@@ -3,7 +3,10 @@ import type { TelemetryConsentState } from '../../shared/telemetry-consent-types
 import type { MemorySnapshot } from '../../shared/process-stats-types'
 import type { PreloadApi } from '../api-types'
 
-export const telemetryBridge: Pick<PreloadApi, 'telemetryTrack' | 'telemetrySetOptIn' | 'telemetryAcknowledgeBanner' | 'telemetryGetConsentState'> = {
+export const telemetryBridge: Pick<
+  PreloadApi,
+  'telemetryTrack' | 'telemetrySetOptIn' | 'telemetryAcknowledgeBanner' | 'telemetryGetConsentState'
+> = {
   // Why: main validates telemetry; renderer call sites use typed wrappers.
   telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
     ipcRenderer.invoke('telemetry:track', name, props),

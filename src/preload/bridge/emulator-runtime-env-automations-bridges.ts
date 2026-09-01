@@ -53,10 +53,8 @@ export const emulatorBridge: PreloadApi['emulator'] = {
     ipcRenderer.on('emulator:frameStreamError', listener)
     return () => ipcRenderer.removeListener('emulator:frameStreamError', listener)
   },
-  startVideoStream: (args: {
-    deviceId: string
-    streamId: string
-  }): Promise<{ streamId: string }> => ipcRenderer.invoke('emulator:videoStreamStart', args),
+  startVideoStream: (args: { deviceId: string; streamId: string }): Promise<{ streamId: string }> =>
+    ipcRenderer.invoke('emulator:videoStreamStart', args),
   stopVideoStream: (args: { streamId: string }): Promise<void> =>
     ipcRenderer.invoke('emulator:videoStreamStop', args),
   onVideoStreamMeta: (
@@ -165,8 +163,7 @@ export const runtimeEnvironmentsBridge: PreloadApi['runtimeEnvironments'] = {
     params?: unknown
     timeoutMs?: number
     expectedEnvironmentPairingRevision?: number
-  }): Promise<RuntimeRpcResponse<unknown>> =>
-    ipcRenderer.invoke('runtimeEnvironments:call', args),
+  }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   subscribe: async (
     args: {
       selector: string

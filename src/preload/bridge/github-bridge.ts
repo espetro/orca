@@ -4,10 +4,7 @@ import type { GithubPullRequestApi } from '../api/github-pull-request-api'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GithubWorkItemApi, GitHubRepoSelectorArgs } from '../api/github-work-item-api'
 import type { GitHubPRFile } from '../../shared/github/pull-request-types'
-import type {
-  GitHubCommentResult,
-  GitHubReactionContent
-} from '../../shared/github/comment-types'
+import type { GitHubCommentResult, GitHubReactionContent } from '../../shared/github/comment-types'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
@@ -144,11 +141,8 @@ export const ghBridge: Omit<
     }
   ): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
 
-  countWorkItems: (args: {
-    repoPath: string
-    repoId?: string
-    query?: string
-  }): Promise<number> => ipcRenderer.invoke('gh:countWorkItems', args),
+  countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }): Promise<number> =>
+    ipcRenderer.invoke('gh:countWorkItems', args),
 
   listWorkItems: (args: {
     repoPath: string
@@ -238,8 +232,7 @@ export const ghBridge: Omit<
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
     }
-  ): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('gh:mergePR', args),
+  ): Promise<{ ok: true } | { ok: false; error: string }> => ipcRenderer.invoke('gh:mergePR', args),
 
   setPRAutoMerge: (
     args: GitHubRepoSelectorArgs & {
@@ -325,5 +318,5 @@ export const ghBridge: Omit<
       startLine?: number
       body: string
     }
-  ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
+  ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args)
 }

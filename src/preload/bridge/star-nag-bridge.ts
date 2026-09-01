@@ -24,9 +24,8 @@ export const starNagBridge: PreloadApi['starNag'] = {
   openWeb: (): Promise<void> => ipcRenderer.invoke('star-nag:openWeb'),
   starOrca: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starOrca'),
   forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow'),
-  agentValueMoment: (): Promise<
-    { status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }
-  > => ipcRenderer.invoke('star-nag:agentValueMoment'),
+  agentValueMoment: (): Promise<{ status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }> =>
+    ipcRenderer.invoke('star-nag:agentValueMoment'),
   showAgentValueMoment: (): Promise<void> => ipcRenderer.invoke('star-nag:showAgentValueMoment'),
   onboardingCompleted: (): Promise<void> => ipcRenderer.invoke('star-nag:onboardingCompleted')
 }

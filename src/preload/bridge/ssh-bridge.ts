@@ -68,8 +68,10 @@ export const sshBridge: PreloadApi['ssh'] = {
   testConnection: async (args: {
     targetId: string
   }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> => {
-    const result: { success: boolean; error?: string; state?: unknown } =
-      await ipcRenderer.invoke('ssh:testConnection', args)
+    const result: { success: boolean; error?: string; state?: unknown } = await ipcRenderer.invoke(
+      'ssh:testConnection',
+      args
+    )
     const state = result.state
       ? admitSshConnectionStateForAuthorityReconciliation(result.state, args.targetId)
       : null

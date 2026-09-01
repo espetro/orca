@@ -29,10 +29,8 @@ export const settingsBridge: PreloadApi['settings'] = {
     ipcRenderer.invoke('settings:previewWarpThemeImport', source),
 
   onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      updates: Record<string, unknown>
-    ): void => callback(updates)
+    const listener = (_event: Electron.IpcRendererEvent, updates: Record<string, unknown>): void =>
+      callback(updates)
     ipcRenderer.on('settings:changed', listener)
     return () => ipcRenderer.removeListener('settings:changed', listener)
   }

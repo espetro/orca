@@ -49,9 +49,7 @@ export const reposBridge: PreloadApi['repos'] = {
 
   cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 
-  onCloneProgress: (
-    callback: (data: { phase: string; percent: number }) => void
-  ): (() => void) => {
+  onCloneProgress: (callback: (data: { phase: string; percent: number }) => void): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
       data: { phase: string; percent: number }
@@ -94,8 +92,7 @@ export const projectsBridge: PreloadApi['projects'] = {
   update: (args) => ipcRenderer.invoke('projects:update', args),
   listHostSetups: () => ipcRenderer.invoke('projectHostSetups:list'),
   createHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:create', args),
-  setupExistingFolder: (args) =>
-    ipcRenderer.invoke('projectHostSetups:setupExistingFolder', args),
+  setupExistingFolder: (args) => ipcRenderer.invoke('projectHostSetups:setupExistingFolder', args),
   updateHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:update', args),
   deleteHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:delete', args)
 }
@@ -135,8 +132,7 @@ export const sparsePresetsBridge: PreloadApi['sparsePresets'] = {
   remove: (args) => ipcRenderer.invoke('sparsePresets:remove', args),
 
   onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
-      callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
     ipcRenderer.on('sparsePresets:changed', listener)
     return () => ipcRenderer.removeListener('sparsePresets:changed', listener)
   }

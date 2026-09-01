@@ -12,9 +12,7 @@ import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-br
 import type { PreloadApi } from '../api-types'
 
 export const runtimeBridge: PreloadApi['runtime'] = {
-  syncWindowGraph: (
-    graph: RuntimeRendererSyncWindowGraph
-  ): Promise<RuntimeSyncWindowGraphResult> =>
+  syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
   call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>

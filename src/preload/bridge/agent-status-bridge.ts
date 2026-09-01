@@ -38,8 +38,7 @@ export const agentStatusBridge: PreloadApi['agentStatus'] = {
     return () => ipcRenderer.removeListener('agentStatus:migrationUnsupported', listener)
   },
   onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) =>
-      callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
     ipcRenderer.on('agentStatus:migrationUnsupportedClear', listener)
     return () => ipcRenderer.removeListener('agentStatus:migrationUnsupportedClear', listener)
   },

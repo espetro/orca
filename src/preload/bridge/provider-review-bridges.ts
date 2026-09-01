@@ -7,8 +7,7 @@ import type { PreloadApi } from '../api-types'
 export const hostedReviewBridge: PreloadApi['hostedReview'] = {
   forBranch: (args: HostedReviewForBranchArgs) =>
     ipcRenderer.invoke('hostedReview:forBranch', args),
-  getCreationEligibility: (args) =>
-    ipcRenderer.invoke('hostedReview:getCreationEligibility', args),
+  getCreationEligibility: (args) => ipcRenderer.invoke('hostedReview:getCreationEligibility', args),
   create: (args) => ipcRenderer.invoke('hostedReview:create', args),
   createStacked: (args) => ipcRenderer.invoke('hostedReview:createStacked', args)
 }
@@ -129,12 +128,8 @@ export const linearBridge: PreloadApi['linear'] = {
     force?: boolean
   }) => ipcRenderer.invoke('linear:listCustomViews', args),
 
-  getCustomView: (args: {
-    viewId: string
-    model: string
-    workspaceId: string
-    force?: boolean
-  }) => ipcRenderer.invoke('linear:getCustomView', args),
+  getCustomView: (args: { viewId: string; model: string; workspaceId: string; force?: boolean }) =>
+    ipcRenderer.invoke('linear:getCustomView', args),
 
   listCustomViewIssues: (args: {
     viewId: string
@@ -204,9 +199,8 @@ export const jiraBridge: PreloadApi['jira'] = {
     title: string
     description?: string
     customFields?: Record<string, unknown>
-  }): Promise<
-    { ok: true; id: string; key: string; url: string } | { ok: false; error: string }
-  > => ipcRenderer.invoke('jira:createIssue', args),
+  }): Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('jira:createIssue', args),
 
   updateIssue: (args: {
     key: string

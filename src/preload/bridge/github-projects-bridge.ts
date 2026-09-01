@@ -64,8 +64,7 @@ export const ghProjectsBridge: Pick<
   | 'onWorkItemMutated'
 > = {
   checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-  starOrca: (source: AppStarSource): Promise<boolean> =>
-    ipcRenderer.invoke('gh:starOrca', source),
+  starOrca: (source: AppStarSource): Promise<boolean> => ipcRenderer.invoke('gh:starOrca', source),
 
   // Why: rate_limit is exempt from rate-limit accounting; `force` still busts the 30s in-process cache after an expensive op.
   rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
@@ -97,11 +96,10 @@ export const ghProjectsBridge: Pick<
     return () => ipcRenderer.removeListener('gh:workItemMutated', listener)
   },
 
-// ── ProjectV2 (GitHub Projects) ───────────────────────────────────
+  // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
   listAccessibleProjects: (
     args?: ListAccessibleProjectsArgs
-  ): Promise<ListAccessibleProjectsResult> =>
-    ipcRenderer.invoke('gh:listAccessibleProjects', args),
+  ): Promise<ListAccessibleProjectsResult> => ipcRenderer.invoke('gh:listAccessibleProjects', args),
   resolveProjectRef: (args: ResolveProjectRefArgs): Promise<ResolveProjectRefResult> =>
     ipcRenderer.invoke('gh:resolveProjectRef', args),
   listProjectViews: (args: ListProjectViewsArgs): Promise<ListProjectViewsResult> =>
@@ -114,17 +112,14 @@ export const ghProjectsBridge: Pick<
     ipcRenderer.invoke('gh:projectWorkItemDetailsBySlug', args),
   updateProjectItemField: (
     args: UpdateProjectItemFieldArgs
-  ): Promise<GitHubProjectMutationResult> =>
-    ipcRenderer.invoke('gh:updateProjectItemField', args),
-  clearProjectItemField: (
-    args: ClearProjectItemFieldArgs
-  ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:clearProjectItemField', args),
+  ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateProjectItemField', args),
+  clearProjectItemField: (args: ClearProjectItemFieldArgs): Promise<GitHubProjectMutationResult> =>
+    ipcRenderer.invoke('gh:clearProjectItemField', args),
   updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
     ipcRenderer.invoke('gh:updateIssueBySlug', args),
   updatePullRequestBySlug: (
     args: UpdatePullRequestBySlugArgs
-  ): Promise<GitHubProjectMutationResult> =>
-    ipcRenderer.invoke('gh:updatePullRequestBySlug', args),
+  ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updatePullRequestBySlug', args),
   addIssueCommentBySlug: (
     args: AddIssueCommentBySlugArgs
   ): Promise<GitHubProjectCommentMutationResult> =>
@@ -145,7 +140,6 @@ export const ghProjectsBridge: Pick<
     ipcRenderer.invoke('gh:listAssignableUsersBySlug', args),
   listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs): Promise<ListIssueTypesBySlugResult> =>
     ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
-  updateIssueTypeBySlug: (
-    args: UpdateIssueTypeBySlugArgs
-  ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
+  updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs): Promise<GitHubProjectMutationResult> =>
+    ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
 }

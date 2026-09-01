@@ -27,8 +27,7 @@ export const remoteWorkspaceBridge: PreloadApi['remoteWorkspace'] = {
     ipcRenderer.invoke('remoteWorkspace:setForConnectedTargets', args),
   listEnabledConnectedTargets: () =>
     ipcRenderer.invoke('remoteWorkspace:listEnabledConnectedTargets'),
-  listConnectedClients: (args) =>
-    ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
+  listConnectedClients: (args) => ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
   clientId: () => ipcRenderer.invoke('remoteWorkspace:clientId'),
   onChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, data: RemoteWorkspaceChangedEvent) =>

@@ -59,8 +59,7 @@ export const uiCommandWorktreeBridge: Pick<
   setWithAck: (args) => ipcRenderer.invoke('ui:set', args),
   recordFeatureInteraction: (id) => ipcRenderer.invoke('ui:recordFeatureInteraction', id),
   onStateChanged: (callback: (ui: PersistedUIState) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, ui: PersistedUIState): void =>
-      callback(ui)
+    const listener = (_event: Electron.IpcRendererEvent, ui: PersistedUIState): void => callback(ui)
     ipcRenderer.on('ui:stateChanged', listener)
     return () => ipcRenderer.removeListener('ui:stateChanged', listener)
   },
@@ -72,8 +71,7 @@ export const uiCommandWorktreeBridge: Pick<
   consumePendingOpenSettings: (): Promise<boolean> =>
     ipcRenderer.invoke('ui:consumePendingOpenSettings'),
   onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, shareId: string): void =>
-      callback(shareId)
+    const listener = (_event: Electron.IpcRendererEvent, shareId: string): void => callback(shareId)
     ipcRenderer.on('ui:openSkillShare', listener)
     return () => ipcRenderer.removeListener('ui:openSkillShare', listener)
   },
@@ -117,10 +115,8 @@ export const uiCommandWorktreeBridge: Pick<
   onTerminalShortcutCaptured: (
     callback: (data: { actionId: KeybindingActionId }) => void
   ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { actionId: KeybindingActionId }
-    ) => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: { actionId: KeybindingActionId }) =>
+      callback(data)
     ipcRenderer.on('ui:terminalShortcutCaptured', listener)
     return () => ipcRenderer.removeListener('ui:terminalShortcutCaptured', listener)
   },
@@ -169,9 +165,7 @@ export const uiCommandWorktreeBridge: Pick<
     ipcRenderer.on('ui:jumpToTabIndex', listener)
     return () => ipcRenderer.removeListener('ui:jumpToTabIndex', listener)
   },
-  onWorktreeHistoryNavigate: (
-    callback: (direction: 'back' | 'forward') => void
-  ): (() => void) => {
+  onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') =>
       callback(direction)
     ipcRenderer.on('ui:worktreeHistoryNavigate', listener)
@@ -218,11 +212,7 @@ export const uiCommandWorktreeBridge: Pick<
     ipcRenderer.on('browser:requestTabCreate', listener)
     return () => ipcRenderer.removeListener('browser:requestTabCreate', listener)
   },
-  replyTabCreate: (reply: {
-    requestId: string
-    browserPageId?: string
-    error?: string
-  }): void => {
+  replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }): void => {
     ipcRenderer.send('browser:tabCreateReply', reply)
   },
   onRequestTabSetProfile: (

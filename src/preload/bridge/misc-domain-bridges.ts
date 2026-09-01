@@ -1,5 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { AiVaultDeleteSessionArgs, AiVaultDeleteSessionResult } from '../../shared/ai-vault-session-deletion'
+import type {
+  AiVaultDeleteSessionArgs,
+  AiVaultDeleteSessionResult
+} from '../../shared/ai-vault-session-deletion'
 import type {
   AiVaultFirstUserPromptArgs,
   AiVaultListArgs,

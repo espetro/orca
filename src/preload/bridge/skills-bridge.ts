@@ -1,5 +1,9 @@
 import { ipcRenderer } from 'electron'
-import type { SkillDeletePlan, SkillDeleteRequest, SkillDeleteResult } from '../../shared/skill-delete-contract'
+import type {
+  SkillDeletePlan,
+  SkillDeleteRequest,
+  SkillDeleteResult
+} from '../../shared/skill-delete-contract'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
 import type {
   SkillCloudOwnedShare,
@@ -119,8 +123,7 @@ export const skillsBridge: PreloadApi['skills'] = {
     return () => ipcRenderer.removeListener('skills:shareProgress', listener)
   },
   onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void =>
-      callback(run)
+    const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void => callback(run)
     ipcRenderer.on('skills:updateRun', listener)
     return () => ipcRenderer.removeListener('skills:updateRun', listener)
   }

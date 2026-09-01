@@ -20,10 +20,8 @@ export const agentTrustBridge: PreloadApi['agentTrust'] = {
 
 export const macosTccPromptsBridge: PreloadApi['macosTccPrompts'] = {
   onThreshold: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      payload: { promptCount: number }
-    ): void => callback(payload)
+    const listener = (_event: Electron.IpcRendererEvent, payload: { promptCount: number }): void =>
+      callback(payload)
     ipcRenderer.on('macosTccPrompts:threshold', listener)
     return () => ipcRenderer.removeListener('macosTccPrompts:threshold', listener)
   },

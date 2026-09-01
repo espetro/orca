@@ -62,12 +62,10 @@ export const pluginsBridge: PreloadApi['plugins'] = {
   removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
   refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
   listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
-  previewMarketplacePlugin: (args) =>
-    ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
+  previewMarketplacePlugin: (args) => ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
   installMarketplacePlugin: (preview) =>
     ipcRenderer.invoke('plugins:installMarketplacePlugin', preview),
-  previewMarketplaceUpdate: (args) =>
-    ipcRenderer.invoke('plugins:previewMarketplaceUpdate', args),
+  previewMarketplaceUpdate: (args) => ipcRenderer.invoke('plugins:previewMarketplaceUpdate', args),
   rollbackMarketplacePlugin: (args) =>
     ipcRenderer.invoke('plugins:rollbackMarketplacePlugin', args),
   remove: (args: { pluginKey: string }): Promise<PluginHostListEntry[]> =>
@@ -98,8 +96,7 @@ export const shellBridge: PreloadApi['shell'] = {
 
   openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 
-  openFilePath: (path: string): Promise<boolean> =>
-    ipcRenderer.invoke('shell:openFilePath', path),
+  openFilePath: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:openFilePath', path),
 
   openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
 

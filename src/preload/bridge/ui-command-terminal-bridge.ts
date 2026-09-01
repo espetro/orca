@@ -125,10 +125,8 @@ export const uiCommandTerminalBridge: Pick<
     return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
   },
   onSessionTabCloseRequest: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      request: Parameters<typeof callback>[0]
-    ) => callback(request)
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
     ipcRenderer.on('ui:sessionTabCloseRequest', listener)
     return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
   },
@@ -209,10 +207,8 @@ export const uiCommandTerminalBridge: Pick<
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
   },
   onTerminalTabCloseRequest: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      request: Parameters<typeof callback>[0]
-    ) => callback(request)
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
     ipcRenderer.on('ui:terminalTabCloseRequest', listener)
     return () => ipcRenderer.removeListener('ui:terminalTabCloseRequest', listener)
   },
@@ -241,6 +237,6 @@ export const uiCommandTerminalBridge: Pick<
     const listener = () => callback()
     ipcRenderer.on('system:resumed', listener)
     return () => ipcRenderer.removeListener('system:resumed', listener)
-  },
+  }
   /** Desktop custom titlebar only: minimize via renderer-drawn window controls. */
 }

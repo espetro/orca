@@ -151,8 +151,7 @@ export const dashboardBridge: PreloadApi['dashboard'] = {
     return () => ipcRenderer.removeListener('ui:revealDashboardAgent', listener)
   },
   onAckAgent: (callback: (paneKey: string) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, paneKey: string): void =>
-      callback(paneKey)
+    const listener = (_event: Electron.IpcRendererEvent, paneKey: string): void => callback(paneKey)
     ipcRenderer.on('ui:ackDashboardAgent', listener)
     return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
   },
@@ -163,10 +162,8 @@ export const dashboardBridge: PreloadApi['dashboard'] = {
     return () => ipcRenderer.removeListener('ui:spawnDashboardAgent', listener)
   },
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      args: DashboardSleepWorkspaceArgs
-    ): void => callback(args)
+    const listener = (_event: Electron.IpcRendererEvent, args: DashboardSleepWorkspaceArgs): void =>
+      callback(args)
     ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
     return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
   },

@@ -13,10 +13,8 @@ export const keybindingsBridge: PreloadApi['keybindings'] = {
   openFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:openFile'),
   revealFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:revealFile'),
   onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      snapshot: KeybindingFileSnapshot
-    ): void => callback(snapshot)
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: KeybindingFileSnapshot): void =>
+      callback(snapshot)
     ipcRenderer.on('keybindings:changed', listener)
     return () => ipcRenderer.removeListener('keybindings:changed', listener)
   }

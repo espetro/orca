@@ -6,7 +6,10 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../shared/worktree/launch-types'
-import type { SleepingAgentLaunchConfig, AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../shared/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
   RuntimeTerminalCreateRequestPayload,
@@ -118,13 +121,9 @@ export const uiCommandBrowserBridge: Pick<
     ipcRenderer.on('ui:appMenuSelectionAction', listener)
     return () => ipcRenderer.removeListener('ui:appMenuSelectionAction', listener)
   },
-  onEditableContextPaste: (
-    callback: (data: { plainTextOnly: boolean }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { plainTextOnly: boolean }
-    ): void => callback({ plainTextOnly: data?.plainTextOnly === true })
+  onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { plainTextOnly: boolean }): void =>
+      callback({ plainTextOnly: data?.plainTextOnly === true })
     ipcRenderer.on('ui:editableContextPaste', listener)
     return () => ipcRenderer.removeListener('ui:editableContextPaste', listener)
   },

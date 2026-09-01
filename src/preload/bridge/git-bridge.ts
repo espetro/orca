@@ -156,11 +156,8 @@ export const gitBridge: Merged<GitInspectionApi & GitOperationApi> = {
     worktreePath: string
     connectionId?: string
   }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
-  stage: (args: {
-    worktreePath: string
-    filePath: string
-    connectionId?: string
-  }): Promise<void> => ipcRenderer.invoke('git:stage', args),
+  stage: (args: { worktreePath: string; filePath: string; connectionId?: string }): Promise<void> =>
+    ipcRenderer.invoke('git:stage', args),
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]

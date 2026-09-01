@@ -83,8 +83,7 @@ export const worktreesBridge: PreloadApi['worktrees'] = {
   },
 
   onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
-      callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
     ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
     return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
   },
@@ -110,10 +109,8 @@ export const worktreesBridge: PreloadApi['worktrees'] = {
   onRemoteBranchConflict: (
     callback: (data: WorktreeRemoteBranchConflictEvent) => void
   ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: WorktreeRemoteBranchConflictEvent
-    ) => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: WorktreeRemoteBranchConflictEvent) =>
+      callback(data)
     ipcRenderer.on('worktree:remoteBranchConflict', listener)
     return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
   }
