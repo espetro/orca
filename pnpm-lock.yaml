@@ -119,6 +119,9 @@ importers:
       '@electron/rebuild':
         specifier: ^4.2.0
         version: 4.2.0
+      '@intl-ai/api':
+        specifier: ^0.4.1
+        version: 0.4.1
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -251,6 +254,9 @@ importers:
       dompurify:
         specifier: ^3.4.13
         version: 3.4.13
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       electron:
         specifier: ^43.1.0
         version: 43.1.0
@@ -878,6 +884,12 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
+  '@formatjs/icu-messageformat-parser@3.5.12':
+    resolution: {integrity: sha512-YyzzxVgYJ8DELmmkhn0Yr0rUj0dTJFf9Jp628K3S0ysInBWxLVDOS8i3RP91cCp4DMK4WYb4cVMhWA9i4knSJg==}
+
+  '@formatjs/icu-skeleton-parser@2.1.10':
+    resolution: {integrity: sha512-XuSva+8ZGawk8VnD5VD6UeH8KarQ/Z022zgjHDoHmlNiAewstXuuzXc0Hk5pGFSdG+nNw5bfJKXqj1ZXHn9yUA==}
+
   '@graphql-typed-document-node/core@3.2.0':
     resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
     peerDependencies:
@@ -1029,6 +1041,10 @@ packages:
       '@types/node':
         optional: true
 
+  '@intl-ai/api@0.4.1':
+    resolution: {integrity: sha512-R5kWMhLm4BRLR+cS9CwC8+uTevVGj6179Z0AN1a6Jiru+GeVAFd8xboo56tK1tSfTHea6jV4fQFgq/zk/NoquA==}
+    engines: {node: ^22.18.0 || >=24}
+
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
@@ -1052,6 +1068,9 @@ packages:
   '@linear/sdk@82.1.0':
     resolution: {integrity: sha512-Ok7o+LqXaenx6Um58NQqjQoQanDsCgAIe9yNgpVbqRSh5APz3Ds1kZUz2vWmSNTNATFZm1zDQtEktTMga2X7UQ==}
     engines: {node: '>=18.x'}
+
+  '@logtape/logtape@2.2.1':
+    resolution: {integrity: sha512-SkRptJUEAbGuf+/blXDxDa8sSq8no+lxJlfwPTMzrHIULOMsNZRaqT2qF3H9tmGOsaLYc+uF3orRCQfoH0qKzA==}
 
   '@malept/cross-spawn-promise@2.0.0':
     resolution: {integrity: sha512-1DpKU0Z5ThltBwjNySMC14g0CkbyhCaz9FkhxqNsZI6uAPJXFS8cMXlBKo26FJ8ZuW6S9GCMcR9IO5k2X5/9Fg==}
@@ -7371,6 +7390,12 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
+  '@formatjs/icu-messageformat-parser@3.5.12':
+    dependencies:
+      '@formatjs/icu-skeleton-parser': 2.1.10
+
+  '@formatjs/icu-skeleton-parser@2.1.10': {}
+
   '@graphql-typed-document-node/core@3.2.0(graphql@16.14.2)':
     dependencies:
       graphql: 16.14.2
@@ -7506,6 +7531,15 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@intl-ai/api@0.4.1':
+    dependencies:
+      '@formatjs/icu-messageformat-parser': 3.5.12
+      '@logtape/logtape': 2.2.1
+      jiti: 2.7.0
+      pathe: 2.0.3
+      yaml: 2.9.0
+      zod: 4.4.3
+
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
       minipass: 7.1.3
@@ -7534,6 +7568,8 @@ snapshots:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.14.2)
     transitivePeerDependencies:
       - graphql
+
+  '@logtape/logtape@2.2.1': {}
 
   '@malept/cross-spawn-promise@2.0.0':
     dependencies:
