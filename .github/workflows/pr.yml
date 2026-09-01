@@ -561,13 +561,10 @@ jobs:
       - name: Build relay companions
         run: pnpm run build:relay
 
-      - name: Setup Node 18 runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '18'
-
-      - name: Smoke managed-hook companions
-        run: node config/scripts/smoke-managed-hook-runtime-node18.ts
+      # Why: the runner stays on Node 24 (tooling), but the companions ship for the Node 18
+      # runtime, so the smoke executes under a real Node 18, with tsx stripping the TS.
+      - name: Smoke managed-hook companions under Node 18
+        run: npm exec --yes --package=node@18 --package=tsx -- tsx config/scripts/smoke-managed-hook-runtime-node18.ts
 
   package:
     name: package

@@ -203,16 +203,14 @@ describe('PR workflow parallelism', () => {
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const buildIndex = steps.findIndex((step) => step.run === 'pnpm run build:relay')
-    const node18Index = steps.findIndex(
-      (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
-    )
     const smokeIndex = steps.findIndex(
-      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.ts'
+      (step) =>
+        step.run ===
+        'npm exec --yes --package=node@18 --package=tsx -- tsx config/scripts/smoke-managed-hook-runtime-node18.ts'
     )
 
     expect(installIndex).toBeLessThan(buildIndex)
-    expect(buildIndex).toBeLessThan(node18Index)
-    expect(node18Index).toBeLessThan(smokeIndex)
+    expect(buildIndex).toBeLessThan(smokeIndex)
   })
 
   it('restores the pnpm store before dependency installation', () => {
