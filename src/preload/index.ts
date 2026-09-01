@@ -196,10 +196,6 @@ import type {
 } from '../shared/local-log-tail-types'
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
-import type {
-  LocalhostWorktreeLabelResult,
-  LocalhostWorktreeLabelRoute
-} from '../shared/localhost-worktree-labels'
 import { prepareAndInvokeAppRestart } from './renderer-restart-wiring'
 import { speechBridge } from './bridge/speech-bridge'
 import { mobileBridge } from './bridge/mobile-bridge'
@@ -222,6 +218,13 @@ import {
   codexConfigSyncBridge
 } from './bridge/agent-accounts-bridges'
 import { preflightBridge, agentHooksBridge } from './bridge/preflight-agent-hooks-bridges'
+import {
+  localhostWorktreeLabelsBridge,
+  agentTrustBridge,
+  macosTccPromptsBridge,
+  developerPermissionsBridge,
+  computerUsePermissionsBridge
+} from './bridge/permission-label-bridges'
 import {
   notificationsBridge,
   onboardingBridge,
@@ -915,23 +918,12 @@ const api: PreloadApi = {
   claudeAccounts: claudeAccountsBridge,
   cli: cliBridge,
   codexConfigSync: codexConfigSyncBridge,
-  localhostWorktreeLabels: {
-    register: (args: LocalhostWorktreeLabelRoute): Promise<LocalhostWorktreeLabelResult> =>
-      ipcRenderer.invoke('localhostWorktreeLabels:register', args)
-  } satisfies PreloadApi['localhostWorktreeLabels'],
 
 
 
 
 
 
-  agentTrust: {
-    markTrusted: (args: {
-      preset: 'cursor' | 'copilot' | 'codex'
-      workspacePath: string
-      connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
-  },
 
 
 
@@ -942,40 +934,14 @@ const api: PreloadApi = {
   onboarding: onboardingBridge,
   dashboard: dashboardBridge,
   terminalPreview: terminalPreviewBridge,
-  macosTccPrompts: {
-    onThreshold: (callback) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        payload: { promptCount: number }
-      ): void => callback(payload)
-      ipcRenderer.on('macosTccPrompts:threshold', listener)
-      return () => ipcRenderer.removeListener('macosTccPrompts:threshold', listener)
-    },
-    consumePending: (): Promise<{ claimId: number; promptCount: number } | null> =>
-      ipcRenderer.invoke('macosTccPrompts:consumePending'),
-    acknowledgePending: (claimId: number): Promise<void> =>
-      ipcRenderer.invoke('macosTccPrompts:acknowledgePending', claimId),
-    releasePending: (claimId: number): Promise<void> =>
-      ipcRenderer.invoke('macosTccPrompts:releasePending', claimId),
-    dismiss: (): Promise<void> => ipcRenderer.invoke('macosTccPrompts:dismiss')
-  },
 
-  developerPermissions: {
-    getStatus: () => ipcRenderer.invoke('developerPermissions:getStatus'),
-    request: (args: { id: string }) => ipcRenderer.invoke('developerPermissions:request', args),
-    openSettings: (args: { id: string }): Promise<void> =>
-      ipcRenderer.invoke('developerPermissions:openSettings', args),
-    testLocalNetworkConnection: (args: { host: string; port: number }) =>
-      ipcRenderer.invoke('developerPermissions:testLocalNetworkConnection', args)
-  },
 
-  computerUsePermissions: {
-    getStatus: () => ipcRenderer.invoke('computerUsePermissions:getStatus'),
-    openSetup: (args?: { id?: string }) =>
-      ipcRenderer.invoke('computerUsePermissions:openSetup', args),
-    reset: () => ipcRenderer.invoke('computerUsePermissions:reset')
-  },
 
+  localhostWorktreeLabels: localhostWorktreeLabelsBridge,
+  agentTrust: agentTrustBridge,
+  macosTccPrompts: macosTccPromptsBridge,
+  developerPermissions: developerPermissionsBridge,
+  computerUsePermissions: computerUsePermissionsBridge,
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
