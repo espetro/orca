@@ -45,6 +45,8 @@
     "tc:cli": "pnpm run typecheck:cli",
     "tc:web": "pnpm run typecheck:web",
     "tc:scripts": "tsc --noEmit -p config/tsconfig.scripts.json",
+    "intl-ai:translate": "node config/scripts/intl-ai-translate-locales.mts",
+    "intl-ai:dry-run": "node config/scripts/intl-ai-translate-locales.mts --dry-run",
     "tc": "pnpm run typecheck",
     "typecheck:node": "tsc --noEmit -p config/tsconfig.node.json",
     "typecheck:cli": "tsc --noEmit -p config/tsconfig.tc.cli.json",

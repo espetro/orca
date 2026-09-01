@@ -19,11 +19,11 @@ export { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mts'
 
 type BrandMistranslations = Record<string, string[]>
 
-type LocaleCatalog = {
+export type LocaleCatalog = {
   [key: string]: LocaleCatalogValue
 }
 
-type LocaleCatalogValue = string | LocaleCatalog | LocaleCatalogArray | null | undefined
+export type LocaleCatalogValue = string | LocaleCatalog | LocaleCatalogArray | null | undefined
 
 type LocaleCatalogArray = LocaleCatalogValue[]
 
