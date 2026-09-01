@@ -13,7 +13,7 @@ import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mts', import.meta.url))
+const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.ts', import.meta.url))
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cts', import.meta.url)
 )
@@ -23,7 +23,7 @@ describe('ensure-native-runtime', () => {
     const projectDir = mkTempProject()
 
     try {
-      const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mts')
+      const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.ts')
       const logPath = join(projectDir, 'native-runtime.log')
       const markerPath = join(projectDir, 'rebuilt.marker')
       const binDir = join(projectDir, 'bin')
@@ -63,7 +63,7 @@ describe('ensure-native-runtime', () => {
       const projectDir = mkTempProject()
 
       try {
-        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mts')
+        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.ts')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
@@ -98,7 +98,7 @@ describe('ensure-native-runtime', () => {
       const projectDir = mkTempProject()
 
       try {
-        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mts')
+        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.ts')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
@@ -133,7 +133,7 @@ describe('ensure-native-runtime', () => {
       const projectDir = mkTempProject()
 
       try {
-        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mts')
+        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.ts')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
@@ -167,7 +167,7 @@ describe('ensure-native-runtime', () => {
       const projectDir = mkTempProject()
 
       try {
-        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mts')
+        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.ts')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')

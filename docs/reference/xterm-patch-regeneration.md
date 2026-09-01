@@ -21,7 +21,7 @@ dropped by the next `--write`, so it fails the run instead.
 
 `config/patches/xterm-src/@xterm__xterm@<version>.src.patch` is the source of
 truth. Everything else is derived from it by
-`config/scripts/regenerate-xterm-patches.mts`, which is pinned to the exact
+`config/scripts/regenerate-xterm-patches.ts`, which is pinned to the exact
 upstream commit the published tarball was built from.
 
 This policy covers `@xterm/xterm` only. The addon patches
@@ -61,13 +61,13 @@ and are tracked separately; see [Known Gaps](#known-gaps).
 $EDITOR config/patches/xterm-src/@xterm__xterm@6.1.0-beta.287.src.patch
 
 # 2. Rebuild the bundle hunks, the full patch, and the lockfile hash.
-node config/scripts/regenerate-xterm-patches.mts --write
+node config/scripts/regenerate-xterm-patches.ts --write
 
 # 3. Reinstall so node_modules picks up the new patch hash.
 pnpm install
 
 # 4. Confirm the tree is self-consistent.
-node config/scripts/regenerate-xterm-patches.mts --check
+node config/scripts/regenerate-xterm-patches.ts --check
 ```
 
 Editing a patch file by hand is awkward for anything larger than a one-liner.
@@ -75,10 +75,10 @@ For a substantial change, work in the generator's own checkout instead — after
 any run it is left at the pinned commit with the source patch applied:
 
 ```sh
-node config/scripts/regenerate-xterm-patches.mts --check --work-dir=/tmp/xterm
+node config/scripts/regenerate-xterm-patches.ts --check --work-dir=/tmp/xterm
 $EDITOR /tmp/xterm/upstream/src/browser/input/CompositionHelper.ts
 git -C /tmp/xterm/upstream diff -- src/ > config/patches/xterm-src/@xterm__xterm@6.1.0-beta.287.src.patch
-node config/scripts/regenerate-xterm-patches.mts --write --work-dir=/tmp/xterm
+node config/scripts/regenerate-xterm-patches.ts --write --work-dir=/tmp/xterm
 ```
 
 `--write` rewrites the source patch into the canonical form it would emit on a
@@ -181,7 +181,7 @@ Bumping `@xterm/xterm` is:
 3. Update `upstream.commit` to the `commit` field of the new tarball's
    `package.json`, and `toolchain` to whatever the new `package-lock.json`
    resolves.
-4. `node config/scripts/regenerate-xterm-patches.mts --write`.
+4. `node config/scripts/regenerate-xterm-patches.ts --write`.
 
 Step 4 is where a real upstream conflict shows up: `git apply` of the source
 patch fails against the new tree. Resolve it in the checkout, re-diff, and
@@ -207,7 +207,7 @@ risk.
 ## CI Contract
 
 `xterm_patch_sync` in `.github/workflows/pr.yml` runs
-`regenerate-xterm-patches.mts --check` on every PR and is part of the `verify`
+`regenerate-xterm-patches.ts --check` on every PR and is part of the `verify`
 aggregate. It clones the pinned commit, installs upstream's toolchain, builds
 twice, and byte-compares the result against the committed patch. Both builds and
 the diff together are about eight seconds; `npm ci` for upstream's toolchain is

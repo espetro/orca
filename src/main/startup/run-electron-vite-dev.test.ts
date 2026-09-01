@@ -138,7 +138,7 @@ describe('run-electron-vite-dev', () => {
     async () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
       const pidFile = join(tempDir, 'grandchild.pid')
-      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
 
       const wrapper = spawn(process.execPath, [wrapperPath], {
@@ -183,7 +183,7 @@ describe('run-electron-vite-dev', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
     const pidFile = join(tempDir, 'grandchild.pid')
     const envFile = join(tempDir, 'env.json')
-    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
     const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
 
     const wrapper = spawn(process.execPath, [wrapperPath, '--remote-debugging-port=9444'], {
@@ -245,7 +245,7 @@ describe('run-electron-vite-dev', () => {
       const userDataPath = join(tempDir, 'userData')
       const pidFile = join(tempDir, 'grandchild.pid')
       const envFile = join(tempDir, 'env.json')
-      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
 
       const wrapper = spawn(process.execPath, [wrapperPath], {
@@ -287,7 +287,7 @@ describe('run-electron-vite-dev', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
     const pidFile = join(tempDir, 'grandchild.pid')
     const envFile = join(tempDir, 'env.json')
-    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
     const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
 
     const wrapper = spawn(
@@ -338,7 +338,7 @@ describe('run-electron-vite-dev', () => {
     'rebuilds the copied Electron app when Chromium resources are missing',
     async () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
-      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
       const baseEnv = devWrapperTestEnv({
         ORCA_ELECTRON_VITE_CLI: fakeCliPath,
@@ -418,7 +418,7 @@ describe('run-electron-vite-dev', () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
       const pidFile = join(tempDir, 'grandchild.pid')
       const envFile = join(tempDir, 'env.json')
-      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
 
       const wrapper = spawn(process.execPath, [wrapperPath, '--remote-debugging-port=9448'], {

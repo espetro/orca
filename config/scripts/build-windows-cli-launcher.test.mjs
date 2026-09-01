@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { shouldReuseCompiledWindowsCliLauncher } from './build-windows-cli-launcher.mts'
+import { shouldReuseCompiledWindowsCliLauncher } from './build-windows-cli-launcher.ts'
 
 const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
@@ -72,7 +72,7 @@ describe('Windows CLI launcher', () => {
     try {
       const result = spawnSync(
         process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mts', '--output', join(outputRoot, 'orca.exe')],
+        ['config/scripts/build-windows-cli-launcher.ts', '--output', join(outputRoot, 'orca.exe')],
         { cwd: projectRoot, encoding: 'utf8' }
       )
 
@@ -120,7 +120,7 @@ describe('Windows CLI launcher', () => {
 
       const build = spawnSync(
         process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mts', '--output', launcherPath],
+        ['config/scripts/build-windows-cli-launcher.ts', '--output', launcherPath],
         { cwd: projectRoot, encoding: 'utf8' }
       )
       expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
@@ -185,7 +185,7 @@ describe('Windows CLI launcher', () => {
       )
       const build = spawnSync(
         process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mts', '--output', launcherPath],
+        ['config/scripts/build-windows-cli-launcher.ts', '--output', launcherPath],
         { cwd: projectRoot, encoding: 'utf8' }
       )
       expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)

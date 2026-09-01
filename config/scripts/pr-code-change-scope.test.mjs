@@ -8,7 +8,7 @@ import {
   isDocsOnlyPath,
   PR_CHECK_JOBS,
   shouldRunPrChecks
-} from './pr-code-change-scope.mts'
+} from './pr-code-change-scope.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
@@ -74,7 +74,7 @@ describe('docs-only path classification', () => {
     expect(isDocsOnlyPath('skill-guides/orca-cli.md')).toBe(false)
     expect(isDocsOnlyPath('.github/workflows/pr.yml')).toBe(false)
     expect(isDocsOnlyPath('src/main/index.ts')).toBe(false)
-    expect(isDocsOnlyPath('config/scripts/pr-code-change-scope.mts')).toBe(false)
+    expect(isDocsOnlyPath('config/scripts/pr-code-change-scope.ts')).toBe(false)
     expect(shouldRunPrChecks(['README.md', 'src/main/index.ts'])).toBe(true)
   })
 
@@ -231,8 +231,8 @@ describe('per-job path classification', () => {
       'package.json',
       'pnpm-lock.yaml',
       '.github/actions/install-node-dependencies/action.yml',
-      'config/scripts/ensure-native-runtime.mts',
-      'config/scripts/rebuild-native-deps.mts',
+      'config/scripts/ensure-native-runtime.ts',
+      'config/scripts/rebuild-native-deps.ts',
       'config/patches/node-pty@1.1.0.patch'
     ]) {
       expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
@@ -246,7 +246,7 @@ describe('per-job path classification', () => {
   })
 
   it('emits GitHub output pairs from the shipped CLI', () => {
-    const result = spawnSync(process.execPath, ['config/scripts/pr-code-change-scope.mts'], {
+    const result = spawnSync(process.execPath, ['config/scripts/pr-code-change-scope.ts'], {
       cwd: projectDir,
       encoding: 'utf8',
       input: 'config/patches/xterm-upstream.json\n'
@@ -268,7 +268,7 @@ describe('PR Checks skip wiring', () => {
     expect(classify.run).toContain('--diff-filter=ACDMR')
     expect(classify.run).toContain('--no-renames')
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
-    expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mts')
+    expect(classify.run).toContain('node config/scripts/pr-code-change-scope.ts')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
     for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(

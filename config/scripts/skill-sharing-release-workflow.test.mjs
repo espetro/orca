@@ -118,7 +118,7 @@ describe('skill-sharing release workflow', () => {
       })
     ])
     expect(smoke.if).toContain("matrix.platform == 'linux-x64'")
-    expect(smoke.with.command).toContain('run-linux-packaged-node-pty-floor-smoke.mts')
+    expect(smoke.with.command).toContain('run-linux-packaged-node-pty-floor-smoke.ts')
     expect(smoke.with.command).toContain('${{ matrix.unpacked_dir }}')
   })
 })

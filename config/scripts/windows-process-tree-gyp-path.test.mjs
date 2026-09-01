@@ -17,7 +17,7 @@ describe('windows-process-tree node-addon-api gyp path', () => {
     expect(PATCH).toContain('+          "include_dirs": ["deps/node-addon-api"],')
     expect(PATCH).toContain('+          "defines": ["NAPI_CPP_EXCEPTIONS", "_HAS_EXCEPTIONS=1"],')
     const buildScript = readFileSync(
-      join(projectDir, 'config/scripts/build-windows-process-tree-relay-addon.mts'),
+      join(projectDir, 'config/scripts/build-windows-process-tree-relay-addon.ts'),
       'utf8'
     )
     expect(buildScript).toContain(

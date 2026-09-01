@@ -16,8 +16,8 @@ import {
   spawnBenchmarkProcess,
   throwBenchmarkTrialFailures,
   writeProcessRecord
-} from './macos-computer-helper-owner-loss-processes.mts'
-import { cleanupOwnerLossTrial } from './macos-computer-helper-owner-loss-trial-cleanup.mts'
+} from './macos-computer-helper-owner-loss-processes.ts'
+import { cleanupOwnerLossTrial } from './macos-computer-helper-owner-loss-trial-cleanup.ts'
 
 const describeMacOS = process.platform === 'darwin' ? describe : describe.skip
 const spawnedPids = new Set()

@@ -336,7 +336,7 @@
       "invariant": "A sidecar written by the new build cannot make the previous production build lose otherwise compatible VM runtimes. Downgrade lifecycle writes remain authoritative after re-upgrade, provisioned-root metadata remains recoverable, and corrupt or future feature metadata is preserved without poisoning the rollback-readable v1 store. Destroy attempts have no automatic wall-clock cutoff; a user stop terminates the process tree, retains cleanup ownership, and permits a fresh retry. Provider failure retains the SSH/project context needed for safe cleanup. Unrecoverable recipe context releases only the hidden SSH registration while preserving lifecycle/provider metadata. Provisioned-root create receives the source ref's pinned commit, adoption verifies the requested branch/ref, and resume preserves the connection mode plus stable SSH ownership identity while allowing endpoint rotation.",
       "oracle": "Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
-        "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mts config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
+        "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.ts config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm-runtime-service.test.ts src/main/ephemeral-vm-resume-integrity.test.ts src/main/ephemeral-vm-recipe-runner.test.ts src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ephemeral-vm-provisioned-root.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ephemeral-vm-provisioned-root.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -344,7 +344,7 @@
       ],
       "testFiles": [
         "config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mts",
+        "config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.ts",
         "src/shared/ephemeral-vm-runtime-store-rollback.test.ts",
         "src/shared/ephemeral-vm-runtime-store.test.ts",
         "src/shared/ephemeral-vm-recipe-process.test.ts",
@@ -475,7 +475,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mts config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
+          "command": "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.ts config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
           "result": "passed",
           "durationSeconds": 11,
           "summary": "The pinned baseline and affected-main oracles passed, candidate downgrade ran the exact old destroy service, candidate re-upgrade retained lifecycle state, and both affected-main and fix-reverted bytes failed the old reader as expected."
@@ -8377,13 +8377,13 @@
       "oracle": "The issue #8048 slice asserts one node-pty ConPTY close for a graceful-then-force sequence, atomically seeds recovered history before fresh shell output and re-anchoring, preserves recovery after seed failure plus adapter restart, and runs 25 built-daemon close races while checking victim session/PID reaping, a stable daemon PID, and a live witness PTY. A broader Windows live gate still needs shell input, resize, cursor, and CJK/wide-glyph pixel evidence.",
       "commands": [
         "pnpm vitest run src/main/daemon/pty-subprocess.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
-        "pnpm build:electron-vite && node config/scripts/windows-daemon-workspace-close-repro.mts",
-        "node config/scripts/windows-daemon-workspace-close-repro.mts"
+        "pnpm build:electron-vite && node config/scripts/windows-daemon-workspace-close-repro.ts",
+        "node config/scripts/windows-daemon-workspace-close-repro.ts"
       ],
       "testFiles": [
         "src/main/daemon/pty-subprocess.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts",
-        "config/scripts/windows-daemon-workspace-close-repro.mts"
+        "config/scripts/windows-daemon-workspace-close-repro.ts"
       ],
       "assertionRefs": [
         {
@@ -8400,7 +8400,7 @@
           ]
         },
         {
-          "file": "config/scripts/windows-daemon-workspace-close-repro.mts",
+          "file": "config/scripts/windows-daemon-workspace-close-repro.ts",
           "assertions": [
             "all 25 victim sessions and OS PIDs are reaped while the built daemon PID and an unrelated witness PowerShell remain alive"
           ]
@@ -8411,7 +8411,7 @@
           "date": "2026-07-10",
           "runner": "local",
           "platform": "windows",
-          "command": "node config/scripts/windows-daemon-workspace-close-repro.mts",
+          "command": "node config/scripts/windows-daemon-workspace-close-repro.ts",
           "result": "passed",
           "durationSeconds": 7.6,
           "summary": "All 25 victim sessions and OS PIDs were reaped while the built daemon and witness PTY survived the real ConPTY workspace-close races. The double-close, history ordering, and seed-failure restart regressions produced intentional red failures before their fixes and passed afterward."
@@ -14956,12 +14956,12 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts",
         "pnpm run build:electron-vite",
         "node config/scripts/runtime-file-watcher-resource-probe.mjs",
-        "node config/scripts/runtime-file-watcher-fault-harness.mts",
-        "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mts",
+        "node config/scripts/runtime-file-watcher-fault-harness.ts",
+        "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
         "pnpm run build:relay",
-        "node config/scripts/relay-watcher-fault-harness.mts"
+        "node config/scripts/relay-watcher-fault-harness.ts"
       ],
       "testFiles": [
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -15008,7 +15008,7 @@
         "src/shared/cross-platform-path.test.ts",
         "src/shared/physical-exit-tracker.test.ts",
         "src/shared/promise-settlement-waiters.test.ts",
-        "config/scripts/runtime-file-watcher-fault-harness.mts",
+        "config/scripts/runtime-file-watcher-fault-harness.ts",
         "config/scripts/runtime-file-watcher-resource-probe.mjs",
         "src/relay/relay-filesystem-watch-registry.test.ts",
         "src/relay/relay-watcher-pending-setup-waiters.test.ts",
@@ -15024,7 +15024,7 @@
         "src/relay/subprocess.test.ts",
         "src/main/ssh/ssh-relay-versioned-install.test.ts",
         "config/scripts/package-electron-runtime-contract.test.mjs",
-        "config/scripts/relay-watcher-fault-harness.mts"
+        "config/scripts/relay-watcher-fault-harness.ts"
       ],
       "assertionRefs": [
         {
@@ -15464,7 +15464,7 @@
           ]
         },
         {
-          "file": "config/scripts/runtime-file-watcher-fault-harness.mts",
+          "file": "config/scripts/runtime-file-watcher-fault-harness.ts",
           "assertions": [
             "the built watcher entry delivers an event before fault injection",
             "the harness parent survives watcher-child SIGSEGV",
@@ -15472,7 +15472,7 @@
           ]
         },
         {
-          "file": "config/scripts/relay-watcher-fault-harness.mts",
+          "file": "config/scripts/relay-watcher-fault-harness.ts",
           "assertions": [
             "the built relay and existing PTY survive watcher-child fault injection",
             "replacement emits overflow and a precise post-crash event"
@@ -15547,7 +15547,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.1,
           "summary": "The Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -15556,7 +15556,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.46,
           "summary": "The Electron-as-Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -15574,7 +15574,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mts",
+          "command": "node config/scripts/relay-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.12,
           "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
@@ -15619,7 +15619,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.01,
           "summary": "The Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -15628,7 +15628,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.46,
           "summary": "The Electron-as-Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
@@ -15646,7 +15646,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mts",
+          "command": "node config/scripts/relay-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.12,
           "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
@@ -15682,7 +15682,7 @@
           "date": "2026-07-12",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mts",
+          "command": "node config/scripts/relay-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.61,
           "summary": "The relay PID and existing PTY survived watcher-child SIGSEGV; overflow and precise events resumed from a replacement child."
@@ -15700,7 +15700,7 @@
           "date": "2026-07-12",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "All 26 built-entry SIGSEGV injections preserved the parent, replaced and resubscribed the child, and delivered a post-crash event; watcher-canary temp-directory count remained 6 before and after the final five-run leak check."
@@ -15709,7 +15709,7 @@
           "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 0.3,
           "summary": "The source-bundled real supervisor delivered through the built child before and after SIGSEGV; the parent survived and automatic resubscription used a replacement PID."
@@ -15718,7 +15718,7 @@
           "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
-          "command": "node config/scripts/runtime-file-watcher-fault-harness.mts",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.ts",
           "result": "passed",
           "durationSeconds": 2.2,
           "summary": "Ten consecutive invocations survived, automatically replaced and resubscribed the child, and delivered a post-crash event. The watcher-canary temp-directory count remained 8 before and after the loop."
@@ -16156,13 +16156,13 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/ensure-virtual-display.test.ts config/scripts/headless-serve-shutdown-workflow.test.mjs --reporter=dot",
         "shellcheck config/docker/headless-serve-shutdown/run-signal-case.sh",
-        "node config/scripts/run-headless-serve-shutdown-docker.mts --appimage dist/orca-linux.AppImage",
-        "node config/scripts/run-headless-serve-shutdown-docker.mts --appimage dist/orca-linux.AppImage --platform linux/amd64"
+        "node config/scripts/run-headless-serve-shutdown-docker.ts --appimage dist/orca-linux.AppImage",
+        "node config/scripts/run-headless-serve-shutdown-docker.ts --appimage dist/orca-linux.AppImage --platform linux/amd64"
       ],
       "testFiles": [
         "src/main/startup/ensure-virtual-display.test.ts",
         "config/scripts/headless-serve-shutdown-workflow.test.mjs",
-        "config/scripts/run-headless-serve-shutdown-docker.mts",
+        "config/scripts/run-headless-serve-shutdown-docker.ts",
         "config/docker/headless-serve-shutdown/run-signal-case.sh"
       ],
       "assertionRefs": [
@@ -16184,7 +16184,7 @@
           ]
         },
         {
-          "file": "config/scripts/run-headless-serve-shutdown-docker.mts",
+          "file": "config/scripts/run-headless-serve-shutdown-docker.ts",
           "assertions": [
             "SIGINT and SIGTERM run in separate disposable containers",
             "both signal failures are reported before the oracle exits",
@@ -16215,7 +16215,7 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "linux",
-          "command": "node config/scripts/run-headless-serve-shutdown-docker.mts --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "command": "node config/scripts/run-headless-serve-shutdown-docker.ts --appimage dist/orca-linux.AppImage --platform linux/amd64",
           "result": "passed",
           "durationSeconds": 48,
           "summary": "The extracted candidate AppRun passed process-group SIGINT and systemd-mixed main-PID SIGTERM under Ubuntu 26.04 amd64 emulation with status zero, no fatal evidence, full listener/Xvfb/tree cleanup, and an unchanged canary identity."
@@ -16271,16 +16271,16 @@
       "invariant": "Every managed-hook companion shipped for Node 18 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
       "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
       "commands": [
-        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mts",
+        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.ts",
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
       ],
       "testFiles": [
-        "config/scripts/smoke-managed-hook-runtime-node18.mts",
+        "config/scripts/smoke-managed-hook-runtime-node18.ts",
         "config/scripts/pr-workflow-parallelism.test.mjs"
       ],
       "assertionRefs": [
         {
-          "file": "config/scripts/smoke-managed-hook-runtime-node18.mts",
+          "file": "config/scripts/smoke-managed-hook-runtime-node18.ts",
           "assertions": [
             "all six built companions load and export installManagedHooks under Node 18",
             "Codex and Claude installations both succeed in an isolated home",
@@ -16300,7 +16300,7 @@
           "runner": "local",
           "platform": "macos",
           "result": "passed",
-          "command": "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mts",
+          "command": "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.ts",
           "durationSeconds": 4,
           "summary": "All six companions loaded under Node 18.20.8; Codex and Claude produced two successful results, executable hook scripts, and managed configs in a temporary home."
         }

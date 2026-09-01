@@ -143,7 +143,7 @@ describe('run-electron-vite-dev web client prepare', () => {
     const pidFile = join(tempDir, 'grandchild.pid')
     const envFile = join(tempDir, 'env.json')
     const viteFile = join(tempDir, 'vite.txt')
-    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
     const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
     const fakeVitePath = resolve('src/main/startup/__fixtures__/fake-vite-cli.mjs')
     let stderr = ''
@@ -195,7 +195,7 @@ describe('run-electron-vite-dev web client prepare', () => {
     const pidFile = join(tempDir, 'grandchild.pid')
     const envFile = join(tempDir, 'env.json')
     const viteFile = join(tempDir, 'vite.txt')
-    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mts')
+    const wrapperPath = resolve('config/scripts/run-electron-vite-dev.ts')
     const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
     const fakeVitePath = resolve('src/main/startup/__fixtures__/fake-vite-cli.mjs')
 

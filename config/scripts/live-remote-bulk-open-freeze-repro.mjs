@@ -12,7 +12,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs'
 import path from 'node:path'
-import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mts'
+import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.ts'
 import {
   applySwitchTargetCap,
   DEFAULT_HARD_MS,
@@ -22,8 +22,8 @@ import {
   readFreezeNumberEnv,
   shouldCapSwitchTargets,
   worktreeSelector
-} from './live-remote-bulk-open-freeze-metrics.mts'
-import { createOrcaRpc } from './live-remote-freeze-rpc.mts'
+} from './live-remote-bulk-open-freeze-metrics.ts'
+import { createOrcaRpc } from './live-remote-freeze-rpc.ts'
 
 const root = path.resolve(import.meta.dirname, '../..')
 const reportDir = path.join(root, 'test-results', 'freeze-repro')

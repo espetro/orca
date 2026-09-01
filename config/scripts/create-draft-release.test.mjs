@@ -4,7 +4,7 @@ import {
   latestPreviousPublishedDesktopReleaseTag,
   parseDesktopReleaseTag,
   truncateReleaseBody
-} from './create-draft-release.mts'
+} from './create-draft-release.ts'
 
 function release(tag, options = {}) {
   return {

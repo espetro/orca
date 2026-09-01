@@ -10,7 +10,7 @@ function electronBuilderNativeRebuild(context) {
 function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime = {}) {
   const args = buildNativeRebuildArgs(context, runtime)
   if (readPlatformName(context?.platform) === 'win32') {
-    runner(process.execPath, ['config/scripts/build-windows-cli-launcher.mts'], {
+    runner(process.execPath, ['config/scripts/build-windows-cli-launcher.ts'], {
       cwd: projectDir,
       stdio: 'inherit'
     })
@@ -37,7 +37,7 @@ function buildNativeRebuildArgs(
     arch === hostArch
 
   return [
-    'config/scripts/rebuild-native-deps.mts',
+    'config/scripts/rebuild-native-deps.ts',
     `--platform=${platform}`,
     `--arch=${arch}`,
     ...(canReusePreparedRuntime ? [] : ['--force'])

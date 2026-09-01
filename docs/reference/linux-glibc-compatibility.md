@@ -96,7 +96,7 @@ as unverifiable and boots anyway, because a silent probe is not evidence. Whatev
 finds is published in `status.get`'s `degradations[]` under `terminal_unavailable`.
 
 **4. Ship the binary, built from patched sources.**
-[`config/scripts/build-orcad-prebuilds.mts`](../../config/scripts/build-orcad-prebuilds.mts)
+[`config/scripts/build-orcad-prebuilds.ts`](../../config/scripts/build-orcad-prebuilds.ts)
 (`pnpm run build:orcad-prebuilds`, after `build:orcad`) compiles node-pty for the current
 host and files it under `out/orcad/prebuilds/<slot>/`, where a slot is
 `linux-{x64,arm64}-{glibc,musl}` or `darwin-{x64,arm64}`. libc is part of the slot name

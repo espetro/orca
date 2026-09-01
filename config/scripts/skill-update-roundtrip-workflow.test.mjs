@@ -11,7 +11,7 @@ const workflow = parse(
 const expectedPaths = [
   'skills/**',
   'resources/skills/**',
-  'config/scripts/verify-skill-update-roundtrip.mts',
+  'config/scripts/verify-skill-update-roundtrip.ts',
   'config/scripts/skill-update-roundtrip-workflow.test.mjs',
   'src/main/skills/skill-freshness-eligibility.ts',
   'src/shared/skill-freshness.ts',

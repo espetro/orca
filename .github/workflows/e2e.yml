@@ -64,7 +64,7 @@ jobs:
         with:
           name: e2e-build-out
           path: out/
-          # Why: build-relay.mts writes each relay's marker as `out/relay/<platform>/.version`,
+          # Why: build-relay.ts writes each relay's marker as `out/relay/<platform>/.version`,
           # and upload-artifact drops dotfiles by default — consumers then fail SSH specs with
           # "local relay build is missing its version marker".
           include-hidden-files: true

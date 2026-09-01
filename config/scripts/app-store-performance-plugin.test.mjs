@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mts'
+import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.ts'
 
 const pluginPath = path.resolve('config/oxlint-plugins/app-store-performance.mjs')
 

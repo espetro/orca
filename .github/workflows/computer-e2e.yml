@@ -5,24 +5,24 @@ on:
     paths:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
-      - 'config/scripts/build-computer-macos.mts'
-      - 'config/scripts/build-windows-cli-launcher.mts'
+      - 'config/scripts/build-computer-macos.ts'
+      - 'config/scripts/build-windows-cli-launcher.ts'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-metrics.mts'
-      - 'config/scripts/macos-computer-helper-owner-loss-processes.mts'
+      - 'config/scripts/macos-computer-helper-owner-loss-metrics.ts'
+      - 'config/scripts/macos-computer-helper-owner-loss-processes.ts'
       - 'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs'
-      - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mts'
+      - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.ts'
       - 'config/scripts/computer-use-modifier-safety.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
-      - 'config/scripts/computer-use-smoke.mts'
+      - 'config/scripts/computer-use-smoke.ts'
       - 'config/scripts/computer-use-smoke.test.mjs'
-      - 'config/scripts/daemon-boot-smoke.mts'
-      - 'config/scripts/daemon-endpoint-handover-smoke.mts'
-      - 'config/scripts/windows-daemon-workspace-close-repro.mts'
-      - 'config/scripts/verify-computer-native.mts'
+      - 'config/scripts/daemon-boot-smoke.ts'
+      - 'config/scripts/daemon-endpoint-handover-smoke.ts'
+      - 'config/scripts/windows-daemon-workspace-close-repro.ts'
+      - 'config/scripts/verify-computer-native.ts'
       # Why: the native-smoke job boots the built terminal daemon under plain
       # Node, so any change to the daemon bundle graph or the main build must
       # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
@@ -124,17 +124,17 @@ jobs:
       # (leaked electron require) while every other check passed; this fails
       # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
       - name: Daemon boot smoke
-        run: node config/scripts/daemon-boot-smoke.mts
+        run: node config/scripts/daemon-boot-smoke.ts
       # Why: a daemon that lost its endpoint name used to delete the replacement's
       # socket on exit, stranding a live daemon that hosts PTYs nothing can reach.
       # Only two real processes racing the same endpoint reproduce it.
       - name: Daemon endpoint handover smoke
-        run: node config/scripts/daemon-endpoint-handover-smoke.mts
+        run: node config/scripts/daemon-endpoint-handover-smoke.ts
       # Why: workspace removal overlaps graceful renderer teardown with the
       # forced main-process sweep; exercise that exact pair against real ConPTY.
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
-        run: node config/scripts/windows-daemon-workspace-close-repro.mts
+        run: node config/scripts/windows-daemon-workspace-close-repro.ts
   # Hosted macOS runners cannot receive persistent Accessibility/Screen Recording
   # grants. Keep the real native build/owner-loss checks on every trigger instead.
   mac-native-owner-smoke:

@@ -9,7 +9,7 @@ import {
   mergeManifest,
   readManifest,
   slotName
-} from './build-orcad-prebuilds.mts'
+} from './build-orcad-prebuilds.ts'
 
 const PATCHED_BINDING_GYP =
   "'ldflags': ['-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed']"

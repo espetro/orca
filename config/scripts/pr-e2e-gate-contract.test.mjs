@@ -8,7 +8,7 @@ import {
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   SSH_SOURCE_ROUTE_IDS
-} from './pr-e2e-source-routing.mts'
+} from './pr-e2e-source-routing.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
@@ -123,7 +123,7 @@ describe('PR E2E gate contract', () => {
 
   it('selects modified Playwright specs without running deleted tests', () => {
     expect(filterStep.run).toContain('--diff-filter=AMCR')
-    expect(filterStep.run).toContain('config/scripts/pr-e2e-source-routing.mts')
+    expect(filterStep.run).toContain('config/scripts/pr-e2e-source-routing.ts')
     expect(filterStep.run).not.toContain('tests/playwright\\.')
     expect(
       selectPrE2eSpecs([
@@ -339,7 +339,7 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs.e2e.with.ssh_source_changed).toBe(
       '${{ needs.e2e-paths.outputs.ssh_source_changed }}'
     )
-    expect(filterStep.run).toContain('pr-e2e-source-routing.mts --ssh-source')
+    expect(filterStep.run).toContain('pr-e2e-source-routing.ts --ssh-source')
     expect(filterStep.run).toContain('ssh_source_changed=$SSH_SOURCE_CHANGED')
   })
 

@@ -1,7 +1,7 @@
 # Scripts TypeScript migration
 
-`config/scripts/` is being migrated from `.mjs`/`.cjs` to `.mts`/`.cts`. The
-end state: every script in `config/scripts/` is a typed `.mts` (ESM) or `.cts`
+`config/scripts/` was migrated from `.mjs`/`.cjs` to `.ts`/`.cts`. The
+end state: every script in `config/scripts/` is a typed `.ts` (ESM) or `.cts`
 (CJS) file, typechecked against `config/tsconfig.scripts.json`.
 
 ## What this unlocks
@@ -10,13 +10,13 @@ end state: every script in `config/scripts/` is a typed `.mts` (ESM) or `.cts`
   oxlint type-aware rules (`await-thenable`, `no-redundant-type-constituents`,
   `restrict-plus-operands`, `restrict-template-expressions`,
   `switch-exhaustiveness-check`) now apply to scripts. A new
-  `typescript/no-floating-promises` rule is scoped to `**/*.mts` / `**/*.cts`
+  `typescript/no-floating-promises` rule is scoped to `**/*.ts` / `**/*.cts`
   via the type-aware oxlint override.
 - Cross-extension imports from `config/scripts/*.mjs → src/**/*.ts` (24 sites
   today) become type-checked end-to-end. Symbols flow from `src/shared` into
   scripts for free.
-- The `bin.orca-dev` entry points directly at `./config/scripts/orca-dev.mts`
-  — Node 22.6+ honors `.mts` shebangs and the repo pins Node 24.
+- The `bin.orca-dev` entry points directly at `./config/scripts/orca-dev.ts`
+  — the repo pins Node 24.
 
 ## Developer workflow
 
@@ -26,7 +26,7 @@ end state: every script in `config/scripts/` is a typed `.mts` (ESM) or `.cts`
   `config/tsconfig.scripts.json`. Useful when working on a script in
   isolation.
 - `pnpm lint` — runs oxlint + the audit chain. Scripts get the same lint
-  coverage as the rest of the tree via the `**/*.mts` / `**/*.cts` overrides
+  coverage as the rest of the tree via the `**/*.ts` / `**/*.cts` overrides
   in `.oxlintrc.json`.
 
 ## Migration rules of thumb

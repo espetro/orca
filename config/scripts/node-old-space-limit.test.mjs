@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendBuildOldSpaceOption, getBuildOldSpaceSizeMb } from './node-old-space-limit.mts'
+import { appendBuildOldSpaceOption, getBuildOldSpaceSizeMb } from './node-old-space-limit.ts'
 
 const gib = 1024 * 1024 * 1024
 

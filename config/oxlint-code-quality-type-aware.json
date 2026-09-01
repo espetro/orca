@@ -28,7 +28,7 @@
       }
     },
     {
-      "files": ["**/*.mts", "**/*.cts"],
+      "files": ["config/scripts/**", "**/*.cts"],
       "rules": {
         "typescript/no-floating-promises": "warn"
       }

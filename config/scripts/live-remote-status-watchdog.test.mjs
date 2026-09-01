@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { startStatusWatchdog } from './live-remote-status-watchdog.mts'
+import { startStatusWatchdog } from './live-remote-status-watchdog.ts'
 
 describe('startStatusWatchdog', () => {
   it('collects status samples and stops cleanly', async () => {

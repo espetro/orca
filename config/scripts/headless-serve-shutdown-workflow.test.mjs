@@ -47,7 +47,7 @@ describe('headless serve shutdown PR gate', () => {
 
     expect(packageStep.run).toContain('--linux AppImage --x64 --publish never')
     expect(shutdownStep.run).toBe(
-      'node config/scripts/run-headless-serve-shutdown-docker.mts --appimage dist/orca-linux.AppImage'
+      'node config/scripts/run-headless-serve-shutdown-docker.ts --appimage dist/orca-linux.AppImage'
     )
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(packageStep))
   })

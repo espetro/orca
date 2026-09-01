@@ -14,9 +14,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mts', import.meta.url))
+const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.ts', import.meta.url))
 const sourceInstallScriptPath = fileURLToPath(
-  new URL('./install-electron-package-binary.mts', import.meta.url)
+  new URL('./install-electron-package-binary.ts', import.meta.url)
 )
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cts', import.meta.url)
@@ -335,10 +335,10 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
 function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-native-deps-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
-  copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.mts'))
+  copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.ts'))
   copyFileSync(
     sourceInstallScriptPath,
-    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mts')
+    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.ts')
   )
   copyFileSync(
     sourceNodePtyJobOwnershipPath,
@@ -361,7 +361,7 @@ function runRebuildScript(projectDir, extraEnv = {}, args = []) {
       delete env[key]
     }
   }
-  return spawnSync(process.execPath, ['config/scripts/rebuild-native-deps.mts', ...args], {
+  return spawnSync(process.execPath, ['config/scripts/rebuild-native-deps.ts', ...args], {
     cwd: projectDir,
     encoding: 'utf8',
     env: {

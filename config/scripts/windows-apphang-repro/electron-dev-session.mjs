@@ -70,7 +70,7 @@ export function launchDevApp({ cdpPort, userDataDir }) {
   })
   const child = spawn(
     process.execPath,
-    [path.join('config', 'scripts', 'run-electron-vite-dev.mts')],
+    [path.join('config', 'scripts', 'run-electron-vite-dev.ts')],
     {
       cwd: rootDir,
       env,

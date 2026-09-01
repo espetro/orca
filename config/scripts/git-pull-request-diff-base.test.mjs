@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectPullRequestDiffBase } from './git-pull-request-diff-base.mts'
+import { selectPullRequestDiffBase } from './git-pull-request-diff-base.ts'
 
 describe('pull request diff base selection', () => {
   it('uses the merge commit first parent for pull request checkouts', () => {

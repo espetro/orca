@@ -110,7 +110,7 @@ describe('dev-channel Windows build workflow', () => {
     expect(verify).toBeGreaterThanOrEqual(0)
     expect(build).toBeGreaterThan(verify)
     expect(stepNamed(steps, 'Verify dev-channel packaging identity').run).toContain(
-      'verify-dev-channel-packaging.mts'
+      'verify-dev-channel-packaging.ts'
     )
   })
 

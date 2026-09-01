@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mts'
+import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.ts'
 
 describe('dev CLI terminal wrappers', () => {
   it('writes profile-scoped Windows wrappers for worker terminals', () => {

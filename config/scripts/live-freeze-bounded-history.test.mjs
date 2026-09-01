@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mts'
+import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.ts'
 
 describe('BoundedLiveFreezeHistory', () => {
   it('retains the newest entries in insertion order and counts the full run', () => {

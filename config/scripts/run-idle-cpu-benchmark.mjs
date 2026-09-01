@@ -11,18 +11,18 @@ import {
   summarizeProcessInventory,
   summarizeSamples,
   terminateProcesses
-} from './idle-cpu-process-sampling.mts'
+} from './idle-cpu-process-sampling.ts'
 import {
   collectRendererCensus,
   configureRendererScaleFixture
-} from './idle-cpu-renderer-scale-fixture.mts'
+} from './idle-cpu-renderer-scale-fixture.ts'
 import {
   runZustandPublications,
   snapshotRendererTimingProbe,
   startRendererTimingProbe,
   stopRendererTimingProbe
-} from './idle-cpu-renderer-timing-probe.mts'
-import { installSyntheticVisibleSpinners } from './idle-cpu-synthetic-spinners.mts'
+} from './idle-cpu-renderer-timing-probe.ts'
+import { installSyntheticVisibleSpinners } from './idle-cpu-synthetic-spinners.ts'
 
 const DEFAULT_WARMUP_MS = 15_000
 const DEFAULT_SAMPLE_MS = 30_000

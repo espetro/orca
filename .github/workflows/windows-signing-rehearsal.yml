@@ -85,7 +85,7 @@ jobs:
       - name: Package unpacked Windows app
         shell: pwsh
         run: |
-          node config/scripts/ensure-native-runtime.mts --runtime=electron
+          node config/scripts/ensure-native-runtime.ts --runtime=electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --dir --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -256,7 +256,7 @@ jobs:
             throw 'Signed Windows installer was not returned by SignPath.'
           }
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          node config/scripts/generate-windows-blockmap.mts 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/generate-windows-blockmap.ts 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'
@@ -311,7 +311,7 @@ jobs:
           # Extract the signed installer and verify the files a user actually
           # gets on disk — including the exact file from issue #7785.
           # electron-builder 26.9+ removed the bundled 7zip-bin package (#6487).
-          $7zaOutput = node config/scripts/resolve-7za-path.mts
+          $7zaOutput = node config/scripts/resolve-7za-path.ts
           $7zaExitCode = $LASTEXITCODE
           if ($7zaExitCode -ne 0) {
             throw "The 7za resolver exited with code $7zaExitCode for the signing rehearsal."
