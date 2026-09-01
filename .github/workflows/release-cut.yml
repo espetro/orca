@@ -726,7 +726,7 @@ jobs:
           # artifacts do not already match this ref and writes just the mapping
           # row, so the version commit stays skill-independent. Node built-ins
           # only, so this needs no install.
-          if ! node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"; then
+          if ! node config/scripts/generate-skill-bundle-manifest.mts --release "$VERSION"; then
             echo "::error::Refusing to record release provenance for v$VERSION: the committed skill artifacts do not match this ref. Land a regeneration on main, then re-run the cut." >&2
             exit 1
           fi

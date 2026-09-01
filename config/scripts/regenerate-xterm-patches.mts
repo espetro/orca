@@ -287,7 +287,7 @@ export function formatCheckFailure({ name, patchPath, committed, regenerated }) 
     'The bundle hunks are generated. Do not edit them. Change the source patch',
     'instead and regenerate both files:',
     '',
-    '  node config/scripts/regenerate-xterm-patches.mjs --write',
+    '  node config/scripts/regenerate-xterm-patches.mts --write',
     '',
     'See docs/reference/xterm-patch-regeneration.md.'
   ].join('\n')
@@ -651,7 +651,7 @@ export function regenerateXtermPatches({
 }
 
 const USAGE =
-  'Usage: regenerate-xterm-patches.mjs [--check | --write] [--work-dir=<path>]\n' +
+  'Usage: regenerate-xterm-patches.mts [--check | --write] [--work-dir=<path>]\n' +
   '  --check (default) verifies the shipped patches match the pinned upstream build;\n' +
   '  --write regenerates them from config/patches/xterm-src/. Build outside this repo:\n' +
   '  tsc otherwise walks up into our node_modules. See\n' +

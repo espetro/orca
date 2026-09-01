@@ -391,7 +391,7 @@ describe('Electron runtime package contract', () => {
       'npm version "$VERSION" --no-git-tag-version --allow-same-version'
     )
     const generateIndex = bumpStep.run.indexOf(
-      'node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"'
+      'node config/scripts/generate-skill-bundle-manifest.mts --release "$VERSION"'
     )
     const commands = bumpStep.run.replace(/^\s*#.*$/gm, '')
     // Unanchored: a `git add` chained after `&&` stages just as effectively.
