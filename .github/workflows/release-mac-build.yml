@@ -74,7 +74,7 @@ jobs:
           command: pnpm install --frozen-lockfile
 
       - name: Verify macOS signing environment
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/verify-macos-release-env.mts
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}

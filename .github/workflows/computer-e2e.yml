@@ -17,12 +17,12 @@ on:
       - 'config/scripts/macos-computer-helper-owner-loss-trial-cleanup.mts'
       - 'config/scripts/computer-use-modifier-safety.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
-      - 'config/scripts/computer-use-smoke.mjs'
+      - 'config/scripts/computer-use-smoke.mts'
       - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/daemon-boot-smoke.mts'
       - 'config/scripts/daemon-endpoint-handover-smoke.mts'
       - 'config/scripts/windows-daemon-workspace-close-repro.mts'
-      - 'config/scripts/verify-computer-native.mjs'
+      - 'config/scripts/verify-computer-native.mts'
       # Why: the native-smoke job boots the built terminal daemon under plain
       # Node, so any change to the daemon bundle graph or the main build must
       # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
