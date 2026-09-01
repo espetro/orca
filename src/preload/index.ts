@@ -11,24 +11,6 @@ import type {
   SleepingAgentLaunchConfig
 } from '../shared/agent-session-resume'
 import type {
-  SshMutationExpectation,
-  SshConnectionState,
-  SshConfigHostListArgs,
-  SshConfigHostListResult,
-  SshConfigHostResolution,
-  SshConfigImportResult,
-  SshTargetAddResult,
-  SshTargetCreateInput,
-  SshTarget,
-  SshTargetUpdateInput,
-  PortForwardEntry,
-  EnrichedDetectedPort
-} from '../shared/ssh-types'
-import {
-  admitSshConnectionStateForAuthorityReconciliation,
-  admitSshDetectedPorts
-} from '../shared/ssh-retained-payload-admission'
-import type {
   BrowserCaptureSelectionScreenshotArgs,
   BrowserExtractHoverArgs,
   BrowserSetGrabModeArgs
@@ -38,9 +20,9 @@ import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../shared/browser-webauthn-account'
+import type { SshMutationExpectation } from '../shared/ssh-types'
 import type { SearchResult } from '../shared/code-search-types'
 import type {
-  FilesystemPathFlavor,
   FsChangedPayload,
   MarkdownDocument
 } from '../shared/filesystem-entry-types'
@@ -55,15 +37,6 @@ import type {
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../shared/terminal-render-desync-evidence'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
-import type { ClientHostedBrowserRowsEvent } from '../shared/client-hosted-browser-rows'
-import type {
-  RuntimeBrowserDriverState,
-  RuntimeRendererSyncWindowGraph,
-  RuntimeStatus,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
-} from '../shared/runtime-types'
-import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
   PreloadApi
@@ -113,7 +86,6 @@ import {
   cliBridge,
   codexConfigSyncBridge
 } from './bridge/agent-accounts-bridges'
-import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import { preflightBridge, agentHooksBridge } from './bridge/preflight-agent-hooks-bridges'
 import {
   orcaProfilesBridge,
@@ -121,6 +93,8 @@ import {
   shellBridge
 } from './bridge/profiles-plugins-shell-bridges'
 import { skillsBridge } from './bridge/skills-bridge'
+import { runtimeBridge } from './bridge/runtime-bridge'
+import { sshBridge } from './bridge/ssh-bridge'
 import { agentStatusBridge } from './bridge/agent-status-bridge'
 import {
   emulatorBridge,
@@ -1384,6 +1358,8 @@ const api: PreloadApi = {
 
   git: gitBridge,
 
+  runtime: runtimeBridge,
+  ssh: sshBridge,
   ui: { ...uiCommandWorktreeBridge, ...uiCommandBrowserBridge, ...uiCommandTerminalBridge, ...uiWindowBridge } satisfies PreloadApi['ui'],
 
 
@@ -1391,140 +1367,6 @@ const api: PreloadApi = {
 
 
 
-  runtime: {
-    syncWindowGraph: (
-      graph: RuntimeRendererSyncWindowGraph
-    ): Promise<RuntimeSyncWindowGraphResult> =>
-      ipcRenderer.invoke('runtime:syncWindowGraph', graph),
-    getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
-    call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
-      ipcRenderer.invoke('runtime:call', args),
-    subscribe: async (
-      args: { method: string; params?: unknown },
-      callback: (response: RuntimeRpcResponse<unknown>) => void
-    ): Promise<RuntimeEnvironmentSubscriptionHandle> => {
-      const subscriptionId = `desktop-${crypto.randomUUID()}`
-      const channel = `runtime:subscription:${subscriptionId}`
-      const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
-        callback(response)
-      ipcRenderer.on(channel, listener)
-      try {
-        await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
-      } catch (error) {
-        ipcRenderer.removeListener(channel, listener)
-        throw error
-      }
-      return {
-        unsubscribe: () => {
-          ipcRenderer.removeListener(channel, listener)
-          ipcRenderer.send('runtime:unsubscribe', { subscriptionId })
-        },
-        sendBinary: () => {
-          throw new Error('Local runtime subscriptions do not accept binary input')
-        }
-      }
-    },
-    getTerminalFitOverrides: (): Promise<
-      { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
-    > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
-    getTerminalDrivers: (): Promise<
-      {
-        ptyId: string
-        driver: RuntimeTerminalDriverState
-      }[]
-    > => ipcRenderer.invoke('runtime:getTerminalDrivers'),
-    getBrowserDrivers: (): Promise<
-      {
-        browserPageId: string
-        driver: RuntimeBrowserDriverState
-      }[]
-    > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
-    getBrowserRemoteViewerPages: (): Promise<string[]> =>
-      ipcRenderer.invoke('runtime:getBrowserRemoteViewerPages'),
-    getClientHostedBrowserRows: (): Promise<ClientHostedBrowserRowsEvent[]> =>
-      ipcRenderer.invoke('runtime:getClientHostedBrowserRows'),
-    restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
-      ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
-    reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
-      ipcRenderer.invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
-    onTerminalFitOverrideChanged: (
-      callback: (event: {
-        ptyId: string
-        mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
-        cols: number
-        rows: number
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          ptyId: string
-          mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
-          cols: number
-          rows: number
-        }
-      ) => callback(data)
-      ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
-      return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
-    },
-    onTerminalDriverChanged: (
-      callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          ptyId: string
-          driver: RuntimeTerminalDriverState
-        }
-      ) => callback(data)
-      ipcRenderer.on('runtime:terminalDriverChanged', listener)
-      return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
-    },
-    onNativeChatLaunchDraftResolved: (
-      callback: (event: { tabId: string; text: string; createdAt: number }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { tabId: string; text: string; createdAt: number }
-      ) => callback(data)
-      ipcRenderer.on('runtime:nativeChatLaunchDraftResolved', listener)
-      return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
-    },
-    onBrowserDriverChanged: (
-      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          browserPageId: string
-          driver: RuntimeBrowserDriverState
-        }
-      ) => callback(data)
-      ipcRenderer.on('runtime:browserDriverChanged', listener)
-      return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
-    },
-    onBrowserRemoteViewersChanged: (
-      callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          browserPageId: string
-          hasRemoteViewers: boolean
-        }
-      ) => callback(data)
-      ipcRenderer.on('runtime:browserRemoteViewersChanged', listener)
-      return () => ipcRenderer.removeListener('runtime:browserRemoteViewersChanged', listener)
-    },
-    onClientHostedBrowserRowsChanged: (
-      callback: (event: ClientHostedBrowserRowsEvent) => void
-    ): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: ClientHostedBrowserRowsEvent) =>
-        callback(data)
-      ipcRenderer.on('runtime:clientHostedBrowserRowsChanged', listener)
-      return () => ipcRenderer.removeListener('runtime:clientHostedBrowserRowsChanged', listener)
-    }
-  },
 
 
 
@@ -1542,167 +1384,6 @@ const api: PreloadApi = {
   emulator: emulatorBridge,
   runtimeEnvironments: runtimeEnvironmentsBridge,
   automations: automationsBridge,
-  ssh: {
-    listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
-
-    listRemovedTargetLabels: (): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
-
-    addTarget: (args: { target: SshTargetCreateInput }): Promise<SshTargetAddResult> =>
-      ipcRenderer.invoke('ssh:addTarget', args),
-
-    updateTarget: (args: { id: string; updates: SshTargetUpdateInput }): Promise<SshTarget> =>
-      ipcRenderer.invoke('ssh:updateTarget', args),
-
-    removeTarget: (args: { id: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:removeTarget', args),
-
-    importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
-      ipcRenderer.invoke('ssh:importConfig', args),
-
-    listConfigHosts: (args?: SshConfigHostListArgs): Promise<SshConfigHostListResult> =>
-      ipcRenderer.invoke('ssh:listConfigHosts', args),
-
-    resolveConfigHost: (args: { alias: string }): Promise<SshConfigHostResolution | null> =>
-      ipcRenderer.invoke('ssh:resolveConfigHost', args),
-
-    connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
-      const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
-      return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
-    },
-
-    disconnect: (args: { targetId: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:disconnect', args),
-
-    terminateSessions: (args: { targetId: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:terminateSessions', args),
-
-    resetRelay: (args: { targetId: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:resetRelay', args),
-
-    getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
-      const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
-      return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
-    },
-
-    needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
-
-    testConnection: async (args: {
-      targetId: string
-    }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> => {
-      const result: { success: boolean; error?: string; state?: unknown } =
-        await ipcRenderer.invoke('ssh:testConnection', args)
-      const state = result.state
-        ? admitSshConnectionStateForAuthorityReconciliation(result.state, args.targetId)
-        : null
-      return { ...result, ...(state ? { state } : { state: undefined }) }
-    },
-
-    onStateChanged: (
-      callback: (data: { targetId: string; state: SshConnectionState }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { targetId: string; state: unknown }
-      ): void => {
-        const state = admitSshConnectionStateForAuthorityReconciliation(data.state, data.targetId)
-        if (state) {
-          callback({ targetId: data.targetId, state })
-        }
-      }
-      ipcRenderer.on('ssh:state-changed', listener)
-      return () => ipcRenderer.removeListener('ssh:state-changed', listener)
-    },
-
-    addPortForward: (args: {
-      targetId: string
-      localPort: number
-      remoteHost: string
-      remotePort: number
-      label?: string
-    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:addPortForward', args),
-
-    updatePortForward: (args: {
-      id: string
-      targetId: string
-      localPort: number
-      remoteHost: string
-      remotePort: number
-      label?: string
-    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:updatePortForward', args),
-
-    removePortForward: (args: { id: string }): Promise<PortForwardEntry | null> =>
-      ipcRenderer.invoke('ssh:removePortForward', args),
-
-    listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
-      ipcRenderer.invoke('ssh:listPortForwards', args),
-
-    listDetectedPorts: async (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
-      admitSshDetectedPorts(await ipcRenderer.invoke('ssh:listDetectedPorts', args)),
-
-    onPortForwardsChanged: (
-      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
-    ): (() => void) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        data: { targetId: string; forwards: PortForwardEntry[] }
-      ) => callback(data)
-      ipcRenderer.on('ssh:port-forwards-changed', handler)
-      return () => ipcRenderer.removeListener('ssh:port-forwards-changed', handler)
-    },
-
-    onDetectedPortsChanged: (
-      callback: (data: { targetId: string; ports: EnrichedDetectedPort[] }) => void
-    ): (() => void) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        data: { targetId: string; ports: unknown }
-      ) => callback({ targetId: data.targetId, ports: admitSshDetectedPorts(data.ports) })
-      ipcRenderer.on('ssh:detected-ports-changed', handler)
-      return () => ipcRenderer.removeListener('ssh:detected-ports-changed', handler)
-    },
-
-    browseDir: (args: {
-      targetId: string
-      dirPath: string
-    }): Promise<{
-      entries: { name: string; isDirectory: boolean }[]
-      resolvedPath: string
-      pathFlavor: FilesystemPathFlavor
-    }> => ipcRenderer.invoke('ssh:browseDir', args),
-
-    onCredentialRequest: (
-      callback: (data: {
-        requestId: string
-        targetId: string
-        kind: 'passphrase' | 'password'
-        detail: string
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          requestId: string
-          targetId: string
-          kind: 'passphrase' | 'password'
-          detail: string
-        }
-      ) => callback(data)
-      ipcRenderer.on('ssh:credential-request', listener)
-      return () => ipcRenderer.removeListener('ssh:credential-request', listener)
-    },
-
-    onCredentialResolved: (callback: (data: { requestId: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }) =>
-        callback(data)
-      ipcRenderer.on('ssh:credential-resolved', listener)
-      return () => ipcRenderer.removeListener('ssh:credential-resolved', listener)
-    },
-
-    submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
-      ipcRenderer.invoke('ssh:submitCredential', args)
-  },
 
   // Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
   // so only external-manager and dispatch-loop plumbing stays on IPC.
