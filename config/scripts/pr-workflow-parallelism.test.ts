@@ -1,11 +1,13 @@
 import { globSync, readFileSync } from 'node:fs'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 import { describe, expect, it } from 'vitest'
 
-const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
-const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
-const nodeNextWorkflow = parse(readFileSync('.github/workflows/node-next-compat.yml', 'utf8'))
-const dependencyAction = parse(
+const workflow = parseWorkflow(readFileSync('.github/workflows/pr.yml', 'utf8'))
+const unitTestWorkflow = parseWorkflow(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
+const nodeNextWorkflow = parseWorkflow(
+  readFileSync('.github/workflows/node-next-compat.yml', 'utf8')
+)
+const dependencyAction = parseWorkflow(
   readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
@@ -41,8 +43,8 @@ const realZshUsage =
 
 describe('PR workflow parallelism', () => {
   it('cancels superseded runs for the same pull request', () => {
-    expect(workflow.concurrency.group).toBe('pr-checks-${{ github.event.pull_request.number }}')
-    expect(workflow.concurrency['cancel-in-progress']).toBe(true)
+    expect(workflow.concurrency!.group).toBe('pr-checks-${{ github.event.pull_request.number }}')
+    expect(workflow.concurrency!['cancel-in-progress']).toBe(true)
   })
 
   it('grants the PR workflow read-only repository access', () => {
@@ -57,26 +59,26 @@ describe('PR workflow parallelism', () => {
     )
     const primerInstall = workflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
-    )
+    )!
 
     expect(workflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
-    expect(JSON.parse(workflow.jobs.test.with.node_versions)).toEqual(['24'])
+    expect(JSON.parse(workflow.jobs.test.with!.node_versions as string)).toEqual(['24'])
     expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
-    expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['26'])
-    expect(nodeNextWorkflow.on.schedule).toHaveLength(1)
-    expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
-    expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
-    expect(sharedTest.strategy.matrix.shard).toEqual(
+    expect(JSON.parse(nodeNextWorkflow.jobs.test.with!.node_versions as string)).toEqual(['26'])
+    expect(nodeNextWorkflow.on!.schedule).toHaveLength(1)
+    expect(nodeNextWorkflow.on!.workflow_dispatch).toBeNull()
+    expect(sharedTest.strategy!.matrix!.node).toBe('${{ fromJSON(inputs.node_versions) }}')
+    expect(sharedTest.strategy!.matrix!.shard).toEqual(
       Array.from({ length: 8 }, (_, index) => index + 1)
     )
-    expect(sharedTest.strategy.matrix.shard_total).toEqual([8])
-    expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
-    expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
+    expect(sharedTest.strategy!.matrix!.shard_total).toEqual([8])
+    expect(installStep!.with!['node-version']).toBe('${{ matrix.node }}')
+    expect(testStep!.run!).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
     for (const testFile of nativeShellContractFiles) {
-      expect(testStep.run).toContain(`--exclude=${testFile}`)
+      expect(testStep!.run!).toContain(`--exclude=${testFile}`)
     }
-    expect(primerInstall.with['native-runtime']).toBe('node')
-    expect(primerInstall.with['node-version']).toBe('24')
+    expect(primerInstall.with!['native-runtime']).toBe('node')
+    expect(primerInstall.with!['node-version']).toBe('24')
     expect(workflow.jobs.test.needs).toContain('test_native_cache')
   })
 
@@ -100,7 +102,7 @@ describe('PR workflow parallelism', () => {
 
     expect(shellStep).toBeDefined()
     expect(shellInstall).toBeDefined()
-    expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
+    expect(shellStep!.run!.split(/\s+/)).toContain('--maxWorkers=1')
     // Why the whole workflow, not just the general shards: any other lane installing
     // these shells would silently start running the real-shell tests twice.
     expect(jobsInstallingPackages).toEqual(['shell_contracts'])
@@ -110,9 +112,9 @@ describe('PR workflow parallelism', () => {
     for (const shell of ['zsh', 'fish']) {
       expect(shellPackages).toContain(shell)
     }
-    expect(shellInstall.with['native-runtime']).toBe('node')
+    expect(shellInstall!.with!['native-runtime']).toBe('node')
     for (const testFile of nativeShellContractFiles) {
-      expect(shellStep.run).toContain(testFile)
+      expect(shellStep!.run!).toContain(testFile)
     }
   })
 
@@ -121,8 +123,8 @@ describe('PR workflow parallelism', () => {
       (step) => step.name === 'Install zsh and fish'
     )
     // Comment lines mention both commands by name, so count the executed ones only.
-    const commands = installStep.run
-      .split('\n')
+    const commands = installStep!
+      .run!.split('\n')
       .filter((line) => !line.trim().startsWith('#'))
       .join('\n')
     const updates = commands.match(/apt-get update/g) ?? []
@@ -158,23 +160,23 @@ describe('PR workflow parallelism', () => {
     const installStep = job.steps.find((step) => step.name === 'Install zsh and fish')
     // apt applies no wall-clock bound to a stalled mirror on its own. These turn an
     // unbounded hang into a bounded, retried, legible failure.
-    expect(installStep.run).toMatch(/Acquire::http::Timeout/)
-    expect(installStep.run).toMatch(/Acquire::https::Timeout/)
-    expect(installStep.run).toMatch(/Acquire::Retries/)
+    expect(installStep!.run!).toMatch(/Acquire::http::Timeout/)
+    expect(installStep!.run!).toMatch(/Acquire::https::Timeout/)
+    expect(installStep!.run!).toMatch(/Acquire::Retries/)
     // Retries multiply: a first attempt at 30s x 3 retries across every index file turned
     // a dead mirror into a ~15 minute stall. One attempt, then move on.
-    expect(installStep.run).toMatch(/Acquire::Retries "1"/)
+    expect(installStep!.run!).toMatch(/Acquire::Retries "1"/)
     // Acquire timeouts are per-connection, so they cannot bound the command as a whole.
     // Only a wall-clock bound can, and both apt invocations need one.
-    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get update/)
-    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
+    expect(installStep!.run!).toMatch(/timeout \d+ sudo apt-get update/)
+    expect(installStep!.run!).toMatch(/timeout \d+ sudo apt-get install/)
   })
 
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       // Why this file is excluded: it carries the detector pattern as a literal
       // and would otherwise match itself.
-      .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
+      .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.ts')
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 
@@ -184,16 +186,16 @@ describe('PR workflow parallelism', () => {
   it('overlaps bundles with independent output directories', () => {
     const buildStep = workflow.jobs.package.steps.find(
       (step) => step.name === 'Build package inputs'
-    )
+    )!
 
     expect(buildStep.run).toContain('scripts=(build:relay build:electron-vite:parallel)')
     expect(buildStep.run).toContain('pnpm run "$script" &')
     expect(
       workflow.jobs.package.steps.find(
         (step) => step.name === 'Project web client from renderer build'
-      ).run
+      )!.run!
     ).toBe('pnpm run build:web-from-renderer')
-    expect(packageJson.scripts['build:desktop']).toContain('pnpm run build:web-from-renderer')
+    expect(packageJson.scripts['build:desktop']!).toContain('pnpm run build:web-from-renderer')
     expect(packageJson.scripts['build:release']).toContain('pnpm run build:web-from-renderer')
   })
 
@@ -214,7 +216,7 @@ describe('PR workflow parallelism', () => {
   })
 
   it('restores the pnpm store before dependency installation', () => {
-    const steps = dependencyAction.runs.steps
+    const steps = dependencyAction.runs!.steps
     const pnpmIndex = steps.findIndex((step) => step.name === 'Setup pnpm')
     const nodeIndex = steps.findIndex((step) => step.name === 'Setup Node.js')
     const requestedNodeIndex = steps.findIndex((step) => step.name === 'Setup requested Node.js')
@@ -233,7 +235,7 @@ describe('PR workflow parallelism', () => {
   it('pins every direct pnpm setup to the repository package-manager version', () => {
     const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
     const directSetups = globSync('.github/workflows/*.yml').flatMap((workflowPath) => {
-      const parsed = parse(readFileSync(workflowPath, 'utf8'))
+      const parsed = parseWorkflow(readFileSync(workflowPath, 'utf8'))
       return Object.values(parsed.jobs ?? {}).flatMap((job) =>
         (job.steps ?? [])
           .filter((step) => step.uses === 'pnpm/action-setup@v6')
@@ -260,31 +262,31 @@ describe('PR workflow parallelism', () => {
   })
 
   it('prepares each native runtime before its consumers start', () => {
-    const installFor = (jobName) =>
+    const installFor = (jobName: string) =>
       workflow.jobs[jobName].steps.find(
         (step) => step.uses === './.github/actions/install-node-dependencies'
-      )
+      )!
     const sharedTestInstall = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
 
     for (const jobName of ['typecheck', 'git_compatibility', 'xterm_patch_sync']) {
-      expect(installFor(jobName).with, jobName).toBeUndefined()
+      expect(installFor(jobName).with!, jobName).toBeUndefined()
     }
-    expect(installFor('static_analysis').with['native-runtime']).toBe('node')
-    expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
-    expect(sharedTestInstall.with['native-runtime']).toBe('node')
-    expect(installFor('package').with['native-runtime']).toBe('electron')
-    expect(installFor('package_windows').with['native-runtime']).toBe('node')
-    expect(installFor('package_windows').with['persist-native-cache']).toBe('false')
+    expect(installFor('static_analysis').with!['native-runtime']).toBe('node')
+    expect(installFor('shell_contracts').with!['native-runtime']).toBe('node')
+    expect(sharedTestInstall!.with!['native-runtime']).toBe('node')
+    expect(installFor('package').with!['native-runtime']).toBe('electron')
+    expect(installFor('package_windows').with!['native-runtime']).toBe('node')
+    expect(installFor('package_windows').with!['persist-native-cache']).toBe('false')
 
-    expect(dependencyAction.inputs['persist-native-cache'].default).toBe('true')
+    expect(dependencyAction.inputs!['persist-native-cache'].default).toBe('true')
     expect(
-      dependencyAction.runs.steps.find((step) => step.name === 'Use external node-gyp').if
+      dependencyAction.runs!.steps.find((step) => step.name === 'Use external node-gyp')!.if!
     ).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
-    const dependencyInstall = dependencyAction.runs.steps.find(
+    const dependencyInstall = dependencyAction.runs!.steps.find(
       (step) => step.name === 'Install dependencies'
-    )
+    )!
     // Why frozen: re-resolving the graph costs a minute per job and the `git diff`
     // guard below already fails the run when the lockfile is stale, so the slow
     // resolution can never legitimately change anything.
@@ -300,9 +302,9 @@ describe('PR workflow parallelism', () => {
       expect.arrayContaining(['current', 'win32'])
     )
     expect(packageJson.pnpm.supportedArchitectures.cpu).toContain('current')
-    const prepareRuntime = dependencyAction.runs.steps.find(
+    const prepareRuntime = dependencyAction.runs!.steps.find(
       (step) => step.name === 'Prepare native runtime'
-    )
+    )!
     expect(prepareRuntime.if).toBe("inputs.native-runtime != 'none'")
     expect(prepareRuntime.run).toContain('ensure-native-runtime.ts --runtime="$NATIVE_RUNTIME"')
   })
@@ -313,14 +315,14 @@ describe('PR workflow parallelism', () => {
     )
     const packageStep = workflow.jobs.package.steps.find(
       (step) => step.name === 'Package unpacked app'
-    )
+    )!
 
-    expect(buildStep.run).not.toContain('ensure:electron-runtime')
-    expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
+    expect(buildStep!.run!).not.toContain('ensure:electron-runtime')
+    expect(packageStep!.env!.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
   })
 
   it('restores compiled native modules after the install that strips them', () => {
-    const steps = dependencyAction.runs.steps
+    const steps = dependencyAction.runs!.steps
     const installIndex = steps.findIndex((step) => step.name === 'Install dependencies')
     const cacheIndex = steps.findIndex((step) => step.name === 'Restore compiled native modules')
     const prepareIndex = steps.findIndex((step) => step.name === 'Prepare native runtime')
@@ -335,14 +337,14 @@ describe('PR workflow parallelism', () => {
     const restoreOnly = steps.find(
       (step) => step.name === 'Restore compiled native modules without saving'
     )
-    expect(restoreOnly.if).toBe(
+    expect(restoreOnly!.if).toBe(
       "inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'"
     )
-    expect(restoreOnly.uses).toBe('actions/cache/restore@v5')
+    expect(restoreOnly!.uses).toBe('actions/cache/restore@v5')
     // Native artifacts are ABI-bound: a key missing either dimension serves a build
     // that cannot load, and ensure-native-runtime would recompile it anyway.
-    for (const cacheStep of [steps[cacheIndex], restoreOnly]) {
-      expect(cacheStep.with.key).toContain('${{ inputs.native-runtime }}')
+    for (const cacheStep of [steps[cacheIndex]!, restoreOnly!]) {
+      expect(cacheStep.with!.key).toContain('${{ inputs.native-runtime }}')
       expect(cacheStep.with.key).toContain('${{ runner.os }}')
       expect(cacheStep.with.key).toContain('${{ runner.arch }}')
       expect(cacheStep.with.key).toContain('steps.requested-node.outputs.node-version')
@@ -357,12 +359,12 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.path).toContain('node-pty@*/node_modules/node-pty/build')
       expect(cacheStep.with.path).toContain('windows-native-registry@')
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tree@')
-      expect(cacheStep.with['restore-keys']).toBeUndefined()
+      expect(cacheStep.with!['restore-keys']).toBeUndefined()
     }
     const cacheScope = steps.find((step) => step.name === 'Resolve native cache scope')
-    expect(cacheScope.if).toBe("inputs.native-runtime != 'none'")
-    expect(cacheScope.run).toContain('/etc/os-release')
-    expect(dependencyAction.outputs['native-cache-scope'].value).toBe(
+    expect(cacheScope!.if).toBe("inputs.native-runtime != 'none'")
+    expect(cacheScope!.run!).toContain('/etc/os-release')
+    expect(dependencyAction.outputs!['native-cache-scope'].value).toBe(
       '${{ steps.native-cache-scope.outputs.scope }}'
     )
   })
@@ -415,14 +417,14 @@ describe('PR workflow parallelism', () => {
     ])
     const verifyStep = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
-    )
-    expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
+    )!
+    expect(verifyStep.env!.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
     expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
     // Why assert this one too: the browser provider test skips itself without
     // ORCA_BROWSER_EXECUTABLE, so it only guards anything if verify actually reads it.
-    expect(verifyStep.env.ORCAD_BROWSER).toBe('${{ needs.orcad_browser.result }}')
+    expect(verifyStep.env!.ORCAD_BROWSER).toBe('${{ needs.orcad_browser.result }}')
     expect(verifyStep.run).toContain('"$ORCAD_BROWSER"')
-    expect(verifyStep.env.CROSS_VERSION_WIRE).toBe('${{ needs.cross-version-wire.result }}')
+    expect(verifyStep.env!.CROSS_VERSION_WIRE).toBe('${{ needs.cross-version-wire.result }}')
     expect(verifyStep.run).toContain('"$CROSS_VERSION_WIRE"')
   })
 })

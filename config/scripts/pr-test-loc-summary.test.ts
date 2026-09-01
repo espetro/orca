@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 import {
   listPullFiles,
   nextLink,
@@ -19,14 +19,14 @@ import {
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const locScript = join(projectDir, '.github/scripts/pr-test-loc-summary.mjs')
-const locWorkflow = parse(
+const locWorkflow = parseWorkflow(
   readFileSync(join(projectDir, '.github/workflows/pr-test-loc.yml'), 'utf8')
 )
 const locJob = locWorkflow.jobs.loc
 const locStep = locJob.steps[0]
-const tempDirs = []
+const tempDirs: string[] = []
 
-function runLoc(args, { env } = {}) {
+function runLoc(args: string[], { env }: { env?: Record<string, string> } = {}) {
   return spawnSync(process.execPath, [locScript, ...args], {
     cwd: projectDir,
     encoding: 'utf8',
@@ -36,7 +36,7 @@ function runLoc(args, { env } = {}) {
 
 afterEach(() => {
   while (tempDirs.length > 0) {
-    rmSync(tempDirs.pop(), { force: true, recursive: true })
+    rmSync(tempDirs.pop()!, { force: true, recursive: true })
   }
 })
 
@@ -126,7 +126,7 @@ describe('PR test LoC summary', () => {
       { ok: false, status: 503, statusText: 'Service Unavailable' },
       { ok: true, status: 200, statusText: 'OK' }
     ]
-    const requests = []
+    const requests: { url: string | undefined; options: RequestInit | undefined }[] = []
     const result = await updatePullRequest({
       owner: 'stablyai',
       repo: 'orca',
@@ -152,8 +152,8 @@ describe('PR test LoC summary', () => {
 
     expect(result).toBe(0)
     expect(requests).toHaveLength(3)
-    expect(requests[1].options.method).toBe('PATCH')
-    expect(requests[2].options.method).toBe('PATCH')
+    expect(requests[1].options?.method).toBe('PATCH')
+    expect(requests[2].options?.method).toBe('PATCH')
   })
 
   it('colors added cells green and deleted or negative-net cells red', () => {
@@ -239,7 +239,7 @@ describe('PR test LoC summary', () => {
     expect(locStep.run).toContain('pr-test-loc-table.mjs')
     expect(locStep.run).toContain('pr-test-loc-summary.mjs')
     expect(locStep.run).toContain('--update-pr')
-    expect(locWorkflow.permissions['pull-requests']).toBe('write')
+    expect(locWorkflow.permissions!['pull-requests']).toBe('write')
     expect(JSON.stringify(locWorkflow)).not.toContain('actions/checkout')
     expect(JSON.stringify(locWorkflow)).not.toContain('self-hosted')
   })
@@ -248,7 +248,7 @@ describe('PR test LoC summary', () => {
   it('executes only default-branch script code, never pull-request head code', () => {
     const serialized = JSON.stringify(locWorkflow)
 
-    expect(locStep.env.TRUSTED_REF).toBe('${{ github.event.repository.default_branch }}')
+    expect(locStep.env!.TRUSTED_REF).toBe('${{ github.event.repository.default_branch }}')
     expect(locStep.run).toContain('?ref=${TRUSTED_REF}')
     expect(serialized).not.toContain('pull_request_target')
     expect(serialized).not.toContain('pull/')
@@ -257,7 +257,7 @@ describe('PR test LoC summary', () => {
   })
 
   it('passes event data through env instead of interpolating it into the shell', () => {
-    expect(locStep.env.PR_NUMBER).toBe('${{ github.event.pull_request.number }}')
+    expect(locStep.env!.PR_NUMBER).toBe('${{ github.event.pull_request.number }}')
     expect(locStep.run).toContain('--update-pr "$PR_NUMBER"')
     expect(locStep.run).not.toContain('${{')
   })

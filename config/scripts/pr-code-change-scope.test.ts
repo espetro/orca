@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 import {
   classifyPrJobs,
   isDocsOnlyPath,
@@ -11,7 +11,7 @@ import {
 } from './pr-code-change-scope.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+const prWorkflow = parseWorkflow(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 
 const expensiveJobs = [
   'static_analysis',
@@ -265,13 +265,16 @@ describe('PR Checks skip wiring', () => {
     const classify = prWorkflow.jobs.code_paths.steps.find(
       (step) => step.name === 'Classify changed paths'
     )
+    if (classify === undefined) {
+      throw new Error('classify step missing')
+    }
     expect(classify.run).toContain('--diff-filter=ACDMR')
     expect(classify.run).toContain('--no-renames')
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.ts')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
     for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
-      expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
+      expect(prWorkflow.jobs.code_paths.outputs![jobName], jobName).toBe(
         `\${{ steps.filter.outputs.${jobName} }}`
       )
     }
@@ -301,7 +304,7 @@ describe('PR Checks skip wiring', () => {
     const primerInstall = prWorkflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    expect(primerInstall.with['node-version']).toBe('24')
+    expect(primerInstall!.with!['node-version']).toBe('24')
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
@@ -315,18 +318,22 @@ describe('PR Checks skip wiring', () => {
     const verifyStep = prWorkflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
-    expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
-    expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
+    if (verifyStep === undefined) {
+      throw new Error('verify step missing')
+    }
+    const verifyNeeds = prWorkflow.jobs.verify.needs ?? []
+    expect(verifyNeeds[0]).toBe('code_paths')
+    expect(verifyStep.env!.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
     expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
     expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
-    for (const job of prWorkflow.jobs.verify.needs) {
+    for (const job of verifyNeeds) {
       if (job === 'code_paths' || job === 'root_directory_guard') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`
-      expect(verifyStep.env[envVar]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
+      expect(verifyStep.env![envVar]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
       expect(verifyStep.run).toContain(`"$${envVar}"`)
     }
   })

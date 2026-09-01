@@ -15,8 +15,8 @@ const PATCHED_BINDING_GYP =
   "'ldflags': ['-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed']"
 const PATCHED_PTY_CC = '__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);'
 
-const dirs = []
-const stage = (bindingGyp, ptyCc) => {
+const dirs: string[] = []
+const stage = (bindingGyp: string, ptyCc: string) => {
   const dir = mkdtempSync(join(tmpdir(), 'orcad-prebuild-src-'))
   dirs.push(dir)
   mkdirSync(join(dir, 'src', 'unix'), { recursive: true })

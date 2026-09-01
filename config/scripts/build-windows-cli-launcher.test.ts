@@ -23,11 +23,15 @@ const WINDOWS_LOCK_CODES = ['EBUSY', 'ENOTEMPTY', 'EPERM']
 // AV scan of the freshly compiled one) after the process exits, so tearing down the
 // fixture races those locks. Retry, then leave the temp tree rather than reporting a
 // teardown lock as a launcher failure.
-function removeFixtureTree(path) {
+function removeFixtureTree(path: string) {
   try {
     rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   } catch (error) {
-    if (process.platform !== 'win32' || !WINDOWS_LOCK_CODES.includes(error?.code)) {
+    const code =
+      error instanceof Error && 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : undefined
+    if (process.platform !== 'win32' || code === undefined || !WINDOWS_LOCK_CODES.includes(code)) {
       throw error
     }
   }
@@ -192,6 +196,9 @@ describe('Windows CLI launcher', () => {
 
       const compiler = findFrameworkCompiler()
       expect(compiler).not.toBeNull()
+      if (compiler === null) {
+        throw new Error('unreachable after toBeNull')
+      }
       const compileHarness = spawnSync(
         compiler,
         ['/nologo', '/target:exe', `/out:${harnessPath}`, harnessSourcePath],
@@ -211,7 +218,7 @@ describe('Windows CLI launcher', () => {
   })
 })
 
-function findFrameworkCompiler() {
+function findFrameworkCompiler(): string | null {
   const windowsDirectory = process.env.WINDIR ?? process.env.SystemRoot
   if (!windowsDirectory) {
     return null

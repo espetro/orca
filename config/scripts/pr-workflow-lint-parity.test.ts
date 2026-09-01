@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 import { describe, expect, it } from 'vitest'
 
 // Why: pr.yml re-lists the `lint` chain as individual steps so a single failure
@@ -21,7 +21,7 @@ function splitCommandChain(command) {
 
 function canonicalize(command) {
   const tokens = command.split(/\s+/)
-  const canonical = []
+  const canonical: string[] = []
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
@@ -42,8 +42,12 @@ function canonicalize(command) {
 }
 
 /** Expands `pnpm run x` indirection until every entry is a real binary invocation. */
-function resolveLeafCommands(command, scripts, seen = new Set()) {
-  const leaves = []
+function resolveLeafCommands(
+  command: string,
+  scripts: Record<string, string>,
+  seen = new Set<string>()
+) {
+  const leaves: string[] = []
 
   for (const part of splitCommandChain(command)) {
     const scriptName = part.match(/^(?:pnpm|npm|yarn)(?:\s+run)?\s+([\w:-]+)$/)?.[1]
@@ -62,7 +66,7 @@ function resolveLeafCommands(command, scripts, seen = new Set()) {
 describe('PR workflow lint parity', () => {
   it('runs every `pnpm lint` step on pull requests', () => {
     const { scripts } = JSON.parse(readFileSync('package.json', 'utf8'))
-    const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+    const workflow = parseWorkflow(readFileSync('.github/workflows/pr.yml', 'utf8'))
 
     // Scan every job: which one hosts the lint steps is an organizational
     // detail that has already been renamed once (verify -> static_analysis).
@@ -70,7 +74,7 @@ describe('PR workflow lint parity', () => {
       Object.values(workflow.jobs)
         .flatMap((job) => job.steps ?? [])
         .filter((step) => typeof step.run === 'string')
-        .flatMap((step) => resolveLeafCommands(step.run, scripts))
+        .flatMap((step) => resolveLeafCommands(step.run as string, scripts))
     )
 
     const missing = resolveLeafCommands(scripts.lint, scripts).filter(

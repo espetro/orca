@@ -245,6 +245,9 @@ describe('electron-builder config', () => {
     const entryFilename = spawnSource.match(/WORKER_ENTRY_FILENAME = '([^']+)'/)?.[1]
 
     expect(entryFilename).toBeDefined()
+    if (entryFilename === undefined) {
+      throw new Error('unreachable after toBeDefined')
+    }
     expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
 
     // Why: the emitted path comes from the rollup input key under
@@ -370,7 +373,8 @@ describe('electron-builder config', () => {
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `\\${entry}`),
-        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+        extractFile: (_asarPath: string, internalPath: string) =>
+          Buffer.from(sources.get(internalPath)!, 'utf8')
       }
 
       expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()

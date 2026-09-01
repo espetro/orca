@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 
-const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+const workflow = parseWorkflow(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 
 describe('packaged Windows PTY native capability routing', () => {
@@ -45,25 +45,25 @@ describe('packaged Windows PTY native capability routing', () => {
     )
     const ensureNativeRuntime = readFileSync('config/scripts/ensure-native-runtime.ts', 'utf8')
 
-    expect(install.with['native-runtime']).toBe('node')
-    expect(install.with['persist-native-cache']).toBe('false')
-    expect(nodeCacheSave.uses).toBe('actions/cache/save@v5')
-    expect(nodeCacheSave.with.key).toContain('-node-node')
-    expect(electronCache.with.key).toContain('-electron-node')
-    for (const cache of [nodeCacheSave, electronCache]) {
-      expect(cache.with.key).toContain('.github/actions/install-node-dependencies/action.yml')
-      expect(cache.with.key).toContain('config/scripts/ensure-native-runtime.ts')
-      expect(cache.with.key).toContain('config/scripts/rebuild-native-deps.ts')
+    expect(install!.with!['native-runtime']).toBe('node')
+    expect(install!.with!['persist-native-cache']).toBe('false')
+    expect(nodeCacheSave!.uses).toBe('actions/cache/save@v5')
+    expect(nodeCacheSave!.with!.key).toContain('-node-node')
+    expect(electronCache!.with!.key).toContain('-electron-node')
+    for (const cache of [nodeCacheSave!, electronCache!]) {
+      expect(cache.with!.key).toContain('.github/actions/install-node-dependencies/action.yml')
+      expect(cache.with!.key).toContain('config/scripts/ensure-native-runtime.ts')
+      expect(cache.with!.key).toContain('config/scripts/rebuild-native-deps.ts')
     }
     expect(ensureNativeRuntime).toContain("runPnpm(['exec', 'node-gyp', 'rebuild']")
     expect(ensureNativeRuntime).toContain("resolve(moduleDir, 'scripts', 'post-install.js')")
-    expect(build.run).toBe('pnpm run build:release:parallel')
-    expect(build.env.ORCA_REUSE_WINDOWS_CLI_LAUNCHER).toBe('1')
-    expect(prepare.run).toBe('node config/scripts/ensure-native-runtime.ts --runtime=electron')
-    expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
+    expect(build!.run).toBe('pnpm run build:release:parallel')
+    expect(build!.env!.ORCA_REUSE_WINDOWS_CLI_LAUNCHER).toBe('1')
+    expect(prepare!.run).toBe('node config/scripts/ensure-native-runtime.ts --runtime=electron')
+    expect(packageStep!.env!.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     expect(workflow.jobs.verify.needs).toContain('package_windows')
-    expect(verify.env.PACKAGE_WINDOWS).toBe('${{ needs.package_windows.result }}')
-    expect(verify.run).toContain('"$PACKAGE_WINDOWS"')
+    expect(verify!.env!.PACKAGE_WINDOWS).toBe('${{ needs.package_windows.result }}')
+    expect(verify!.run!).toContain('"$PACKAGE_WINDOWS"')
   })
 
   it('keeps the native probe event-based, scoped, and runnable in packaged Node mode', () => {

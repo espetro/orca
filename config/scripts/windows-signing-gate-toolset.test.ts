@@ -26,7 +26,7 @@ function workflowSource(name) {
 function scanSpans(source) {
   // Here-strings use different terminator rules; refusing them beats mis-pairing silently.
   expect(source, 'here-strings are not understood by this scanner').not.toMatch(/@['"]/)
-  const spans = []
+  const spans: { start: number; end: number; kind: string }[] = []
   let i = 0
   while (i < source.length) {
     const char = source[i]

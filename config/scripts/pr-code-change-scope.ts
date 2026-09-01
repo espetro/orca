@@ -235,7 +235,13 @@ export function shouldRunPrChecks(changedFiles) {
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
-export function classifyPrJobs(changedFiles) {
+/** Per-job run decision plus aggregate flags used by the PR workflow gate. */
+export type PrJobClassification = Record<(typeof PR_CHECK_JOBS)[number], boolean> & {
+  should_run: boolean
+  native_cache_changed: boolean
+}
+
+export function classifyPrJobs(changedFiles: string[]): PrJobClassification {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)

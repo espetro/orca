@@ -257,7 +257,10 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   writeFakeWindowsRegistry(projectDir, { requiresMarker: windowsRegistryRequiresMarker })
 }
 
-function writeLoadableNativeModules(projectDir, { nativeDir = null } = {}) {
+function writeLoadableNativeModules(
+  projectDir: string,
+  { nativeDir = null }: { nativeDir?: string | null } = {}
+) {
   const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
   mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
   writeFileSync(

@@ -306,7 +306,10 @@ function runInstallScript(projectDir, extraEnv = {}) {
   })
 }
 
-function writeFakeElectronPackage(projectDir, { lazyRequireMarker = null } = {}) {
+function writeFakeElectronPackage(
+  projectDir: string,
+  { lazyRequireMarker = null }: { lazyRequireMarker?: string | null } = {}
+) {
   const electronDir = join(projectDir, 'node_modules', 'electron')
   mkdirSync(electronDir, { recursive: true })
   writeFileSync(
@@ -329,14 +332,21 @@ module.exports = path.join(__dirname, 'dist', fs.readFileSync(pathFile, 'utf8'))
   )
 }
 
+type ElectronGetFixture = {
+  downloadNeverSettles?: boolean
+  downloadFailures?: number
+  downloadErrorCode?: string
+  downloadHttpStatus?: number | null
+}
+
 function writeFakeElectronGet(
-  projectDir,
+  projectDir: string,
   {
     downloadNeverSettles = false,
     downloadFailures = 0,
     downloadErrorCode = 'ECONNRESET',
     downloadHttpStatus = null
-  } = {}
+  }: ElectronGetFixture = {}
 ) {
   const getDir = join(projectDir, 'node_modules', 'electron', 'node_modules', '@electron', 'get')
   mkdirSync(getDir, { recursive: true })
@@ -375,7 +385,10 @@ exports.downloadArtifact = async function downloadArtifact(details) {
   )
 }
 
-function writeFakeExtractor(projectDir, { createExecutable }) {
+function writeFakeExtractor(
+  projectDir: string,
+  { createExecutable }: { createExecutable: boolean }
+) {
   writeFileSync(
     join(projectDir, 'fake-extractor.cjs'),
     `

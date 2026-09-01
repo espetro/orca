@@ -7,8 +7,8 @@ on:
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.ts'
       - 'config/scripts/build-windows-cli-launcher.ts'
-      - 'config/scripts/build-windows-cli-launcher.test.mjs'
-      - 'config/scripts/computer-e2e-workflow.test.mjs'
+      - 'config/scripts/build-windows-cli-launcher.test.ts'
+      - 'config/scripts/computer-e2e-workflow.test.ts'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-metrics.ts'
@@ -81,7 +81,7 @@ jobs:
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
           src/main/ssh/ssh-remote-cli-launcher.test.ts
-          config/scripts/computer-e2e-workflow.test.mjs
+          config/scripts/computer-e2e-workflow.test.ts
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-modifier-safety.test.mjs

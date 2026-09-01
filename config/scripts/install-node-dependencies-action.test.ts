@@ -2,13 +2,19 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 import { describe, expect, it } from 'vitest'
 
-const action = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
-const installScript = action.runs.steps.find((step) => step.name === 'Install dependencies').run
+const action = parseWorkflow(
+  readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
+)
+const installScript = action.runs!.steps.find((step) => step.name === 'Install dependencies')!.run!
 
-function run(command, args, options = {}) {
+function run(
+  command: string,
+  args: string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}
+) {
   return spawnSync(command, args, { encoding: 'utf8', ...options })
 }
 

@@ -376,7 +376,7 @@ jobs:
           # a wedge holds the entire run open and blocks `gh run rerun --failed`.
           # Bounded timeouts plus retries turn an unbounded hang into a fast, legible
           # failure. Set in apt.conf.d rather than on each command line so the two
-          # invocations below stay exactly as pr-workflow-parallelism.test.mjs parses
+          # invocations below stay exactly as pr-workflow-parallelism.test.ts parses
           # them. Retries are 1, not 3: a first attempt at these bounds already multiplied
           # 30s x 3 retries across every index file into a ~15 minute stall on a dead
           # mirror, which is worse than failing once and moving on.
@@ -398,7 +398,7 @@ jobs:
           # The update is already tolerant by design (see above), so bounding it just caps
           # what a dead mirror can cost before the install runs against whatever index exists.
           timeout 120 sudo apt-get update || true
-          # Why both shells on one line: pr-workflow-parallelism.test.mjs parses only the
+          # Why both shells on one line: pr-workflow-parallelism.test.ts parses only the
           # first install command in this step to prove the lane really installs them.
           timeout 300 sudo apt-get install -y zsh fish
 
@@ -685,7 +685,7 @@ jobs:
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
-          config/scripts/rebuild-native-deps.test.mjs
+          config/scripts/rebuild-native-deps.test.ts
           src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
           src/main/browser/browser-route-tcp-egress.electron.test.ts
           src/main/browser/browser-route-webrtc-egress.electron.test.ts

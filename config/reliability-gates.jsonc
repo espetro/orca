@@ -16272,11 +16272,11 @@
       "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
       "commands": [
         "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.ts"
       ],
       "testFiles": [
         "config/scripts/smoke-managed-hook-runtime-node18.ts",
-        "config/scripts/pr-workflow-parallelism.test.mjs"
+        "config/scripts/pr-workflow-parallelism.test.ts"
       ],
       "assertionRefs": [
         {
@@ -16288,7 +16288,7 @@
           ]
         },
         {
-          "file": "config/scripts/pr-workflow-parallelism.test.mjs",
+          "file": "config/scripts/pr-workflow-parallelism.test.ts",
           "assertions": [
             "PR CI builds the companions before switching to Node 18 and running the smoke oracle"
           ]

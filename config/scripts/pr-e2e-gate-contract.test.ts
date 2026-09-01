@@ -36,6 +36,9 @@ const verifyStep = prWorkflow.jobs.verify.steps.find(
 const restartSurvivalRoute = PR_E2E_SOURCE_ROUTES.find(
   (route) => route.id === 'client-hosted-browser.restart-survival'
 )
+if (restartSurvivalRoute === undefined) {
+  throw new Error('restart-survival route missing')
+}
 
 describe('restart-survival E2E routing', () => {
   // Every file below carries behavior the restart spec is the only test that exercises end to end.
@@ -497,6 +500,9 @@ describe('PR E2E gate contract', () => {
     ]
     for (const gateId of routedGateIds) {
       const route = PR_E2E_SOURCE_ROUTES.find((candidate) => candidate.id === gateId)
+      if (route === undefined) {
+        throw new Error(`route missing: ${gateId}`)
+      }
       const gate = reliabilityManifest.gates.find((candidate) => candidate.id === gateId)
       expect(route, gateId).toBeDefined()
       expect(gate, gateId).toMatchObject({ maturity: 'experimental', protection: 'partial' })

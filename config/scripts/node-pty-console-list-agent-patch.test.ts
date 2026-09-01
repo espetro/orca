@@ -9,7 +9,7 @@ const {
   patchNodePtyConsoleListAgent
 } = require('../relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs')
 const projectDir = resolve(import.meta.dirname, '..', '..')
-const cleanupDirs = []
+const cleanupDirs: string[] = []
 
 afterEach(() => {
   for (const dir of cleanupDirs.splice(0)) {
@@ -48,7 +48,7 @@ describe('Windows SSH relay node-pty console-list patch', () => {
   })
 })
 
-function writeNodePtyFixture(version, agentSource) {
+function writeNodePtyFixture(version: string, agentSource: string) {
   const root = mkdtempSync(join(projectDir, '.node-pty-console-list-patch-test-'))
   cleanupDirs.push(root)
   const nodePtyDir = join(root, 'node_modules', 'node-pty')

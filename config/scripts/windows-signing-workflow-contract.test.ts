@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 
-const readWorkflow = (relativePath) => parse(readFileSync(join(projectDir, relativePath), 'utf8'))
+const readWorkflow = (relativePath) =>
+  parseWorkflow(readFileSync(join(projectDir, relativePath), 'utf8'))
 
 describe('Windows signing workflow contract', () => {
   it('preflights SignPath module install before Windows signing side effects', () => {
@@ -43,13 +44,13 @@ describe('Windows signing workflow contract', () => {
     expect(installStep.run).toBeUndefined()
 
     const installAction = readWorkflow('.github/actions/install-signpath-module/action.yml')
-    const actionStep = installAction.runs.steps[0]
-    const installRun = actionStep.run
+    const actionStep = installAction.runs!.steps[0]!
+    const installRun = actionStep.run!
     const sleepSeconds = [...installRun.matchAll(/Start-Sleep -Seconds (\d+)/g)].map(
       ([, seconds]) => seconds
     )
 
-    expect(installAction.runs.using).toBe('composite')
+    expect(installAction.runs!.using).toBe('composite')
     expect(actionStep.shell).toBe('pwsh')
     expect(installRun).toContain(
       'if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue))'
@@ -77,12 +78,12 @@ describe('Windows signing workflow contract', () => {
 
   it('falls back to a hash-pinned SignPath nupkg when the gallery API is down', () => {
     const installAction = readWorkflow('.github/actions/install-signpath-module/action.yml')
-    const installRun = installAction.runs.steps[0].run
+    const installRun = installAction.runs!.steps[0]!.run!
 
     // Why: the gallery API 403s during Azure Front Door incidents while its CDN
     // stays up, so a pinned nupkg is the fallback. The hash pin is the only
     // integrity check on that route — losing it would let any payload install.
-    const { 'fallback-version': version, 'fallback-sha256': sha256 } = installAction.inputs
+    const { 'fallback-version': version, 'fallback-sha256': sha256 } = installAction.inputs!
     expect(version.default).toMatch(/^4\.\d+\.\d+$/)
     expect(sha256.default).toMatch(/^[0-9a-f]{64}$/)
     expect(installRun).toContain('Get-FileHash -LiteralPath $nupkg -Algorithm SHA256')
@@ -119,9 +120,9 @@ describe('Windows signing workflow contract', () => {
     expect(restoreIndex).toBeLessThan(installIndex)
 
     const restoreStep = steps[restoreIndex]
-    const restoreRun = restoreStep.run
+    const restoreRun = restoreStep.run!
 
-    expect(restoreStep.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
+    expect(restoreStep.env!.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
     expect(restoreRun).toContain('.github/actions/install-signpath-module/action.yml')
     expect(restoreRun).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
     expect(restoreRun).toContain('git checkout "$WORKFLOW_SHA" -- .github/actions')
@@ -132,8 +133,8 @@ describe('Windows signing workflow contract', () => {
     expect(steps[installIndex]['continue-on-error']).toBeUndefined()
     expect(restoreStep['continue-on-error']).toBeUndefined()
 
-    const installRun = readWorkflow('.github/actions/install-signpath-module/action.yml').runs
-      .steps[0].run
+    const installRun = readWorkflow('.github/actions/install-signpath-module/action.yml').runs!
+      .steps[0]!.run!
 
     expect(installRun).toContain('$actualHash -ne $expectedHash.ToUpperInvariant()')
     expect(installRun).toContain('throw "SHA-256 mismatch for $source')
@@ -172,7 +173,7 @@ describe('Windows signing workflow contract', () => {
     // Why fail-open: unsigned inner binaries must warn, not block, until the
     // flow is proven on a real release (issue #7785). Flip this to 'true'
     // together with the workflow env to make the gate required.
-    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
+    expect(steps[innerVerifyIndex]!.env!.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
 
     // Why: every step in the inner-signing chain must be unable to fail the
     // release — a SignPath outage or timeout falls through to today's

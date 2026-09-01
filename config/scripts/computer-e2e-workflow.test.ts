@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 
@@ -42,14 +42,14 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('triggers on computer-use shared contracts, scripts, and agent skill changes', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
-    const triggerPaths = workflow.on.pull_request.paths
+    const triggerPaths = workflow.on!.pull_request!.paths
 
     expect(triggerPaths).toEqual(
       expect.arrayContaining([
-        'config/scripts/computer-e2e-workflow.test.mjs',
+        'config/scripts/computer-e2e-workflow.test.ts',
         'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
         'config/scripts/computer-use-modifier-safety.test.mjs',
         'config/scripts/computer-use-skill-guidance.test.mjs',
@@ -68,7 +68,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('runs focused computer-use regression tests in the PR native-smoke job', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const nativeSmokeRuns = workflow.jobs['native-smoke'].steps
@@ -114,7 +114,7 @@ describe('computer-use e2e workflow', () => {
       'src/shared/remote-runtime-client.test.ts'
     ]
 
-    expect(checkout.with['persist-credentials']).toBe(false)
+    expect(checkout!.with!['persist-credentials']).toBe(false)
     expect(regressionRun).toBeTruthy()
     for (const file of expectedRegressionFiles) {
       expect(regressionRun).toContain(file)
@@ -122,7 +122,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('builds and tests the macOS helper on every trigger without hosted TCC e2e', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const job = workflow.jobs['mac-native-owner-smoke']
@@ -134,8 +134,8 @@ describe('computer-use e2e workflow', () => {
 
     expect(job.if).toBeUndefined()
     expect(job['runs-on']).toBe('macos-15')
-    expect(checkout.with['persist-credentials']).toBe(false)
-    expect(install.with['native-runtime']).toBe('electron')
+    expect(checkout!.with!['persist-credentials']).toBe(false)
+    expect(install!.with!['native-runtime']).toBe('electron')
     expect(runs).toContain('pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1')
     const cleanupRun = runs.find((run) =>
       run.includes('config/scripts/macos-computer-helper-owner-loss-processes.test.mjs')
@@ -146,7 +146,7 @@ describe('computer-use e2e workflow', () => {
     expect(runs).toContain('pnpm verify:computer-native')
     expect(runs.join('\n')).not.toContain('test:e2e:computer')
     expect(workflow.jobs.mac).toBeUndefined()
-    expect(workflow.on.pull_request.paths).toEqual(
+    expect(workflow.on!.pull_request!.paths).toEqual(
       expect.arrayContaining([
         'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs',
         'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
@@ -159,7 +159,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('uses the cached Electron dependency path for scheduled Linux and Windows e2e', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     for (const jobName of ['linux', 'windows']) {
@@ -168,8 +168,8 @@ describe('computer-use e2e workflow', () => {
       const install = job.steps.find(
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
-      expect(checkout.with['persist-credentials'], jobName).toBe(false)
-      expect(install.with['native-runtime'], jobName).toBe('electron')
+      expect(checkout!.with!['persist-credentials'], jobName).toBe(false)
+      expect(install!.with!['native-runtime'], jobName).toBe('electron')
       expect(
         job.steps.some((step) => step.uses === 'pnpm/action-setup@v6'),
         jobName
@@ -205,7 +205,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('boots the built daemon under plain Node in the PR native-smoke job after the main build', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const steps = workflow.jobs['native-smoke'].steps
@@ -222,7 +222,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('runs the Windows workspace-close daemon repro after the main build', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const steps = workflow.jobs['native-smoke'].steps
@@ -233,16 +233,16 @@ describe('computer-use e2e workflow', () => {
 
     expect(reproIndex).toBeGreaterThan(buildIndex)
     expect(steps[reproIndex].if).toBe("runner.os == 'Windows'")
-    expect(workflow.on.pull_request.paths).toContain(
+    expect(workflow.on!.pull_request!.paths).toContain(
       'config/scripts/windows-daemon-workspace-close-repro.ts'
     )
   })
 
   it('re-runs the native-smoke job when the daemon bundle graph changes', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
-    const triggerPaths = workflow.on.pull_request.paths
+    const triggerPaths = workflow.on!.pull_request!.paths
 
     expect(triggerPaths).toEqual(
       expect.arrayContaining([
@@ -256,7 +256,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('does not run computer-use e2e in PR smoke jobs', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const nativeSmokeRuns = workflow.jobs['native-smoke'].steps
@@ -267,7 +267,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('builds Electron main output before every computer-use e2e run', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
 
@@ -293,7 +293,7 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('keeps computer-use e2e in scheduled jobs only', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const nativeSmokeRuns = workflow.jobs['native-smoke'].steps
@@ -313,10 +313,10 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('runs Linux e2e on schedule without advertising hosted macOS TCC coverage', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
-    const triggerPaths = workflow.on.pull_request.paths
+    const triggerPaths = workflow.on!.pull_request!.paths
     const linuxRuns = workflow.jobs.linux.steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
@@ -337,10 +337,10 @@ describe('computer-use e2e workflow', () => {
   })
 
   it('runs every Windows computer-use e2e file in the scheduled Windows job', () => {
-    const workflow = parse(
+    const workflow = parseWorkflow(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
-    const triggerPaths = workflow.on.pull_request.paths
+    const triggerPaths = workflow.on!.pull_request!.paths
     const windowsRuns = workflow.jobs.windows.steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
