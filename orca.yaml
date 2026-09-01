@@ -1,5 +1,5 @@
 setupAgentStartupPolicy: wait-for-setup
 scripts:
   setup: |
-    node config/scripts/run-internal-dev-setup.mjs
+    node config/scripts/run-internal-dev-setup.mts
     pnpm install

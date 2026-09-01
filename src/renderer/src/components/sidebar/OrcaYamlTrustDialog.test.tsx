@@ -63,7 +63,7 @@ describe('OrcaYamlTrustDialog', () => {
       repoId: 'repo-1',
       repoName: 'orca',
       scriptKind: 'setup',
-      scriptContent: 'node config/scripts/run-internal-dev-setup.mjs\npnpm install',
+      scriptContent: 'node config/scripts/run-internal-dev-setup.mts\npnpm install',
       contentHash: 'hash-1',
       previouslyApproved: false
     }

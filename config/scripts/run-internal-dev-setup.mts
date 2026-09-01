@@ -3,7 +3,27 @@ import { accessSync, constants, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
-function isExecutable(filePath, platform, access = accessSync) {
+type SpawnSyncFn = (
+  command: string,
+  args: readonly string[],
+  options: { stdio: 'inherit'; windowsVerbatimArguments?: boolean }
+) => { status: number | null }
+type AccessSyncFn = typeof accessSync
+
+export type InternalDevSetupDeps = {
+  env?: NodeJS.ProcessEnv
+  cwd?: string
+  platform?: NodeJS.Platform
+  exists?: (path: string) => boolean
+  access?: AccessSyncFn
+  spawn?: SpawnSyncFn
+}
+
+function isExecutable(
+  filePath: string,
+  platform: NodeJS.Platform,
+  access: AccessSyncFn = accessSync
+): boolean {
   if (platform === 'win32') {
     return true
   }
@@ -16,13 +36,13 @@ function isExecutable(filePath, platform, access = accessSync) {
   }
 }
 
-function quoteWindowsArg(value) {
+function quoteWindowsArg(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
 }
 
 // Why: under a Git Bash setup runner, Orca exports ORCA_WORKTREE_PATH in MSYS form (/c/...), which
 // cmd.exe cannot resolve. This is the migration pattern for any setup script feeding a native exe.
-function posixShellPathToNativeWindowsPath(value) {
+function posixShellPathToNativeWindowsPath(value: string): string {
   const driveMatch = value.match(/^\/([A-Za-z])\/(.*)$/)
   if (driveMatch) {
     return `${driveMatch[1].toUpperCase()}:\\${driveMatch[2].replace(/\//g, '\\')}`
@@ -30,7 +50,13 @@ function posixShellPathToNativeWindowsPath(value) {
   return value
 }
 
-function spawnOptionalSetup(spawn, setupPath, worktreePath, platform, env) {
+function spawnOptionalSetup(
+  spawn: SpawnSyncFn,
+  setupPath: string,
+  worktreePath: string,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv
+): void {
   if (platform === 'win32') {
     const nativeWorktreePath = posixShellPathToNativeWindowsPath(worktreePath)
     spawn(
@@ -54,14 +80,16 @@ function spawnOptionalSetup(spawn, setupPath, worktreePath, platform, env) {
   })
 }
 
-export function runInternalDevSetup({
-  env = process.env,
-  cwd = process.cwd(),
-  platform = process.platform,
-  exists = existsSync,
-  access = accessSync,
-  spawn = spawnSync
-} = {}) {
+export function runInternalDevSetup(
+  {
+    env = process.env,
+    cwd = process.cwd(),
+    platform = process.platform,
+    exists = existsSync,
+    access = accessSync,
+    spawn = spawnSync
+  } = {} as InternalDevSetupDeps
+): number {
   const setupPath = env.ORCA_INTERNAL_DEV_SETUP?.trim()
   if (!setupPath || !exists(setupPath) || !isExecutable(setupPath, platform, access)) {
     return 0

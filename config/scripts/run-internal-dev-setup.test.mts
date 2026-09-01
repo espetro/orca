@@ -1,5 +1,6 @@
+import type { SpawnSyncReturns } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
-import { runInternalDevSetup } from './run-internal-dev-setup.mjs'
+import { runInternalDevSetup } from './run-internal-dev-setup.mts'
 
 describe('runInternalDevSetup', () => {
   it('does nothing when ORCA_INTERNAL_DEV_SETUP is unset', () => {
@@ -40,7 +41,7 @@ describe('runInternalDevSetup', () => {
   })
 
   it('runs the optional setup with the worktree path and ignores its exit status', () => {
-    const spawn = vi.fn(() => ({ status: 1 }))
+    const spawn = vi.fn((): SpawnSyncReturns<string> => ({ status: 1 }) as SpawnSyncReturns<string>)
 
     expect(
       runInternalDevSetup({
@@ -60,7 +61,7 @@ describe('runInternalDevSetup', () => {
   })
 
   it('uses cmd.exe with explicit quoting so .cmd setup shims receive paths with spaces', () => {
-    const spawn = vi.fn(() => ({ status: 0 }))
+    const spawn = vi.fn((): SpawnSyncReturns<string> => ({ status: 0 }) as SpawnSyncReturns<string>)
 
     expect(
       runInternalDevSetup({

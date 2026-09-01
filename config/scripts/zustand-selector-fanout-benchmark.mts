@@ -9,11 +9,13 @@ const MAX_MILLISECONDS_PER_WRITE = Number.parseFloat(
   process.env.ORCA_ZUSTAND_BENCH_MAX_MS_PER_WRITE ?? '5'
 )
 
-for (const [name, value] of [
+const BENCH_SETTINGS: [string, number][] = [
   ['ORCA_ZUSTAND_BENCH_SUBSCRIBERS', SUBSCRIBERS],
   ['ORCA_ZUSTAND_BENCH_WRITES', WRITES],
   ['ORCA_ZUSTAND_BENCH_MAX_MS_PER_WRITE', MAX_MILLISECONDS_PER_WRITE]
-]) {
+]
+
+for (const [name, value] of BENCH_SETTINGS) {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${name} must be positive, received ${value}`)
   }
