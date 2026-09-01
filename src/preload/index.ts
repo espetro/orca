@@ -94,7 +94,6 @@ import type {
 import type { GitHubAssignableUser, GitHubOwnerRepo } from '../shared/github/pull-request-types'
 import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
-import type { GhosttyImportPreview } from '../shared/global-settings-types'
 import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
 import type { JiraProjectStatusOrder } from '../shared/jira-types'
 import type { LinearProjectDetail } from '../shared/linear/project-types'
@@ -109,7 +108,6 @@ import type {
 } from '../shared/notification-settings-types'
 import type { OnboardingState } from '../shared/onboarding-state-types'
 import type { PersistedUIState } from '../shared/persisted-ui-state-types'
-import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
 import type { TuiAgent } from '../shared/tui-agent'
@@ -132,10 +130,6 @@ import type {
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../shared/terminal-render-desync-evidence'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
-import type {
-  WarpThemeImportPreview,
-  WarpThemeImportSource
-} from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type {
   ShellOpenExternalEditorRequest,
@@ -247,7 +241,6 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
-import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type {
   PreflightRuntimeContext,
   RefreshAgentsResult,
@@ -269,7 +262,6 @@ import {
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
 import { readBrowserClientHostIdArgument } from '../shared/browser-client-host-id-argument'
-import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
@@ -288,7 +280,7 @@ import type {
   ScopedExternalManagerUpdateRequest
 } from '../shared/external-automation-scope'
 import type { AutomationsChangedPayload } from '../shared/runtime-client-events'
-import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
+import type { KeybindingActionId } from '../shared/keybindings'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
@@ -336,6 +328,20 @@ import { petBridge } from './bridge/pet-bridge'
 import { e2eBridge, e2eResourcesBridge } from './bridge/e2e-bridge'
 import { updaterBridge } from './bridge/updater-bridge'
 import { docPreviewBridge } from './bridge/doc-preview-bridge'
+import { platformBridge, wslBridge, pwshBridge, gitBashBridge } from './bridge/platform-bridge'
+import {
+  telemetryBridge,
+  diagnosticsBridge,
+  statsBridge,
+  memoryBridge
+} from './bridge/telemetry-diagnostics-bridge'
+import { settingsBridge } from './bridge/settings-bridge'
+import { keybindingsBridge } from './bridge/keybindings-bridge'
+import {
+  claudeUsageBridge,
+  codexUsageBridge,
+  openCodeUsageBridge
+} from './bridge/usage-provider-bridges'
 import { awaitBeforeUnloadCheckpoint } from './bridge/before-unload-checkpoint'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
@@ -343,19 +349,6 @@ type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
 
-function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
-  if (process.platform !== 'linux') {
-    return null
-  }
-  if (
-    process.env.WAYLAND_DISPLAY ||
-    process.env.XDG_SESSION_TYPE?.toLowerCase() === 'wayland' ||
-    process.env.ELECTRON_OZONE_PLATFORM_HINT?.toLowerCase() === 'wayland'
-  ) {
-    return 'wayland'
-  }
-  return process.env.DISPLAY ? 'x11' : null
-}
 
 const onNativeFileDrop = (_event: Electron.IpcRendererEvent, data: NativeFileDropPayload): void => {
   for (const callback of Array.from(nativeFileDropCallbacks)) {
@@ -607,34 +600,9 @@ const api: PreloadApi = {
     orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
   } satisfies PreloadApi['orcaProfiles'],
 
-  platform: {
-    get: () => ({
-      platform: process.platform,
-      // Why: sandboxed preload cannot require node:os; Electron exposes the OS
-      // version on process.getSystemVersion when available.
-      osRelease:
-        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ??
-        '',
-      arch: process.arch,
-      // Why: these identify the default shell without probing user config files.
-      // process.env is available in the sandboxed preload; node:os is not.
-      shell: process.env.SHELL?.trim() || process.env.ComSpec?.trim() || '',
-      displayServer: getLinuxDisplayServer()
-    })
-  } satisfies PreloadApi['platform'],
 
-  wsl: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
-    listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros')
-  },
 
-  pwsh: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
-  },
 
-  gitBash: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('gitBash:isAvailable')
-  },
 
   plugins: {
     list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
@@ -1991,61 +1959,6 @@ const api: PreloadApi = {
 
 
   // Why: main validates telemetry; renderer call sites use typed wrappers.
-  telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
-    ipcRenderer.invoke('telemetry:track', name, props),
-  telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
-    ipcRenderer.invoke('telemetry:setOptIn', optedIn),
-  telemetryAcknowledgeBanner: (): Promise<void> =>
-    ipcRenderer.invoke('telemetry:acknowledgeBanner'),
-  telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
-    ipcRenderer.invoke('telemetry:getConsentState'),
-
-  // Why: bridges are deliberately loose — main type-narrows this untrusted renderer input (see telemetry-error-tracking.md).
-  diagnostics: {
-    getStatus: () => ipcRenderer.invoke('diagnostics:getStatus'),
-    collectBundle: (lookbackMinutes?: number) =>
-      ipcRenderer.invoke('diagnostics:collectBundle', lookbackMinutes),
-    openBundlePreview: (bundleSubmissionId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:openBundlePreview', bundleSubmissionId),
-    discardBundlePreview: (bundleSubmissionId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:discardBundlePreview', bundleSubmissionId),
-    uploadBundle: (bundleSubmissionId: string) =>
-      ipcRenderer.invoke('diagnostics:uploadBundle', bundleSubmissionId),
-    deleteBundle: (ticketId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:deleteBundle', ticketId)
-  },
-
-  settings: {
-    get: () => ipcRenderer.invoke('settings:get'),
-
-    // Why: blocking read for the few startup decisions (terminal side-effect authority) that can't wait for async hydration. Call sparingly.
-    getSync: () => ipcRenderer.sendSync('settings:get-sync'),
-
-    set: (args: Record<string, unknown>) => ipcRenderer.invoke('settings:set', args),
-
-    setActiveRuntimeEnvironmentPreference: (args: { environmentId: string | null }) =>
-      ipcRenderer.invoke('settings:set-active-runtime-environment-preference', args),
-
-    updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) =>
-      ipcRenderer.invoke('settings:update-pr-bot-author-override', args),
-
-    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
-
-    previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
-      ipcRenderer.invoke('settings:previewGhosttyImport'),
-
-    previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
-      ipcRenderer.invoke('settings:previewWarpThemeImport', source),
-
-    onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        updates: Record<string, unknown>
-      ): void => callback(updates)
-      ipcRenderer.on('settings:changed', listener)
-      return () => ipcRenderer.removeListener('settings:changed', listener)
-    }
-  },
 
   agentAwake: {
     getStatus: (): Promise<ComputerAwakeStatus> => ipcRenderer.invoke('agentAwake:getStatus'),
@@ -2062,25 +1975,6 @@ const api: PreloadApi = {
       ipcRenderer.invoke('localhostWorktreeLabels:register', args)
   } satisfies PreloadApi['localhostWorktreeLabels'],
 
-  keybindings: {
-    get: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:get'),
-    ensureFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:ensureFile'),
-    setAction: (args: {
-      actionId: KeybindingActionId
-      bindings: string[] | null
-    }): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:setAction', args),
-    reload: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:reload'),
-    openFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:openFile'),
-    revealFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:revealFile'),
-    onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        snapshot: KeybindingFileSnapshot
-      ): void => callback(snapshot)
-      ipcRenderer.on('keybindings:changed', listener)
-      return () => ipcRenderer.removeListener('keybindings:changed', listener)
-    }
-  },
 
   codexAccounts: {
     list: () => ipcRenderer.invoke('codexAccounts:list'),
@@ -4285,22 +4179,8 @@ const api: PreloadApi = {
     }
   } satisfies PreloadApi['ui'],
 
-  stats: {
-    getSummary: (): Promise<{
-      totalAgentsSpawned: number
-      totalPRsCreated: number
-      totalAgentTimeMs: number
-      firstEventAt: number | null
-    }> => ipcRenderer.invoke('stats:summary')
-  },
 
-  memory: {
-    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
-  },
 
-  claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),
-  codexUsage: createUsageProviderApi(ipcRenderer, 'codexUsage'),
-  openCodeUsage: createUsageProviderApi(ipcRenderer, 'openCodeUsage'),
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
@@ -4886,7 +4766,20 @@ const api: PreloadApi = {
   starNag: starNagBridge,
   pet: petBridge,
   updater: updaterBridge,
-  docPreview: docPreviewBridge
+  docPreview: docPreviewBridge,
+  platform: platformBridge,
+  wsl: wslBridge,
+  pwsh: pwshBridge,
+  gitBash: gitBashBridge,
+  ...telemetryBridge,
+  diagnostics: diagnosticsBridge,
+  settings: settingsBridge,
+  keybindings: keybindingsBridge,
+  stats: statsBridge,
+  memory: memoryBridge,
+  claudeUsage: claudeUsageBridge,
+  codexUsage: codexUsageBridge,
+  openCodeUsage: openCodeUsageBridge
 }
 
 // Expose Electron APIs via contextBridge when context-isolated, otherwise attach to the DOM global.
