@@ -7,8 +7,6 @@ import type {
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
-import type { GitHubRepoSelectorArgs } from './api/github-work-item-api'
-import type { GitHubPRFile } from '../shared/github/pull-request-types'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -85,16 +83,6 @@ import type {
 } from '../shared/filesystem-entry-types'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../shared/git-fork-sync'
 import type { GitStagingArea, GitUpstreamStatus } from '../shared/git-status-types'
-import type { GitHubCommentResult, GitHubReactionContent } from '../shared/github/comment-types'
-import type {
-  GitHubPRRefreshCandidate,
-  GitHubPRRefreshEvent,
-  GitHubPRRefreshReason
-} from '../shared/github/pull-request-refresh-types'
-import type { GitHubAssignableUser, GitHubOwnerRepo } from '../shared/github/pull-request-types'
-import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
-import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
-import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
 import type { JiraProjectStatusOrder } from '../shared/jira-types'
 import type { LinearProjectDetail } from '../shared/linear/project-types'
 import type {
@@ -196,37 +184,6 @@ import type {
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
-import type { GhAuthDiagnostic } from '../shared/github/auth-types'
-import type {
-  GetProjectViewTableResult,
-  GitHubProjectCommentMutationResult,
-  GitHubProjectMutationResult,
-  ListAccessibleProjectsResult,
-  ListAssignableUsersBySlugResult,
-  ListIssueTypesBySlugResult,
-  ListLabelsBySlugResult,
-  ListProjectViewsResult,
-  ProjectWorkItemDetailsBySlugResult,
-  ResolveProjectRefResult
-} from '../shared/github/project-result-types'
-import type {
-  AddIssueCommentBySlugArgs,
-  ClearProjectItemFieldArgs,
-  DeleteIssueCommentBySlugArgs,
-  GetProjectViewTableArgs,
-  ListAccessibleProjectsArgs,
-  ListAssignableUsersBySlugArgs,
-  ListIssueTypesBySlugArgs,
-  ListLabelsBySlugArgs,
-  ListProjectViewsArgs,
-  ProjectWorkItemDetailsBySlugArgs,
-  ResolveProjectRefArgs,
-  UpdateIssueBySlugArgs,
-  UpdateIssueCommentBySlugArgs,
-  UpdateIssueTypeBySlugArgs,
-  UpdatePullRequestBySlugArgs,
-  UpdateProjectItemFieldArgs
-} from '../shared/github/project-request-types'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
@@ -262,7 +219,6 @@ import {
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
 import { readBrowserClientHostIdArgument } from '../shared/browser-client-host-id-argument'
-import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
   AutomationDispatchRequest,
@@ -328,6 +284,8 @@ import { petBridge } from './bridge/pet-bridge'
 import { e2eBridge, e2eResourcesBridge } from './bridge/e2e-bridge'
 import { updaterBridge } from './bridge/updater-bridge'
 import { docPreviewBridge } from './bridge/doc-preview-bridge'
+import { ghBridge } from './bridge/github-bridge'
+import { ghProjectsBridge } from './bridge/github-projects-bridge'
 import { platformBridge, wslBridge, pwshBridge, gitBashBridge } from './bridge/platform-bridge'
 import {
   telemetryBridge,
@@ -1342,374 +1300,8 @@ const api: PreloadApi = {
   },
 
   gh: {
-    viewer: () => ipcRenderer.invoke('gh:viewer'),
-
-    repoSlug: (args: { repoPath: string; repoId?: string }) =>
-      ipcRenderer.invoke('gh:repoSlug', args),
-
-    repoUpstream: (args: { repoPath: string; repoId?: string }) =>
-      ipcRenderer.invoke('gh:repoUpstream', args),
-
-    prForBranch: (args: {
-      repoPath: string
-      repoId?: string
-      branch: string
-      linkedPRNumber?: number | null
-      fallbackPRNumber?: number | null
-      acceptMergedFallbackPR?: boolean
-      currentHeadOid?: string | null
-    }) => ipcRenderer.invoke('gh:prForBranch', args),
-
-    refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) =>
-      ipcRenderer.invoke('gh:refreshPRNow', args),
-
-    enqueuePRRefresh: (args: {
-      candidate: GitHubPRRefreshCandidate
-      reason: GitHubPRRefreshReason
-      priority?: number
-    }) => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
-
-    reportVisiblePRRefreshCandidates: (args: {
-      candidates: GitHubPRRefreshCandidate[]
-      generation: number
-    }) => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
-
-    onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, event: GitHubPRRefreshEvent): void =>
-        callback(event)
-      ipcRenderer.on('gh:prRefreshEvent', listener)
-      return () => ipcRenderer.removeListener('gh:prRefreshEvent', listener)
-    },
-
-    issue: (
-      args: GitHubRepoSelectorArgs & {
-        number: number
-      }
-    ) => ipcRenderer.invoke('gh:issue', args),
-
-    workItem: (
-      args: GitHubRepoSelectorArgs & {
-        number: number
-        type?: 'issue' | 'pr'
-      }
-    ) => ipcRenderer.invoke('gh:workItem', args),
-
-    workItemByOwnerRepo: (args: {
-      repoPath: string
-      repoId?: string
-      owner: string
-      repo: string
-      host?: string
-      number: number
-      type: 'issue' | 'pr'
-    }) => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
-
-    workItemDetails: (
-      args: GitHubRepoSelectorArgs & {
-        number: number
-        type?: 'issue' | 'pr'
-      }
-    ) => ipcRenderer.invoke('gh:workItemDetails', args),
-
-    notifyWorkItemMutated: (args: {
-      repoPath: string
-      repoId?: string
-      type: 'issue' | 'pr'
-      number: number
-    }): Promise<boolean> => ipcRenderer.invoke('gh:notifyWorkItemMutated', args),
-
-    prFileContents: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        prRepo?: GitHubOwnerRepo | null
-        path: string
-        oldPath?: string
-        status: GitHubPRFile['status']
-        headSha: string
-        baseSha: string
-      }
-    ) => ipcRenderer.invoke('gh:prFileContents', args),
-
-    listIssues: (args: { repoPath: string; repoId?: string; limit?: number }) =>
-      ipcRenderer.invoke('gh:listIssues', args),
-
-    createIssue: (
-      args: GitHubRepoSelectorArgs & {
-        title: string
-        body: string
-        labels?: string[]
-        assignees?: string[]
-      }
-    ): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
-
-    countWorkItems: (args: {
-      repoPath: string
-      repoId?: string
-      query?: string
-    }): Promise<number> => ipcRenderer.invoke('gh:countWorkItems', args),
-
-    listWorkItems: (args: {
-      repoPath: string
-      repoId?: string
-      limit?: number
-      query?: string
-      page?: number
-      noCache?: boolean
-    }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
-      ipcRenderer.invoke('gh:listWorkItems', args),
-
-    prChecks: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        headSha?: string
-        prRepo?: GitHubOwnerRepo | null
-        noCache?: boolean
-      }
-    ) => ipcRenderer.invoke('gh:prChecks', args),
-
-    prCheckDetails: (
-      args: GitHubRepoSelectorArgs & {
-        checkRunId?: number
-        workflowRunId?: number
-        checkName?: string
-        url?: string | null
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ) => ipcRenderer.invoke('gh:prCheckDetails', args),
-
-    rerunPRChecks: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        headSha?: string
-        failedOnly?: boolean
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true; count: number } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:rerunPRChecks', args),
-
-    prComments: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        prRepo?: GitHubOwnerRepo | null
-        noCache?: boolean
-      }
-    ) => ipcRenderer.invoke('gh:prComments', args),
-
-    setPRCommentReaction: (
-      args: GitHubRepoSelectorArgs & {
-        reactionSubjectId: string
-        content: GitHubReactionContent
-        reacted: boolean
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<boolean> => ipcRenderer.invoke('gh:setPRCommentReaction', args),
-
-    resolveReviewThread: (
-      args: GitHubRepoSelectorArgs & {
-        threadId: string
-        resolve: boolean
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
-
-    setPRFileViewed: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        prRepo?: GitHubOwnerRepo | null
-        pullRequestId: string
-        path: string
-        viewed: boolean
-      }
-    ): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
-
-    updatePRTitle: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      title: string
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args),
-
-    mergePR: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        method?: 'merge' | 'squash' | 'rebase'
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:mergePR', args),
-
-    setPRAutoMerge: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        enabled: boolean
-        method?: 'merge' | 'squash' | 'rebase'
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:setPRAutoMerge', args),
-
-    updatePRState: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        updates: { state: 'open' | 'closed' }
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:updatePRState', args),
-
-    markPRReadyForReview: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:markPRReadyForReview', args),
-
-    requestPRReviewers: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        reviewers: string[]
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:requestPRReviewers', args),
-
-    removePRReviewers: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        reviewers: string[]
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:removePRReviewers', args),
-
-    updateIssue: (
-      args: GitHubRepoSelectorArgs & {
-        number: number
-        updates: unknown
-      }
-    ): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:updateIssue', args),
-
-    addIssueComment: (
-      args: GitHubRepoSelectorArgs & {
-        number: number
-        body: string
-        type?: 'issue' | 'pr'
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
-
-    addPRReviewCommentReply: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        commentId: number
-        body: string
-        threadId?: string
-        path?: string
-        line?: number
-        prRepo?: GitHubOwnerRepo | null
-      }
-    ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
-
-    addPRReviewComment: (
-      args: GitHubRepoSelectorArgs & {
-        prNumber: number
-        prRepo?: GitHubOwnerRepo | null
-        commitId: string
-        path: string
-        line: number
-        startLine?: number
-        body: string
-      }
-    ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
-
-    listLabels: (args: GitHubRepoSelectorArgs & {}): Promise<string[]> =>
-      ipcRenderer.invoke('gh:listLabels', args),
-
-    listAssignableUsers: (args: GitHubRepoSelectorArgs & {}): Promise<GitHubAssignableUser[]> =>
-      ipcRenderer.invoke('gh:listAssignableUsers', args),
-
-    // Why: renderer owns the work-item cache; main fires this for non-origin mutations only (origin callers updated optimistically). See src/main/ipc/github.ts.
-    onWorkItemMutated: (
-      callback: (payload: {
-        repoPath: string
-        repoId?: string
-        type: 'issue' | 'pr'
-        number: number
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        payload: { repoPath: string; repoId?: string; type: 'issue' | 'pr'; number: number }
-      ): void => callback(payload)
-      ipcRenderer.on('gh:workItemMutated', listener)
-      return () => ipcRenderer.removeListener('gh:workItemMutated', listener)
-    },
-
-    checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (source: AppStarSource): Promise<boolean> =>
-      ipcRenderer.invoke('gh:starOrca', source),
-
-    // Why: rate_limit is exempt from rate-limit accounting; `force` still busts the 30s in-process cache after an expensive op.
-    rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
-      ipcRenderer.invoke('gh:rateLimit', args),
-
-    diagnoseAuth: (args?: { host?: string }): Promise<GhAuthDiagnostic> =>
-      ipcRenderer.invoke('gh:diagnoseAuth', args),
-
-    // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
-    listAccessibleProjects: (
-      args?: ListAccessibleProjectsArgs
-    ): Promise<ListAccessibleProjectsResult> =>
-      ipcRenderer.invoke('gh:listAccessibleProjects', args),
-    resolveProjectRef: (args: ResolveProjectRefArgs): Promise<ResolveProjectRefResult> =>
-      ipcRenderer.invoke('gh:resolveProjectRef', args),
-    listProjectViews: (args: ListProjectViewsArgs): Promise<ListProjectViewsResult> =>
-      ipcRenderer.invoke('gh:listProjectViews', args),
-    getProjectViewTable: (args: GetProjectViewTableArgs): Promise<GetProjectViewTableResult> =>
-      ipcRenderer.invoke('gh:getProjectViewTable', args),
-    projectWorkItemDetailsBySlug: (
-      args: ProjectWorkItemDetailsBySlugArgs
-    ): Promise<ProjectWorkItemDetailsBySlugResult> =>
-      ipcRenderer.invoke('gh:projectWorkItemDetailsBySlug', args),
-    updateProjectItemField: (
-      args: UpdateProjectItemFieldArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateProjectItemField', args),
-    clearProjectItemField: (
-      args: ClearProjectItemFieldArgs
-    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:clearProjectItemField', args),
-    updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateIssueBySlug', args),
-    updatePullRequestBySlug: (
-      args: UpdatePullRequestBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updatePullRequestBySlug', args),
-    addIssueCommentBySlug: (
-      args: AddIssueCommentBySlugArgs
-    ): Promise<GitHubProjectCommentMutationResult> =>
-      ipcRenderer.invoke('gh:addIssueCommentBySlug', args),
-    updateIssueCommentBySlug: (
-      args: UpdateIssueCommentBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateIssueCommentBySlug', args),
-    deleteIssueCommentBySlug: (
-      args: DeleteIssueCommentBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:deleteIssueCommentBySlug', args),
-    listLabelsBySlug: (args: ListLabelsBySlugArgs): Promise<ListLabelsBySlugResult> =>
-      ipcRenderer.invoke('gh:listLabelsBySlug', args),
-    listAssignableUsersBySlug: (
-      args: ListAssignableUsersBySlugArgs
-    ): Promise<ListAssignableUsersBySlugResult> =>
-      ipcRenderer.invoke('gh:listAssignableUsersBySlug', args),
-    listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs): Promise<ListIssueTypesBySlugResult> =>
-      ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
-    updateIssueTypeBySlug: (
-      args: UpdateIssueTypeBySlugArgs
-    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
+    ...ghBridge,
+    ...ghProjectsBridge
   },
 
   hostedReview: {
