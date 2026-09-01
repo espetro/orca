@@ -18,7 +18,6 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
-import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
@@ -152,8 +151,6 @@ import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-i
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
-  PreflightRuntimeContext,
-  RefreshAgentsResult,
   NativeChatAppendedPayload,
   NativeChatReadSessionResult,
   NativeChatSubscriptionFrame,
@@ -244,6 +241,7 @@ import {
   cliBridge,
   codexConfigSyncBridge
 } from './bridge/agent-accounts-bridges'
+import { preflightBridge, agentHooksBridge } from './bridge/preflight-agent-hooks-bridges'
 import {
   hostedReviewBridge,
   bitbucketBridge,
@@ -950,6 +948,8 @@ const api: PreloadApi = {
 
 
   agentAwake: agentAwakeBridge,
+  preflight: preflightBridge,
+  agentHooks: agentHooksBridge,
   codexAccounts: codexAccountsBridge,
   claudeAccounts: claudeAccountsBridge,
   cli: cliBridge,
@@ -963,33 +963,6 @@ const api: PreloadApi = {
 
 
 
-  agentHooks: {
-    claudeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:claudeStatus'),
-    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:openClaudeStatus'),
-    codexStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:codexStatus'),
-    geminiStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:geminiStatus'),
-    antigravityStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:antigravityStatus'),
-    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
-    cursorStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:cursorStatus'),
-    droidStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:droidStatus'),
-    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
-    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
-    devinStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:devinStatus'),
-    copilotStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:copilotStatus'),
-    hermesStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:hermesStatus'),
-    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus')
-  },
 
   agentTrust: {
     markTrusted: (args: {
@@ -999,46 +972,6 @@ const api: PreloadApi = {
     }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
   },
 
-  preflight: {
-    check: (args?: {
-      force?: boolean
-    }): Promise<{
-      git: { installed: boolean }
-      gh: { installed: boolean; authenticated: boolean }
-      glab?: { installed: boolean; authenticated: boolean }
-      bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-      azureDevOps?: {
-        configured: boolean
-        authenticated: boolean
-        account: string | null
-        baseUrl: string | null
-        tokenConfigured: boolean
-      }
-      gitea?: {
-        configured: boolean
-        authenticated: boolean
-        account: string | null
-        baseUrl: string | null
-        tokenConfigured: boolean
-      }
-      linear: { connected: boolean }
-    }> => ipcRenderer.invoke('preflight:check', args),
-    detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectAgents', args),
-    refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
-      ipcRenderer.invoke('preflight:refreshAgents', args),
-    detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectRemoteAgents', args),
-    detectRemoteWindowsTerminalCapabilities: (args: {
-      connectionId: string
-    }): Promise<{
-      wslAvailable: boolean
-      wslDistros: string[]
-      pwshAvailable: boolean
-      gitBashAvailable: boolean
-      hostPlatform: NodeJS.Platform | null
-    }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
-  },
 
   notifications: {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
