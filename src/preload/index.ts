@@ -20,11 +20,11 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
-import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
   AgentProviderSessionMetadata,
@@ -53,10 +53,6 @@ import type {
   HostRepoCatalogSnapshot,
   ListReposForExecutionHostArgs
 } from '../shared/host-repo-catalog-contract'
-import type {
-  HostLineageSnapshot,
-  ListDesktopLineageForHostArgs
-} from '../shared/host-lineage-contract'
 import type {
   PluginPanelActionOutcome,
   PluginPanelEntry
@@ -95,12 +91,7 @@ import type { NestedRepoScanResult } from '../shared/project-group-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
 import type { TuiAgent } from '../shared/tui-agent'
 import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
-import type {
-  WorktreeBaseStatusEvent,
-  WorktreeRemoteBranchConflictEvent
-} from '../shared/worktree/base-ref-drift-types'
 import type { WorktreeSetupLaunch } from '../shared/worktree/launch-types'
-import type { WorktreeHeadIdentity } from '../shared/worktree/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
 import type {
@@ -165,9 +156,6 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
-import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
-import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
-import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -263,6 +251,12 @@ import { uiCommandWorktreeBridge } from './bridge/ui-command-worktree-bridge'
 import { uiCommandBrowserBridge } from './bridge/ui-command-browser-bridge'
 import { uiCommandTerminalBridge } from './bridge/ui-command-terminal-bridge'
 import { uiWindowBridge } from './bridge/ui-window-bridge'
+import { worktreesBridge } from './bridge/worktrees-bridge'
+import {
+  workspaceCleanupBridge,
+  workspaceSpaceBridge,
+  workspacePortsBridge
+} from './bridge/workspace-cleanup-space-ports-bridge'
 import { gitBridge } from './bridge/git-bridge'
 import { ghBridge } from './bridge/github-bridge'
 import { ghProjectsBridge } from './bridge/github-projects-bridge'
@@ -693,552 +687,354 @@ const api: PreloadApi = {
       return () => ipcRenderer.removeListener('sparsePresets:changed', listener)
     }
   } satisfies PreloadApi['sparsePresets'],
-
-  worktrees: {
-    list: (args) => ipcRenderer.invoke('worktrees:list', args),
-    listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
-
-    listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
-
-    listKnownForExecutionHost: (args) =>
-      ipcRenderer.invoke('worktrees:listKnownForExecutionHost', args),
-
-    forgetRemovedForExecutionHost: (args) =>
-      ipcRenderer.invoke('worktrees:forgetRemovedForExecutionHost', args),
-
-    cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
-
-    listAll: () => ipcRenderer.invoke('worktrees:listAll'),
-
-    create: (args) => ipcRenderer.invoke('worktrees:create', args),
-
-    adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
-
-    onCreateProgress: (
-      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { creationId?: string; phase: 'fetching' | 'creating' }
-      ) => callback(data)
-      ipcRenderer.on('createWorktree:progress', listener)
-      return () => ipcRenderer.removeListener('createWorktree:progress', listener)
-    },
-
-    prefetchCreateBase: (args) => ipcRenderer.invoke('worktrees:prefetchCreateBase', args),
-
-    resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
-
-    resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
-
-    remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
-
-    forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),
-
-    forceDeletePreservedBranch: (args) =>
-      ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
-
-    updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
-
-    listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
-
-    listLineageForHost: (args: ListDesktopLineageForHostArgs): Promise<HostLineageSnapshot> =>
-      ipcRenderer.invoke('worktrees:listLineageForHost', args),
-
-    updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
-
-    persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
-
-    getBranchRenameFailureOutput: (args) =>
-      ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
-
-    onChanged: (
-      callback: (data: {
-        repoId: string
-        renamed?: { oldWorktreeId: string; newWorktreeId: string }
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }
-      ) => callback(data)
-      ipcRenderer.on('worktrees:changed', listener)
-      return () => ipcRenderer.removeListener('worktrees:changed', listener)
-    },
-
-    onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
-        callback(data)
-      ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
-      return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
-    },
-
-    onHeadIdentitiesChanged: (
-      callback: (data: { repoId: string; identities: WorktreeHeadIdentity[] }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { repoId: string; identities: WorktreeHeadIdentity[] }
-      ) => callback(data)
-      ipcRenderer.on('worktrees:headIdentitiesChanged', listener)
-      return () => ipcRenderer.removeListener('worktrees:headIdentitiesChanged', listener)
-    },
-
-    onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: WorktreeBaseStatusEvent) =>
-        callback(data)
-      ipcRenderer.on('worktree:baseStatus', listener)
-      return () => ipcRenderer.removeListener('worktree:baseStatus', listener)
-    },
-
-    onRemoteBranchConflict: (
-      callback: (data: WorktreeRemoteBranchConflictEvent) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: WorktreeRemoteBranchConflictEvent
-      ) => callback(data)
-      ipcRenderer.on('worktree:remoteBranchConflict', listener)
-      return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
-    }
-  } satisfies PreloadApi['worktrees'],
-
-  workspaceCleanup: {
-    scan: (args, onProgress) => {
-      if (!onProgress) {
-        return ipcRenderer.invoke('workspaceCleanup:scan', args)
-      }
-      const scanId = args?.scanId ?? crypto.randomUUID()
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        progress: WorkspaceCleanupScanProgress
-      ): void => {
-        if (progress.scanId === scanId) {
-          onProgress(progress)
-        }
-      }
-      ipcRenderer.on('workspaceCleanup:scanProgress', listener)
-      return ipcRenderer
-        .invoke('workspaceCleanup:scan', { ...args, scanId })
-        .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
-    },
-    cancelScan: (scanId) => ipcRenderer.invoke('workspaceCleanup:cancelScan', scanId),
-    getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
-    dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
-    clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
-    hasKillableLocalProcesses: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
-    beginRemovalSnapshotPruneBatch: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
-    recordRemovalSnapshotPrune: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
-    finishRemovalSnapshotPruneBatch: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
-  } satisfies PreloadApi['workspaceCleanup'],
-
-  workspaceSpace: {
-    analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
-    getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
-    cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
-    onProgress: (callback) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        progress: WorkspaceSpaceScanProgress
-      ): void => callback(progress)
-      ipcRenderer.on('workspaceSpace:progress', listener)
-      return () => ipcRenderer.removeListener('workspaceSpace:progress', listener)
-    }
-  } satisfies PreloadApi['workspaceSpace'],
-
-  workspacePorts: {
-    scan: (args) => ipcRenderer.invoke('workspacePorts:scan', args),
-    kill: (args) => ipcRenderer.invoke('workspacePorts:kill', args),
-    onAdvertisedUrlChanged: (callback) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        event: WorkspacePortAdvertisedUrlChangedEvent
-      ): void => callback(event)
-      ipcRenderer.on('workspacePorts:advertised-url-changed', listener)
-      return () => ipcRenderer.removeListener('workspacePorts:advertised-url-changed', listener)
-    }
-  } satisfies PreloadApi['workspacePorts'],
-
-  pty: {
-    spawn: (opts: {
-      cols: number
-      rows: number
-      cwd?: string
-      cwdFallback?: 'worktree'
-      env?: Record<string, string>
-      envToDelete?: string[]
-      command?: string
-      commandDelivery?: 'renderer' | 'provider'
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      startupCommandDelivery?: StartupCommandDelivery
-      connectionId?: string | null
-      worktreeId?: string
-      sessionId?: string
-      shellOverride?: string
-      projectRuntime?: ProjectExecutionRuntimeResolution
-      terminalColorQueryReplies?: { foreground?: string; background?: string }
-      // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
-      initiallyHidden?: boolean
-      // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
-      tabId?: string
-      leafId?: string
-      // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
-      telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
-    }): Promise<{
-      id: string
-      /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
-      incarnationId?: string
-      launchConfig?: SleepingAgentLaunchConfig
-      snapshot?: string
-      snapshotCols?: number
-      snapshotRows?: number
-      snapshotPrefixAnsi?: string
-      snapshotFrameAnsi?: string
-      snapshotFrameRestoreAnsi?: string
-      snapshotKittyKeyboardFlags?: number
-      snapshotTerminalOwner?: 'shell'
-      snapshotSeq?: number
-      isReattach?: boolean
-      isAlternateScreen?: boolean
-      replay?: string
-      sessionExpired?: boolean
-      coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
-      startupCwdFallback?: { kind: 'worktree'; cwd: string }
-      agentResumeUnavailable?: true
-    }> => ipcRenderer.invoke('pty:spawn', opts),
-
-    write: (id: string, data: string): void => {
-      ipcRenderer.send('pty:write', { id, data })
-    },
-    writeAccepted: (id: string, data: string): Promise<boolean> =>
-      ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-    onWriteUnavailable: (
-      callback: (payload: {
-        id: string
-        /** Set only when a durable agent-session lease refused the write; absent otherwise. */
-        agentSessionRefusal?: AgentSessionPtyWriteRefusal
-      }) => void
-    ): (() => void) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
-      ): void => callback(payload)
-      ipcRenderer.on('pty:writeUnavailable', handler)
-      return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
-    },
-
-    resize: (id: string, cols: number, rows: number): void => {
-      ipcRenderer.send('pty:resize', { id, cols, rows })
-    },
-    claimViewport: (id: string, cols: number, rows: number): void => {
-      ipcRenderer.send('pty:claimViewport', { id, cols, rows })
-    },
-
-    /** Why: measurement-only sibling of resize — keeps the runtime's restore-target baseline fresh while a mobile-fit override blocks pty:resize. Never resizes the PTY. See docs/mobile-fit-hold.md. */
-    reportGeometry: (id: string, cols: number, rows: number): void => {
-      ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
-    },
-
-    signal: (id: string, signal: string): void => {
-      ipcRenderer.send('pty:signal', { id, signal })
-    },
-
-    /** Why: Cmd/Ctrl+K clears the renderer xterm, but the PTY host keeps its own screen state and would repaint the next prompt at the stale cursor row. */
-    clearBuffer: (id: string): void => {
-      ipcRenderer.send('pty:clearBuffer', { id })
-    },
-
-    ackColdRestore: (id: string): void => {
-      ipcRenderer.send('pty:ackColdRestore', { id })
-    },
-    /** charCount is the legacy per-chunk delta; processedChars is the cumulative per-pty total (self-heals under lost ACKs). */
-    ackData: (id: string, charCount: number, processedChars?: number): void => {
-      ipcRenderer.send('pty:ackData', {
-        id,
-        charCount,
-        ...(typeof processedChars === 'number' ? { processedChars } : {})
-      })
-    },
-    /** Main requests the renderer's cumulative processed totals when delivery looks stuck on lost ACKs. */
-    onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: { requestId: number }) =>
-        callback(payload)
-      ipcRenderer.on('pty:requestDeliveryResync', listener)
-      return () => ipcRenderer.removeListener('pty:requestDeliveryResync', listener)
-    },
-    respondDeliveryResync: (payload: {
-      requestId: number
-      processedCharsByPty: Record<string, number>
-    }): void => {
-      ipcRenderer.send('pty:deliveryResyncResponse', payload)
-    },
-    /** Renderer-initiated delivery health/heal lane — rides invoke because the field wedge (v1.4.121-rc.0) kills main→renderer push while invoke stays alive. */
-    reportRendererDeliveryState: (
-      report: PtyRendererDeliveryStateReport
-    ): Promise<PtyRendererDeliveryHealthReply> =>
-      ipcRenderer.invoke('pty:reportRendererDeliveryState', report),
-    /** Live pty:data listener count — the watchdog's "listener detached" vs "channel dead" discriminator. */
-    getPtyDataListenerCount: (): number => ipcRenderer.listenerCount('pty:data'),
-    rendererDispatcherReady: (): void => {
-      ipcRenderer.send('pty:rendererDispatcherReady')
-    },
-    setActiveRendererPty: (id: string, active: boolean): void => {
-      ipcRenderer.send('pty:setActiveRendererPty', { id, active })
-    },
-    setRendererPtyVisible: (id: string, visible: boolean): void => {
-      ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
-    },
-    /** Hidden-delivery gate: hidden=true lets main DROP renderer byte delivery after model ingestion; reveal restores from the model snapshot. Fire-and-forget. */
-    setHiddenRendererPty: (id: string, hidden: boolean): void => {
-      ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
-    },
-    /** Delivery-interest signal: a renderer party needing raw bytes suppresses the hidden-delivery gate for that PTY while registered. */
-    setPtyDeliveryInterest: (id: string, interested: boolean): void => {
-      ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
-    },
-    /** Push composed terminal appearance so main's model responder can answer OSC 4/10/11/12 and DSR ?996n for hidden-gated PTYs with renderer-true values. */
-    publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
-      ipcRenderer.send('pty:terminalViewAttributes', attributes)
-    },
-
-    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
-
-    listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
-    getAuthoritativeBufferSnapshotCapabilities: (
-      ids: string[]
-    ): Promise<{ id: string; authoritative: boolean | null }[]> =>
-      ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
-    hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
-
-    getMainBufferSnapshot: (
-      id: string,
-      opts?: { scrollbackRows?: number }
-    ): Promise<{
-      data: string
-      frameRestoreAnsi?: string
-      cols: number
-      rows: number
-      cwd?: string | null
-      seq?: number
-      pendingDeliveryStartSeq?: number
-      source?: 'headless' | 'renderer'
-      alternateScreen?: boolean
-      scrollbackAnsi?: string
-      pendingEscapeTailAnsi?: string
-      kittyKeyboardFlags?: number
-      terminalOwner?: 'shell'
-    } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
-
-    getRendererDeliveryDebugSnapshot: (): Promise<{
-      pendingPtyCount: number
-      pendingChars: number
-      maxPendingCharsByPty: number
-      rendererInFlightPtyCount: number
-      rendererInFlightChars: number
-      maxRendererInFlightCharsByPty: number
-      activeRendererPtyCount: number
-      flushScheduled: boolean
-      peakPendingChars: number
-      peakMaxPendingCharsByPty: number
-      peakRendererInFlightChars: number
-      peakMaxRendererInFlightCharsByPty: number
-      ackGatedFlushSkipCount: number
-      hiddenDeliveryGatedPtyCount: number
-      hiddenDeliveryGatedVisiblePtyCount: number
-      hiddenDeliveryGatedActivePtyCount: number
-      deliveryInterestPtyCount: number
-      hiddenDeliveryDroppedChars: number
-      hiddenDeliveryDroppedChunks: number
-      pendingDroppedChars: number
-      diagnostics: PtyMainDeliveryDiagnostics
-      rendererLifecycleResetCount: number
-      lastLifecycleResetClearedChars: number
-      rendererPtyDispatcherReady: boolean
-      rendererDispatcherReadyForcedCount: number
-    }> => ipcRenderer.invoke('pty:getRendererDeliveryDebugSnapshot'),
-
-    resetRendererDeliveryDebug: (): Promise<void> =>
-      ipcRenderer.invoke('pty:resetRendererDeliveryDebug'),
-
-    /** True if the PTY's shell has child processes (a running command); false at an idle prompt. */
-    hasChildProcesses: (id: string): Promise<boolean> =>
-      ipcRenderer.invoke('pty:hasChildProcesses', { id }),
-
-    /** Return the PTY foreground process basename when available (e.g. "codex"). */
-    getForegroundProcess: (id: string): Promise<string | null> =>
-      ipcRenderer.invoke('pty:getForegroundProcess', { id }),
-    inspectProcess: (
-      id: string
-    ): Promise<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-      unavailable?: true
-    }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
-    confirmForegroundProcess: (id: string): Promise<string | null> =>
-      ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
-
-    /** Resolve a PTY's live cwd via `/proc` (Linux) or `lsof` (macOS); `''` when unknown or unresolvable. */
-    getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
-
-    /** The PTY's last APPLIED size (real winsize), or null if unknown — lets the renderer detect drift after a dropped resize and re-assert. */
-    getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
-      ipcRenderer.invoke('pty:getSize', { id }),
-
-    onData: (
-      callback: (data: {
-        id: string
-        data: string
-        seq?: number
-        rawLength?: number
-        transformed?: boolean
-        background?: boolean
-        droppedOutput?: boolean
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          id: string
-          data: string
-          seq?: number
-          rawLength?: number
-          transformed?: boolean
-          background?: boolean
-          droppedOutput?: boolean
-        }
-      ) => callback(data)
-      ipcRenderer.on('pty:data', listener)
-      return () => ipcRenderer.removeListener('pty:data', listener)
-    },
-
-    onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
-        callback(data)
-      ipcRenderer.on('pty:replay', listener)
-      return () => ipcRenderer.removeListener('pty:replay', listener)
-    },
-
-    /** Out-of-band signal that main dropped renderer-bound bytes (hidden-gate / pending cap); pane restores from the model snapshot.
-     *  NOT on pty:data — an in-band marker is ambiguous with chunks fully stripped by OSC-9999 cleaning. */
-    onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, event: PtyModelRestoreNeededEvent) =>
-        callback(event)
-      ipcRenderer.on('pty:modelRestoreNeeded', listener)
-      return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
-    },
-
-    /** Batched side-effect facts (title/bell/agent transitions) for local-main PTYs.
-     *  Per-PTY in-order; deliberately NOT synced with pty:data (terminal-side-effect-authority.md). */
-    onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>
-        callback(batch)
-      ipcRenderer.on('pty:sideEffect', listener)
-      return () => ipcRenderer.removeListener('pty:sideEffect', listener)
-    },
-
-    /** Title-only replay snapshot on (re)attach — attention facts (bells/completions) never replay. */
-    getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
-      ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
-
-    onExit: (
-      callback: (data: {
-        id: string
-        code: number
-        preserveRendererBinding?: boolean
-        /** Which lifetime of `id` died; absent when the execution host predates the field. */
-        incarnationId?: string
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          id: string
-          code: number
-          preserveRendererBinding?: boolean
-          incarnationId?: string
-        }
-      ) => callback(data)
-      ipcRenderer.on('pty:exit', listener)
-      return () => ipcRenderer.removeListener('pty:exit', listener)
-    },
-
-    onSpawned: (callback: (data: { id: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string }) => callback(data)
-      ipcRenderer.on('pty:spawned', listener)
-      return () => ipcRenderer.removeListener('pty:spawned', listener)
-    },
-
-    onSerializeBufferRequest: (
-      callback: (data: {
-        requestId: string
-        ptyId: string
-        opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
-      }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: {
-          requestId: string
-          ptyId: string
-          opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
-        }
-      ) => callback(data)
-      ipcRenderer.on('pty:serializeBuffer:request', listener)
-      return () => ipcRenderer.removeListener('pty:serializeBuffer:request', listener)
-    },
-
-    onClearBufferRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) =>
-        callback(data)
-      ipcRenderer.on('pty:clearBuffer:request', listener)
-      return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
-    },
-
-    sendSerializedBuffer: (
-      requestId: string,
-      snapshot: {
-        data: string
-        cols: number
-        rows: number
-        seq?: number
-        lastTitle?: string
-        kittyKeyboardFlags?: number
-      } | null
-    ): void => {
-      ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
-    },
-
-    // Claim serializer ownership before spawn; echo the generation token on settle/clear to prevent pane-key reuse races.
-    declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
-      ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
-
-    settlePaneSerializer: (paneKey: string, gen: number): Promise<void> =>
-      ipcRenderer.invoke('pty:settlePaneSerializer', { paneKey, gen }),
-
-    clearPendingPaneSerializer: (paneKey: string, gen: number): Promise<void> =>
-      ipcRenderer.invoke('pty:clearPendingPaneSerializer', { paneKey, gen }),
-
-    reportRendererSerializerReady: (ptyId: string): Promise<void> =>
-      ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
-
-    management: {
-      listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
-      killAll: () => ipcRenderer.invoke('pty:management:killAll'),
-      killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
-      restart: () => ipcRenderer.invoke('pty:management:restart'),
-      macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
-    }
-  },
-
-
+  worktrees: worktreesBridge,
+  workspaceCleanup: workspaceCleanupBridge,
+  workspaceSpace: workspaceSpaceBridge,
+  workspacePorts: workspacePortsBridge,
+ pty: {
+   spawn: (opts: {
+     cols: number
+     rows: number
+     cwd?: string
+     cwdFallback?: 'worktree'
+     env?: Record<string, string>
+     envToDelete?: string[]
+     command?: string
+     commandDelivery?: 'renderer' | 'provider'
+     launchConfig?: SleepingAgentLaunchConfig
+     resumeProviderSession?: AgentProviderSessionMetadata
+     launchToken?: string
+     launchAgent?: TuiAgent
+     startupCommandDelivery?: StartupCommandDelivery
+     connectionId?: string | null
+     worktreeId?: string
+     sessionId?: string
+     shellOverride?: string
+     projectRuntime?: ProjectExecutionRuntimeResolution
+     terminalColorQueryReplies?: { foreground?: string; background?: string }
+     // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
+     initiallyHidden?: boolean
+     // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
+     tabId?: string
+     leafId?: string
+     // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
+     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
+   }): Promise<{
+     id: string
+     /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
+     incarnationId?: string
+     launchConfig?: SleepingAgentLaunchConfig
+     snapshot?: string
+     snapshotCols?: number
+     snapshotRows?: number
+     snapshotPrefixAnsi?: string
+     snapshotFrameAnsi?: string
+     snapshotFrameRestoreAnsi?: string
+     snapshotKittyKeyboardFlags?: number
+     snapshotTerminalOwner?: 'shell'
+     snapshotSeq?: number
+     isReattach?: boolean
+     isAlternateScreen?: boolean
+     replay?: string
+     sessionExpired?: boolean
+     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
+     startupCwdFallback?: { kind: 'worktree'; cwd: string }
+     agentResumeUnavailable?: true
+   }> => ipcRenderer.invoke('pty:spawn', opts),
+   write: (id: string, data: string): void => {
+     ipcRenderer.send('pty:write', { id, data })
+   },
+   writeAccepted: (id: string, data: string): Promise<boolean> =>
+     ipcRenderer.invoke('pty:writeAccepted', { id, data }),
+   onWriteUnavailable: (
+     callback: (payload: {
+       id: string
+       /** Set only when a durable agent-session lease refused the write; absent otherwise. */
+       agentSessionRefusal?: AgentSessionPtyWriteRefusal
+     }) => void
+   ): (() => void) => {
+     const handler = (
+       _event: Electron.IpcRendererEvent,
+       payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
+     ): void => callback(payload)
+     ipcRenderer.on('pty:writeUnavailable', handler)
+     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
+   },
+   resize: (id: string, cols: number, rows: number): void => {
+     ipcRenderer.send('pty:resize', { id, cols, rows })
+   },
+   claimViewport: (id: string, cols: number, rows: number): void => {
+     ipcRenderer.send('pty:claimViewport', { id, cols, rows })
+   },
+   /** Why: measurement-only sibling of resize — keeps the runtime's restore-target baseline fresh while a mobile-fit override blocks pty:resize. Never resizes the PTY. See docs/mobile-fit-hold.md. */
+   reportGeometry: (id: string, cols: number, rows: number): void => {
+     ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
+   },
+   signal: (id: string, signal: string): void => {
+     ipcRenderer.send('pty:signal', { id, signal })
+   },
+   /** Why: Cmd/Ctrl+K clears the renderer xterm, but the PTY host keeps its own screen state and would repaint the next prompt at the stale cursor row. */
+   clearBuffer: (id: string): void => {
+     ipcRenderer.send('pty:clearBuffer', { id })
+   },
+   ackColdRestore: (id: string): void => {
+     ipcRenderer.send('pty:ackColdRestore', { id })
+   },
+   /** charCount is the legacy per-chunk delta; processedChars is the cumulative per-pty total (self-heals under lost ACKs). */
+   ackData: (id: string, charCount: number, processedChars?: number): void => {
+     ipcRenderer.send('pty:ackData', {
+       id,
+       charCount,
+       ...(typeof processedChars === 'number' ? { processedChars } : {})
+     })
+   },
+   /** Main requests the renderer's cumulative processed totals when delivery looks stuck on lost ACKs. */
+   onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void): (() => void) => {
+     const listener = (_event: Electron.IpcRendererEvent, payload: { requestId: number }) =>
+       callback(payload)
+     ipcRenderer.on('pty:requestDeliveryResync', listener)
+     return () => ipcRenderer.removeListener('pty:requestDeliveryResync', listener)
+   },
+   respondDeliveryResync: (payload: {
+     requestId: number
+     processedCharsByPty: Record<string, number>
+   }): void => {
+     ipcRenderer.send('pty:deliveryResyncResponse', payload)
+   },
+   /** Renderer-initiated delivery health/heal lane — rides invoke because the field wedge (v1.4.121-rc.0) kills main→renderer push while invoke stays alive. */
+   reportRendererDeliveryState: (
+     report: PtyRendererDeliveryStateReport
+   ): Promise<PtyRendererDeliveryHealthReply> =>
+     ipcRenderer.invoke('pty:reportRendererDeliveryState', report),
+   /** Live pty:data listener count — the watchdog's "listener detached" vs "channel dead" discriminator. */
+   getPtyDataListenerCount: (): number => ipcRenderer.listenerCount('pty:data'),
+   rendererDispatcherReady: (): void => {
+     ipcRenderer.send('pty:rendererDispatcherReady')
+   },
+   setActiveRendererPty: (id: string, active: boolean): void => {
+     ipcRenderer.send('pty:setActiveRendererPty', { id, active })
+   },
+   setRendererPtyVisible: (id: string, visible: boolean): void => {
+     ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
+   },
+   /** Hidden-delivery gate: hidden=true lets main DROP renderer byte delivery after model ingestion; reveal restores from the model snapshot. Fire-and-forget. */
+   setHiddenRendererPty: (id: string, hidden: boolean): void => {
+     ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
+   },
+   /** Delivery-interest signal: a renderer party needing raw bytes suppresses the hidden-delivery gate for that PTY while registered. */
+   setPtyDeliveryInterest: (id: string, interested: boolean): void => {
+     ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
+   },
+   /** Push composed terminal appearance so main's model responder can answer OSC 4/10/11/12 and DSR ?996n for hidden-gated PTYs with renderer-true values. */
+   publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
+     ipcRenderer.send('pty:terminalViewAttributes', attributes)
+   },
+   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
+     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+   listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
+   getAuthoritativeBufferSnapshotCapabilities: (
+     ids: string[]
+   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
+     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
+   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
+   getMainBufferSnapshot: (
+     id: string,
+     opts?: { scrollbackRows?: number }
+   ): Promise<{
+     data: string
+     frameRestoreAnsi?: string
+     cols: number
+     rows: number
+     cwd?: string | null
+     seq?: number
+     pendingDeliveryStartSeq?: number
+     source?: 'headless' | 'renderer'
+     alternateScreen?: boolean
+     scrollbackAnsi?: string
+     pendingEscapeTailAnsi?: string
+     kittyKeyboardFlags?: number
+     terminalOwner?: 'shell'
+   } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
+   getRendererDeliveryDebugSnapshot: (): Promise<{
+     pendingPtyCount: number
+     pendingChars: number
+     maxPendingCharsByPty: number
+     rendererInFlightPtyCount: number
+     rendererInFlightChars: number
+     maxRendererInFlightCharsByPty: number
+     activeRendererPtyCount: number
+     flushScheduled: boolean
+     peakPendingChars: number
+     peakMaxPendingCharsByPty: number
+     peakRendererInFlightChars: number
+     peakMaxRendererInFlightCharsByPty: number
+     ackGatedFlushSkipCount: number
+     hiddenDeliveryGatedPtyCount: number
+     hiddenDeliveryGatedVisiblePtyCount: number
+     hiddenDeliveryGatedActivePtyCount: number
+     deliveryInterestPtyCount: number
+     hiddenDeliveryDroppedChars: number
+     hiddenDeliveryDroppedChunks: number
+     pendingDroppedChars: number
+     diagnostics: PtyMainDeliveryDiagnostics
+     rendererLifecycleResetCount: number
+     lastLifecycleResetClearedChars: number
+     rendererPtyDispatcherReady: boolean
+     rendererDispatcherReadyForcedCount: number
+   }> => ipcRenderer.invoke('pty:getRendererDeliveryDebugSnapshot'),
+   resetRendererDeliveryDebug: (): Promise<void> =>
+     ipcRenderer.invoke('pty:resetRendererDeliveryDebug'),
+   /** True if the PTY's shell has child processes (a running command); false at an idle prompt. */
+   hasChildProcesses: (id: string): Promise<boolean> =>
+     ipcRenderer.invoke('pty:hasChildProcesses', { id }),
+   /** Return the PTY foreground process basename when available (e.g. "codex"). */
+   getForegroundProcess: (id: string): Promise<string | null> =>
+     ipcRenderer.invoke('pty:getForegroundProcess', { id }),
+   inspectProcess: (
+     id: string
+   ): Promise<{
+     foregroundProcess: string | null
+     hasChildProcesses: boolean
+     unavailable?: true
+   }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
+   confirmForegroundProcess: (id: string): Promise<string | null> =>
+     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
+   /** Resolve a PTY's live cwd via `/proc` (Linux) or `lsof` (macOS); `''` when unknown or unresolvable. */
+   getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
+   /** The PTY's last APPLIED size (real winsize), or null if unknown — lets the renderer detect drift after a dropped resize and re-assert. */
+   getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
+     ipcRenderer.invoke('pty:getSize', { id }),
+   onData: (
+     callback: (data: {
+       id: string
+       data: string
+       seq?: number
+       rawLength?: number
+       transformed?: boolean
+       background?: boolean
+       droppedOutput?: boolean
+     }) => void
+   ): (() => void) => {
+     const listener = (
+       _event: Electron.IpcRendererEvent,
+       data: {
+         id: string
+         data: string
+         seq?: number
+         rawLength?: number
+         transformed?: boolean
+         background?: boolean
+         droppedOutput?: boolean
+       }
+     ) => callback(data)
+     ipcRenderer.on('pty:data', listener)
+     return () => ipcRenderer.removeListener('pty:data', listener)
+   },
+   onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
+     const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
+       callback(data)
+     ipcRenderer.on('pty:replay', listener)
+     return () => ipcRenderer.removeListener('pty:replay', listener)
+   },
+   /** Out-of-band signal that main dropped renderer-bound bytes (hidden-gate / pending cap); pane restores from the model snapshot.
+    *  NOT on pty:data — an in-band marker is ambiguous with chunks fully stripped by OSC-9999 cleaning. */
+   onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void): (() => void) => {
+     const listener = (_event: Electron.IpcRendererEvent, event: PtyModelRestoreNeededEvent) =>
+       callback(event)
+     ipcRenderer.on('pty:modelRestoreNeeded', listener)
+     return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
+   },
+   /** Batched side-effect facts (title/bell/agent transitions) for local-main PTYs.
+    *  Per-PTY in-order; deliberately NOT synced with pty:data (terminal-side-effect-authority.md). */
+   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
+     const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>
+       callback(batch)
+     ipcRenderer.on('pty:sideEffect', listener)
+     return () => ipcRenderer.removeListener('pty:sideEffect', listener)
+   },
+   /** Title-only replay snapshot on (re)attach — attention facts (bells/completions) never replay. */
+   getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
+     ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
+   onExit: (
+     callback: (data: {
+       id: string
+       code: number
+       preserveRendererBinding?: boolean
+       /** Which lifetime of `id` died; absent when the execution host predates the field. */
+       incarnationId?: string
+     }) => void
+   ): (() => void) => {
+     const listener = (
+       _event: Electron.IpcRendererEvent,
+       data: {
+         id: string
+         code: number
+         preserveRendererBinding?: boolean
+         incarnationId?: string
+       }
+     ) => callback(data)
+     ipcRenderer.on('pty:exit', listener)
+     return () => ipcRenderer.removeListener('pty:exit', listener)
+   },
+   onSpawned: (callback: (data: { id: string }) => void): (() => void) => {
+     const listener = (_event: Electron.IpcRendererEvent, data: { id: string }) => callback(data)
+     ipcRenderer.on('pty:spawned', listener)
+     return () => ipcRenderer.removeListener('pty:spawned', listener)
+   },
+   onSerializeBufferRequest: (
+     callback: (data: {
+       requestId: string
+       ptyId: string
+       opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+     }) => void
+   ): (() => void) => {
+     const listener = (
+       _event: Electron.IpcRendererEvent,
+       data: {
+         requestId: string
+         ptyId: string
+         opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+       }
+     ) => callback(data)
+     ipcRenderer.on('pty:serializeBuffer:request', listener)
+     return () => ipcRenderer.removeListener('pty:serializeBuffer:request', listener)
+   },
+   onClearBufferRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
+     const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) =>
+       callback(data)
+     ipcRenderer.on('pty:clearBuffer:request', listener)
+     return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
+   },
+   sendSerializedBuffer: (
+     requestId: string,
+     snapshot: {
+       data: string
+       cols: number
+       rows: number
+       seq?: number
+       lastTitle?: string
+       kittyKeyboardFlags?: number
+     } | null
+   ): void => {
+     ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
+   },
+   // Claim serializer ownership before spawn; echo the generation token on settle/clear to prevent pane-key reuse races.
+   declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
+     ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
+   settlePaneSerializer: (paneKey: string, gen: number): Promise<void> =>
+     ipcRenderer.invoke('pty:settlePaneSerializer', { paneKey, gen }),
+   clearPendingPaneSerializer: (paneKey: string, gen: number): Promise<void> =>
+     ipcRenderer.invoke('pty:clearPendingPaneSerializer', { paneKey, gen }),
+   reportRendererSerializerReady: (ptyId: string): Promise<void> =>
+     ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
+   management: {
+     listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
+     killAll: () => ipcRenderer.invoke('pty:management:killAll'),
+     killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
+     restart: () => ipcRenderer.invoke('pty:management:restart'),
+     macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
+   }
+ },
 
   export: {
     htmlToPdf: (args: {
