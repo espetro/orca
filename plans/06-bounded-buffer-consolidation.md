@@ -14,18 +14,18 @@ evict-oldest", fail-closed on unmeasurable weights, onEvict fires only on capaci
 Around ten other modules hand-roll cousins of the same pattern, each with its own constants,
 ledger logic, and drift:
 
-| Module | Hand-rolled concern |
-| --- | --- |
-| `src/shared/growing-byte-buffer.ts` | byte-bounded grow/trim |
-| `src/shared/ws-outbound-backpressure-queue.ts` | bounded outbound queue |
-| `src/shared/relay-frame-buffer.ts` | bounded frame retention |
-| `src/shared/pty-retained-string-memory.ts` | retained string ledger |
-| `src/shared/string-chunk-compaction.ts` | chunk compaction with size accounting |
-| `src/shared/terminal-partial-escape-tail.ts` | bounded tail retention |
-| `src/shared/check-job-log-tail-slice.ts` | bounded log tail |
-| `src/shared/osc-title-scan-tail.ts` | bounded escape-sequence tail |
-| `src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.ts` | bounded pre-handler buffer |
-| `src/renderer/src/components/activity/activity-portal-churn-budget.ts` | churn budget |
+| Module                                                                 | Hand-rolled concern                   |
+| ---------------------------------------------------------------------- | ------------------------------------- |
+| `src/shared/growing-byte-buffer.ts`                                    | byte-bounded grow/trim                |
+| `src/shared/ws-outbound-backpressure-queue.ts`                         | bounded outbound queue                |
+| `src/shared/relay-frame-buffer.ts`                                     | bounded frame retention               |
+| `src/shared/pty-retained-string-memory.ts`                             | retained string ledger                |
+| `src/shared/string-chunk-compaction.ts`                                | chunk compaction with size accounting |
+| `src/shared/terminal-partial-escape-tail.ts`                           | bounded tail retention                |
+| `src/shared/check-job-log-tail-slice.ts`                               | bounded log tail                      |
+| `src/shared/osc-title-scan-tail.ts`                                    | bounded escape-sequence tail          |
+| `src/renderer/src/components/terminal-pane/pty-pre-handler-buffer.ts`  | bounded pre-handler buffer            |
+| `src/renderer/src/components/activity/activity-portal-churn-budget.ts` | churn budget                          |
 
 Separately, budget constants are scattered across module-local files
 (`src/shared/windows-command-line-budget.ts`, `src/shared/git-diff-transport-budget.ts`,
@@ -57,8 +57,8 @@ accumulator next to a repo that already had a bounded-map; the fix was point, no
    - `src/shared/osc-title-scan-tail.ts`
    - `src/shared/check-job-log-tail-slice.ts`
    - `src/shared/terminal-partial-escape-tail.ts`
-   Each migration is its own PR, one logical change, existing module tests prove no behavior
-   change.
+     Each migration is its own PR, one logical change, existing module tests prove no behavior
+     change.
 3. As cousins are removed, knip (`audit:dead-code`) confirms the dead exports disappear. Nothing
    new to build.
 4. Stretch (separate PR, only if the first three land cleanly): an oxlint rule modeled on

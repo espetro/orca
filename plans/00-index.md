@@ -28,16 +28,16 @@ collector still does). Doc 08 closes that loop with gates; the other docs raise 
 
 ## Doc table
 
-| Doc | Title | What | Effort | PR strategy | Module | Issues |
-| --- | --- | --- | --- | --- | --- | --- |
-| 01 | fs-opendir-scope | shared withDir/listDirSafe + oxlint import rule; migrate 11 opendir sites | S | PR now (2 PRs: helper+migration, lint rule) | shared, relay | #12895 |
-| 02 | process-supervisor | ProcessRegistry routing kills to the 3 existing termination stacks + ratchet | M | issue first, then PR | main, shared | #9530, #9138, #9141 |
-| 03 | tab-scoped-cleanup-registry | renderer TabClosed event + registerTabScopedCleanup + lint rule | M | issue first, then PR | renderer | #15241 |
-| 04 | session-memory-budget | one aggregate budget at PTY ingress + checkpoint enqueue | M | issue first | main/daemon | #16211, #11218 |
-| 05 | session-residency-dehydrate | Residency state machine; dehydrate idle detached sessions via existing disposeEmulator/rehydrate paths | M | PR after issue ping on #12728 | main/daemon | #12728, #16211 |
-| 06 | bounded-buffer-consolidation | consolidate ~10 hand-rolled buffers onto bounded-map + BoundedBuffer | M | series of small PRs | shared, renderer | hygiene |
-| 07 | process-info-service | native collector migration + TTL snapshot cache + PressureMonitor (3 PRs) | S, S-M, M | PR phases 1-2 now | memory, windows | #16905, #16211 |
-| 08 | reliability-gates | register dir-handle / process-tree / bounded-retention gates in reliability-gates.jsonc | S | issue + PR immediately | config | meta |
+| Doc | Title                        | What                                                                                                   | Effort    | PR strategy                                 | Module           | Issues              |
+| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------- | ---------------- | ------------------- |
+| 01  | fs-opendir-scope             | shared withDir/listDirSafe + oxlint import rule; migrate 11 opendir sites                              | S         | PR now (2 PRs: helper+migration, lint rule) | shared, relay    | #12895              |
+| 02  | process-supervisor           | ProcessRegistry routing kills to the 3 existing termination stacks + ratchet                           | M         | issue first, then PR                        | main, shared     | #9530, #9138, #9141 |
+| 03  | tab-scoped-cleanup-registry  | renderer TabClosed event + registerTabScopedCleanup + lint rule                                        | M         | issue first, then PR                        | renderer         | #15241              |
+| 04  | session-memory-budget        | one aggregate budget at PTY ingress + checkpoint enqueue                                               | M         | issue first                                 | main/daemon      | #16211, #11218      |
+| 05  | session-residency-dehydrate  | Residency state machine; dehydrate idle detached sessions via existing disposeEmulator/rehydrate paths | M         | PR after issue ping on #12728               | main/daemon      | #12728, #16211      |
+| 06  | bounded-buffer-consolidation | consolidate ~10 hand-rolled buffers onto bounded-map + BoundedBuffer                                   | M         | series of small PRs                         | shared, renderer | hygiene             |
+| 07  | process-info-service         | native collector migration + TTL snapshot cache + PressureMonitor (3 PRs)                              | S, S-M, M | PR phases 1-2 now                           | memory, windows  | #16905, #16211      |
+| 08  | reliability-gates            | register dir-handle / process-tree / bounded-retention gates in reliability-gates.jsonc                | S         | issue + PR immediately                      | config           | meta                |
 
 ## Recommended sequencing
 
@@ -61,14 +61,14 @@ collector still does). Doc 08 closes that loop with gates; the other docs raise 
 
 ## Maintainer contact (verified)
 
-| GitHub | Name | Role | X | Notes |
-| --- | --- | --- | --- | --- |
-| nwparker | Neil Parker | Co-founder/CTO; owns relay/SSH/PTY/terminal/session | @nwparker_ | Primary reviewer for all our targets; neil@stably.ai; invites contributor calls |
-| AmethystLiang | Jinjing Liang | CEO; i18n/editor/UI; triaged #15241 | @JinjingLiang | Amplification channel, not code review |
-| Jinwoo-H | Jinwoo Hong | Releases/CI/native builds | @jinwoohong_ | |
-| brennanb2025 | Brennan Benson | i18n/localization | @brennankb5 | Only CODEOWNERS entry |
-| tmchow | Trevin Chow | Product leader/advisor | @trevin (trev.in) | Founder circle |
-| (company) | | | @orca_build | Merge shoutouts; Discord: https://discord.gg/fzjDKHxv8Q |
+| GitHub        | Name           | Role                                                | X                 | Notes                                                                           |
+| ------------- | -------------- | --------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| nwparker      | Neil Parker    | Co-founder/CTO; owns relay/SSH/PTY/terminal/session | @nwparker\_       | Primary reviewer for all our targets; neil@stably.ai; invites contributor calls |
+| AmethystLiang | Jinjing Liang  | CEO; i18n/editor/UI; triaged #15241                 | @JinjingLiang     | Amplification channel, not code review                                          |
+| Jinwoo-H      | Jinwoo Hong    | Releases/CI/native builds                           | @jinwoohong\_     |                                                                                 |
+| brennanb2025  | Brennan Benson | i18n/localization                                   | @brennankb5       | Only CODEOWNERS entry                                                           |
+| tmchow        | Trevin Chow    | Product leader/advisor                              | @trevin (trev.in) | Founder circle                                                                  |
+| (company)     |                |                                                     | @orca_build       | Merge shoutouts; Discord: https://discord.gg/fzjDKHxv8Q                         |
 
 Engagement reality check: memory-family issues linger with little triage (#12728 and #16905
 have zero maintainer replies) and external memory PRs sat 4+ days with no human review

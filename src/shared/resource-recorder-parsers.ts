@@ -15,7 +15,7 @@ export function parsePsFootprint(stdout: string): Map<number, PsFootprintRow> {
     }
     const pid = Number(fields[0])
     const rssKb = Number(fields[1])
-    const footprintBytes = fields.length === 3 ? Number(fields[2]) : NaN
+    const footprintBytes = fields.length === 3 ? Number(fields[2]) : Number.NaN
     if (!Number.isFinite(pid) || !Number.isFinite(rssKb)) {
       continue
     }

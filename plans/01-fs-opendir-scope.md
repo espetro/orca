@@ -22,7 +22,7 @@ Five already close in a `finally` block:
 Six rely on implicit close, which only happens when the async iterator runs to completion:
 
 - `src/shared/quick-open-directory-reader.ts:31-32` is the worst case: it can throw
-  (`throwIfFileListingCancelled`, `assertQuickOpenReaddirDeadline`) *between* `opendir` and the
+  (`throwIfFileListingCancelled`, `assertQuickOpenReaddirDeadline`) _between_ `opendir` and the
   `for await` loop. That throw leaks the handle with no chance for implicit close. This is a real
   leak, not a theoretical one.
 - `src/shared/linux-proc-socket-owner-scanner.ts:11` is an async generator over a `Dir`. If the

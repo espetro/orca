@@ -11,15 +11,15 @@ The daemon retains terminal memory through six independent caps. Each cap was ch
 bound its own structure, but nothing bounds their product. A single terminal session can retain
 on the order of:
 
-| Cap | Site | Value |
-| --- | --- | --- |
-| Pending output records | `src/main/daemon/session-output-plane.ts:16` | 2MB per session (UTF-16 chars) |
-| Scrollback rows | `src/shared/terminal-scrollback-policy.ts:1-3` | 1,000 to 50,000 rows, default 5,000 |
-| Backlog chars | `src/shared/terminal-scrollback-policy.ts:33-40` | `terminalOutputBacklogCapChars` = max(2M, rows x 120), applied only to backlog |
-| Cold-restore cache | `src/main/daemon/cold-restore-payload-cache.ts:14` | 16MB aggregate |
-| Checkpoint history | `src/main/daemon/terminal-history-file-limits.ts:5` | 200MB per checkpoint (`TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES`) |
-| Output log | `src/main/daemon/terminal-history-file-limits.ts:2` | 5MB per session |
-| Restorable sessions | `src/main/daemon/terminal-history-restorable-retention.ts:1` | 10,000 sessions |
+| Cap                    | Site                                                         | Value                                                                          |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Pending output records | `src/main/daemon/session-output-plane.ts:16`                 | 2MB per session (UTF-16 chars)                                                 |
+| Scrollback rows        | `src/shared/terminal-scrollback-policy.ts:1-3`               | 1,000 to 50,000 rows, default 5,000                                            |
+| Backlog chars          | `src/shared/terminal-scrollback-policy.ts:33-40`             | `terminalOutputBacklogCapChars` = max(2M, rows x 120), applied only to backlog |
+| Cold-restore cache     | `src/main/daemon/cold-restore-payload-cache.ts:14`           | 16MB aggregate                                                                 |
+| Checkpoint history     | `src/main/daemon/terminal-history-file-limits.ts:5`          | 200MB per checkpoint (`TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES`)                 |
+| Output log             | `src/main/daemon/terminal-history-file-limits.ts:2`          | 5MB per session                                                                |
+| Restorable sessions    | `src/main/daemon/terminal-history-restorable-retention.ts:1` | 10,000 sessions                                                                |
 
 Worst case is rows x sessions x copies (pending plane, backlog, cache, checkpoint on disk). The
 only damping is accidental: most sessions do not hit every cap simultaneously. When agents do

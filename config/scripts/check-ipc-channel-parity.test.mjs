@@ -46,7 +46,10 @@ describe('ipc channel parity guard', () => {
       channels: { 'export:requestPdf': { reason: 'orphaned listener' } }
     }
     const report = computeParity(
-      [site('runtime:subscription:abc', 'preload-listen'), site('export:requestPdf', 'preload-listen')],
+      [
+        site('runtime:subscription:abc', 'preload-listen'),
+        site('export:requestPdf', 'preload-listen')
+      ],
       [site('export:requestPdf', 'main-listen')],
       allowlist
     )
@@ -59,18 +62,16 @@ describe('ipc channel parity guard', () => {
 
   it('does not exempt a renamed channel just because a similar one is allowlisted', () => {
     const allowlist = { patterns: [], channels: { 'export:requestPdf': { reason: 'orphaned' } } }
-    const report = computeParity(
-      [site('export:requestPdfTypo', 'preload-listen')],
-      [],
-      allowlist
-    )
+    const report = computeParity([site('export:requestPdfTypo', 'preload-listen')], [], allowlist)
     expect(report.preloadOnly).toHaveLength(1)
   })
 
   it('resolves quoted literals, channel constants and rejects dynamic expressions', () => {
     const constants = new Map([['DOC_PREVIEW_MINT_GRANT_CHANNEL', 'docPreview:mintGrant']])
     expect(resolveChannelArgForTest("'git:status'", constants)).toBe('git:status')
-    expect(resolveChannelArgForTest('DOC_PREVIEW_MINT_GRANT_CHANNEL', constants)).toBe('docPreview:mintGrant')
+    expect(resolveChannelArgForTest('DOC_PREVIEW_MINT_GRANT_CHANNEL', constants)).toBe(
+      'docPreview:mintGrant'
+    )
     expect(resolveChannelArgForTest('UNKNOWN_CONSTANT', constants)).toBeNull()
     expect(resolveChannelArgForTest('`git:${action}`', constants)).toBeNull()
   })
