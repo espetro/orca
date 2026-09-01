@@ -34,9 +34,9 @@ describe('release mac build workflow dispatch', () => {
     ])
 
     const completedRun = await runReleaseMacBuildWorkflow(baseOptions, {
-      fetch,
+      fetch: fetch as unknown as typeof fetch,
       now: () => Date.parse('2026-06-30T12:00:00Z'),
-      sleep: vi.fn()
+      sleep: vi.fn(async () => {})
     })
 
     expect(completedRun.conclusion).toBe('success')
@@ -82,9 +82,9 @@ describe('release mac build workflow dispatch', () => {
     ])
 
     const completedRun = await runReleaseMacBuildWorkflow(baseOptions, {
-      fetch,
+      fetch: fetch as unknown as typeof fetch,
       now: () => Date.parse('2026-06-30T12:00:05Z'),
-      sleep: vi.fn()
+      sleep: vi.fn(async () => {})
     })
 
     expect(completedRun.id).toBe(124)
@@ -110,9 +110,9 @@ describe('release mac build workflow dispatch', () => {
 
     await expect(
       runReleaseMacBuildWorkflow(baseOptions, {
-        fetch,
+        fetch: fetch as unknown as typeof fetch,
         now: () => Date.parse('2026-06-30T12:00:00Z'),
-        sleep: vi.fn()
+        sleep: vi.fn(async () => {})
       })
     ).rejects.toThrow(/concluded failure/)
   })
@@ -133,30 +133,41 @@ describe('release mac build workflow dispatch', () => {
   })
 })
 
-function createGitHubFetch(responses) {
-  const requests = []
-  const fetch = vi.fn(async (rawUrl, init) => {
-    const url = new URL(rawUrl)
-    const response = responses.shift()
-
-    if (response == null) {
-      throw new Error(`Unexpected request: ${init.method} ${rawUrl}`)
-    }
-
-    requests.push({
-      body: init.body == null ? undefined : JSON.parse(init.body),
-      method: init.method,
-      path: url.pathname,
-      query: url.searchParams
-    })
-
-    return response
-  })
-
-  return { fetch, requests }
+type RecordedRequest = {
+  body: unknown
+  method: string
+  path: string
+  query: URLSearchParams
 }
 
-function jsonResponse(status, body) {
+function createGitHubFetch(responses: unknown[]) {
+  const requests: RecordedRequest[] = []
+  const fetch = vi.fn(
+    async (rawUrl: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
+      const url = new URL(String(rawUrl))
+      const method = init.method
+      const body = typeof init.body === 'string' ? init.body : undefined
+      const response = responses.shift()
+
+      if (response == null) {
+        throw new Error(`Unexpected request: ${method} ${rawUrl}`)
+      }
+
+      requests.push({
+        body: body == null ? undefined : JSON.parse(body),
+        method: method ?? 'GET',
+        path: url.pathname,
+        query: url.searchParams
+      })
+
+      return response as Response
+    }
+  )
+
+  return { fetch: fetch as unknown as typeof fetch, requests }
+}
+
+function jsonResponse(status: number, body: unknown) {
   return {
     ok: status >= 200 && status < 300,
     status,

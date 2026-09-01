@@ -165,7 +165,7 @@ describe('orca CLI install stub', () => {
   })
 
   it('keeps the routing frontmatter identical to the guide', () => {
-    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
+    const frontmatter = (text: string) => /^---\n[\s\S]*?\n---\n/u.exec(text)![0]
 
     expect(frontmatter(readSkill(stubPath))).toBe(frontmatter(readSkill(guidePath)))
   })

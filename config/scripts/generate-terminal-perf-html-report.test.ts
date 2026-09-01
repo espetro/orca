@@ -7,7 +7,7 @@ import {
   parseHtmlReportArgs
 } from './generate-terminal-perf-html-report.mjs'
 
-const tempDirs = []
+const tempDirs: string[] = []
 
 function makeTempDir() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-html-'))
@@ -54,7 +54,7 @@ function writeReport(
 
 afterEach(() => {
   while (tempDirs.length > 0) {
-    rmSync(tempDirs.pop(), { force: true, recursive: true })
+    rmSync(tempDirs.pop()!, { force: true, recursive: true })
   }
 })
 

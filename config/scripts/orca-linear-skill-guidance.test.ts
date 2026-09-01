@@ -106,7 +106,7 @@ describe('orca-linear install stubs', () => {
     })
 
     it(`keeps the ${name} routing frontmatter identical to its guide`, () => {
-      const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
+      const frontmatter = (text: string) => /^---\n[\s\S]*?\n---\n/u.exec(text)![0]
 
       expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
         frontmatter(readFileSync(guidePath, 'utf8'))

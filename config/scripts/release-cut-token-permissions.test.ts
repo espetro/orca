@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
+import { parseWorkflow } from './github-workflow-yaml.ts'
 
 const RELEASE_WORKFLOW = '.github/workflows/release-cut.yml'
 const EXPECTED_MATRIX = {
@@ -47,10 +47,10 @@ function readWorkflow(relativePath) {
   const source = ref
     ? execFileSync('git', ['show', `${ref}:${relativePath}`], { encoding: 'utf8' })
     : readFileSync(relativePath, 'utf8')
-  return parse(source)
+  return parseWorkflow(source)
 }
 
-function normalizePermissions(permissions) {
+function normalizePermissions(permissions: unknown): Record<string, string> {
   if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
     throw new Error(`Expected an explicit permission map, received ${String(permissions)}`)
   }
@@ -59,8 +59,10 @@ function normalizePermissions(permissions) {
   )
 }
 
-function intersectPermissions(granted, requested) {
-  const rank = { none: 0, read: 1, write: 2 }
+type PermissionMap = Record<string, string>
+
+function intersectPermissions(granted: PermissionMap, requested: PermissionMap): PermissionMap {
+  const rank: Record<string, number> = { none: 0, read: 1, write: 2 }
   const scopes = new Set([...Object.keys(granted), ...Object.keys(requested)])
   return Object.fromEntries(
     [...scopes]
@@ -74,7 +76,12 @@ function intersectPermissions(granted, requested) {
   )
 }
 
-function resolveWorkflowMatrix(workflow, workflowPath, inheritedPermissions, prefix = '') {
+function resolveWorkflowMatrix(
+  workflow: ReturnType<typeof parseWorkflow>,
+  workflowPath: string,
+  inheritedPermissions?: PermissionMap,
+  prefix = ''
+): Record<string, PermissionMap> {
   const workflowPermissions = workflow.permissions
     ? normalizePermissions(workflow.permissions)
     : inheritedPermissions
@@ -103,7 +110,7 @@ function resolveWorkflowMatrix(workflow, workflowPath, inheritedPermissions, pre
   }, {})
 }
 
-function applyFault(workflow) {
+function applyFault(workflow: ReturnType<typeof parseWorkflow>) {
   if (process.env.RELEASE_CUT_PERMISSION_FAULT !== 'inherit-write') {
     return workflow
   }
@@ -112,12 +119,12 @@ function applyFault(workflow) {
   return workflow
 }
 
-function checkoutRef(job) {
+function checkoutRef(job: { steps?: { uses?: string; with?: Record<string, unknown> }[] }) {
   return job.steps?.find((step) => step.uses === 'actions/checkout@v6')?.with?.ref
 }
 
-function discoverDispatchedWorkflowPaths(workflow) {
-  const names = new Set()
+function discoverDispatchedWorkflowPaths(workflow: ReturnType<typeof parseWorkflow>): string[] {
+  const names = new Set<string>()
   for (const job of Object.values(workflow.jobs)) {
     for (const step of job.steps ?? []) {
       for (const [key, value] of Object.entries(step.env ?? {})) {
@@ -133,19 +140,19 @@ function discoverDispatchedWorkflowPaths(workflow) {
   return [...names].sort().map((name) => `.github/workflows/${name}`)
 }
 
-function discoverStandaloneReusablePaths(workflow) {
+function discoverStandaloneReusablePaths(workflow: ReturnType<typeof parseWorkflow>): string[] {
   return [
     ...new Set(
       Object.values(workflow.jobs)
         .map((job) => job.uses)
         .filter((uses) => uses?.startsWith('./.github/workflows/'))
-        .map((uses) => uses.slice(2))
+        .map((uses) => (uses as string).slice(2))
         .filter((path) => readWorkflow(path).on?.workflow_dispatch)
     )
   ].sort()
 }
 
-function releaseTagExecutionJobs(workflow) {
+function releaseTagExecutionJobs(workflow: ReturnType<typeof parseWorkflow>) {
   return Object.entries(workflow.jobs).filter(([, job]) => {
     const checkoutIndex = job.steps?.findIndex((step) => step.uses === 'actions/checkout@v6') ?? -1
     return (

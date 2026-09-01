@@ -7,7 +7,7 @@ import {
   runTerminalScalePerfReportGate
 } from './run-terminal-scale-perf-report-gate.mjs'
 
-const tempDirs = []
+const tempDirs: string[] = []
 
 function tempReportPath() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-gate-'))
@@ -15,9 +15,13 @@ function tempReportPath() {
   return join(dir, 'report.json')
 }
 
-function makeSpawnSync({ onScaleRun, scaleStatus = 0 } = {}) {
-  const calls = []
-  const spawnSyncImpl = vi.fn((command, args, options) => {
+type GateSpawnFixture = { onScaleRun?: () => void; scaleStatus?: number }
+
+type GateSpawnCall = { args: string[]; command: string; options: Record<string, unknown> }
+
+function makeSpawnSync({ onScaleRun, scaleStatus = 0 }: GateSpawnFixture = {}) {
+  const calls: GateSpawnCall[] = []
+  const spawnSyncImpl = vi.fn((command: string, args: string[], options) => {
     calls.push({ args, command, options })
     if (args[0] === 'config/scripts/run-terminal-scale-perf-e2e.mjs') {
       onScaleRun?.()
@@ -31,7 +35,7 @@ function makeSpawnSync({ onScaleRun, scaleStatus = 0 } = {}) {
 
 afterEach(() => {
   while (tempDirs.length > 0) {
-    rmSync(tempDirs.pop(), { force: true, recursive: true })
+    rmSync(tempDirs.pop()!, { force: true, recursive: true })
   }
 })
 
@@ -87,7 +91,7 @@ describe('run-terminal-scale-perf-report-gate', () => {
       '--grep',
       '25 ACK-backpressured real PTYs'
     ])
-    expect(calls[0].options.env.ORCA_TEST_MARKER).toBe('1')
+    expect((calls[0].options.env as Record<string, string>).ORCA_TEST_MARKER).toBe('1')
     expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
     expect(calls[2].args).toEqual([
       'config/scripts/check-terminal-perf-report-budgets.mjs',

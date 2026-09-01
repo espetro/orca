@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = 'config/scripts/summarize-terminal-perf-report.mjs'
-const tempDirs = []
+const tempDirs: string[] = []
 
 function writeReport() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-summary-'))
@@ -43,7 +43,7 @@ function writeReport() {
 
 afterEach(() => {
   while (tempDirs.length > 0) {
-    rmSync(tempDirs.pop(), { force: true, recursive: true })
+    rmSync(tempDirs.pop()!, { force: true, recursive: true })
   }
 })
 
