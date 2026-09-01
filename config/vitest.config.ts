@@ -1,7 +1,15 @@
+import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
-const windowsTestWorkerOptions = process.platform === 'win32' ? { maxWorkers: 4 } : {}
+// Why: cap at cpus-1 (except win32 keeps a low fixed count) to reduce per-worker import cost without starving the machine.
+const testWorkerOptions =
+  process.platform === 'win32'
+    ? { minWorkers: 4, maxWorkers: 4 }
+    : (() => {
+        const workers = Math.max(1, availableParallelism() - 1)
+        return { minWorkers: workers, maxWorkers: workers }
+      })()
 
 export default defineConfig({
   define: {
@@ -37,6 +45,6 @@ export default defineConfig({
     testTimeout: 30_000,
     // Why: Windows process and shell startup are slower under full-suite load;
     // macOS/Linux keep Vitest's default worker parallelism.
-    ...windowsTestWorkerOptions
+    ...testWorkerOptions
   }
 })
