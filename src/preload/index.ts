@@ -1,23 +1,12 @@
 /* eslint-disable max-lines -- Why: preload is the audited renderer/Electron IPC contract; co-locating the surface eases security and type-drift review. */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { preloadE2EConfig } from './e2e-config'
-import type { ResourceDump } from '../shared/resource-recorder-types'
 import { glApi } from './gitlab'
 import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
-import {
-  DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
-  DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
-  DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
-  DOC_PREVIEW_MINT_GRANT_CHANNEL,
-  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
-  type DocPreviewFailure
-} from '../shared/doc-preview-scheme'
-import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { GitHubRepoSelectorArgs } from './api/github-work-item-api'
 import type { GitHubPRFile } from '../shared/github/pull-request-types'
 import type { AppIdentity } from '../shared/app-identity'
@@ -120,13 +109,11 @@ import type {
 } from '../shared/notification-settings-types'
 import type { OnboardingState } from '../shared/onboarding-state-types'
 import type { PersistedUIState } from '../shared/persisted-ui-state-types'
-import type { CustomPet } from '../shared/pet-types'
 import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
 import type { TuiAgent } from '../shared/tui-agent'
 import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
-import type { UpdateStatus } from '../shared/update-status-types'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -314,7 +301,6 @@ import type {
 import type { AiVaultSessionTitlesArgs } from '../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
-import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
@@ -340,48 +326,22 @@ import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
 } from '../shared/localhost-worktree-labels'
-import type {
-  CrashReportBreadcrumbData,
-  CrashReportCopyDiagnosticsArgs,
-  CrashReportSubmitArgs,
-  CrashReportSubmitResult,
-  ReactErrorBoundaryReportArgs,
-  ReactErrorBoundaryReportResult
-} from '../shared/crash-reporting'
-import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
-import type { RendererProcessMemory } from '../shared/renderer-process-memory'
-import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
-import { readRendererProcessMemory } from './renderer-process-memory-reader'
-import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
-import {
-  prepareAndInvokeAppRestart,
-  prepareAndInvokeUpdaterInstall,
-  registerRendererRestartIpcRelays
-} from './renderer-restart-wiring'
+import { prepareAndInvokeAppRestart } from './renderer-restart-wiring'
 import { speechBridge } from './bridge/speech-bridge'
 import { mobileBridge } from './bridge/mobile-bridge'
-
-// Why: the sync checkpoint only stages; this joins its durable write so a
-// navigating path can abort instead of losing the staged session.
-async function awaitBeforeUnloadCheckpoint(): Promise<void> {
-  const result = (await ipcRenderer.invoke('app:await-before-unload-checkpoint')) as {
-    ok?: unknown
-  }
-  if (result?.ok !== true) {
-    throw new Error('Failed to persist renderer state before unload.')
-  }
-}
+import { feedbackBridge } from './bridge/feedback-bridge'
+import { crashReportsBridge } from './bridge/crash-reports-bridge'
+import { starNagBridge } from './bridge/star-nag-bridge'
+import { petBridge } from './bridge/pet-bridge'
+import { e2eBridge, e2eResourcesBridge } from './bridge/e2e-bridge'
+import { updaterBridge } from './bridge/updater-bridge'
+import { docPreviewBridge } from './bridge/doc-preview-bridge'
+import { awaitBeforeUnloadCheckpoint } from './bridge/before-unload-checkpoint'
 
 type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
-const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
-  window,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-)
-
-registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
 
 function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
   if (process.platform !== 'linux') {
@@ -1402,35 +1362,7 @@ const api: PreloadApi = {
     }
   },
 
-  feedback: {
-    submit: (args: {
-      feedback: string
-      submitAnonymously?: boolean
-      githubLogin: string | null
-      githubEmail: string | null
-      images?: { contentType: string; data: Uint8Array }[]
-    }): Promise<
-      { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
-    > => ipcRenderer.invoke('feedback:submit', args)
-  },
 
-  crashReports: {
-    getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
-    getLatestReport: () => ipcRenderer.invoke('crashReports:getLatestReport'),
-    dismiss: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:dismiss', args),
-    recordRendererError: (
-      args: ReactErrorBoundaryReportArgs
-    ): Promise<ReactErrorBoundaryReportResult> =>
-      ipcRenderer.invoke('crashReports:recordRendererError', args),
-    recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }): void =>
-      ipcRenderer.send('crashReports:recordBreadcrumb', args),
-    submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
-      ipcRenderer.invoke('crashReports:submit', args),
-    copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
-      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
-    readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics(),
-    readProcessMemory: (): Promise<RendererProcessMemory | null> => readRendererProcessMemory()
-  },
 
   export: {
     htmlToPdf: (args: {
@@ -2057,35 +1989,6 @@ const api: PreloadApi = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
-  starNag: {
-    onShow: (
-      callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }
-      ): void => callback(payload)
-      ipcRenderer.on('star-nag:show', listener)
-      return () => ipcRenderer.removeListener('star-nag:show', listener)
-    },
-    onHide: (callback: () => void): (() => void) => {
-      const listener = (): void => callback()
-      ipcRenderer.on('star-nag:hide', listener)
-      return () => ipcRenderer.removeListener('star-nag:hide', listener)
-    },
-    dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
-    later: (): Promise<void> => ipcRenderer.invoke('star-nag:later'),
-    complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
-    disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
-    openWeb: (): Promise<void> => ipcRenderer.invoke('star-nag:openWeb'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starOrca'),
-    forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow'),
-    agentValueMoment: (): Promise<
-      { status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }
-    > => ipcRenderer.invoke('star-nag:agentValueMoment'),
-    showAgentValueMoment: (): Promise<void> => ipcRenderer.invoke('star-nag:showAgentValueMoment'),
-    onboardingCompleted: (): Promise<void> => ipcRenderer.invoke('star-nag:onboardingCompleted')
-  },
 
   // Why: main validates telemetry; renderer call sites use typed wrappers.
   telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
@@ -2667,14 +2570,6 @@ const api: PreloadApi = {
     }
   },
 
-  pet: {
-    import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),
-    importPetBundle: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:importPetBundle'),
-    read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('pet:read', id, fileName, kind),
-    delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
-      ipcRenderer.invoke('pet:delete', id, fileName, kind)
-  },
 
   browser: {
     onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
@@ -3233,57 +3128,6 @@ const api: PreloadApi = {
     }
   } satisfies PreloadApi['remoteWorkspace'],
 
-  updater: {
-    getStatus: () => ipcRenderer.invoke('updater:getStatus'),
-    getVersion: () => ipcRenderer.invoke('updater:getVersion'),
-    check: (options) => ipcRenderer.invoke('updater:check', options),
-    download: () => ipcRenderer.invoke('updater:download'),
-    dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
-    dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
-    getLinuxPackageInstallInstructions: () =>
-      ipcRenderer.invoke('updater:getLinuxPackageInstallInstructions'),
-    showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
-    listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
-    quitAndInstall: (): Promise<void> =>
-      prepareAndInvokeUpdaterInstall(
-        window,
-        updaterQuitAbortRelay,
-        () => ipcRenderer.invoke('updater:quitAndInstall'),
-        awaitBeforeUnloadCheckpoint
-      ),
-
-    onStatus: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
-      ipcRenderer.on('updater:status', listener)
-      return () => ipcRenderer.removeListener('updater:status', listener)
-    },
-    onClearDismissal: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('updater:clearDismissal', listener)
-      return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
-    }
-  } satisfies PreloadApi['updater'],
-
-  docPreview: {
-    mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
-      ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
-    revokeGrant: (grantId: string): Promise<boolean> =>
-      ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
-    authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
-      ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
-    onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
-        callback(payload)
-      ipcRenderer.on(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
-      return () => ipcRenderer.removeListener(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
-    },
-    onLoadFailure: (callback: (payload: DocPreviewFailure) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewFailure): void =>
-        callback(payload)
-      ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
-      return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
-    }
-  },
 
   notebook: {
     runPythonCell: (args: {
@@ -4951,21 +4795,8 @@ const api: PreloadApi = {
     }
   },
 
-  e2e: {
-    getConfig: () => preloadE2EConfig
-  },
-
-  // Only present in e2e-mode builds: feeds the renderer __orcaE2E__ resource bridge.
-  ...(preloadE2EConfig.exposeStore
-    ? {
-        resources: {
-          dump: (): Promise<ResourceDump> => ipcRenderer.invoke('resources:dump'),
-          mark: (name: string): void => {
-            void ipcRenderer.invoke('resources:mark', name)
-          }
-        }
-      }
-    : {}),
+  e2e: e2eBridge,
+  resources: e2eResourcesBridge,
 
 
   agentStatus: {
@@ -5049,7 +4880,13 @@ const api: PreloadApi = {
     }
   },
   speech: speechBridge,
-  mobile: mobileBridge
+  mobile: mobileBridge,
+  feedback: feedbackBridge,
+  crashReports: crashReportsBridge,
+  starNag: starNagBridge,
+  pet: petBridge,
+  updater: updaterBridge,
+  docPreview: docPreviewBridge
 }
 
 // Expose Electron APIs via contextBridge when context-isolated, otherwise attach to the DOM global.
