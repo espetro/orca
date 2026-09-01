@@ -5,7 +5,14 @@ import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './status'
 
+import { gitFixtureExecOptions } from './git-fixture-environment'
+
 const tempRoots: string[] = []
+
+// Why: code under test spawns git with ambient env; a dev machine's global
+// excludesFile hides fixture files from status and breaks assertions.
+process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+process.env.GIT_CONFIG_SYSTEM = '/dev/null'
 const globNamedFile = '[k]eep.log'
 const globMatchedFile = 'keep.log'
 
@@ -16,20 +23,24 @@ function gitLiteralPathspec(filePath: string): string {
 async function createRepoWithGlobNamedFiles(): Promise<string> {
   const repo = await mkdtemp(path.join(tmpdir(), 'orca-status-pathspec-'))
   tempRoots.push(repo)
-  execFileSync('git', ['init', '-q'], { cwd: repo })
-  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
-  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
+  execFileSync('git', ['init', '-q'], gitFixtureExecOptions(repo))
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], gitFixtureExecOptions(repo))
+  execFileSync('git', ['config', 'user.name', 'Test User'], gitFixtureExecOptions(repo))
   await writeFile(path.join(repo, globNamedFile), 'selected')
   await writeFile(path.join(repo, globMatchedFile), 'keep')
-  execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
-  execFileSync('git', ['commit', '-q', '-m', 'initial'], { cwd: repo })
+  execFileSync(
+    'git',
+    ['add', gitLiteralPathspec(globNamedFile), globMatchedFile],
+    gitFixtureExecOptions(repo)
+  )
+  execFileSync('git', ['commit', '-q', '-m', 'initial'], gitFixtureExecOptions(repo))
   await writeFile(path.join(repo, globNamedFile), 'selected modified')
   await writeFile(path.join(repo, globMatchedFile), 'keep modified')
   return repo
 }
 
 function gitNames(repo: string, args: string[]): string[] {
-  const stdout = execFileSync('git', args, { cwd: repo, encoding: 'utf8' })
+  const stdout = execFileSync('git', args, gitFixtureExecOptions(repo))
   return stdout.split(/\r?\n/).filter(Boolean)
 }
 
@@ -58,7 +69,11 @@ describe('git status pathspec literals', () => {
 
   it('unstages a tracked path with Git glob characters as one literal path', async () => {
     const repo = await createRepoWithGlobNamedFiles()
-    execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
+    execFileSync(
+      'git',
+      ['add', gitLiteralPathspec(globNamedFile), globMatchedFile],
+      gitFixtureExecOptions(repo)
+    )
 
     await unstageFile(repo, globNamedFile)
 
@@ -68,7 +83,11 @@ describe('git status pathspec literals', () => {
 
   it('bulk unstages tracked paths with Git glob characters as literal paths', async () => {
     const repo = await createRepoWithGlobNamedFiles()
-    execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
+    execFileSync(
+      'git',
+      ['add', gitLiteralPathspec(globNamedFile), globMatchedFile],
+      gitFixtureExecOptions(repo)
+    )
 
     await bulkUnstageFiles(repo, [globNamedFile])
 

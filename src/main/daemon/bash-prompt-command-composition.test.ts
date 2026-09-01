@@ -29,7 +29,17 @@ function runInteractiveBash(
     {
       input,
       encoding: 'utf8',
-      env: { ...process.env, HOME: tempHome, ORCA_SHELL_FEATURES: 'ready', TERM: 'xterm' },
+      env: {
+        ...process.env,
+        HOME: tempHome,
+        ORCA_SHELL_FEATURES: 'ready',
+        TERM: 'xterm',
+        // Why: macOS's /bin/bash prints a zsh deprecation banner in interactive
+        // shells, and Apple-Terminal rc hooks print "Saving session..." noise
+        // (which trips the nounset assertions); scrub both at the source.
+        BASH_SILENCE_DEPRECATION_WARNING: '1',
+        TERM_PROGRAM: ''
+      },
       timeout: 5000
     }
   )

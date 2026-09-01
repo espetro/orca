@@ -4,11 +4,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parsePorcelainV1Records } from './porcelain-v1-records'
+import { gitFixtureExecOptions } from './git-fixture-environment'
 
 const tempRoots: string[] = []
 
+// Why: code under test spawns git with ambient env; a dev machine's global
+// excludesFile hides fixture files from status and breaks assertions.
+process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+process.env.GIT_CONFIG_SYSTEM = '/dev/null'
+
 const git = (args: string[], cwd: string): string =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  execFileSync('git', args, gitFixtureExecOptions(cwd))
 
 function createRepo(): string {
   const repo = mkdtempSync(join(tmpdir(), 'orca-porcelain-v1-'))
