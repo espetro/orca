@@ -8,6 +8,10 @@ import type { UiWindowApi } from '../api/ui-window-api'
 
 const browserFindSubscriptions = createBrowserFindSubscriptions()
 
+ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
+  browserFindSubscriptions.dispatch(source)
+})
+
 // Command/event dispatch members of the ui merged contract.
 export const uiCommandWorktreeBridge: Pick<
   Merged<UiCommandEventApi & UiWindowApi>,
