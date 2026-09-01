@@ -1,0 +1,22 @@
+{
+  // Allowlist for the IPC channel parity guard (config/scripts/check-ipc-channel-parity.mjs).
+  // "channels" entries are exact channel names that fail preload<->main parity today.
+  // Each entry must carry a justification; entries are meant to be removed when the
+  // underlying gap is fixed (either register a handler/sender or drop the orphan side).
+  // "patterns" are regexes for dynamically built channels (template literals etc.)
+  // that a static scan cannot pair up.
+  "patterns": [
+    {
+      "_comment": "Per-subscription reply channels built from a desktop-<uuid> id in preload/runtime subscriptions; main replies on the subscribed request channel instead.",
+      "pattern": "^runtime:subscription:"
+    }
+  ],
+  "channels": {
+    "export:requestPdf": {
+      "reason": "Orphaned preload listener: no main-process sender exists anywhere. Kept so the gate lands green; remove when the listener or its sender is deleted."
+    },
+    "ui:closeSessionTab": {
+      "reason": "Orphaned preload listener: the runtime notifier path relays via 'ui:sessionTabCloseRequest' (session-tab-close-request-relay.ts) instead of this channel. Remove when the dead listener is dropped."
+    }
+  }
+}
