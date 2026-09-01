@@ -18,6 +18,9 @@ const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
   (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
 )
 
+// Default OFF; flip per build with ORCA_REACT_COMPILER_ENABLED=1.
+const reactCompilerEnabled = process.env.ORCA_REACT_COMPILER_ENABLED === '1'
+
 // Regex form: Rolldown's native binding rejects function-form external, and
 // the output-contract test asserts this pattern's match behavior directly.
 const EXTERNAL_MAIN_MODULE_PATTERN = new RegExp(
@@ -296,7 +299,7 @@ export const electronViteConfig: UserConfig = {
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react({ compiler: reactCompilerEnabled }), tailwindcss()],
     worker: {
       format: 'es'
     },
