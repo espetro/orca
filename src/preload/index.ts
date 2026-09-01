@@ -18,6 +18,8 @@ import {
   type DocPreviewFailure
 } from '../shared/doc-preview-scheme'
 import type { DocPreviewGrantRequest } from './api/doc-preview-api'
+import type { GitHubRepoSelectorArgs } from './api/github-work-item-api'
+import type { GitHubPRFile } from '../shared/github/pull-request-types'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -80,6 +82,11 @@ import type {
 } from '../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
+import type {
+  BrowserCaptureSelectionScreenshotArgs,
+  BrowserExtractHoverArgs,
+  BrowserSetGrabModeArgs
+} from '../shared/browser-grab-types'
 import type { BrowserViewportOverride } from '../shared/browser-workspace-types'
 import type {
   BrowserWebAuthnAccountRequest,
@@ -213,7 +220,6 @@ import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github/auth-types'
-import type { TaskSourceContext } from '../shared/task-source-context'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -559,8 +565,9 @@ ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
 })
 
 // Custom APIs for renderer
-const api = {
+const api: PreloadApi = {
   app: {
+    awaitBeforeUnloadCheckpoint: () => awaitBeforeUnloadCheckpoint(),
     getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
@@ -689,11 +696,8 @@ const api = {
       pluginKey: string
       panelId: string
     }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
-    invokeCommand: (args: {
-      pluginKey: string
-      commandId: string
-      args?: unknown
-    }): Promise<unknown> => ipcRenderer.invoke('plugins:invokeCommand', args),
+    invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
+      ipcRenderer.invoke('plugins:invokeCommand', args),
     panelAction: (args: {
       sessionToken: string
       action: string
@@ -1447,12 +1451,12 @@ const api = {
   },
 
   gh: {
-    viewer: (): Promise<unknown> => ipcRenderer.invoke('gh:viewer'),
+    viewer: () => ipcRenderer.invoke('gh:viewer'),
 
-    repoSlug: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
+    repoSlug: (args: { repoPath: string; repoId?: string }) =>
       ipcRenderer.invoke('gh:repoSlug', args),
 
-    repoUpstream: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
+    repoUpstream: (args: { repoPath: string; repoId?: string }) =>
       ipcRenderer.invoke('gh:repoUpstream', args),
 
     prForBranch: (args: {
@@ -1463,21 +1467,21 @@ const api = {
       fallbackPRNumber?: number | null
       acceptMergedFallbackPR?: boolean
       currentHeadOid?: string | null
-    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
+    }) => ipcRenderer.invoke('gh:prForBranch', args),
 
-    refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
+    refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) =>
       ipcRenderer.invoke('gh:refreshPRNow', args),
 
     enqueuePRRefresh: (args: {
       candidate: GitHubPRRefreshCandidate
       reason: GitHubPRRefreshReason
       priority?: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
+    }) => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
 
     reportVisiblePRRefreshCandidates: (args: {
       candidates: GitHubPRRefreshCandidate[]
       generation: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
+    }) => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
 
     onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, event: GitHubPRRefreshEvent): void =>
@@ -1486,20 +1490,18 @@ const api = {
       return () => ipcRenderer.removeListener('gh:prRefreshEvent', listener)
     },
 
-    issue: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      number: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:issue', args),
+    issue: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+      }
+    ) => ipcRenderer.invoke('gh:issue', args),
 
-    workItem: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      number: number
-      type?: 'issue' | 'pr'
-    }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
+    workItem: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        type?: 'issue' | 'pr'
+      }
+    ) => ipcRenderer.invoke('gh:workItem', args),
 
     workItemByOwnerRepo: (args: {
       repoPath: string
@@ -1509,15 +1511,14 @@ const api = {
       host?: string
       number: number
       type: 'issue' | 'pr'
-    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
+    }) => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
 
-    workItemDetails: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      number: number
-      type?: 'issue' | 'pr'
-    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
+    workItemDetails: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        type?: 'issue' | 'pr'
+      }
+    ) => ipcRenderer.invoke('gh:workItemDetails', args),
 
     notifyWorkItemMutated: (args: {
       repoPath: string
@@ -1526,31 +1527,29 @@ const api = {
       number: number
     }): Promise<boolean> => ipcRenderer.invoke('gh:notifyWorkItemMutated', args),
 
-    prFileContents: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-      path: string
-      oldPath?: string
-      status: string
-      headSha: string
-      baseSha: string
-    }): Promise<unknown> => ipcRenderer.invoke('gh:prFileContents', args),
+    prFileContents: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+        path: string
+        oldPath?: string
+        status: GitHubPRFile['status']
+        headSha: string
+        baseSha: string
+      }
+    ) => ipcRenderer.invoke('gh:prFileContents', args),
 
-    listIssues: (args: { repoPath: string; repoId?: string; limit?: number }): Promise<unknown[]> =>
+    listIssues: (args: { repoPath: string; repoId?: string; limit?: number }) =>
       ipcRenderer.invoke('gh:listIssues', args),
 
-    createIssue: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      title: string
-      body: string
-      labels?: string[]
-      assignees?: string[]
-    }): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
+    createIssue: (
+      args: GitHubRepoSelectorArgs & {
+        title: string
+        body: string
+        labels?: string[]
+        assignees?: string[]
+      }
+    ): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
 
     countWorkItems: (args: {
       repoPath: string
@@ -1568,76 +1567,69 @@ const api = {
     }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
       ipcRenderer.invoke('gh:listWorkItems', args),
 
-    prChecks: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      headSha?: string
-      prRepo?: GitHubOwnerRepo | null
-      noCache?: boolean
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:prChecks', args),
+    prChecks: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        headSha?: string
+        prRepo?: GitHubOwnerRepo | null
+        noCache?: boolean
+      }
+    ) => ipcRenderer.invoke('gh:prChecks', args),
 
-    prCheckDetails: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      checkRunId?: number
-      workflowRunId?: number
-      checkName?: string
-      url?: string | null
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<unknown> => ipcRenderer.invoke('gh:prCheckDetails', args),
+    prCheckDetails: (
+      args: GitHubRepoSelectorArgs & {
+        checkRunId?: number
+        workflowRunId?: number
+        checkName?: string
+        url?: string | null
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => ipcRenderer.invoke('gh:prCheckDetails', args),
 
-    rerunPRChecks: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      headSha?: string
-      failedOnly?: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true; count: number } | { ok: false; error: string }> =>
+    rerunPRChecks: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        headSha?: string
+        failedOnly?: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true; count: number } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:rerunPRChecks', args),
 
-    prComments: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-      noCache?: boolean
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:prComments', args),
+    prComments: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+        noCache?: boolean
+      }
+    ) => ipcRenderer.invoke('gh:prComments', args),
 
-    setPRCommentReaction: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      reactionSubjectId: string
-      content: GitHubReactionContent
-      reacted: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<boolean> => ipcRenderer.invoke('gh:setPRCommentReaction', args),
+    setPRCommentReaction: (
+      args: GitHubRepoSelectorArgs & {
+        reactionSubjectId: string
+        content: GitHubReactionContent
+        reacted: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<boolean> => ipcRenderer.invoke('gh:setPRCommentReaction', args),
 
-    resolveReviewThread: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      threadId: string
-      resolve: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
+    resolveReviewThread: (
+      args: GitHubRepoSelectorArgs & {
+        threadId: string
+        resolve: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
 
-    setPRFileViewed: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-      pullRequestId: string
-      path: string
-      viewed: boolean
-    }): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
+    setPRFileViewed: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+        pullRequestId: string
+        path: string
+        viewed: boolean
+      }
+    ): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
 
     updatePRTitle: (args: {
       repoPath: string
@@ -1647,122 +1639,106 @@ const api = {
       prRepo?: GitHubOwnerRepo | null
     }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args),
 
-    mergePR: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      method?: 'merge' | 'squash' | 'rebase'
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    mergePR: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        method?: 'merge' | 'squash' | 'rebase'
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
 
-    setPRAutoMerge: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      enabled: boolean
-      method?: 'merge' | 'squash' | 'rebase'
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    setPRAutoMerge: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        enabled: boolean
+        method?: 'merge' | 'squash' | 'rebase'
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:setPRAutoMerge', args),
 
-    updatePRState: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      updates: { state: 'open' | 'closed' }
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    updatePRState: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        updates: { state: 'open' | 'closed' }
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:updatePRState', args),
 
-    markPRReadyForReview: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    markPRReadyForReview: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:markPRReadyForReview', args),
 
-    requestPRReviewers: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      reviewers: string[]
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    requestPRReviewers: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        reviewers: string[]
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:requestPRReviewers', args),
 
-    removePRReviewers: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      reviewers: string[]
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    removePRReviewers: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        reviewers: string[]
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:removePRReviewers', args),
 
-    updateIssue: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      number: number
-      updates: unknown
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    updateIssue: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        updates: unknown
+      }
+    ): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:updateIssue', args),
 
-    addIssueComment: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      number: number
-      body: string
-      type?: 'issue' | 'pr'
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
+    addIssueComment: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        body: string
+        type?: 'issue' | 'pr'
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
 
-    addPRReviewCommentReply: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      commentId: number
-      body: string
-      threadId?: string
-      path?: string
-      line?: number
-      prRepo?: GitHubOwnerRepo | null
-    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
+    addPRReviewCommentReply: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        commentId: number
+        body: string
+        threadId?: string
+        path?: string
+        line?: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
 
-    addPRReviewComment: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-      commitId: string
-      path: string
-      line: number
-      startLine?: number
-      body: string
-    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
+    addPRReviewComment: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+        commitId: string
+        path: string
+        line: number
+        startLine?: number
+        body: string
+      }
+    ): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
 
-    listLabels: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-    }): Promise<string[]> => ipcRenderer.invoke('gh:listLabels', args),
+    listLabels: (args: GitHubRepoSelectorArgs & {}): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listLabels', args),
 
-    listAssignableUsers: (args: {
-      repoPath: string
-      repoId?: string
-      sourceContext?: TaskSourceContext | null
-    }): Promise<GitHubAssignableUser[]> => ipcRenderer.invoke('gh:listAssignableUsers', args),
+    listAssignableUsers: (args: GitHubRepoSelectorArgs & {}): Promise<GitHubAssignableUser[]> =>
+      ipcRenderer.invoke('gh:listAssignableUsers', args),
 
     // Why: renderer owns the work-item cache; main fires this for non-origin mutations only (origin callers updated optimistically). See src/main/ipc/github.ts.
     onWorkItemMutated: (
@@ -1846,13 +1822,12 @@ const api = {
   },
 
   hostedReview: {
-    forBranch: (args: HostedReviewForBranchArgs): Promise<unknown> =>
+    forBranch: (args: HostedReviewForBranchArgs) =>
       ipcRenderer.invoke('hostedReview:forBranch', args),
-    getCreationEligibility: (args: unknown): Promise<unknown> =>
+    getCreationEligibility: (args) =>
       ipcRenderer.invoke('hostedReview:getCreationEligibility', args),
-    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args),
-    createStacked: (args: unknown): Promise<unknown> =>
-      ipcRenderer.invoke('hostedReview:createStacked', args)
+    create: (args) => ipcRenderer.invoke('hostedReview:create', args),
+    createStacked: (args) => ipcRenderer.invoke('hostedReview:createStacked', args)
   },
 
   // Why: GitLab bindings live in `./gitlab` so `gl.*` changes don't conflict on every upstream sync of this central file.
@@ -1870,40 +1845,32 @@ const api = {
 
     disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
 
-    status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
+    status: () => ipcRenderer.invoke('bitbucket:status')
   },
 
   linear: {
-    connect: (args: {
-      apiKey: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:connect', args),
+    connect: (args: { apiKey: string }) => ipcRenderer.invoke('linear:connect', args),
 
     disconnect: (args?: { workspaceId?: string }): Promise<void> =>
       ipcRenderer.invoke('linear:disconnect', args),
 
-    selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
+    selectWorkspace: (args: { workspaceId: string }) =>
       ipcRenderer.invoke('linear:selectWorkspace', args),
 
-    status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
+    status: () => ipcRenderer.invoke('linear:status'),
 
-    testConnection: (args?: {
-      workspaceId?: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+    testConnection: (args?: { workspaceId?: string }) =>
       ipcRenderer.invoke('linear:testConnection', args),
 
-    searchIssues: (args: {
-      query: string
-      limit?: number
-      workspaceId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('linear:searchIssues', args),
+    searchIssues: (args: { query: string; limit?: number; workspaceId?: string }) =>
+      ipcRenderer.invoke('linear:searchIssues', args),
 
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: string
       attributeFilter?: unknown
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listIssues', args),
+    }) => ipcRenderer.invoke('linear:listIssues', args),
 
     createIssue: (args: {
       teamId: string
@@ -1921,7 +1888,7 @@ const api = {
       | { ok: false; error: string }
     > => ipcRenderer.invoke('linear:createIssue', args),
 
-    getIssue: (args: { id: string; workspaceId?: string }): Promise<unknown> =>
+    getIssue: (args: { id: string; workspaceId?: string }) =>
       ipcRenderer.invoke('linear:getIssue', args),
 
     updateIssue: (args: {
@@ -1938,18 +1905,17 @@ const api = {
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('linear:addIssueComment', args),
 
-    issueComments: (args: { issueId: string; workspaceId?: string }): Promise<unknown[]> =>
+    issueComments: (args: { issueId: string; workspaceId?: string }) =>
       ipcRenderer.invoke('linear:issueComments', args),
 
-    listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:listTeams', args),
+    listTeams: (args?: { workspaceId?: string }) => ipcRenderer.invoke('linear:listTeams', args),
 
     listProjects: (args?: {
       query?: string
       limit?: number
       workspaceId?: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listProjects', args),
+    }) => ipcRenderer.invoke('linear:listProjects', args),
 
     createProject: (args: {
       name: string
@@ -1966,7 +1932,7 @@ const api = {
     }): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> =>
       ipcRenderer.invoke('linear:createProject', args),
 
-    getProject: (args: { id: string; workspaceId: string; force?: boolean }): Promise<unknown> =>
+    getProject: (args: { id: string; workspaceId: string; force?: boolean }) =>
       ipcRenderer.invoke('linear:getProject', args),
 
     listProjectIssues: (args: {
@@ -1974,43 +1940,43 @@ const api = {
       limit?: number
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listProjectIssues', args),
+    }) => ipcRenderer.invoke('linear:listProjectIssues', args),
 
     listCustomViews: (args: {
       model: string
       limit?: number
       workspaceId?: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViews', args),
+    }) => ipcRenderer.invoke('linear:listCustomViews', args),
 
     getCustomView: (args: {
       viewId: string
       model: string
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:getCustomView', args),
+    }) => ipcRenderer.invoke('linear:getCustomView', args),
 
     listCustomViewIssues: (args: {
       viewId: string
       limit?: number
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewIssues', args),
+    }) => ipcRenderer.invoke('linear:listCustomViewIssues', args),
 
     listCustomViewProjects: (args: {
       viewId: string
       limit?: number
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewProjects', args),
+    }) => ipcRenderer.invoke('linear:listCustomViewProjects', args),
 
-    teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
+    teamStates: (args: { teamId: string; workspaceId?: string }) =>
       ipcRenderer.invoke('linear:teamStates', args),
 
-    teamLabels: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
+    teamLabels: (args: { teamId: string; workspaceId?: string }) =>
       ipcRenderer.invoke('linear:teamLabels', args),
 
-    teamMembers: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
+    teamMembers: (args: { teamId: string; workspaceId?: string }) =>
       ipcRenderer.invoke('linear:teamMembers', args)
   },
 
@@ -2020,30 +1986,21 @@ const api = {
       email: string
       apiToken: string
       authType?: 'cloud' | 'server'
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:connect', args),
+    }) => ipcRenderer.invoke('jira:connect', args),
 
     disconnect: (args?: { siteId?: string }): Promise<void> =>
       ipcRenderer.invoke('jira:disconnect', args),
 
-    selectSite: (args: { siteId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('jira:selectSite', args),
+    selectSite: (args: { siteId: string }) => ipcRenderer.invoke('jira:selectSite', args),
 
-    status: (): Promise<unknown> => ipcRenderer.invoke('jira:status'),
+    status: () => ipcRenderer.invoke('jira:status'),
 
-    readStatus: (): Promise<unknown> => ipcRenderer.invoke('jira:readStatus'),
+    readStatus: () => ipcRenderer.invoke('jira:readStatus'),
 
-    testConnection: (args?: {
-      siteId?: string
-    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:testConnection', args),
+    testConnection: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:testConnection', args),
 
-    searchIssues: (args: {
-      jql: string
-      limit?: number
-      siteId?: string
-      requestId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:searchIssues', args),
+    searchIssues: (args: { jql: string; limit?: number; siteId?: string; requestId?: string }) =>
+      ipcRenderer.invoke('jira:searchIssues', args),
     cancelSearchIssues: (args: { requestId: string }): Promise<void> =>
       ipcRenderer.invoke('jira:cancelSearchIssues', args),
 
@@ -2051,16 +2008,12 @@ const api = {
       filter?: 'assigned' | 'reported' | 'all' | 'done'
       limit?: number
       siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listIssues', args),
+    }) => ipcRenderer.invoke('jira:listIssues', args),
 
-    getIssue: (args: { key: string; siteId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('jira:getIssue', args),
+    getIssue: (args: { key: string; siteId?: string }) => ipcRenderer.invoke('jira:getIssue', args),
 
-    lookupIssueSummary: (args: {
-      key: string
-      siteId: string
-      requestId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('jira:lookupIssueSummary', args),
+    lookupIssueSummary: (args: { key: string; siteId: string; requestId?: string }) =>
+      ipcRenderer.invoke('jira:lookupIssueSummary', args),
     cancelIssueSummary: (args: { requestId: string }): Promise<void> =>
       ipcRenderer.invoke('jira:cancelIssueSummary', args),
 
@@ -2089,31 +2042,23 @@ const api = {
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('jira:addIssueComment', args),
 
-    issueComments: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
+    issueComments: (args: { key: string; siteId?: string }) =>
       ipcRenderer.invoke('jira:issueComments', args),
 
-    listProjects: (args?: { siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listProjects', args),
+    listProjects: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:listProjects', args),
 
-    listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }): Promise<unknown[]> =>
+    listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) =>
       ipcRenderer.invoke('jira:listIssueTypes', args),
 
-    listCreateFields: (args: {
-      projectIdOrKey: string
-      issueTypeId: string
-      siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listCreateFields', args),
+    listCreateFields: (args: { projectIdOrKey: string; issueTypeId: string; siteId?: string }) =>
+      ipcRenderer.invoke('jira:listCreateFields', args),
 
-    listPriorities: (args?: { siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listPriorities', args),
+    listPriorities: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:listPriorities', args),
 
-    listAssignableUsers: (args: {
-      key: string
-      query?: string
-      siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
+    listAssignableUsers: (args: { key: string; query?: string; siteId?: string }) =>
+      ipcRenderer.invoke('jira:listAssignableUsers', args),
 
-    listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
+    listTransitions: (args: { key: string; siteId?: string }) =>
       ipcRenderer.invoke('jira:listTransitions', args),
     getProjectStatusOrder: (args: {
       projectKey: string
@@ -2163,34 +2108,31 @@ const api = {
 
   // Why: bridges are deliberately loose — main type-narrows this untrusted renderer input (see telemetry-error-tracking.md).
   diagnostics: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:getStatus'),
-    collectBundle: (lookbackMinutes?: number): Promise<unknown> =>
+    getStatus: () => ipcRenderer.invoke('diagnostics:getStatus'),
+    collectBundle: (lookbackMinutes?: number) =>
       ipcRenderer.invoke('diagnostics:collectBundle', lookbackMinutes),
     openBundlePreview: (bundleSubmissionId: string): Promise<void> =>
       ipcRenderer.invoke('diagnostics:openBundlePreview', bundleSubmissionId),
     discardBundlePreview: (bundleSubmissionId: string): Promise<void> =>
       ipcRenderer.invoke('diagnostics:discardBundlePreview', bundleSubmissionId),
-    uploadBundle: (bundleSubmissionId: string): Promise<unknown> =>
+    uploadBundle: (bundleSubmissionId: string) =>
       ipcRenderer.invoke('diagnostics:uploadBundle', bundleSubmissionId),
     deleteBundle: (ticketId: string): Promise<void> =>
       ipcRenderer.invoke('diagnostics:deleteBundle', ticketId)
   },
 
   settings: {
-    get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
+    get: () => ipcRenderer.invoke('settings:get'),
 
     // Why: blocking read for the few startup decisions (terminal side-effect authority) that can't wait for async hydration. Call sparingly.
-    getSync: (): unknown => ipcRenderer.sendSync('settings:get-sync'),
+    getSync: () => ipcRenderer.sendSync('settings:get-sync'),
 
-    set: (args: Record<string, unknown>): Promise<unknown> =>
-      ipcRenderer.invoke('settings:set', args),
+    set: (args: Record<string, unknown>) => ipcRenderer.invoke('settings:set', args),
 
-    setActiveRuntimeEnvironmentPreference: (args: {
-      environmentId: string | null
-    }): Promise<unknown> =>
+    setActiveRuntimeEnvironmentPreference: (args: { environmentId: string | null }) =>
       ipcRenderer.invoke('settings:set-active-runtime-environment-preference', args),
 
-    updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }): Promise<unknown> =>
+    updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) =>
       ipcRenderer.invoke('settings:update-pr-bot-author-override', args),
 
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
@@ -2247,20 +2189,17 @@ const api = {
   },
 
   codexAccounts: {
-    list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
-    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+    list: () => ipcRenderer.invoke('codexAccounts:list'),
+    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
       ipcRenderer.invoke('codexAccounts:add', args),
-    reauthenticate: (args: {
-      accountId: string
-      activateIfSelectionWasEmpty?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:reauthenticate', args),
-    remove: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:remove', args),
+    reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
+      ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),
     select: (args: {
       accountId: string | null
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
-    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args),
+    }) => ipcRenderer.invoke('codexAccounts:select', args),
     listStalePanes: (args: {
       ptyIds: string[]
     }): Promise<
@@ -2278,20 +2217,19 @@ const api = {
   },
 
   claudeAccounts: {
-    list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
-    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+    list: () => ipcRenderer.invoke('claudeAccounts:list'),
+    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
       ipcRenderer.invoke('claudeAccounts:add', args),
     cancelPendingLogin: (): Promise<boolean> =>
       ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
-    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
+    reauthenticate: (args: { accountId: string }) =>
       ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
-    remove: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:remove', args),
+    remove: (args: { accountId: string }) => ipcRenderer.invoke('claudeAccounts:remove', args),
     select: (args: {
       accountId: string | null
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
-    }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
+    }) => ipcRenderer.invoke('claudeAccounts:select', args)
   },
 
   cli: {
@@ -2578,9 +2516,11 @@ const api = {
   },
 
   macosTccPrompts: {
-    onThreshold: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown): void =>
-        callback(payload)
+    onThreshold: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { promptCount: number }
+      ): void => callback(payload)
       ipcRenderer.on('macosTccPrompts:threshold', listener)
       return () => ipcRenderer.removeListener('macosTccPrompts:threshold', listener)
     },
@@ -2594,20 +2534,19 @@ const api = {
   },
 
   developerPermissions: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('developerPermissions:getStatus'),
-    request: (args: { id: string }): Promise<unknown> =>
-      ipcRenderer.invoke('developerPermissions:request', args),
+    getStatus: () => ipcRenderer.invoke('developerPermissions:getStatus'),
+    request: (args: { id: string }) => ipcRenderer.invoke('developerPermissions:request', args),
     openSettings: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('developerPermissions:openSettings', args),
-    testLocalNetworkConnection: (args: { host: string; port: number }): Promise<unknown> =>
+    testLocalNetworkConnection: (args: { host: string; port: number }) =>
       ipcRenderer.invoke('developerPermissions:testLocalNetworkConnection', args)
   },
 
   computerUsePermissions: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
-    openSetup: (args?: { id?: string }): Promise<unknown> =>
+    getStatus: () => ipcRenderer.invoke('computerUsePermissions:getStatus'),
+    openSetup: (args?: { id?: string }) =>
       ipcRenderer.invoke('computerUsePermissions:openSetup', args),
-    reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
+    reset: () => ipcRenderer.invoke('computerUsePermissions:reset')
   },
 
   shell: {
@@ -3032,27 +2971,18 @@ const api = {
     cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:cancelDownload', args),
 
-    setGrabMode: (args: {
-      browserPageId: string
-      enabled: boolean
-    }): Promise<{ ok: true } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('browser:setGrabMode', args),
+    setGrabMode: (args: BrowserSetGrabModeArgs) => ipcRenderer.invoke('browser:setGrabMode', args),
 
-    awaitGrabSelection: (args: { browserPageId: string; opId: string }): Promise<unknown> =>
+    awaitGrabSelection: (args: { browserPageId: string; opId: string }) =>
       ipcRenderer.invoke('browser:awaitGrabSelection', args),
 
     cancelGrab: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:cancelGrab', args),
 
-    captureSelectionScreenshot: (args: {
-      browserPageId: string
-      rect: { x: number; y: number; width: number; height: number }
-    }): Promise<{ ok: true; screenshot: unknown } | { ok: false; reason: string }> =>
+    captureSelectionScreenshot: (args: BrowserCaptureSelectionScreenshotArgs) =>
       ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
 
-    extractHoverPayload: (args: {
-      browserPageId: string
-    }): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> =>
+    extractHoverPayload: (args: BrowserExtractHoverArgs) =>
       ipcRenderer.invoke('browser:extractHoverPayload', args),
 
     onGrabModeToggle: (callback: (browserPageId: string) => void): (() => void) => {
@@ -3073,8 +3003,7 @@ const api = {
       return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
     },
 
-    sessionListProfiles: (): Promise<unknown[]> =>
-      ipcRenderer.invoke('browser:session:listProfiles'),
+    sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
 
     prepareSshWorkspacePartition: (args: {
       targetId: string
@@ -3087,47 +3016,33 @@ const api = {
       scope: 'default' | 'isolated' | 'imported'
       label: string
       userAgentMode?: 'clean' | 'native'
-    }): Promise<unknown> => ipcRenderer.invoke('browser:session:createProfile', args),
+    }) => ipcRenderer.invoke('browser:session:createProfile', args),
 
     sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:session:deleteProfile', args),
 
-    sessionImportCookies: (args: {
-      profileId: string
-    }): Promise<
-      { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
-    > => ipcRenderer.invoke('browser:session:importCookies', args),
+    sessionImportCookies: (args: { profileId: string }) =>
+      ipcRenderer.invoke('browser:session:importCookies', args),
 
     sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
       ipcRenderer.invoke('browser:session:resolvePartition', args),
 
-    sessionDetectBrowsers: (): Promise<unknown[]> =>
-      ipcRenderer.invoke('browser:session:detectBrowsers'),
+    sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
 
-    sessionDetectBrowsersForClientHost: (args: {
-      environmentId: string
-    }): Promise<unknown[] | null> =>
+    sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
       ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
 
-    sessionImportFromBrowser: (args: {
-      profileId: string
-      browserFamily: string
-    }): Promise<
-      { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
-    > => ipcRenderer.invoke('browser:session:importFromBrowser', args),
+    sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
+      ipcRenderer.invoke('browser:session:importFromBrowser', args),
 
     sessionImportFromBrowserForClientHost: (args: {
       environmentId: string
       profileId: string
       browserFamily: string
       browserProfile?: string
-    }): Promise<
-      { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string } | null
-    > => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+    }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
 
-    sessionClientRouteImportSources: (args: {
-      environmentId: string
-    }): Promise<Record<string, unknown>> =>
+    sessionClientRouteImportSources: (args: { environmentId: string }) =>
       ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
 
     sessionClearDefaultCookies: (): Promise<boolean> =>
@@ -3237,20 +3152,11 @@ const api = {
   },
 
   hooks: {
-    check: (args: {
-      repoId: string
-      hostId?: ExecutionHostId
-    }): Promise<{
-      status?: 'ok' | 'error'
-      hasHooks: boolean
-      hooks: unknown
-      mayNeedUpdate: boolean
-    }> => ipcRenderer.invoke('hooks:check', args),
+    check: (args: { repoId: string; hostId?: ExecutionHostId }) =>
+      ipcRenderer.invoke('hooks:check', args),
 
-    inspectSetupScriptImports: (args: {
-      repoId: string
-      hostId?: ExecutionHostId
-    }): Promise<unknown[]> => ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
+    inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>
+      ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
 
     createIssueCommandRunner: (args: {
       repoId: string
@@ -3616,7 +3522,7 @@ const api = {
       reuseLineStats?: boolean
       branchLineTotalMergeBase?: string
       requestToken?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+    }) => ipcRenderer.invoke('git:status', args),
     cancelStatus: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('git:cancelStatus', args),
     setStatusUpstreamRefWatch: (args: {
@@ -3632,7 +3538,7 @@ const api = {
       submodulePath: string
       connectionId?: string
       area?: GitStagingArea
-    }): Promise<unknown> => ipcRenderer.invoke('git:submoduleStatus', args),
+    }) => ipcRenderer.invoke('git:submoduleStatus', args),
     checkIgnored: (args: {
       worktreePath: string
       paths: string[]
@@ -3645,7 +3551,7 @@ const api = {
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
-    conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
+    conflictOperation: (args: { worktreePath: string; connectionId?: string }) =>
       ipcRenderer.invoke('git:conflictOperation', args),
     abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('git:abortMerge', args),
@@ -3657,17 +3563,11 @@ const api = {
       staged: boolean
       compareAgainstHead?: boolean
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
-    branchCompare: (args: {
-      worktreePath: string
-      baseRef: string
-      connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
-    commitCompare: (args: {
-      worktreePath: string
-      commitId: string
-      connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:commitCompare', args),
+    }) => ipcRenderer.invoke('git:diff', args),
+    branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
+      ipcRenderer.invoke('git:branchCompare', args),
+    commitCompare: (args: { worktreePath: string; commitId: string; connectionId?: string }) =>
+      ipcRenderer.invoke('git:commitCompare', args),
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
@@ -3711,7 +3611,7 @@ const api = {
       filePath: string
       oldPath?: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
+    }) => ipcRenderer.invoke('git:branchDiff', args),
     commitDiff: (args: {
       worktreePath: string
       commitOid: string
@@ -3719,7 +3619,7 @@ const api = {
       filePath: string
       oldPath?: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:commitDiff', args),
+    }) => ipcRenderer.invoke('git:commitDiff', args),
     commit: (args: {
       worktreePath: string
       message: string
@@ -3733,12 +3633,12 @@ const api = {
       sourceControlAiResolvedParams?: unknown
       sourceControlAi?: unknown
       agentCmdOverrides?: Record<string, string>
-    }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
+    }) => ipcRenderer.invoke('git:generateCommitMessage', args),
     discoverCommitMessageModels: (args: {
       agentId: string
       worktreePath?: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
+    }) => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
     cancelGenerateCommitMessage: (args: {
       worktreePath: string
       connectionId?: string
@@ -3757,7 +3657,7 @@ const api = {
       sourceControlAiResolvedParams?: unknown
       sourceControlAi?: unknown
       agentCmdOverrides?: Record<string, string>
-    }): Promise<unknown> => ipcRenderer.invoke('git:generatePullRequestFields', args),
+    }) => ipcRenderer.invoke('git:generatePullRequestFields', args),
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string
       connectionId?: string
@@ -4568,17 +4468,16 @@ const api = {
   openCodeUsage: createUsageProviderApi(ipcRenderer, 'openCodeUsage'),
 
   aiVault: {
-    listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:listSessions', args),
-    resolveSessionTitles: (args: AiVaultSessionTitlesArgs): Promise<unknown> =>
+    listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
+    resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
       ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
     cancelListSessions: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('aiVault:cancelListSessions', args),
-    prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs): Promise<unknown> =>
+    prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
       ipcRenderer.invoke('aiVault:prepareSessionResume', args),
-    listSubagentSessions: (args: AiVaultSubagentListArgs): Promise<unknown> =>
+    listSubagentSessions: (args: AiVaultSubagentListArgs) =>
       ipcRenderer.invoke('aiVault:listSubagentSessions', args),
-    getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs): Promise<unknown> =>
+    getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) =>
       ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
     deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
       ipcRenderer.invoke('aiVault:deleteSession', args),
@@ -5332,6 +5231,5 @@ if (process.contextIsolated) {
   }
 } else {
   window.electron = electronAPI
-  // @ts-expect-error (define in dts)
   window.api = api
 }
