@@ -8,7 +8,6 @@ import type {
 } from '../shared/skill-delete-contract'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
-import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
@@ -19,9 +18,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
-import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
-import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
@@ -240,6 +237,13 @@ import { uiCommandWorktreeBridge } from './bridge/ui-command-worktree-bridge'
 import { uiCommandBrowserBridge } from './bridge/ui-command-browser-bridge'
 import { uiCommandTerminalBridge } from './bridge/ui-command-terminal-bridge'
 import { uiWindowBridge } from './bridge/ui-window-bridge'
+import {
+  agentAwakeBridge,
+  codexAccountsBridge,
+  claudeAccountsBridge,
+  cliBridge,
+  codexConfigSyncBridge
+} from './bridge/agent-accounts-bridges'
 import {
   hostedReviewBridge,
   bitbucketBridge,
@@ -944,81 +948,21 @@ const api: PreloadApi = {
 
   // Why: main validates telemetry; renderer call sites use typed wrappers.
 
-  agentAwake: {
-    getStatus: (): Promise<ComputerAwakeStatus> => ipcRenderer.invoke('agentAwake:getStatus'),
-    onChanged: (callback: (status: ComputerAwakeStatus) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, status: ComputerAwakeStatus): void =>
-        callback(status)
-      ipcRenderer.on('agentAwake:changed', listener)
-      return () => ipcRenderer.removeListener('agentAwake:changed', listener)
-    }
-  } satisfies PreloadApi['agentAwake'],
 
+  agentAwake: agentAwakeBridge,
+  codexAccounts: codexAccountsBridge,
+  claudeAccounts: claudeAccountsBridge,
+  cli: cliBridge,
+  codexConfigSync: codexConfigSyncBridge,
   localhostWorktreeLabels: {
     register: (args: LocalhostWorktreeLabelRoute): Promise<LocalhostWorktreeLabelResult> =>
       ipcRenderer.invoke('localhostWorktreeLabels:register', args)
   } satisfies PreloadApi['localhostWorktreeLabels'],
 
 
-  codexAccounts: {
-    list: () => ipcRenderer.invoke('codexAccounts:list'),
-    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
-      ipcRenderer.invoke('codexAccounts:add', args),
-    reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
-      ipcRenderer.invoke('codexAccounts:reauthenticate', args),
-    remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),
-    select: (args: {
-      accountId: string | null
-      runtime?: 'host' | 'wsl'
-      wslDistro?: string | null
-    }) => ipcRenderer.invoke('codexAccounts:select', args),
-    listStalePanes: (args: {
-      ptyIds: string[]
-    }): Promise<
-      {
-        ptyId: string
-        launchAccountId: string | null
-        activeAccountId: string | null
-        reason?: 'account-change' | 'home-route-change'
-      }[]
-    > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
-    listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
-    forgetStalePanes: (args: { ptyIds: string[] }): Promise<void> =>
-      ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
-  },
 
-  claudeAccounts: {
-    list: () => ipcRenderer.invoke('claudeAccounts:list'),
-    add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
-      ipcRenderer.invoke('claudeAccounts:add', args),
-    cancelPendingLogin: (): Promise<boolean> =>
-      ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
-    reauthenticate: (args: { accountId: string }) =>
-      ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
-    remove: (args: { accountId: string }) => ipcRenderer.invoke('claudeAccounts:remove', args),
-    select: (args: {
-      accountId: string | null
-      runtime?: 'host' | 'wsl'
-      wslDistro?: string | null
-    }) => ipcRenderer.invoke('claudeAccounts:select', args)
-  },
 
-  cli: {
-    getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
-    install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
-    remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove'),
-    getWslInstallStatus: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:getWslInstallStatus', args),
-    installWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:installWsl', args),
-    removeWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:removeWsl', args)
-  },
 
-  codexConfigSync: {
-    status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
-  },
   agentHooks: {
     claudeStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:claudeStatus'),
