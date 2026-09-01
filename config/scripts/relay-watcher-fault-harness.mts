@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
@@ -12,12 +12,12 @@ const require = createRequire(import.meta.url)
 
 // Why: endpoint credentials are 32–256 base64url chars; openClient requires an authenticated
 // transport, and #12746 admits pty.data only after a consumer grant.
-function writeEndpointCredential(path) {
+function writeEndpointCredential(path: string) {
   return writeFile(path, randomBytes(32).toString('base64url'), 'utf8')
 }
 
-function withTimeout(promise, label, stderr) {
-  return new Promise((resolvePromise, rejectPromise) => {
+function withTimeout<T>(promise: Promise<T>, label: string, stderr: () => string): Promise<T> {
+  return new Promise<T>((resolvePromise, rejectPromise) => {
     const timer = setTimeout(() => {
       rejectPromise(new Error(`Timed out waiting for ${label}\n${stderr()}`))
     }, WAIT_TIMEOUT_MS)
@@ -34,9 +34,13 @@ function withTimeout(promise, label, stderr) {
   })
 }
 
-function pollUntil(readValue, label, stderr) {
+function pollUntil<T>(
+  readValue: () => Promise<T | undefined>,
+  label: string,
+  stderr: () => string
+): Promise<T> {
   const deadline = Date.now() + WAIT_TIMEOUT_MS
-  return new Promise((resolveValue, rejectValue) => {
+  return new Promise<T>((resolveValue, rejectValue) => {
     const poll = async () => {
       try {
         const value = await readValue()
@@ -55,14 +59,30 @@ function pollUntil(readValue, label, stderr) {
   })
 }
 
-function waitForExit(proc) {
+function waitForExit(proc: ChildProcess): Promise<unknown> {
   if (proc.exitCode !== null || proc.signalCode !== null) {
     return Promise.resolve()
   }
   return new Promise((resolveExit) => proc.once('exit', resolveExit))
 }
 
-async function loadProtocol(bundleDir) {
+type RelayProtocol = {
+  FrameDecoder: new (onFrame: (frame: { type: number; payload: Uint8Array }) => void) => {
+    feed: (chunk: Buffer) => void
+  }
+  MessageType: { Regular: number }
+  parseJsonRpcMessage: (payload: Uint8Array) => {
+    id?: number
+    method?: string
+    params?: Record<string, unknown>
+    error?: { message: string }
+    result?: unknown
+  }
+  encodeJsonRpcFrame: (message: Record<string, unknown>, sequence: number, flag: number) => Buffer
+  RELAY_SENTINEL: string
+}
+
+async function loadProtocol(bundleDir: string): Promise<RelayProtocol> {
   const outfile = join(bundleDir, 'relay-protocol.cjs')
   await build({
     entryPoints: [resolve('src/relay/protocol.ts')],
@@ -72,12 +92,12 @@ async function loadProtocol(bundleDir) {
     outfile,
     logLevel: 'silent'
   })
-  return require(outfile)
+  return require(outfile) as RelayProtocol
 }
 
-function attachProcessStreams(proc) {
+function attachProcessStreams(proc: ChildProcess) {
   let stderr = ''
-  proc.stderr.on('data', (chunk) => {
+  proc.stderr!.on('data', (chunk) => {
     stderr = `${stderr}${String(chunk)}`.slice(-8_000)
   })
   return {
@@ -85,12 +105,12 @@ function attachProcessStreams(proc) {
   }
 }
 
-function waitForStdoutSentinel(proc, protocol, stderr) {
+function waitForStdoutSentinel(proc: ChildProcess, protocol: RelayProtocol, stderr: () => string) {
   let stdoutBuffer = Buffer.alloc(0)
   return withTimeout(
     new Promise((resolvePromise, rejectPromise) => {
       let settled = false
-      const onData = (chunk) => {
+      const onData = (chunk: Buffer) => {
         stdoutBuffer = Buffer.concat([stdoutBuffer, chunk])
         const sentinel = Buffer.from(protocol.RELAY_SENTINEL)
         const index = stdoutBuffer.indexOf(sentinel)
@@ -98,21 +118,21 @@ function waitForStdoutSentinel(proc, protocol, stderr) {
           return
         }
         settled = true
-        proc.stdout.off('data', onData)
+        proc.stdout!.off('data', onData)
         proc.off('exit', onExit)
         resolvePromise(stdoutBuffer.subarray(index + sentinel.length))
       }
-      const onExit = (code, signal) => {
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
         if (settled) {
           return
         }
         settled = true
-        proc.stdout.off('data', onData)
+        proc.stdout!.off('data', onData)
         rejectPromise(
           new Error(`process exited before sentinel (code=${code}, signal=${signal})\n${stderr()}`)
         )
       }
-      proc.stdout.on('data', onData)
+      proc.stdout!.on('data', onData)
       proc.once('exit', onExit)
     }),
     'relay sentinel',
@@ -120,19 +140,26 @@ function waitForStdoutSentinel(proc, protocol, stderr) {
   )
 }
 
-function createRelayClient(entryPath, args, env, protocol) {
-  const proc = spawn(process.execPath, [entryPath, ...args], {
+type RelayClient = ReturnType<typeof createRelayClient>
+
+function createRelayClient(
+  entryPath: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  protocol: RelayProtocol
+) {
+  const proc: ChildProcess = spawn(process.execPath, [entryPath, ...args], {
     cwd: dirname(entryPath),
     env,
     stdio: ['pipe', 'pipe', 'pipe']
   })
   const streams = attachProcessStreams(proc)
-  const messages = []
+  const messages: ReturnType<RelayProtocol['parseJsonRpcMessage']>[] = []
   let nextSequence = 1
   let stdoutBuffer = Buffer.alloc(0)
   let ready = false
-  let resolveReady
-  const sentinelReceived = new Promise((resolvePromise) => {
+  let resolveReady: (value: undefined) => void = () => {}
+  const sentinelReceived = new Promise<undefined>((resolvePromise) => {
     resolveReady = resolvePromise
   })
   const decoder = new protocol.FrameDecoder((frame) => {
@@ -140,7 +167,7 @@ function createRelayClient(entryPath, args, env, protocol) {
       messages.push(protocol.parseJsonRpcMessage(frame.payload))
     }
   })
-  proc.stdout.on('data', (chunk) => {
+  proc.stdout!.on('data', (chunk) => {
     if (ready) {
       decoder.feed(chunk)
       return
@@ -152,43 +179,58 @@ function createRelayClient(entryPath, args, env, protocol) {
       return
     }
     ready = true
-    resolveReady()
+    resolveReady(undefined)
     const remainder = stdoutBuffer.subarray(index + sentinel.length)
     if (remainder.length > 0) {
       decoder.feed(remainder)
     }
   })
 
-  const waitForMessage = (startIndex, predicate, label) =>
-    pollUntil(() => messages.slice(startIndex).find(predicate), label, streams.stderr)
+  const waitForMessage = (
+    startIndex: number,
+    predicate: (message: ReturnType<RelayProtocol['parseJsonRpcMessage']>) => boolean,
+    label: string
+  ): Promise<ReturnType<RelayProtocol['parseJsonRpcMessage']>> =>
+    pollUntil(
+      async () => messages.slice(startIndex).find(predicate) ?? undefined,
+      label,
+      streams.stderr
+    )
 
-  const request = async (method, params = {}) => {
+  const request = async (
+    method: string,
+    params: Record<string, unknown> = {}
+  ): Promise<unknown> => {
     const id = nextSequence++
     const startIndex = messages.length
-    proc.stdin.write(protocol.encodeJsonRpcFrame({ jsonrpc: '2.0', id, method, params }, id, 0))
-    const response = await waitForMessage(
+    proc.stdin!.write(protocol.encodeJsonRpcFrame({ jsonrpc: '2.0', id, method, params }, id, 0))
+    const response = (await waitForMessage(
       startIndex,
       (message) => message.id === id,
       `response to ${method}`
-    )
+    )) as { error?: { message: string }; result?: unknown }
     if (response.error) {
       throw new Error(`${method} failed: ${response.error.message}`)
     }
     return response.result
   }
 
-  const notify = (method, params = {}) => {
+  const notify = (method: string, params: Record<string, unknown> = {}) => {
     const sequence = nextSequence++
-    proc.stdin.write(protocol.encodeJsonRpcFrame({ jsonrpc: '2.0', method, params }, sequence, 0))
+    proc.stdin!.write(protocol.encodeJsonRpcFrame({ jsonrpc: '2.0', method, params }, sequence, 0))
   }
 
   return {
     proc,
-    request,
+    request: request as (method: string, params?: Record<string, unknown>) => Promise<unknown>,
     notify,
     sentinelReceived: withTimeout(sentinelReceived, 'relay sentinel', streams.stderr),
     messageCount: () => messages.length,
-    waitForNotification: (startIndex, method, predicate = () => true) =>
+    waitForNotification: (
+      startIndex: number,
+      method: string,
+      predicate: (params: Record<string, unknown>) => boolean = () => true
+    ) =>
       waitForMessage(
         startIndex,
         (message) => message.method === method && predicate(message.params ?? {}),
@@ -198,7 +240,7 @@ function createRelayClient(entryPath, args, env, protocol) {
   }
 }
 
-async function stopProcess(proc, stderr, label) {
+async function stopProcess(proc: ChildProcess | undefined, stderr: () => string, label: string) {
   if (!proc || proc.exitCode !== null || proc.signalCode !== null) {
     return
   }
@@ -211,7 +253,11 @@ async function stopProcess(proc, stderr, label) {
   }
 }
 
-async function waitForWatcherPid(pidFile, previousPid, stderr) {
+async function waitForWatcherPid(
+  pidFile: string,
+  previousPid: number | undefined,
+  stderr: () => string
+): Promise<number> {
   return pollUntil(
     async () => {
       const pid = Number((await readFile(pidFile, 'utf8')).trim())
@@ -227,7 +273,7 @@ async function waitForWatcherPid(pidFile, previousPid, stderr) {
   )
 }
 
-function includesWatchPath(params, targetPath) {
+function includesWatchPath(params: Record<string, unknown>, targetPath: string) {
   return Array.isArray(params.events)
     ? params.events.some((event) => event.absolutePath === targetPath)
     : false
@@ -241,10 +287,10 @@ async function main() {
     throw new Error(`Missing built relay artifacts for ${platform}; run pnpm run build:relay first`)
   }
 
-  let tempRoot
-  let daemon
-  let daemonStreams
-  let relay
+  let tempRoot: string | undefined
+  let daemon: ChildProcess | undefined
+  let daemonStreams: ReturnType<typeof attachProcessStreams> | undefined
+  let relay: RelayClient | undefined
   try {
     tempRoot = await mkdtemp(join(tmpdir(), 'orca-relay-watcher-fault-'))
     const watchRoot = await realpath(tempRoot)
@@ -291,16 +337,20 @@ async function main() {
     await relay.sentinelReceived
 
     // Why no outputFlowControl: legacy owner grant admits plain pty.data without delivery tokens.
-    const grant = await relay.request('pty.openClient', {
+    const grant = (await relay.request('pty.openClient', {
       protocolVersion: 1,
       clientInstanceId: `relay-watcher-fault-${process.pid}`,
       requestedRole: 'session-owner'
-    })
+    })) as { role?: string } | undefined
     if (grant?.role !== 'session-owner') {
       throw new Error(`expected session-owner grant, got ${JSON.stringify(grant)}`)
     }
 
-    const spawned = await relay.request('pty.spawn', { cols: 80, rows: 24, cwd: watchRoot })
+    const spawned = (await relay.request('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      cwd: watchRoot
+    })) as { id?: string }
     const beforePtyMarker = `ORCA_PTY_BEFORE_${Date.now()}`
     let startIndex = relay.messageCount()
     relay.notify('pty.data', { id: spawned.id, data: `echo ${beforePtyMarker}\r` })
@@ -314,7 +364,7 @@ async function main() {
     const firstWatcherPid = await waitForWatcherPid(
       pidFile,
       undefined,
-      () => `${daemonStreams.stderr()}\n${relay.stderr()}`
+      () => `${daemonStreams!.stderr()}\n${relay!.stderr()}`
     )
     const beforePath = join(watchRoot, 'before.txt')
     startIndex = relay.messageCount()
@@ -329,7 +379,7 @@ async function main() {
     const replacementWatcherPid = await waitForWatcherPid(
       pidFile,
       firstWatcherPid,
-      () => `${daemonStreams.stderr()}\n${relay.stderr()}`
+      () => `${daemonStreams!.stderr()}\n${relay!.stderr()}`
     )
     await relay.waitForNotification(startIndex, 'fs.changed', (params) =>
       Array.isArray(params.events)
@@ -339,8 +389,8 @@ async function main() {
         : false
     )
 
-    const status = await relay.request('relay.status')
-    if (status.pid !== daemon.pid) {
+    const status = (await relay.request('relay.status')) as { pid?: number }
+    if (status.pid !== daemon?.pid) {
       throw new Error('relay.status did not come from the original surviving relay process')
     }
     const afterPtyMarker = `ORCA_PTY_AFTER_${Date.now()}`
@@ -363,7 +413,7 @@ async function main() {
     await relay.request('pty.shutdown', { id: spawned.id })
     console.log(
       JSON.stringify({
-        relayPid: daemon.pid,
+        relayPid: daemon?.pid,
         killedWatcherPid: firstWatcherPid,
         replacementWatcherPid,
         faultSignal,

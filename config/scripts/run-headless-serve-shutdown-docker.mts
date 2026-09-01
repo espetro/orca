@@ -12,7 +12,7 @@ const entrypoint = valueAfter('--entrypoint') ?? 'app'
 const intDelivery = valueAfter('--int-delivery') ?? 'foreground-process-group'
 const launcherExecOverlay = args.includes('--launcher-exec-overlay')
 if (!appImageArg) {
-  fail('Usage: run-headless-serve-shutdown-docker.mjs --appimage /path/to/orca.AppImage')
+  fail('Usage: run-headless-serve-shutdown-docker.mts --appimage /path/to/orca.AppImage')
 }
 if (!['app', 'serving-electron'].includes(signalTarget)) {
   fail(`Unsupported --signal-target: ${signalTarget}`)
@@ -88,7 +88,7 @@ try {
       launcherExecOverlay
     })
   )
-  const failedSignals = []
+  const failedSignals: string[] = []
   for (const signal of ['INT', 'TERM']) {
     const result = docker(
       [
@@ -129,12 +129,12 @@ try {
   docker(['image', 'rm', image], { allowFailure: true })
 }
 
-function valueAfter(flag) {
+function valueAfter(flag: string): string | null {
   const index = args.indexOf(flag)
   return index === -1 ? null : (args[index + 1] ?? null)
 }
 
-function docker(dockerArgs, options = {}) {
+function docker(dockerArgs: string[], options: { allowFailure?: boolean } = {}) {
   const result = spawnSync('docker', dockerArgs, {
     cwd: process.cwd(),
     encoding: 'utf8',
@@ -151,7 +151,7 @@ function docker(dockerArgs, options = {}) {
   return result
 }
 
-function fail(message) {
+function fail(message: string): never {
   console.error(message)
   process.exitCode = 1
   throw new Error(message)

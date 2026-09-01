@@ -1310,14 +1310,14 @@ jobs:
         run: |
           # Why: #8212 is a native-process crash contract. Prove both the Node
           # host and the exact Electron runtime survive SIGSEGV before packaging.
-          node config/scripts/runtime-file-watcher-fault-harness.mjs
-          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+          node config/scripts/runtime-file-watcher-fault-harness.mts
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mts
 
       - name: Gate SSH relay watcher process isolation
         run: |
           # Why: the remote native watcher shares a daemon with live PTYs.
           # Kill only its child and require both PTY and watch recovery before packaging.
-          node config/scripts/relay-watcher-fault-harness.mjs
+          node config/scripts/relay-watcher-fault-harness.mts
 
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
@@ -1338,7 +1338,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: >-
-            node config/scripts/run-linux-packaged-node-pty-floor-smoke.mjs
+            node config/scripts/run-linux-packaged-node-pty-floor-smoke.mts
             --app-dir ${{ matrix.unpacked_dir }}
 
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must

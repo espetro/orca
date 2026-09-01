@@ -207,7 +207,7 @@ describe('PR workflow parallelism', () => {
       (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
     )
     const smokeIndex = steps.findIndex(
-      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
+      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mts'
     )
 
     expect(installIndex).toBeLessThan(buildIndex)

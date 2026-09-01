@@ -27,7 +27,13 @@ function workspaceRelativePath(workspaceDirectory, inputPath) {
   return relativePath.split(sep).join('/')
 }
 
-export function packagedNodePtyFloorDockerArgs({ workspaceDirectory, appDirectory }) {
+export function packagedNodePtyFloorDockerArgs({
+  workspaceDirectory,
+  appDirectory
+}: {
+  workspaceDirectory: string
+  appDirectory: string
+}) {
   const relativeAppDirectory = workspaceRelativePath(workspaceDirectory, appDirectory)
   const containerAppDirectory = `/workspace/${relativeAppDirectory}`
   const command = [
@@ -56,15 +62,17 @@ function parseAppDirectory(argv) {
   const index = argv.indexOf('--app-dir')
   const value = index !== -1 ? argv[index + 1] : undefined
   if (!value || isAbsolute(value) || value.startsWith('-')) {
-    throw new Error('Usage: run-linux-packaged-node-pty-floor-smoke.mjs --app-dir <relative-path>')
+    throw new Error('Usage: run-linux-packaged-node-pty-floor-smoke.mts --app-dir <relative-path>')
   }
   return value
 }
 
 export function runPackagedNodePtyFloorSmoke({
   workspaceDirectory = process.cwd(),
-  appDirectory,
-  spawn = spawnSync
+  appDirectory
+}: {
+  workspaceDirectory?: string
+  appDirectory: string
 }) {
   if (process.platform !== 'linux') {
     throw new Error('linux-packaged-node-pty-floor-smoke-requires-linux')
@@ -73,7 +81,7 @@ export function runPackagedNodePtyFloorSmoke({
   if (!existsSync(resolve(absoluteAppDirectory, LINUX_EXECUTABLE))) {
     throw new Error(`linux-packaged-node-pty-floor-executable-missing: ${absoluteAppDirectory}`)
   }
-  const result = spawn(
+  const result = spawnSync(
     'docker',
     packagedNodePtyFloorDockerArgs({ workspaceDirectory, appDirectory }),
     { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }

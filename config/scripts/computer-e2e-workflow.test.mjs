@@ -211,7 +211,7 @@ describe('computer-use e2e workflow', () => {
     const steps = workflow.jobs['native-smoke'].steps
     const runs = steps.map((step) => step.run).filter((run) => typeof run === 'string')
     const buildIndex = runs.indexOf('pnpm build:electron-vite')
-    const daemonSmokeIndex = runs.indexOf('node config/scripts/daemon-boot-smoke.mjs')
+    const daemonSmokeIndex = runs.indexOf('node config/scripts/daemon-boot-smoke.mts')
 
     expect(daemonSmokeIndex, 'native-smoke must boot the built daemon').toBeGreaterThanOrEqual(0)
     expect(
@@ -228,13 +228,13 @@ describe('computer-use e2e workflow', () => {
     const steps = workflow.jobs['native-smoke'].steps
     const buildIndex = steps.findIndex((step) => step.run === 'pnpm build:electron-vite')
     const reproIndex = steps.findIndex(
-      (step) => step.run === 'node config/scripts/windows-daemon-workspace-close-repro.mjs'
+      (step) => step.run === 'node config/scripts/windows-daemon-workspace-close-repro.mts'
     )
 
     expect(reproIndex).toBeGreaterThan(buildIndex)
     expect(steps[reproIndex].if).toBe("runner.os == 'Windows'")
     expect(workflow.on.pull_request.paths).toContain(
-      'config/scripts/windows-daemon-workspace-close-repro.mjs'
+      'config/scripts/windows-daemon-workspace-close-repro.mts'
     )
   })
 
@@ -246,8 +246,8 @@ describe('computer-use e2e workflow', () => {
 
     expect(triggerPaths).toEqual(
       expect.arrayContaining([
-        'config/scripts/daemon-boot-smoke.mjs',
-        'config/scripts/windows-daemon-workspace-close-repro.mjs',
+        'config/scripts/daemon-boot-smoke.mts',
+        'config/scripts/windows-daemon-workspace-close-repro.mts',
         'electron.vite.config.ts',
         'config/build-plugins/**',
         'src/main/daemon/**'

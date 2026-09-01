@@ -123,7 +123,7 @@ function runSmoke() {
     throw new Error(`Packaged app archive is missing: ${appAsar}`)
   }
   const require = createRequire(import.meta.url)
-  const executable = require('electron')
+  const executable = require('electron') as string
   const launcherDir = mkdtempSync(join(tmpdir(), 'orca-packaged-watchdog-launcher-'))
   const launcherPath = join(launcherDir, 'main.cjs')
   writeFileSync(
@@ -137,7 +137,12 @@ function runSmoke() {
   process.exitCode = 1
 })\n`
   )
-  const env = { ...process.env, [INTERNAL_ENV]: '1', [ASAR_ENV]: appAsar, NODE_PATH: '' }
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    [INTERNAL_ENV]: '1',
+    [ASAR_ENV]: appAsar,
+    NODE_PATH: ''
+  }
   delete env.ELECTRON_RUN_AS_NODE
   try {
     const electronArgs =

@@ -35,13 +35,13 @@ const appDir = resolve(readAppDirArg(process.argv.slice(2)))
 const tempRoot = await mkdtemp(join(tmpdir(), 'orca-packaged-cli-smoke-'))
 const copiedAppDir = join(tempRoot, basename(appDir))
 
-let smokeFailure = null
+let smokeFailure: unknown = null
 try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
-  const env = { ...process.env, NODE_PATH: '' }
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_PATH: '' }
   delete env.ORCA_CLI_CWD
-  const run = (args) =>
+  const run = (args: string[]) =>
     execFileAsync(cliPath, args, {
       env,
       killSignal: 'SIGKILL',

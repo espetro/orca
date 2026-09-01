@@ -206,7 +206,7 @@ describe('Electron runtime package contract', () => {
 
       expect(gate.if).toBe(expectedCondition)
       expect(gate['continue-on-error']).toBeUndefined()
-      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.mts')
       expect(gate.run).toContain('ELECTRON_RUN_AS_NODE=1 pnpm exec electron')
       expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
       expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
@@ -257,7 +257,7 @@ describe('Electron runtime package contract', () => {
       const names = steps.map((step) => step.name)
       const gate = steps.find((step) => step.name === 'Gate SSH relay watcher process isolation')
       expect(gate['continue-on-error']).toBeUndefined()
-      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mts')
       expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
       expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
     }
@@ -486,7 +486,7 @@ describe('Electron runtime package contract', () => {
     )
 
     expect(smokeStep.run).toBe(
-      'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked'
+      'node config/scripts/smoke-packaged-cli.mts --app-dir=dist/linux-unpacked'
     )
   })
 

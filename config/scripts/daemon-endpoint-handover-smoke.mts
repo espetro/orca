@@ -7,7 +7,7 @@
  *
  * Unix only: Windows named pipes are not directory entries, so the mechanism cannot occur.
  *
- * Usage: node config/scripts/daemon-endpoint-handover-smoke.mjs
+ * Usage: node config/scripts/daemon-endpoint-handover-smoke.mts
  */
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
@@ -31,18 +31,25 @@ const READY_TIMEOUT_MS = 20_000
 const EXIT_TIMEOUT_MS = 15_000
 const REACHABILITY_TIMEOUT_MS = 2_000
 
-const log = (msg) => console.log(`[endpoint-handover-smoke] ${msg}`)
+const log = (msg: string) => console.log(`[endpoint-handover-smoke] ${msg}`)
 
-function readProtocolVersion() {
+function readProtocolVersion(): string {
   const source = readFileSync(join(repoRoot, 'src/main/daemon/daemon-protocol-version.ts'), 'utf8')
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {
     throw new Error('could not read daemon protocol version')
   }
-  return Number(match[1])
+  return String(match[1])
 }
 
-function bootDaemon(tag, dir, socketPath) {
+type BootedDaemon = {
+  child: ReturnType<typeof fork>
+  tokenPath: string
+  pidPath: string
+  ready: Promise<void>
+}
+
+function bootDaemon(tag: string, dir: string, socketPath: string): BootedDaemon {
   const tokenPath = join(dir, `${tag}.token`)
   const pidPath = join(dir, `${tag}.pid`)
   const child = fork(
@@ -70,18 +77,18 @@ function bootDaemon(tag, dir, socketPath) {
   child.stderr?.on('data', (chunk) => {
     stderr += chunk.toString('utf8')
   })
-  const ready = new Promise((resolveReady, rejectReady) => {
+  const ready = new Promise<void>((resolveReady, rejectReady) => {
     const timer = setTimeout(
       () => rejectReady(new Error(`daemon ${tag} never signaled ready.\nstderr:\n${stderr}`)),
       READY_TIMEOUT_MS
     )
-    child.on('message', (msg) => {
-      if (msg && typeof msg === 'object' && msg.type === 'ready') {
+    child.on('message', (msg: unknown) => {
+      if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
         clearTimeout(timer)
         resolveReady()
       }
     })
-    child.on('exit', (code) => {
+    child.on('exit', (code: number | null) => {
       clearTimeout(timer)
       rejectReady(new Error(`daemon ${tag} exited with ${code}.\nstderr:\n${stderr}`))
     })
@@ -89,8 +96,8 @@ function bootDaemon(tag, dir, socketPath) {
   return { child, tokenPath, pidPath, ready }
 }
 
-function isReachable(socketPath) {
-  return new Promise((resolveReachable) => {
+function isReachable(socketPath: string): Promise<boolean> {
+  return new Promise<boolean>((resolveReachable) => {
     const socket = connect({ path: socketPath })
     socket.once('connect', () => {
       socket.destroy()
@@ -103,16 +110,20 @@ function isReachable(socketPath) {
   })
 }
 
-function isDaemonReachable(socketPath, tokenPath, protocolVersion) {
+function isDaemonReachable(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion: string
+): Promise<boolean> {
   if (!existsSync(tokenPath)) {
     return Promise.resolve(false)
   }
   const token = readFileSync(tokenPath, 'utf8').trim()
-  return new Promise((resolveReachable) => {
+  return new Promise<boolean>((resolveReachable) => {
     let buffer = ''
     let settled = false
     const socket = connect({ path: socketPath })
-    const finish = (reachable) => {
+    const finish = (reachable: boolean) => {
       if (settled) {
         return
       }
@@ -141,7 +152,7 @@ function isDaemonReachable(socketPath, tokenPath, protocolVersion) {
         return
       }
       try {
-        const message = JSON.parse(buffer.slice(0, newlineIndex))
+        const message = JSON.parse(buffer.slice(0, newlineIndex)) as { type?: string; ok?: boolean }
         finish(message.type === 'hello' && message.ok === true)
       } catch {
         finish(false)
@@ -151,13 +162,13 @@ function isDaemonReachable(socketPath, tokenPath, protocolVersion) {
 }
 
 /** Resolves with the child's exit code, so callers can assert on it. */
-function killAndWait(child) {
+function killAndWait(child: ReturnType<typeof fork>): Promise<number | null> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve(child.exitCode)
   }
-  return new Promise((resolveExit, rejectExit) => {
+  return new Promise<number | null>((resolveExit, rejectExit) => {
     const timer = setTimeout(() => rejectExit(new Error('daemon did not exit')), EXIT_TIMEOUT_MS)
-    child.on('exit', (code) => {
+    child.on('exit', (code: number | null) => {
       clearTimeout(timer)
       resolveExit(code)
     })
@@ -177,7 +188,7 @@ async function main() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-endpoint-handover-'))
   const socketPath = join(dir, 'daemon.sock')
   const protocolVersion = readProtocolVersion()
-  const daemons = []
+  const daemons: BootedDaemon[] = []
   try {
     const departed = bootDaemon('departed', dir, socketPath)
     daemons.push(departed)
@@ -203,7 +214,7 @@ async function main() {
       )
     }
 
-    const owners = []
+    const owners: BootedDaemon[] = []
     for (const daemon of racers) {
       if (await isDaemonReachable(socketPath, daemon.tokenPath, protocolVersion)) {
         owners.push(daemon)
@@ -214,6 +225,9 @@ async function main() {
     }
     const survivor = owners[0]
     const loser = racers.find((daemon) => daemon !== survivor)
+    if (!loser) {
+      throw new Error('expected a losing racer')
+    }
     const survivorInode = statSync(socketPath).ino
     if (survivorInode === deadInode) {
       throw new Error('survivor did not replace the dead endpoint entry')

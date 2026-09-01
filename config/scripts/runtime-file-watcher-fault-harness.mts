@@ -10,8 +10,8 @@ const SUPERVISOR_SOURCE = resolve('src/main/ipc/parcel-watcher-process-superviso
 const WAIT_TIMEOUT_MS = 15_000
 const require = createRequire(import.meta.url)
 
-function withTimeout(promise, label) {
-  return new Promise((resolvePromise, rejectPromise) => {
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolvePromise, rejectPromise) => {
     const timer = setTimeout(
       () => rejectPromise(new Error(`Timed out waiting for ${label}`)),
       WAIT_TIMEOUT_MS
@@ -29,7 +29,15 @@ function withTimeout(promise, label) {
   })
 }
 
-function nextMatchingEvent(register, predicate, label) {
+type WatcherEvent = { path: string }
+
+type WatcherEventListener = (events: WatcherEvent[]) => void
+
+function nextMatchingEvent(
+  register: (listener: WatcherEventListener) => void,
+  predicate: (event: WatcherEvent) => boolean,
+  label: string
+) {
   return withTimeout(
     new Promise((resolveEvent) => {
       register((events) => {
@@ -74,7 +82,7 @@ async function main() {
   let supervisor
   let subscription
   let watcherCanaryDir
-  let eventListener = () => undefined
+  let eventListener: WatcherEventListener = () => undefined
   let rejectWatcherError
   const watcherError = new Promise((_, reject) => {
     rejectWatcherError = reject
@@ -91,7 +99,7 @@ async function main() {
     const WatcherProcessSupervisor = await loadSupervisor(bundleDir)
     supervisor = new WatcherProcessSupervisor()
 
-    let resolveInterruption
+    let resolveInterruption: (value: undefined) => void
     const interrupted = withTimeout(
       new Promise((resolveWait) => {
         resolveInterruption = resolveWait
@@ -112,7 +120,7 @@ async function main() {
       { ignore: ['.git', 'node_modules'] },
       {
         delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 200 },
-        onInterruption: () => resolveInterruption()
+        onInterruption: () => resolveInterruption(undefined)
       }
     )
     watcherCanaryDir = supervisor.canaryDir
@@ -121,7 +129,7 @@ async function main() {
       (listener) => {
         eventListener = listener
       },
-      (event) => event.path === join(rootPath, 'before.txt'),
+      (event: WatcherEvent) => event.path === join(rootPath, 'before.txt'),
       'pre-crash watch event'
     )
     await writeFile(join(rootPath, 'before.txt'), 'before')
@@ -142,7 +150,7 @@ async function main() {
       (listener) => {
         eventListener = listener
       },
-      (event) => event.path === join(rootPath, 'after.txt'),
+      (event: WatcherEvent) => event.path === join(rootPath, 'after.txt'),
       'post-crash watch event'
     )
     await writeFile(join(rootPath, 'after.txt'), 'after')

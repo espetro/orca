@@ -109,7 +109,7 @@ function createRpcClient(socketPath, tokenPath) {
   let helloResolve
   let helloReject
   let helloTimer
-  const hello = new Promise((resolveHello, rejectHello) => {
+  const hello = new Promise<void>((resolveHello, rejectHello) => {
     helloResolve = () => {
       clearTimeout(helloTimer)
       resolveHello()
@@ -217,7 +217,7 @@ function createRpcClient(socketPath, tokenPath) {
 }
 
 function waitForReady(child, stderr) {
-  return new Promise((resolveReady, rejectReady) => {
+  return new Promise<void>((resolveReady, rejectReady) => {
     const timer = setTimeout(
       () => rejectReady(new Error(`Daemon readiness timed out.\n${stderr()}`)),
       requestTimeoutMs
@@ -245,23 +245,23 @@ async function stopChild(child) {
   child.kill('SIGTERM')
   await Promise.race([
     exited,
-    new Promise((resolveTimeout) =>
+    new Promise<void>((resolveTimeout) =>
       setTimeout(() => {
         if (child.exitCode === null && child.signalCode === null) {
           child.kill('SIGKILL')
         }
-        resolveTimeout()
+        resolveTimeout(undefined)
       }, 5_000)
     )
   ])
 }
 
-function isProcessAlive(pid) {
+function isProcessAlive(pid: number) {
   try {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    if (error?.code === 'ESRCH') {
+    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
       return false
     }
     throw error
@@ -297,10 +297,12 @@ async function main() {
   const child = fork(
     entryPath,
     ['--socket', socketPath, '--token', tokenPath, '--log-file', daemonLogPath],
+    // Why: windowsHide prevents a console window flash on Windows; ForkOptions typing omits it
+    // though the option reaches child_process.fork at runtime.
     {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      windowsHide: true,
-      env: { ...process.env, ORCA_USER_DATA_PATH: scratch }
+      env: { ...process.env, ORCA_USER_DATA_PATH: scratch },
+      ...({ windowsHide: true } as object)
     }
   )
   const daemonPid = child.pid
@@ -355,8 +357,9 @@ async function main() {
       `PASS: ${iterations} victim sessions/PIDs were reaped while daemon ${daemonPid} and the witness PTY survived`
     )
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     const daemonLog = existsSync(daemonLogPath) ? readFileSync(daemonLogPath, 'utf8') : ''
-    throw new Error(`${error.message}\nstderr:\n${stderr}\ndaemon.log:\n${daemonLog}`)
+    throw new Error(`${message}\nstderr:\n${stderr}\ndaemon.log:\n${daemonLog}`)
   } finally {
     rpc?.close()
     await stopChild(child)

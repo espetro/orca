@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { packagedNodePtyFloorDockerArgs } from './run-linux-packaged-node-pty-floor-smoke.mjs'
+import { packagedNodePtyFloorDockerArgs } from './run-linux-packaged-node-pty-floor-smoke.mts'
 
 describe('packaged node-pty Linux floor smoke', () => {
   it('mounts the exact package read-only in an Ubuntu 20.04 container', () => {

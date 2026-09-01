@@ -20,7 +20,7 @@ describe('packaged skills CLI PR gates', () => {
     expect(packageStep.run).toContain('--dir')
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     expect(smokeStep.run).toBe(
-      'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked'
+      'node config/scripts/smoke-packaged-cli.mts --app-dir=dist/win-unpacked'
     )
 
     const aggregateStep = workflow.jobs.verify.steps.find(

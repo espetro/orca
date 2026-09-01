@@ -75,7 +75,17 @@ function makeDataDir(name) {
   return destination
 }
 
-function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
+type OracleOptions = { expectFailure?: string }
+
+type RunOptions = { encoding?: BufferEncoding }
+
+function runOracle(
+  label: string,
+  targetRoot: string,
+  operation: string,
+  userDataPath: string,
+  options: OracleOptions = {}
+) {
   const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   const result = spawnSync(pnpm, ['exec', 'vitest', 'run', driver, '--config', config], {
     cwd: root,
@@ -103,7 +113,7 @@ function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
   process.stdout.write(`PASS ${label}\n`)
 }
 
-function run(command, args, options = {}) {
+function run(command: string, args: string[], options: RunOptions = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
     encoding: options.encoding,

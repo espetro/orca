@@ -6,7 +6,7 @@ describe('packaged hang watchdog worker contract', () => {
   it('boots the worker from app.asar in PR checks', () => {
     const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
     const smokeSource = readFileSync(
-      'config/scripts/smoke-packaged-hang-watchdog-worker.mjs',
+      'config/scripts/smoke-packaged-hang-watchdog-worker.mts',
       'utf8'
     )
     const smokeStep = workflow.jobs.package.steps.find(
@@ -14,7 +14,7 @@ describe('packaged hang watchdog worker contract', () => {
     )
 
     expect(smokeStep.run).toBe(
-      'xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked'
+      'xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mts --app-dir=dist/linux-unpacked'
     )
     expect(smokeSource).toContain(
       "process.platform === 'linux' ? ['--no-sandbox', launcherDir] : [launcherDir]"
@@ -26,7 +26,7 @@ describe('packaged hang watchdog worker contract', () => {
   // Why: Electron ignores process.exitCode, so the gate needs app.exit plus a stdout assertion.
   it('fails the smoke when the packaged worker never reports success', () => {
     const smokeSource = readFileSync(
-      'config/scripts/smoke-packaged-hang-watchdog-worker.mjs',
+      'config/scripts/smoke-packaged-hang-watchdog-worker.mts',
       'utf8'
     )
 

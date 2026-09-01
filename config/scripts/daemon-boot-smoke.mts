@@ -29,23 +29,23 @@ const READY_TIMEOUT_MS = 30_000
 const PTY_HEALTH_TIMEOUT_MS = 10_000
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
-function log(message) {
+function log(message: string) {
   process.stdout.write(`[daemon-boot-smoke] ${message}\n`)
 }
 
 // Why: the daemon rejects a hello whose protocol version differs, so read the
 // current version from source rather than hardcoding a number that can drift.
-function readProtocolVersion() {
+function readProtocolVersion(): string {
   const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
   const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {
     throw new Error(`could not read PROTOCOL_VERSION from ${protocolSourcePath}`)
   }
-  return Number(match[1])
+  return String(match[1])
 }
 
-function makeSocketPath(userDataDir) {
+function makeSocketPath(userDataDir: string) {
   // Why: Windows AF_UNIX-style IPC uses named pipes; POSIX uses a filesystem
   // socket kept under the scratch userData dir so cleanup removes it.
   if (process.platform === 'win32') {
@@ -54,11 +54,13 @@ function makeSocketPath(userDataDir) {
   return join(userDataDir, 'daemon.sock')
 }
 
+type DaemonIpcMessage = { type?: string; ok?: boolean; error?: string; id?: string }
+
 // 'connected' only when something actually answers; a dead entry left on the name is not it.
-function probeEndpoint(socketPath) {
-  return new Promise((resolveProbe) => {
+function probeEndpoint(socketPath: string): Promise<'connected' | 'unreachable'> {
+  return new Promise<'connected' | 'unreachable'>((resolveProbe) => {
     const socket = connect(socketPath)
-    const settle = (result) => {
+    const settle = (result: 'connected' | 'unreachable') => {
       socket.destroy()
       resolveProbe(result)
     }
@@ -67,12 +69,18 @@ function probeEndpoint(socketPath) {
   })
 }
 
-function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs) {
+function runDaemonRpc(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion: string,
+  request: { id: string; type: string; payload?: unknown },
+  timeoutMs: number
+): Promise<DaemonIpcMessage | undefined> {
   return new Promise((resolveRpc, rejectRpc) => {
     let settled = false
     let buffer = ''
     const socket = connect(socketPath)
-    const finish = (error, response) => {
+    const finish = (error: Error | undefined, response?: DaemonIpcMessage) => {
       if (settled) {
         return
       }
@@ -106,9 +114,9 @@ function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs
       while (newlineIdx !== -1) {
         const line = buffer.slice(0, newlineIdx)
         buffer = buffer.slice(newlineIdx + 1)
-        let msg
+        let msg: DaemonIpcMessage
         try {
-          msg = JSON.parse(line)
+          msg = JSON.parse(line) as DaemonIpcMessage
         } catch {
           finish(new Error('invalid response line'))
           return
@@ -133,7 +141,11 @@ function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs
 }
 
 // Best-effort: constrained CI runners can make node-pty spawn flaky.
-async function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
+async function runPtySpawnHealthCheck(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion: string
+) {
   try {
     await runDaemonRpc(
       socketPath,
@@ -144,7 +156,9 @@ async function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
     )
     return true
   } catch (error) {
-    log(`PTY spawn health check skipped (best-effort): ${error.message}`)
+    log(
+      `PTY spawn health check skipped (best-effort): ${error instanceof Error ? error.message : error}`
+    )
     return false
   }
 }
@@ -200,7 +214,7 @@ async function main() {
   }
 
   try {
-    await new Promise((resolveReady, rejectReady) => {
+    await new Promise<void>((resolveReady, rejectReady) => {
       const timer = setTimeout(() => {
         rejectReady(
           new Error(
@@ -208,17 +222,17 @@ async function main() {
           )
         )
       }, READY_TIMEOUT_MS)
-      child.on('message', (msg) => {
-        if (msg && typeof msg === 'object' && msg.type === 'ready') {
+      child.on('message', (msg: unknown) => {
+        if (msg && typeof msg === 'object' && (msg as DaemonIpcMessage).type === 'ready') {
           clearTimeout(timer)
           resolveReady()
         }
       })
-      child.on('error', (err) => {
+      child.on('error', (err: Error) => {
         clearTimeout(timer)
         rejectReady(new Error(`daemon fork errored: ${err.message}\nstderr:\n${stderr}`))
       })
-      child.on('exit', (code, signal) => {
+      child.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
         clearTimeout(timer)
         rejectReady(
           new Error(
@@ -257,11 +271,11 @@ async function main() {
       log('ptySpawnHealth OK — daemon spawned a real PTY end-to-end')
     }
 
-    await new Promise((resolveExit, rejectExit) => {
+    await new Promise<void>((resolveExit, rejectExit) => {
       const timer = setTimeout(() => {
         rejectExit(new Error(`daemon did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of shutdown RPC`))
       }, SHUTDOWN_TIMEOUT_MS)
-      child.on('exit', (code, signal) => {
+      child.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
         clearTimeout(timer)
         log(`daemon exited after shutdown RPC (code=${code}, signal=${signal})`)
         resolveExit()
