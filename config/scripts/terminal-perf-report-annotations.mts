@@ -22,14 +22,19 @@ export function parseAnnotationDescription(description: string): Record<string, 
   return values
 }
 
+type TerminalPerfReportSuite = {
+  specs?: { tests?: { annotations?: { type: string; description?: string }[] }[] }[]
+  suites?: TerminalPerfReportSuite[]
+}
+
 export function collectTerminalPerfRows(
-  report: unknown,
+  report: { suites?: TerminalPerfReportSuite[] },
   source: string,
   options: { typePrefix?: string } = {}
 ): Record<string, string>[] {
   const { typePrefix = 'opencode-' } = options
   const rows: Record<string, string>[] = []
-  const visitSuite = (suite) => {
+  const visitSuite = (suite: TerminalPerfReportSuite) => {
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         for (const annotation of test.annotations ?? []) {

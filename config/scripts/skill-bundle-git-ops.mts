@@ -1,6 +1,7 @@
 // Pure Git operations for skill bundle manifest generation.
 // Extracted to keep generate-skill-bundle-manifest.mts under the 600-line budget.
 
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 
 import type { DirNode } from './skill-bundle-manifest-types.mts'
@@ -22,7 +23,7 @@ export type GitPackageFilesResult = {
 }
 
 export function describeFile(manifestPath: string, bytes: Uint8Array, executable: boolean) {
-  const classification = bytes.includes(0) ? 'binary' : 'text'
+  const classification = classifyFile(bytes)
   const textNormalizedSha256 = classification === 'text' ? sha256(normalizeText(bytes)) : null
   const exactSha256 = sha256(bytes)
   return {
@@ -37,19 +38,29 @@ export function describeFile(manifestPath: string, bytes: Uint8Array, executable
   }
 }
 
-function sha256(bytes: Uint8Array | Buffer) {
-  const { createHash } = require('node:crypto')
-  return createHash('sha256').update(bytes).digest('hex')
-}
-
-function gitObjectSha(kind: string, bytes: Uint8Array | Buffer) {
-  const { createHash } = require('node:crypto')
-  return createHash('sha1').update(`${kind} ${bytes.length}\0`).update(bytes).digest()
+function classifyFile(bytes: Uint8Array | Buffer) {
+  if (bytes.includes(0)) {
+    return 'binary'
+  }
+  try {
+    normalizeText(bytes)
+    return 'text'
+  } catch {
+    return 'binary'
+  }
 }
 
 function normalizeText(bytes: Uint8Array | Buffer) {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   return Buffer.from(text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'), 'utf8')
+}
+
+function sha256(bytes: Uint8Array | Buffer) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+function gitObjectSha(kind: string, bytes: Uint8Array | Buffer) {
+  return createHash('sha1').update(`${kind} ${bytes.length}\0`).update(bytes).digest()
 }
 
 export function gitTreeSha(entries: { path: string; executable?: boolean }[]): string {
@@ -79,7 +90,7 @@ export function gitTreeSha(entries: { path: string; executable?: boolean }[]): s
       ...directory.files.map((file) => ({
         mode: file.executable ? '100755' : '100644',
         name: file.filename,
-        hash: Buffer.from(file.gitBlobSha, 'hex')
+        hash: Buffer.from(file.gitBlobSha ?? '', 'hex')
       }))
     ].sort((left, right) => {
       const leftName = left.mode === '40000' ? `${left.name}/` : left.name
@@ -100,6 +111,7 @@ export function gitTreeSha(entries: { path: string; executable?: boolean }[]): s
 function compareCodeUnits(left: string, right: string) {
   return left === right ? 0 : left < right ? -1 : 1
 }
+export { compareCodeUnits, classifyFile, normalizeText }
 
 export function compareManifestPaths(left: string, right: string) {
   const leftParts = left.split('/')
@@ -134,7 +146,7 @@ export function packageDigest(files: SkillFileEntry[]) {
   )
 }
 
-export async function collectGitPackageFiles(
+export function collectGitPackageFiles(
   treeSha: string,
   name: string,
   entries: { mode: string; type: string; objectSha: string; manifestPath: string }[],

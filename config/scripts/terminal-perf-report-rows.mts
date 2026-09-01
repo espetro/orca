@@ -48,9 +48,17 @@ function parseAnnotationDescription(description: string): Record<string, string>
   return values
 }
 
-export function collectTerminalPerfRows(report: unknown, source: string) {
+type TerminalPerfReportSuite = {
+  specs?: { tests?: { annotations?: { type: string; description?: string }[] }[] }[]
+  suites?: TerminalPerfReportSuite[]
+}
+
+export function collectTerminalPerfRows(
+  report: { suites?: TerminalPerfReportSuite[] },
+  source: string
+) {
   const rows: unknown[] = []
-  const visitSuite = (suite) => {
+  const visitSuite = (suite: TerminalPerfReportSuite) => {
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         for (const annotation of test.annotations ?? []) {

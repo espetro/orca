@@ -5,7 +5,6 @@ import process from 'node:process'
 import { isDeepStrictEqual } from 'node:util'
 
 import {
-  classifyFile,
   collectGitPackageFiles,
   collectGitSkillTreeEntries,
   describeFile,
@@ -29,6 +28,12 @@ const SNAPSHOT_REGISTRY_PATH = path.join(OUTPUT_ROOT, 'snapshot-registry.json')
 const RELEASE_MAPPING_PATH = path.join(OUTPUT_ROOT, 'release-mapping.json')
 const CONTENT_ADDRESSED_PATHS = [CURRENT_MANIFEST_PATH, SNAPSHOT_REGISTRY_PATH]
 const ALL_ARTIFACT_PATHS = [...CONTENT_ADDRESSED_PATHS, RELEASE_MAPPING_PATH]
+
+type SnapshotRegistry = { schemaVersion: number; skills: Record<string, unknown[]> }
+type ReleaseMapping = {
+  schemaVersion: number
+  releases: { appVersion: string; skills: Record<string, number> }[]
+}
 
 // Why: kept in step with isOsMetadataSkillEntryName in src/main/skills/skill-package-identity.ts.
 // The scanner ignores these because the OS writes them into a live install; the generator
@@ -219,7 +224,7 @@ function releasedHistoryFromCommitted(committedRegistry: unknown, committedMappi
   const mapping =
     committedMapping &&
     (committedMapping as { schemaVersion: number }).schemaVersion === RELEASE_MAPPING_SCHEMA_VERSION
-      ? structuredClone(committedMapping)
+      ? structuredClone(committedMapping as ReleaseMapping)
       : {
           schemaVersion: RELEASE_MAPPING_SCHEMA_VERSION,
           releases: [] as { appVersion: string; skills: Record<string, number> }[]
@@ -366,9 +371,7 @@ function assertReleasedHistoryPreserved(
     releasedSnapshotCounts: Record<string, number>
     snapshotRegistry: { skills: Record<string, unknown[]> }
   },
-  committedReleaseMapping: {
-    releases: { appVersion: string; skills: Record<string, number> }[]
-  } | null
+  committedReleaseMapping: ReleaseMapping | null
 ) {
   if (
     !committedRegistry ||
@@ -405,17 +408,17 @@ function assertReleasedHistoryPreserved(
   }
 }
 
-async function readCommittedRegistry() {
+async function readCommittedRegistry(): Promise<SnapshotRegistry | null> {
   try {
-    return JSON.parse(await readFile(SNAPSHOT_REGISTRY_PATH, 'utf8'))
+    return JSON.parse(await readFile(SNAPSHOT_REGISTRY_PATH, 'utf8')) as SnapshotRegistry
   } catch {
     return null
   }
 }
 
-async function readCommittedReleaseMapping() {
+async function readCommittedReleaseMapping(): Promise<ReleaseMapping | null> {
   try {
-    return JSON.parse(await readFile(RELEASE_MAPPING_PATH, 'utf8'))
+    return JSON.parse(await readFile(RELEASE_MAPPING_PATH, 'utf8')) as ReleaseMapping
   } catch {
     return null
   }
@@ -476,23 +479,24 @@ function isToleratedReleaseMappingPrefix(
 
 async function verifyArtifacts(
   artifacts: {
-    currentManifest: unknown
     snapshotRegistry: unknown
-    releaseMapping: {
-      schemaVersion: number
-      releases: { appVersion: string; skills: Record<string, number> }[]
-    }
+    releaseMapping: ReleaseMapping
     currentManifest: { skills: { name: string; releaseRevision: number }[] }
   },
   paths = ALL_ARTIFACT_PATHS
 ) {
-  const expected: [string, unknown, ((text: string, arts: unknown) => boolean) | null][] = [
-    [CURRENT_MANIFEST_PATH, artifacts.currentManifest, null],
-    [SNAPSHOT_REGISTRY_PATH, artifacts.snapshotRegistry, null],
-    [RELEASE_MAPPING_PATH, artifacts.releaseMapping, isToleratedReleaseMappingPrefix]
-  ].filter((entry): entry is [string, unknown, ((text: string, arts: unknown) => boolean) | null] =>
-    paths.includes(entry[0])
-  )
+  type ArtifactExpectation = [
+    path: string,
+    value: unknown,
+    tolerated: ((text: string, arts: unknown) => boolean) | null
+  ]
+  const expected = (
+    [
+      [CURRENT_MANIFEST_PATH, artifacts.currentManifest, null],
+      [SNAPSHOT_REGISTRY_PATH, artifacts.snapshotRegistry, null],
+      [RELEASE_MAPPING_PATH, artifacts.releaseMapping, isToleratedReleaseMappingPrefix]
+    ] as ArtifactExpectation[]
+  ).filter(([filePath]) => paths.includes(filePath))
   const stale: string[] = []
   for (const [filePath, value, tolerated] of expected) {
     try {
@@ -552,7 +556,6 @@ export {
   assertReleasedHistoryPreserved,
   buildArtifacts,
   buildReleasedHistory,
-  classifyFile,
   collectPackageFiles,
   describeFile,
   gitTreeSha,
@@ -564,3 +567,5 @@ export {
   verifyArtifacts,
   writeArtifacts
 }
+
+export { classifyFile, normalizeText } from './skill-bundle-git-ops.mts'

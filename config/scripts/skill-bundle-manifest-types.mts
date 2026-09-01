@@ -8,5 +8,5 @@ export type SkillTreeEntry = {
 
 export type DirNode = {
   directories: Map<string, DirNode>
-  files: { filename: string; path: string; executable?: boolean }[]
+  files: (SkillTreeEntry & { filename: string; gitBlobSha?: string })[]
 }

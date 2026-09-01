@@ -15,19 +15,19 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { observeSkillPackage } from '../../src/main/skills/skill-package-identity'
+import type { SkillFileEntry } from './skill-bundle-git-ops.mts'
 import {
   appendReleaseRow,
   assertReleasedHistoryPreserved,
-  classifyFile,
   collectPackageFiles,
   describeFile,
   gitTreeSha,
   isToleratedReleaseMappingPrefix,
-  normalizeText,
   packageDigest,
   releasedHistoryFromCommitted,
   sortManifestFiles
 } from './generate-skill-bundle-manifest.mts'
+import { classifyFile, normalizeText } from './skill-bundle-git-ops.mts'
 
 const temporaryDirectories: string[] = []
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
@@ -50,6 +50,14 @@ async function createReleaseSandbox() {
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
   await copyFile(path.join(import.meta.dirname, 'generate-skill-bundle-manifest.mts'), script)
+  await copyFile(
+    path.join(import.meta.dirname, 'skill-bundle-git-ops.mts'),
+    path.join(root, 'config', 'scripts', 'skill-bundle-git-ops.mts')
+  )
+  await copyFile(
+    path.join(import.meta.dirname, 'skill-bundle-manifest-types.mts'),
+    path.join(root, 'config', 'scripts', 'skill-bundle-manifest-types.mts')
+  )
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
   return {
     generate: (...args) => execFileSync(process.execPath, [script, ...args], { stdio: 'pipe' }),
@@ -99,8 +107,8 @@ describe('skill bundle manifest generator', () => {
 
     // Why: git ls-tree emits [Zebra.md, apple.md, sub.md, sub/inner.txt]; index-based
     // snapshot matching requires history and observation to share one order.
-    const gitOrdered = ['Zebra.md', 'apple.md', 'sub.md', 'sub/inner.txt'].map((manifestPath) =>
-      walked.find((file) => file.path === manifestPath)
+    const gitOrdered: SkillFileEntry[] = ['Zebra.md', 'apple.md', 'sub.md', 'sub/inner.txt'].map(
+      (manifestPath) => walked.find((file) => file.path === manifestPath)!
     )
 
     expect(sortManifestFiles(gitOrdered)).toEqual(walked)
