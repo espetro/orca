@@ -149,7 +149,6 @@ import type {
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
-import type { RemoteWorkspaceChangedEvent } from '../shared/remote-workspace-types'
 import type {
   CodexRateLimitResetResult,
   GrokAccountStatus,
@@ -251,6 +250,7 @@ import { uiCommandWorktreeBridge } from './bridge/ui-command-worktree-bridge'
 import { uiCommandBrowserBridge } from './bridge/ui-command-browser-bridge'
 import { uiCommandTerminalBridge } from './bridge/ui-command-terminal-bridge'
 import { uiWindowBridge } from './bridge/ui-window-bridge'
+import { cacheBridge, sessionBridge, remoteWorkspaceBridge } from './bridge/workspace-session-bridge'
 import { worktreesBridge } from './bridge/worktrees-bridge'
 import {
   workspaceCleanupBridge,
@@ -2301,6 +2301,9 @@ const api: PreloadApi = {
     }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
   },
 
+  cache: cacheBridge,
+  session: sessionBridge,
+  remoteWorkspace: remoteWorkspaceBridge,
   ephemeralVm: {
     listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
     listRecipeCatalog: () => ipcRenderer.invoke('ephemeralVm:listRecipeCatalog'),
@@ -2324,41 +2327,8 @@ const api: PreloadApi = {
     getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
   } satisfies PreloadApi['ephemeralVm'],
 
-  cache: {
-    getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
-    setGitHub: (args) => ipcRenderer.invoke('cache:setGitHub', args)
-  } satisfies PreloadApi['cache'],
 
-  session: {
-    // hostId is optional; main defaults it to 'local' so existing omitting call sites keep the local session partition.
-    get: (hostId) => ipcRenderer.invoke('session:get', hostId),
-    set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
-    patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
-    flush: () => ipcRenderer.invoke('session:flush'),
-    readTerminalScrollback: (args) =>
-      ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
-    /** Synchronous session save for beforeunload — blocks until flushed to disk. */
-    setSync: (args, hostId) => {
-      ipcRenderer.sendSync('session:set-sync', args, hostId)
-    }
-  } satisfies PreloadApi['session'],
 
-  remoteWorkspace: {
-    get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
-    setForConnectedTargets: (args) =>
-      ipcRenderer.invoke('remoteWorkspace:setForConnectedTargets', args),
-    listEnabledConnectedTargets: () =>
-      ipcRenderer.invoke('remoteWorkspace:listEnabledConnectedTargets'),
-    listConnectedClients: (args) =>
-      ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
-    clientId: () => ipcRenderer.invoke('remoteWorkspace:clientId'),
-    onChanged: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: RemoteWorkspaceChangedEvent) =>
-        callback(data)
-      ipcRenderer.on('remoteWorkspace:changed', listener)
-      return () => ipcRenderer.removeListener('remoteWorkspace:changed', listener)
-    }
-  } satisfies PreloadApi['remoteWorkspace'],
 
 
   notebook: {
