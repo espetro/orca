@@ -381,7 +381,19 @@ function applyPhraseFixes(enValue, localeValue, locale, key = '') {
   return result
 }
 
-export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
+export type TranslationRepairInput = {
+  key: string
+  enValue: string
+  localeValue: string
+  locale: string
+}
+
+export function repairTranslatedValue({
+  key,
+  enValue,
+  localeValue,
+  locale
+}: TranslationRepairInput) {
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
