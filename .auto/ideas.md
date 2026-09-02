@@ -29,7 +29,24 @@ This machine had real memory-pressure sources that inflate benchmark noise. Befo
 - Long-run renderer growth (465MB after ~1 day) is itself evidence of retention worth investigating later, but it is out of scope for the idle-RSS metric.
 
 # Loop experiment ideas (2026-08-31 research pass)
-- V8 flags as loop experiments: --max-semi-space-size, --max-old-space-size (skip --optimize-for-size; CPU tradeoffs)
+- V8 flags as loop experiments: --max-semi-space-size, --max-old-space-size
 - Buffer hygiene: Buffer.from(chunk.subarray(...)) copies vs pinned parents; allocUnsafeSlow for persistent small buffers
 - GC telemetry via perf_hooks PerformanceObserver(entryTypes:['gc']) for allocation-rate signal (needs in-app hook; later iteration)
 - Rejected: malloc_trim/MALLOC_CONF (glibc/jemalloc only; macOS uses its own allocator)
+- Rejected: `--single-process` (crashes Electron with node-pty/webviews/CDP, drops process security/isolation)
+
+## Candidate Levers for Autoresearch Loop (2026-09-02)
+
+1. **Chromium Low-End Device Mode (`--enable-low-end-device-mode`)**:
+   - Forces `base::SysInfo::IsLowEndDevice() == true`.
+   - Halves image decode caches, drops compositor tile headroom, and aggressively discards hidden tab caches.
+2. **Renderer Process Limit Tuning (`--renderer-process-limit=2` vs `4`)**:
+   - Caps total renderer processes spawned for webviews/previews to prevent unbounded process growth.
+3. **Full GPU Process Disabling (`--disable-gpu` / `--disable-software-rasterizer`)**:
+   - Eliminates the ~155MB Chromium GPU process entirely for headless or extreme low-memory environments, falling back to Canvas/DOM terminal rendering.
+4. **Native Code Caching (`NODE_COMPILE_CACHE` / Chromium Script Cache)**:
+   - Evaluates warm startup time gains (-200ms) and transient AST heap spike reduction vs disk footprint.
+5. **Linear / Jira Cache Unspreading**:
+   - Selective field extraction when storing issues in Zustand rather than spreading raw API payloads.
+6. **Background Tab Auto-Hibernation**:
+   - Unmounting terminal DOM for tabs idle > 5 minutes while preserving PTY headless stream.

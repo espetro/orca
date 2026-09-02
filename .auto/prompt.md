@@ -1,11 +1,11 @@
 # Objective
 
-Reduce idle main-process phys_footprint of the candidate app vs the pinned baseline in the no-editor fixture, without regressing the other roles. Only confirmed reductions in `main_footprint_delta_mb` advance the branch; everything else is secondary.
+Reduce idle process phys_footprint (main, renderer, and forked helper processes) of the candidate app vs the pinned baseline in the fixture, without regressing performance or stability. Confirmed reductions in `main_footprint_delta_mb`, `renderer_footprint_delta_mb`, and `fork_footprint_delta_mb` advance the branch.
 
 # Metrics (read METRIC lines from measure.sh output)
 
-- Primary: `main_footprint_delta_mb` — per-run median main-role phys_footprint (samples type=main footprintBytes), median of 3 runs per side, A minus B. Negative = better. Phys_footprint is pre-compression dirty+clean pages: the macOS-correct memory metric, ~5-9x tighter than RSS on this host (empirical half-spread 10.5MB vs 56-94MB).
-- Secondary (must not regress): `main_footprint_pvalue` (exact Mann-Whitney over run medians), `combined_rss_delta_mb` (all roles workingSetKb), `heap_used_delta_mb`, `main_rss_postgc_delta_mb` (diagnostic only - forced V8 GC does NOT reclaim macOS dirty pages, so post-GC footprint ≈ pre-GC plateau; do not chase post-GC drops).
+- Primary: `main_footprint_delta_mb`, `renderer_footprint_delta_mb`, `fork_footprint_delta_mb` — per-run median role phys_footprint (from `/usr/bin/footprint -p <pid>`), median of 3 runs per side, A minus B. Negative = better. Phys_footprint is pre-compression dirty+clean pages: the macOS-correct memory metric.
+- Secondary (must not regress): `combined_rss_delta_mb` (all roles workingSetKb), `heap_used_delta_mb`, `main_footprint_pvalue` (Mann-Whitney U).
 - Resolution rule: footprint run-to-run half-spread is ~10-11MB. A 3-run A/B resolves nothing under ~15MB. If |delta| < 15MB, rerun once; only trust it if both runs agree in sign. For 10-20MB candidate wins, confirm with MEASURE_RUNS=5 before keeping.
 - p-value guardrail: never keep on a delta whose p-value is 1.0 even if the MB number looks good (identical-code baselines produced p=1.0 with -7MB deltas; that is noise).
 
@@ -15,18 +15,24 @@ Reduce idle main-process phys_footprint of the candidate app vs the pinned basel
 
 # Known measurement properties (do not rediscover)
 
-- Artifacts: schema orca.resource-bench-run; per-tick samples have type main/gpu/utility/renderer (NO zygote on darwin); mainProcess aggregate is in-proc (rssBytes bytes); footprintBytes is bytes, integer-MB quantized by the tool default (a future upgrade is footprint -f bytes; optional).
-- measure.sh analyzer: sorts ticks by timestamp (overlapping async ticks land out of order), EXCLUDES the final tick (teardown spike +20-60MB in 5/6 runs), bounds the post-GC tail by postGc.startedAt (slice(-5) reached into pre-GC ticks because effective tick period is 3-4s, footprint probes are slow).
-- cpuPercent is always 0 on darwin in-app; main_cpu_delta_pct is a placeholder. mainHeapSpaces/mainMemoryUsage are null in packaged apps (attribution failure, non-blocking).
-- Combined roles zygote/other contribute 0 on both sides (fine). If a delta prints 0.00 exactly and looks suspicious, check both sides had runs: the analyzer now fails loudly on an empty side.
+- Artifacts: schema orca.resource-bench-run; per-tick samples have type main/gpu/utility/renderer/fork (NO zygote on darwin); mainProcess aggregate is in-proc (rssBytes bytes); footprintBytes is bytes, integer-MB quantized by the tool default.
+- measure.sh analyzer: sorts ticks by timestamp (overlapping async ticks land out of order), EXCLUDES the final tick (teardown spike +20-60MB in 5/6 runs), bounds the post-GC tail by postGc.startedAt.
+- Negative results inventory (DO NOT RETRY):
+  - `--single-process`: Drops Chromium multi-process isolation and crashes with Node-PTY, webviews, and CDP. Unusable in Electron.
+  - Direct bytecode packaging (`bytenode`): Brittle V8 version coupling, breaks sandboxed ESM renderer, strips symbolication from crash telemetry.
+  - Forced V8 GC: Does NOT return dirty pages to macOS kernel immediately without purge.
 - Known upstream-class leak already fixed on this branch: terminal error accumulation bound; max-lines ratchets; do not re-audit renderer Maps - a 2026-08-30 audit found all major caches properly capped.
 
 # Files in Scope
 
-- src/main/** memory-relevant subsystems (sqlite sync-database.ts pragmas F2, service lazy-start)
-- src/renderer/src/** lazy loading and chunking (F1 warp theme worker teardown useWarpThemeImport.ts, F3 lazy Monaco in pr-files-combined-diff-viewer/body.tsx)
-- electron.vite.config.ts chunking
-- V8 flags on the bench app main process (--max-semi-space-size=2 gave -36MB RSS in a prior study; test via src/main/index.ts bench-startup-switches pattern already present)
+- `src/main/startup/host-memory-budget.ts` (host RAM budget tiers & thresholds)
+- `src/main/startup/disabled-chromium-features.ts` & `src/main/startup/configure-process.ts` (Chromium feature flags & GPU limits)
+- `src/main/startup/renderer-heap-headroom.ts` (V8 old space and flags)
+- `src/renderer/src/lib/pane-manager/terminal-webgl-hidden-retention.ts` (WebGL GPU context retention)
+- `src/renderer/src/components/terminal/background-terminal-worktree-mount.ts` (tab deferral)
+- `src/main/daemon/daemon-session-scrollback-window.ts` (detached session retention)
+- `src/main/ai-vault/session-scanner-service-client-state.ts` (idle service worker timeout)
+- `electron.vite.config.ts` chunking and lazy loading seams
 
 # Off Limits
 
