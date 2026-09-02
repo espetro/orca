@@ -50,27 +50,34 @@ export async function discoverMarkdownRelativePaths(
       throw error
     }
 
-    for await (const entry of directory) {
-      throwIfAborted(options.signal)
-      const relativePath = relativeDirectoryPath
-        ? `${relativeDirectoryPath}/${entry.name}`
-        : entry.name
-      const nextDepth = depth + 1
-      const shouldDescend = entry.isDirectory() && options.shouldDescend(relativePath, entry.name)
-      visitMarkdownDocumentListingEntry(budget, relativePath, shouldDescend ? nextDepth : depth)
-      if (entry.isSymbolicLink()) {
-        continue
-      }
-      if (entry.isDirectory()) {
-        if (shouldDescend) {
-          await visitDirectory(join(absoluteDirectoryPath, entry.name), relativePath, nextDepth)
+    // try/finally guarantees closure even when an abort throws between
+    // iterations or a nested frame throws while this frame is suspended.
+    try {
+      for await (const entry of directory) {
+        throwIfAborted(options.signal)
+        const relativePath = relativeDirectoryPath
+          ? `${relativeDirectoryPath}/${entry.name}`
+          : entry.name
+        const nextDepth = depth + 1
+        const shouldDescend = entry.isDirectory() && options.shouldDescend(relativePath, entry.name)
+        visitMarkdownDocumentListingEntry(budget, relativePath, shouldDescend ? nextDepth : depth)
+        if (entry.isSymbolicLink()) {
+          continue
         }
-        continue
+        if (entry.isDirectory()) {
+          if (shouldDescend) {
+            await visitDirectory(join(absoluteDirectoryPath, entry.name), relativePath, nextDepth)
+          }
+          continue
+        }
+        if (entry.isFile() && isMarkdownDocumentPath(entry.name)) {
+          retainMarkdownRelativePath(budget, rootPath, relativePath)
+          documents.push(relativePath)
+        }
       }
-      if (entry.isFile() && isMarkdownDocumentPath(entry.name)) {
-        retainMarkdownRelativePath(budget, rootPath, relativePath)
-        documents.push(relativePath)
-      }
+    } finally {
+      // readDirectory may be injected as a non-Dir iterable (tests); only real handles close.
+      await ('close' in directory ? (directory as Dir).close().catch(() => undefined) : undefined)
     }
   }
 

@@ -7,12 +7,19 @@ type LinuxProcSocketOwnerScannerDependencies = {
 }
 
 async function* readNodeDirectoryNames(directoryPath: string): AsyncGenerator<string> {
+  // try/finally closes the handle even when the consumer breaks out of the
+  // for-await (the generator's return() runs finally blocks).
+  let directory: Awaited<ReturnType<typeof opendir>> | undefined
   try {
-    const directory = await opendir(directoryPath)
+    directory = await opendir(directoryPath)
     for await (const entry of directory) {
       yield entry.name
     }
-  } catch {}
+  } catch {
+    // ignored
+  } finally {
+    await directory?.close().catch(() => undefined)
+  }
 }
 
 const defaultDependencies: LinuxProcSocketOwnerScannerDependencies = {
