@@ -26,8 +26,14 @@ function createFixture() {
     writeFileSync(join(directory, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
   }
 
-  expect(run('git', ['init', '-q'], { cwd: workspace }).status).toBe(0)
-  expect(run('git', ['add', 'package.json', 'pnpm-lock.yaml'], { cwd: workspace }).status).toBe(0)
+  const gitEnv = {
+    // Why: dev machines often ignore pnpm-lock.yaml globally; fixtures must not inherit that.
+    env: { ...process.env, GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null' }
+  }
+  expect(run('git', ['init', '-q'], { cwd: workspace, ...gitEnv }).status).toBe(0)
+  expect(
+    run('git', ['add', 'package.json', 'pnpm-lock.yaml'], { cwd: workspace, ...gitEnv }).status
+  ).toBe(0)
 
   const pnpm = join(bin, 'pnpm')
   writeFileSync(pnpm, '#!/bin/sh\nexit 0\n')

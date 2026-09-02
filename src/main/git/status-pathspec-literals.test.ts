@@ -5,7 +5,7 @@ import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './status'
 
-import { gitFixtureExecOptions } from './git-fixture-environment'
+import { gitFixtureExecOptions } from './git-fixture-test-harness'
 
 const tempRoots: string[] = []
 

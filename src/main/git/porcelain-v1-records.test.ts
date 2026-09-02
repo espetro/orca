@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parsePorcelainV1Records } from './porcelain-v1-records'
-import { gitFixtureExecOptions } from './git-fixture-environment'
+import { gitFixtureExecOptions } from './git-fixture-test-harness'
 
 const tempRoots: string[] = []
 

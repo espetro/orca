@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'node:f
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { bulkDiscardChanges, discardChanges } from './status'
-import { gitFixtureExecOptions } from './git-fixture-environment'
+import { gitFixtureExecOptions } from './git-fixture-test-harness'
 
 const tempRoots: string[] = []
 

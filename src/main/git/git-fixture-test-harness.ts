@@ -1,7 +1,9 @@
-import type { ExecFileSyncOptions } from 'node:child_process'
+import type * as ChildProcess from 'node:child_process'
 
 // Why: dev machines often ignore *.log/node_modules globally; fixtures must not inherit that.
-export function gitFixtureExecOptions(cwd: string): ExecFileSyncOptions & { encoding: 'utf8' } {
+export function gitFixtureExecOptions(cwd: string): ChildProcess.ExecFileSyncOptions & {
+  encoding: 'utf8'
+} {
   return {
     cwd,
     encoding: 'utf8',
