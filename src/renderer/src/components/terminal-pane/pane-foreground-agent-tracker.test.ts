@@ -1,5 +1,3 @@
-// @vitest-environment happy-dom
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'

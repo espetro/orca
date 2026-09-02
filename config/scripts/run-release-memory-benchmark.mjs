@@ -301,6 +301,7 @@ export function buildResourceBenchArtifact({
   heapBoot,
   heapIdle,
   postGc = null,
+  mainAttribution = null,
   gitCommit = null
 }) {
   if (!dump) {
@@ -322,6 +323,10 @@ export function buildResourceBenchArtifact({
     heapBoot: heapBoot ?? null,
     heapIdle: heapIdle ?? null,
     postGc,
+    // Diagnostic main-process heap attribution; compare tooling ignores nulls.
+    mainHeapSpaces: mainAttribution?.heapSpaces ?? null,
+    mainMemoryUsage: mainAttribution?.memoryUsage ?? null,
+    mainHeapAttributionAt: mainAttribution?.takenAt ?? null,
     gitCommit
   }
 }
@@ -355,10 +360,11 @@ function sleep(ms) {
 }
 
 // Forced GC protocol constants: identical for every spawn so sides stay
-// comparable. Recorder ticks at 2s, so POST_GC_TAIL_S ~= 5 tail ticks.
+// comparable. Recorder ticks at 2s; 5s tail yields 2-3 post-GC ticks.
 const FORCED_GC_CALLS = 3
 const FORCED_GC_GAP_S = 1.5
-const POST_GC_TAIL_S = 10
+// 5s at 2s recorder ticks still yields 2-3 tail ticks for a post-GC median.
+const POST_GC_TAIL_S = 5
 
 // Force V8 GC over CDP after the sampling window, then let the recorder
 // capture a post-GC tail before the idle snapshot and dump.
@@ -383,6 +389,30 @@ export async function forceGcOverCdp(cdpSession) {
   return { applied, ticks: FORCED_GC_CALLS, startedAt: new Date().toISOString() }
 }
 
+// Main-process heap attribution over a browser-level CDP session (browser target == Electron
+// main, so Runtime.evaluate sees the Node world); any failure null-degrades.
+export async function collectMainHeapAttribution(createSession) {
+  let cdpSession
+  try {
+    cdpSession = await createSession()
+    const evaluate = (expression) =>
+      cdpSession
+        .send('Runtime.evaluate', { expression, returnByValue: true })
+        .then((r) => (r.exceptionDetails ? null : JSON.parse(r.result.value)))
+    // Per-space V8 stats + process.memoryUsage, evaluated in the Node world.
+    const [heapSpaces, memoryUsage] = await Promise.all([
+      evaluate('JSON.stringify(require("node:v8").getHeapSpaceStatistics())'),
+      evaluate('JSON.stringify(process.memoryUsage())')
+    ])
+    return heapSpaces == null && memoryUsage == null
+      ? null
+      : { takenAt: new Date().toISOString(), heapSpaces, memoryUsage }
+  } catch {
+    return null
+  } finally {
+    await cdpSession?.detach().catch(() => {})
+  }
+}
 async function fetchCdpTargets(cdpPort, timeoutMs = 60_000) {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
@@ -520,6 +550,7 @@ async function main() {
     let fixtureState = null
     let externalCrossCheck = { start: null, end: null }
     let postGc = null
+    let mainAttribution = null
     let dump = null
     // Hoisted so the finally block can detach Playwright before killing the
     // tree; a live CDP connection is what triggers the "target closed" class.
@@ -553,6 +584,7 @@ async function main() {
       externalCrossCheck.end = externalSweep(rootPid)
       postGc = await forceGcOverCdp(cdpSession)
       await settle(POST_GC_TAIL_S)
+      mainAttribution = await collectMainHeapAttribution(() => browser.newBrowserCDPSession())
       idleHeapSummary = await takeHeapSnapshotSummary(cdpSession)
       if (bridgeReady) {
         await page.evaluate(() => window.__orcaE2E__.resources.mark('snapshot-taken'))
@@ -569,6 +601,7 @@ async function main() {
         heapBoot: bootHeapSummary,
         heapIdle: idleHeapSummary,
         postGc,
+        mainAttribution,
         gitCommit: gitCommit()
       })
       mkdirSync(path.dirname(path.resolve(artifactPath)), { recursive: true })

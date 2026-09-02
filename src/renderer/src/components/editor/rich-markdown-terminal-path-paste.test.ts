@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import type { Editor } from '@tiptap/react'
 import { describe, expect, it } from 'vitest'
 import {

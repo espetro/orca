@@ -4,8 +4,14 @@ import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'node:f
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { bulkDiscardChanges, discardChanges } from './status'
+import { gitFixtureExecOptions } from './git-fixture-test-harness'
 
 const tempRoots: string[] = []
+
+// Why: code under test spawns git with ambient env; a dev machine's global
+// excludesFile hides fixture files from status and breaks assertions.
+process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+process.env.GIT_CONFIG_SYSTEM = '/dev/null'
 
 async function createRepoWithOutsideDirectory(): Promise<{
   repo: string
@@ -20,12 +26,12 @@ async function createRepoWithOutsideDirectory(): Promise<{
 
   await mkdir(repo)
   await mkdir(outsideDir)
-  execFileSync('git', ['init', '-q'], { cwd: repo })
-  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
-  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
+  execFileSync('git', ['init', '-q'], gitFixtureExecOptions(repo))
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], gitFixtureExecOptions(repo))
+  execFileSync('git', ['config', 'user.name', 'Test User'], gitFixtureExecOptions(repo))
   await writeFile(path.join(repo, '.gitkeep'), '')
-  execFileSync('git', ['add', '.gitkeep'], { cwd: repo })
-  execFileSync('git', ['commit', '-q', '-m', 'initial'], { cwd: repo })
+  execFileSync('git', ['add', '.gitkeep'], gitFixtureExecOptions(repo))
+  execFileSync('git', ['commit', '-q', '-m', 'initial'], gitFixtureExecOptions(repo))
   await writeFile(outsideFile, 'outside')
 
   return { repo, outsideDir, outsideFile }
@@ -87,8 +93,8 @@ describe('discardChanges symlink safety', () => {
   it('removes ignored paths selected for discard', async () => {
     const { repo } = await createRepoWithOutsideDirectory()
     await writeFile(path.join(repo, '.gitignore'), 'ignored/\n')
-    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
-    execFileSync('git', ['commit', '-q', '-m', 'ignore ignored dir'], { cwd: repo })
+    execFileSync('git', ['add', '.gitignore'], gitFixtureExecOptions(repo))
+    execFileSync('git', ['commit', '-q', '-m', 'ignore ignored dir'], gitFixtureExecOptions(repo))
     const ignoredFile = path.join(repo, 'ignored', 'file.txt')
     await mkdir(path.dirname(ignoredFile))
     await writeFile(ignoredFile, 'ignored')
@@ -101,8 +107,8 @@ describe('discardChanges symlink safety', () => {
   it('treats untracked discard paths with Git glob characters as literal paths', async () => {
     const { repo } = await createRepoWithOutsideDirectory()
     await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
-    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
-    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
+    execFileSync('git', ['add', '.gitignore'], gitFixtureExecOptions(repo))
+    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], gitFixtureExecOptions(repo))
     await writeFile(path.join(repo, globNamedFile), 'selected')
     await writeFile(path.join(repo, globMatchedFile), 'unrelated')
     await writeFile(path.join(repo, 'ignored.log'), 'ignored')
@@ -118,8 +124,12 @@ describe('discardChanges symlink safety', () => {
     const { repo } = await createRepoWithOutsideDirectory()
     await writeFile(path.join(repo, globNamedFile), 'selected')
     await writeFile(path.join(repo, globMatchedFile), 'keep')
-    execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
-    execFileSync('git', ['commit', '-q', '-m', 'track log fixtures'], { cwd: repo })
+    execFileSync(
+      'git',
+      ['add', gitLiteralPathspec(globNamedFile), globMatchedFile],
+      gitFixtureExecOptions(repo)
+    )
+    execFileSync('git', ['commit', '-q', '-m', 'track log fixtures'], gitFixtureExecOptions(repo))
     await writeFile(path.join(repo, globNamedFile), 'selected modified')
     await writeFile(path.join(repo, globMatchedFile), 'keep modified')
 
@@ -132,8 +142,8 @@ describe('discardChanges symlink safety', () => {
   it('treats bulk untracked discard paths with Git glob characters as literal paths', async () => {
     const { repo } = await createRepoWithOutsideDirectory()
     await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
-    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
-    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
+    execFileSync('git', ['add', '.gitignore'], gitFixtureExecOptions(repo))
+    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], gitFixtureExecOptions(repo))
     await writeFile(path.join(repo, globNamedFile), 'selected')
     await writeFile(path.join(repo, globMatchedFile), 'unrelated')
     await writeFile(path.join(repo, 'ignored.log'), 'ignored')

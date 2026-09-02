@@ -12,7 +12,8 @@ import {
   resolveAppExecutable,
   runArtifactPath,
   summarizeRoleRss,
-  takeHeapSnapshotSummary
+  takeHeapSnapshotSummary,
+  collectMainHeapAttribution
 } from './run-release-memory-benchmark.mjs'
 import { reapLeftovers } from './bench-process-reap.mjs'
 import { cliffsDelta, mannWhitneyU } from './bench-rank-stats.mjs'
@@ -291,6 +292,92 @@ describe('run-release-memory-benchmark helpers', () => {
         alive = false
       }
       expect(alive).toBe(false)
+    })
+  })
+
+  describe('main-process heap attribution (WI-B)', () => {
+    it('collects v8 heap spaces and process.memoryUsage from the main process', async () => {
+      const spaces = [{ space_name: 'new_space', space_used_size: 1024, space_size: 4096 }]
+      const mem = { heapUsed: 5e6, external: 1e6, arrayBuffers: 2e5 }
+      const expressions = []
+      const session = {
+        send: async (method, params) => {
+          expect(method).toBe('Runtime.evaluate')
+          expressions.push(params.expression)
+          const value = params.expression.includes('getHeapSpaceStatistics')
+            ? JSON.stringify(spaces)
+            : JSON.stringify(mem)
+          return { result: { value } }
+        },
+        detach: async () => undefined
+      }
+      const attribution = await collectMainHeapAttribution(async () => session)
+      expect(attribution.takenAt).toBeTruthy()
+      expect(attribution.heapSpaces).toEqual(spaces)
+      expect(attribution.memoryUsage).toEqual(mem)
+      expect(expressions.some((expression) => expression.includes('getHeapSpaceStatistics'))).toBe(
+        true
+      )
+      expect(expressions.some((expression) => expression.includes('process.memoryUsage'))).toBe(
+        true
+      )
+    })
+
+    it('degrades to null when session creation or evaluation fails', async () => {
+      expect(
+        await collectMainHeapAttribution(async () => {
+          throw new Error('no browser target')
+        })
+      ).toBeNull()
+
+      const failingSession = {
+        send: async () => {
+          throw new Error('target closed')
+        },
+        detach: async () => undefined
+      }
+      expect(await collectMainHeapAttribution(async () => failingSession)).toBeNull()
+    })
+
+    it('null-degrades when Runtime.evaluate returns an exception instead of a value', async () => {
+      const session = {
+        send: async () => ({ result: { type: 'object' }, exceptionDetails: { text: 'boom' } }),
+        detach: async () => undefined
+      }
+      const attribution = await collectMainHeapAttribution(async () => session)
+      expect(attribution).toBeNull()
+    })
+
+    it('attaches mainHeapSpaces/mainMemoryUsage to the v2 artifact', () => {
+      const dump = { schema: 'orca.resource-dump', ticks: [], markers: [] }
+      const artifact = buildResourceBenchArtifact({
+        label: 'Orca',
+        fixture: 'standard',
+        runIndex: 0,
+        settleSeconds: 30,
+        windowSeconds: 120,
+        dump,
+        postGc: { applied: true },
+        mainAttribution: {
+          takenAt: '2026-08-31T00:00:00.000Z',
+          heapSpaces: [{ space_name: 'old_space', space_used_size: 7 }],
+          memoryUsage: { heapUsed: 8 }
+        }
+      })
+      expect(artifact.mainHeapSpaces).toEqual([{ space_name: 'old_space', space_used_size: 7 }])
+      expect(artifact.mainMemoryUsage).toEqual({ heapUsed: 8 })
+      expect(artifact.mainHeapAttributionAt).toBe('2026-08-31T00:00:00.000Z')
+      // Omitted attribution degrades to nulls, never throws.
+      const bare = buildResourceBenchArtifact({
+        label: 'x',
+        fixture: 'standard',
+        runIndex: 0,
+        settleSeconds: 30,
+        windowSeconds: 120,
+        dump
+      })
+      expect(bare.mainHeapSpaces).toBeNull()
+      expect(bare.mainMemoryUsage).toBeNull()
     })
   })
 

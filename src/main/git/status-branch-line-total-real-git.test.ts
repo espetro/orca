@@ -5,22 +5,27 @@ import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { invalidateGitBranchLineTotalInFlight } from '../../shared/git-branch-line-total'
 import { getStatus, invalidateGitReadCaches } from './status'
+import { gitFixtureExecOptions } from './git-fixture-test-harness'
 
 const tempRoots: string[] = []
 
+// Why: the code under test spawns git with the ambient process env; without this,
+// a dev machine's global excludesFile (e.g. *.log, pnpm-lock.yaml) hides fixture
+// files from status and breaks untracked-path assertions.
+process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+process.env.GIT_CONFIG_SYSTEM = '/dev/null'
+
 function git(repo: string, args: string[]): string {
-  return execFileSync('git', args, {
-    cwd: repo,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  }).trim()
+  return execFileSync('git', args, gitFixtureExecOptions(repo)).trim()
 }
 
 async function createFixtureRepo(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-line-total-'))
   tempRoots.push(root)
   const repo = path.join(root, 'repo')
-  execFileSync('git', ['init', '-q', repo])
+  execFileSync('git', ['init', '-q', repo], {
+    env: gitFixtureExecOptions(repo).env
+  })
   git(repo, ['config', 'user.email', 'test@example.com'])
   git(repo, ['config', 'user.name', 'Test User'])
   git(repo, ['config', 'commit.gpgSign', 'false'])

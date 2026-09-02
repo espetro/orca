@@ -1,0 +1,46 @@
+{
+  "schema": "orca.resource-dump",
+  "schemaVersion": 1,
+  "recordedAt": 0,
+  "platform": "darwin",
+  "appVersion": "1.0.0",
+  "appCommit": null,
+  "uptimeSeconds": 60,
+  "recorderConfig": { "tickMs": 2000, "ringCapacity": 3600, "startedAt": 0 },
+  "ticks": [
+    {
+      "timestamp": 1000,
+      "samples": [
+        {
+          "timestamp": 1000,
+          "pid": 1,
+          "type": "renderer",
+          "rssBytes": 100,
+          "workingSetKb": null,
+          "footprintBytes": 100,
+          "cpuPercent": 1
+        }
+      ],
+      "host": {
+        "availableMemoryBytes": 8000000000,
+        "availableMemorySource": "purgeable-and-free",
+        "loadAverage1m": 2,
+        "thermal": { "cpuSpeedLimitPercent": null },
+        "pageinsDelta": null,
+        "pageoutsDelta": null
+      },
+      "mainProcess": null
+    }
+  ],
+  "markers": [],
+  "hostSamples": [
+    {
+      "availableMemoryBytes": 8000000000,
+      "availableMemorySource": "purgeable-and-free",
+      "loadAverage1m": 2,
+      "thermal": { "cpuSpeedLimitPercent": null },
+      "pageinsDelta": null,
+      "pageoutsDelta": null
+    }
+  ]
+}

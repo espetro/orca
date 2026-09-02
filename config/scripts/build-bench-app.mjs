@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
@@ -59,7 +60,47 @@ const NATIVE_MODULES = [
 ]
 
 export function parseArgs(argv) {
-  return { rendererOnly: argv.includes('--renderer-only') }
+  return {
+    rendererOnly: argv.includes('--renderer-only'),
+    skipUnchanged: argv.includes('--skip-unchanged')
+  }
+}
+
+const BENCH_INPUT_ROOTS = ['src', 'config']
+
+export function getBenchHashFilePath(repoRootOverride = repoRoot) {
+  return path.join(repoRootOverride, 'dist', 'mac-arm64', '.bench-build-hash.json')
+}
+
+// content hash of relative path + bytes, so a revert re-triggers the build
+export function computeBenchInputsHash(roots, deps = {}) {
+  const readdir = deps.readdirSync ?? readdirSync
+  const readFile = deps.readFileSync ?? readFileSync
+  const baseDir = deps.repoRoot ?? repoRoot
+  const hash = (deps.createHash ?? createHash)('sha256')
+  for (const root of roots.sort()) {
+    const files = listSourceFiles(root, readdir)
+      .map((file) => path.relative(baseDir, file))
+      .sort()
+    for (const relPath of files) {
+      hash.update(relPath)
+      hash.update(readFile(path.join(baseDir, relPath)))
+    }
+  }
+  return hash.digest('hex')
+}
+
+export function isBenchBuildUpToDate({ storedHash, computedHash, packagedAppDir }, deps = {}) {
+  const exists = deps.existsSync ?? existsSync
+  return storedHash !== undefined && storedHash === computedHash && exists(packagedAppDir)
+}
+
+function readStoredBenchHash(hashFilePath, readFile = readFileSync) {
+  try {
+    return JSON.parse(readFile(hashFilePath, 'utf8'))
+  } catch {
+    return undefined
+  }
 }
 
 function listSourceFiles(dir, readdir = readdirSync) {
@@ -122,12 +163,29 @@ export function createBenchBuild({
   runner = spawnSync,
   env = process.env,
   isUpToDate = isNativeModuleUpToDate,
-  rendererAssetsDir = path.join(repoRoot, 'out', 'renderer', 'assets')
+  rendererAssetsDir = path.join(repoRoot, 'out', 'renderer', 'assets'),
+  computeInputsHash = computeBenchInputsHash,
+  isUpToDateByHash = isBenchBuildUpToDate,
+  writeStateFile = writeFileSync,
+  readStateFile = readStoredBenchHash,
+  hashFilePath = getBenchHashFilePath()
 } = {}) {
   const packagedAppPath = path.join(repoRoot, 'dist', 'mac-arm64', 'Orca.app')
 
   async function run() {
     const args = parseArgs(process.argv.slice(2))
+    if (args.skipUnchanged) {
+      const state = readStateFile(hashFilePath)
+      const computedHash = computeInputsHash(
+        BENCH_INPUT_ROOTS.map((dir) => path.join(repoRoot, dir))
+      )
+      const packagedAppDir = path.dirname(packagedAppPath)
+      if (isUpToDateByHash({ storedHash: state?.hash, computedHash, packagedAppDir })) {
+        log(`skipping build, inputs unchanged (hash ${computedHash.slice(0, 12)})`)
+        process.stdout.write(`${packagedAppPath}\n`)
+        return
+      }
+    }
     if (!args.rendererOnly) {
       log('step 1/5: native module builds')
       for (const module of NATIVE_MODULES) {
@@ -217,6 +275,18 @@ export function createBenchBuild({
       )
     }
     log(`store exposure verified (${matchCount} __store matches)`)
+
+    writeStateFile(
+      hashFilePath,
+      JSON.stringify(
+        {
+          hash: computeInputsHash(BENCH_INPUT_ROOTS.map((dir) => path.join(repoRoot, dir))),
+          appPath: packagedAppPath
+        },
+        null,
+        2
+      )
+    )
 
     process.stdout.write(`${packagedAppPath}\n`)
   }

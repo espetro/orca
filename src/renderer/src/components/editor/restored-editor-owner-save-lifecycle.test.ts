@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'

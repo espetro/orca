@@ -106,6 +106,9 @@ jobs:
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
+      - name: Check IPC channel parity
+        run: pnpm run check:ipc-channel-parity
+
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -129,6 +132,9 @@ jobs:
 
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
+
+      - name: Check test project membership
+        run: pnpm run check:test-project-membership
 
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet

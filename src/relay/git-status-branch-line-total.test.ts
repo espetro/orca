@@ -75,6 +75,7 @@ const realGitExec: GitExec = async (args, cwd, opts) => {
   const { stdout, stderr } = await execFileAsync('git', args, {
     cwd,
     encoding: 'utf8',
+    ...gitFixtureEnv,
     ...(opts?.signal ? { signal: opts.signal } : {}),
     ...(opts?.timeout ? { timeout: opts.timeout } : {})
   })
@@ -93,8 +94,18 @@ function runFixtureGit(repo: string, args: string[]): string {
       'commit.gpgSign=false',
       ...args
     ],
-    { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...gitFixtureEnv }
   ).trim()
+}
+
+// Why: the status read under test spawns git with the ambient process env; a dev
+// machine's global excludesFile would hide the untracked fixture file.
+const gitFixtureEnv = {
+  env: {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+    GIT_CONFIG_SYSTEM: process.platform === 'win32' ? 'NUL' : '/dev/null'
+  }
 }
 
 /**
@@ -103,7 +114,7 @@ function runFixtureGit(repo: string, args: string[]): string {
  */
 async function seedBranchFixture(repo: string): Promise<string> {
   await fs.rm(path.join(repo, UNTRACKED_FILE), { force: true })
-  execFileSync('git', ['init', '-q', repo], { stdio: 'pipe' })
+  execFileSync('git', ['init', '-q', repo], { stdio: 'pipe', ...gitFixtureEnv })
   await fs.writeFile(path.join(repo, 'tracked.txt'), 'a\nb\nc\n')
   await fs.writeFile(path.join(repo, 'doomed.txt'), 'x\ny\n')
   await fs.writeFile(path.join(repo, 'old-name.txt'), 'stable\n')

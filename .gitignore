@@ -60,6 +60,9 @@ desktop.ini
 # Lint/cache
 .oxlintcache
 
+# Vitest V8 compile cache
+.cache/
+
 # Logs
 *.log
 *.log.*

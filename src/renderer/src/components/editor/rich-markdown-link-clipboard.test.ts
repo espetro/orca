@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { toastError, toastSuccess } = vi.hoisted(() => ({

@@ -79,14 +79,32 @@ export function createMockDispatcher(): MockDispatcher {
   }
 }
 
+const gitIsolationEnv = {
+  env: {
+    ...process.env,
+    // Why: dev machines often ignore *.log/node_modules globally; fixtures must
+    // not inherit that, or untracked-path assertions break.
+    GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+    GIT_CONFIG_SYSTEM: process.platform === 'win32' ? 'NUL' : '/dev/null'
+  }
+}
+
 export function gitInit(dir: string): void {
-  execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', TEST_GIT_USER_EMAIL], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', TEST_GIT_USER_NAME], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe', ...gitIsolationEnv })
+  execFileSync('git', ['config', 'user.email', TEST_GIT_USER_EMAIL], {
+    cwd: dir,
+    stdio: 'pipe',
+    ...gitIsolationEnv
+  })
+  execFileSync('git', ['config', 'user.name', TEST_GIT_USER_NAME], {
+    cwd: dir,
+    stdio: 'pipe',
+    ...gitIsolationEnv
+  })
 }
 
 export function gitCommit(dir: string, message: string): void {
-  execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe', ...gitIsolationEnv })
   // Why: `git submodule add` creates a checkout that does not inherit the
   // source repo's local identity config, and CI may have no global identity.
   execFileSync(
@@ -101,7 +119,7 @@ export function gitCommit(dir: string, message: string): void {
       message,
       '--allow-empty'
     ],
-    { cwd: dir, stdio: 'pipe' }
+    { cwd: dir, stdio: 'pipe', ...gitIsolationEnv }
   )
 }
 

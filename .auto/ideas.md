@@ -27,3 +27,9 @@ This machine had real memory-pressure sources that inflate benchmark noise. Befo
 - Orphaned dev-build Electron procs from prior bench runs (~45 found, ~225MB): sweep `pgrep -f orca-mem-worktrees` / `orca/dist` before runs; leftover app processes both consume memory and can interfere via the shared CDP port.
 - The installed production Orca (renderer 465MB after 1d4h) runs concurrently with benchmarks and is the main machine-load source behind the noise floor. If deltas look noisy, quit it during measure runs and note that in asi.
 - Long-run renderer growth (465MB after ~1 day) is itself evidence of retention worth investigating later, but it is out of scope for the idle-RSS metric.
+
+# Loop experiment ideas (2026-08-31 research pass)
+- V8 flags as loop experiments: --max-semi-space-size, --max-old-space-size (skip --optimize-for-size; CPU tradeoffs)
+- Buffer hygiene: Buffer.from(chunk.subarray(...)) copies vs pinned parents; allocUnsafeSlow for persistent small buffers
+- GC telemetry via perf_hooks PerformanceObserver(entryTypes:['gc']) for allocation-rate signal (needs in-app hook; later iteration)
+- Rejected: malloc_trim/MALLOC_CONF (glibc/jemalloc only; macOS uses its own allocator)

@@ -3,7 +3,10 @@
    conflict on every upstream sync of the much larger central preload
    file. Composed back into `api.gl` from `index.ts`. */
 import { ipcRenderer } from 'electron'
+import type { GitLabWorkItem } from '../shared/gitlab-types'
+import type { ClassifiedError } from '../shared/classified-error'
 import type { TaskSourceContext } from '../shared/task-source-context'
+import type { GitLabApi } from './api/gitlab-api'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
@@ -11,24 +14,22 @@ type GitLabRepoSelectorArgs = {
   sourceContext?: TaskSourceContext | null
 }
 
-export const glApi = {
-  viewer: (): Promise<unknown> => ipcRenderer.invoke('gitlab:viewer'),
-  diagnoseAuth: (): Promise<unknown> => ipcRenderer.invoke('gitlab:diagnoseAuth'),
-  rateLimit: (args?: { force?: boolean; host?: string | null }): Promise<unknown> =>
+const glApiBody = {
+  viewer: () => ipcRenderer.invoke('gitlab:viewer'),
+  diagnoseAuth: () => ipcRenderer.invoke('gitlab:diagnoseAuth'),
+  rateLimit: (args?: { force?: boolean; host?: string | null }) =>
     ipcRenderer.invoke('gitlab:rateLimit', args),
 
-  projectSlug: (args: GitLabRepoSelectorArgs): Promise<unknown> =>
-    ipcRenderer.invoke('gitlab:projectSlug', args),
+  projectSlug: (args: GitLabRepoSelectorArgs) => ipcRenderer.invoke('gitlab:projectSlug', args),
 
   mrForBranch: (
     args: GitLabRepoSelectorArgs & {
       branch: string
       linkedMRIid?: number | null
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:mrForBranch', args),
+  ) => ipcRenderer.invoke('gitlab:mrForBranch', args),
 
-  mr: (args: GitLabRepoSelectorArgs & { iid: number }): Promise<unknown> =>
-    ipcRenderer.invoke('gitlab:mr', args),
+  mr: (args: GitLabRepoSelectorArgs & { iid: number }) => ipcRenderer.invoke('gitlab:mr', args),
 
   listMRs: (
     args: GitLabRepoSelectorArgs & {
@@ -37,7 +38,7 @@ export const glApi = {
       perPage?: number
       query?: string
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:listMRs', args),
+  ) => ipcRenderer.invoke('gitlab:listMRs', args),
 
   listWorkItems: (
     args: GitLabRepoSelectorArgs & {
@@ -46,9 +47,9 @@ export const glApi = {
       perPage?: number
       query?: string
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:listWorkItems', args),
+  ) => ipcRenderer.invoke('gitlab:listWorkItems', args),
 
-  issue: (args: GitLabRepoSelectorArgs & { number: number }): Promise<unknown> =>
+  issue: (args: GitLabRepoSelectorArgs & { number: number }) =>
     ipcRenderer.invoke('gitlab:issue', args),
 
   listIssues: (
@@ -58,8 +59,11 @@ export const glApi = {
       limit?: number
       page?: number
     }
-  ): Promise<{ items: unknown[]; totalPages?: number; error?: unknown }> =>
-    ipcRenderer.invoke('gitlab:listIssues', args),
+  ): Promise<{
+    items: GitLabWorkItem[]
+    totalPages?: number
+    error?: ClassifiedError
+  }> => ipcRenderer.invoke('gitlab:listIssues', args),
 
   createIssue: (
     args: GitLabRepoSelectorArgs & {
@@ -77,25 +81,23 @@ export const glApi = {
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:updateIssue', args),
 
-  addIssueComment: (
-    args: GitLabRepoSelectorArgs & { number: number; body: string }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:addIssueComment', args),
+  addIssueComment: (args: GitLabRepoSelectorArgs & { number: number; body: string }) =>
+    ipcRenderer.invoke('gitlab:addIssueComment', args),
 
   listLabels: (args: GitLabRepoSelectorArgs): Promise<string[]> =>
     ipcRenderer.invoke('gitlab:listLabels', args),
 
-  listAssignableUsers: (args: GitLabRepoSelectorArgs): Promise<unknown[]> =>
+  listAssignableUsers: (args: GitLabRepoSelectorArgs) =>
     ipcRenderer.invoke('gitlab:listAssignableUsers', args),
 
-  todos: (args: GitLabRepoSelectorArgs): Promise<unknown[]> =>
-    ipcRenderer.invoke('gitlab:todos', args),
+  todos: (args: GitLabRepoSelectorArgs) => ipcRenderer.invoke('gitlab:todos', args),
 
   workItemDetails: (
     args: GitLabRepoSelectorArgs & {
       iid: number
       type: 'issue' | 'mr'
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemDetails', args),
+  ) => ipcRenderer.invoke('gitlab:workItemDetails', args),
 
   closeMR: (
     args: GitLabRepoSelectorArgs & {
@@ -133,9 +135,9 @@ export const glApi = {
       reviewerIds: number[]
       projectRef?: unknown
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:updateMRReviewers', args),
+  ) => ipcRenderer.invoke('gitlab:updateMRReviewers', args),
 
-  addMRComment: (args: GitLabRepoSelectorArgs & { iid: number; body: string }): Promise<unknown> =>
+  addMRComment: (args: GitLabRepoSelectorArgs & { iid: number; body: string }) =>
     ipcRenderer.invoke('gitlab:addMRComment', args),
 
   addMRInlineComment: (
@@ -144,7 +146,7 @@ export const glApi = {
       input: unknown
       projectRef?: unknown
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:addMRInlineComment', args),
+  ) => ipcRenderer.invoke('gitlab:addMRInlineComment', args),
 
   resolveMRDiscussion: (
     args: GitLabRepoSelectorArgs & {
@@ -152,15 +154,14 @@ export const glApi = {
       discussionId: string
       resolved: boolean
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:resolveMRDiscussion', args),
+  ) => ipcRenderer.invoke('gitlab:resolveMRDiscussion', args),
 
   jobTrace: (
     args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown; logExcerpt?: boolean }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:jobTrace', args),
+  ) => ipcRenderer.invoke('gitlab:jobTrace', args),
 
-  retryJob: (
-    args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:retryJob', args),
+  retryJob: (args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown }) =>
+    ipcRenderer.invoke('gitlab:retryJob', args),
 
   workItemByPath: (
     args: GitLabRepoSelectorArgs & {
@@ -169,5 +170,7 @@ export const glApi = {
       iid: number
       type: 'issue' | 'mr'
     }
-  ): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemByPath', args)
+  ) => ipcRenderer.invoke('gitlab:workItemByPath', args)
 }
+
+export const glApi: GitLabApi = glApiBody

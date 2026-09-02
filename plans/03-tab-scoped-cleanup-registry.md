@@ -46,10 +46,7 @@ The leak class is user-visible: `recoveryTimestampsByTabId` growth was reported 
 New module, e.g. `src/renderer/src/lib/tab-scoped-cleanup.ts`:
 
 ```ts
-export function registerTabScopedCleanup(
-  tabId: string,
-  dispose: () => void
-): () => void  // returns unregister
+export function registerTabScopedCleanup(tabId: string, dispose: () => void): () => void // returns unregister
 ```
 
 A single emitter lives at the tab-close action factory (`createTerminalTabCloseActions` in

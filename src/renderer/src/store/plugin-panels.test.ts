@@ -1,5 +1,3 @@
-// @vitest-environment happy-dom
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../preload/api-types'
 import {

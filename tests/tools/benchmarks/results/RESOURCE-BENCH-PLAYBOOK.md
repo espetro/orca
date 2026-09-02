@@ -5,12 +5,12 @@ verdicts, and know when not to trust a number.
 
 ## When to cite which metric
 
-| Metric | What it is | Cite it for |
-| --- | --- | --- |
-| `rssBytes` | Resident set size from `ps`/appMetrics. Includes shared pages (Chromium mappings, mmap'd DB pages). | Never cite alone for "app grew". |
-| `footprintBytes` | macOS `phys_footprint`: pages charged to this process, excluding most shared mappings. | The authoritative per-process cost on macOS. Default citation for "process X uses N MB". |
-| `workingSetKb` | Electron `appMetrics` working set. Can double count shared pages on macOS. | Cross-check only. |
-| `mainProcess.heapUsedBytes` | V8 JS heap in use in the main process. | Distinguishing JS growth from native/mmap RSS growth. |
+| Metric                      | What it is                                                                                          | Cite it for                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `rssBytes`                  | Resident set size from `ps`/appMetrics. Includes shared pages (Chromium mappings, mmap'd DB pages). | Never cite alone for "app grew".                                                         |
+| `footprintBytes`            | macOS `phys_footprint`: pages charged to this process, excluding most shared mappings.              | The authoritative per-process cost on macOS. Default citation for "process X uses N MB". |
+| `workingSetKb`              | Electron `appMetrics` working set. Can double count shared pages on macOS.                          | Cross-check only.                                                                        |
+| `mainProcess.heapUsedBytes` | V8 JS heap in use in the main process.                                                              | Distinguishing JS growth from native/mmap RSS growth.                                    |
 
 On non-macOS hosts `footprintBytes` is `null` in dumps. Never read that as zero.
 

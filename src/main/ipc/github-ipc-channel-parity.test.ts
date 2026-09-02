@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
@@ -85,8 +85,17 @@ describe('GitHub IPC channel parity', () => {
   it('preserves the facade and fixed IPC channel contract', () => {
     github.registerGitHubHandlers(harness.store as never, harness.stats as never)
 
-    const preloadSource = readFileSync(new URL('../../preload/index.ts', import.meta.url), 'utf8')
-    const exposedChannels = [...preloadSource.matchAll(/ipcRenderer\.invoke\('(gh:[^']+)'/g)].map(
+    const bridgeSource = [
+      ...readdirSync(new URL('../../preload/bridge', import.meta.url), {
+        withFileTypes: true
+      })
+    ]
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+      .map((entry) =>
+        readFileSync(new URL(`../../preload/bridge/${entry.name}`, import.meta.url), 'utf8')
+      )
+      .join('\n')
+    const exposedChannels = [...bridgeSource.matchAll(/ipcRenderer\.invoke\('(gh:[^']+)'/g)].map(
       (match) => match[1]
     )
     const registeredChannels = mocks.electron.ipcMain.handle.mock.calls.map(

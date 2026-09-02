@@ -8,14 +8,14 @@ Inputs: 8 research lanes (xterm tuning, xterm alternatives, Deno Desktop, bun-co
 
 ## 0. TL;DR
 
-| Stream | Verdict |
-|---|---|
-| Optimize xterm.js setup | Ceiling ~0.2-0.3MB/pane idle tuning; real lever is lifecycle policy (~1.5-2.5MB/hidden pane) — mostly already done by parking |
-| Replace xterm.js | **No.** No alternative beats tuned xterm.js for a multi-pane WebGL IDE; wterm lacks search/serialize/ligatures/GPU renderer |
-| Deno Desktop migration | **No.** No multi-webview, no partitions, no offscreen; TS-compat buys ~nothing (migration cost is platform surface, ~769 ipcMain sites); RAM delta ≈ 0 |
-| Daemon → `bun --compile` | **No.** node-pty broken under Bun (#28925 segfault, #25822 no onData); fork/execPath/IPC architecture conflicts; daemon's 300-400MB is session data, not runtime |
-| Electrobun v1/v2 | **No.** v2.0 is 1 week old; fails offscreen/powerMonitor/crash-reporting/native-addons outright; same system-webview class already rejected |
-| Tauri minimal-Rust + Pake | **No.** Rust floor real (~100-300 LOC) but blockers are product capabilities (multiwebview unstable, no offscreen, cookie partitions open since 2024); node sidecar makes memory math net-zero. Pake: category error |
+| Stream                                    | Verdict                                                                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Optimize xterm.js setup                   | Ceiling ~0.2-0.3MB/pane idle tuning; real lever is lifecycle policy (~1.5-2.5MB/hidden pane) — mostly already done by parking                                                                                                  |
+| Replace xterm.js                          | **No.** No alternative beats tuned xterm.js for a multi-pane WebGL IDE; wterm lacks search/serialize/ligatures/GPU renderer                                                                                                    |
+| Deno Desktop migration                    | **No.** No multi-webview, no partitions, no offscreen; TS-compat buys ~nothing (migration cost is platform surface, ~769 ipcMain sites); RAM delta ≈ 0                                                                         |
+| Daemon → `bun --compile`                  | **No.** node-pty broken under Bun (#28925 segfault, #25822 no onData); fork/execPath/IPC architecture conflicts; daemon's 300-400MB is session data, not runtime                                                               |
+| Electrobun v1/v2                          | **No.** v2.0 is 1 week old; fails offscreen/powerMonitor/crash-reporting/native-addons outright; same system-webview class already rejected                                                                                    |
+| Tauri minimal-Rust + Pake                 | **No.** Rust floor real (~100-300 LOC) but blockers are product capabilities (multiwebview unstable, no offscreen, cookie partitions open since 2024); node sidecar makes memory math net-zero. Pake: category error           |
 | **New memory candidates (renderer+main)** | **Yes — the only surviving wins:** C2 pressure response (unblocks #16214), C7 theme-worker teardown leak, C4 SQLite pragmas, C3 partition reaper, C8 mirror-buffer cap check, C9 GPU selection, plus prior lazy-Monaco top win |
 
 **The composite answer to "minimum resource usage" is unchanged: stay on Electron, ship the thin-shell trajectory, and work a short list of concrete memory candidates. Every framework swap nets ~zero memory for this app class.**
@@ -45,7 +45,7 @@ Re-verified repo surface: **769** ipcMain sites (not 155), 343 webContents calls
 
 Deno Desktop (2.9, experimental): one webview per window, no `<webview>`/WebContentsView equivalent (independent reviewers agree: "VS Code/Figma-class → Electron"), no session partitions, no offscreen, webview backend has **no DevTools**, no Windows auto-update/MSI, macOS notarization manual. Memory claims (3x less) are hello-world-class; orca's footprint is webview-dominated, and WKWebView guests still run separate WebKit processes. CEF backend = ~150MB Chromium = Electron's cost with fewer features.
 
-**The TS-compat premise conflates language with platform.** ~60-70% of code is portable in principle but the Electron integration layer (~0%) is where the 4-7 engineer-months go, for a *worse* result. Posture: **track, don't migrate**; revisit at Deno 2.10+ with multi-webview + Windows update story.
+**The TS-compat premise conflates language with platform.** ~60-70% of code is portable in principle but the Electron integration layer (~0%) is where the 4-7 engineer-months go, for a _worse_ result. Posture: **track, don't migrate**; revisit at Deno 2.10+ with multi-webview + Windows update story.
 
 ## 4. Daemon → `bun --compile` (rejected)
 
@@ -82,17 +82,17 @@ Verified against source; excludes everything already dead or done in plans/09 §
 
 Already-good (no action): i18next lazy locales; STT worker 1h idle teardown; SQLite stmt cache bounded 256; telemetry burst caps; renderer heap headroom tiers.
 
-| # | Candidate | Evidence | Est. MB | Effort | Type |
-|---|---|---|---|---|---|
-| C2 | **Chromium memory-pressure response + purge-on-minimize** — nothing wired; #16214 hibernation planner is blocked on exactly this signal | grep: no pressure listener; `host-memory.ts:74` read-only | 50-150 reclaimed-on-pressure | M | knob; **unblocks #16214** |
-| C7 | **warp-theme parser worker never torn down** (no idle teardown like STT's) | `src/main/warp-themes/` no teardown constant | 10-20 | S | **leak** |
-| C4 | **SQLite pragmas unset** (cache_size/mmap_size/journal_mode; node:sqlite default 2MB page cache/conn; scanner workers at 384MB heap cap) | `sync-database.ts:43-57` | 5-20 | S | knob |
-| C3 | **session partitions never reaped** — 15+ `fromPartition` sites incl. per-SSH-host and per-provider; no refcount/close on last pane death | `local-ssh-browser-partitions.ts:157,173,210` | 10-60 with N profiles | M | **leak-ish** |
-| C8 | **renderer host-mirror replay buffer cap unverified** — `pane.terminal.clear()` workarounds imply a resident per-pane mirror copy | `web-runtime-session.ts:141,1766-1788` | 2.5MB/pane if uncapped | S (verify+cap) | potential leak |
-| C9 | **GPU selection knob** (integrated vs discrete on macOS) — configure-process.ts sets many flags, none for GPU choice | `configure-process.ts:281-321` | 30-80 hardware-dependent | S-M | knob |
-| C1 | lucide-react import discipline (audit for dynamic icon map) | 821 files, named imports | 0-20 if a dynamic site exists | S | fixed cost |
-| C5 | TerminalPane.tsx memo debt (6 memo hits vs 65 in the palette) — GC pressure, not residency | `TerminalPane.tsx` | 0 direct | S-M | transient garbage |
-| C6 | lazy provider slices (linear/jira/github) out of boot store | `store/index.ts:64-116` | 5-15 | M | fixed cost; refactor risk |
+| #   | Candidate                                                                                                                                 | Evidence                                                  | Est. MB                       | Effort         | Type                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------- | -------------- | ------------------------- |
+| C2  | **Chromium memory-pressure response + purge-on-minimize** — nothing wired; #16214 hibernation planner is blocked on exactly this signal   | grep: no pressure listener; `host-memory.ts:74` read-only | 50-150 reclaimed-on-pressure  | M              | knob; **unblocks #16214** |
+| C7  | **warp-theme parser worker never torn down** (no idle teardown like STT's)                                                                | `src/main/warp-themes/` no teardown constant              | 10-20                         | S              | **leak**                  |
+| C4  | **SQLite pragmas unset** (cache_size/mmap_size/journal_mode; node:sqlite default 2MB page cache/conn; scanner workers at 384MB heap cap)  | `sync-database.ts:43-57`                                  | 5-20                          | S              | knob                      |
+| C3  | **session partitions never reaped** — 15+ `fromPartition` sites incl. per-SSH-host and per-provider; no refcount/close on last pane death | `local-ssh-browser-partitions.ts:157,173,210`             | 10-60 with N profiles         | M              | **leak-ish**              |
+| C8  | **renderer host-mirror replay buffer cap unverified** — `pane.terminal.clear()` workarounds imply a resident per-pane mirror copy         | `web-runtime-session.ts:141,1766-1788`                    | 2.5MB/pane if uncapped        | S (verify+cap) | potential leak            |
+| C9  | **GPU selection knob** (integrated vs discrete on macOS) — configure-process.ts sets many flags, none for GPU choice                      | `configure-process.ts:281-321`                            | 30-80 hardware-dependent      | S-M            | knob                      |
+| C1  | lucide-react import discipline (audit for dynamic icon map)                                                                               | 821 files, named imports                                  | 0-20 if a dynamic site exists | S              | fixed cost                |
+| C5  | TerminalPane.tsx memo debt (6 memo hits vs 65 in the palette) — GC pressure, not residency                                                | `TerminalPane.tsx`                                        | 0 direct                      | S-M            | transient garbage         |
+| C6  | lazy provider slices (linear/jira/github) out of boot store                                                                               | `store/index.ts:64-116`                                   | 5-15                          | M              | fixed cost; refactor risk |
 
 Not candidates (checked): ipcMain registrations (flat map, closures needed anyway); hang-watchdog thread (deadlock protection, keep); skills residency; pet cache (known, small).
 
@@ -100,11 +100,11 @@ Not candidates (checked): ipcMain registrations (flat map, closures needed anywa
 
 ## 8. Final decision matrix
 
-| Path | Memory gained | Effort | Risk | Upstreamable |
-|---|---|---|---|---|
-| **Short list**: lazy Monaco (prior #1) + C7 + C4 + C8-verify | ~40-90MB | S each | low | high |
-| **C2 pressure response** | 50-150 reclaimed | M | medium | high — unblocks #16214, strategic |
-| plans/04+05 budget+dehydration | 100MB+ (daemon) | M-L | medium | via maintainer ack on #17033 |
-| Any framework/runtime swap (Deno/Electrobun/Tauri/bun) | **~0** | 4-7 eng-months | high | no |
+| Path                                                         | Memory gained    | Effort         | Risk   | Upstreamable                      |
+| ------------------------------------------------------------ | ---------------- | -------------- | ------ | --------------------------------- |
+| **Short list**: lazy Monaco (prior #1) + C7 + C4 + C8-verify | ~40-90MB         | S each         | low    | high                              |
+| **C2 pressure response**                                     | 50-150 reclaimed | M              | medium | high — unblocks #16214, strategic |
+| plans/04+05 budget+dehydration                               | 100MB+ (daemon)  | M-L            | medium | via maintainer ack on #17033      |
+| Any framework/runtime swap (Deno/Electrobun/Tauri/bun)       | **~0**           | 4-7 eng-months | high   | no                                |
 
 Recommended sequence (updated: user confirms the ~600MB readings are from the RELEASE app, so there is no dev-build confound to falsify — the memory is real product waste): (1) issue-first for C7 + C4 (S, leaks/knobs), (2) propose C2 as the #16214 unblock with the pressure-signal design, (3) keep lazy-Monaco as the top renderer PR, (4) file the packaged-release memory benchmark as its own harness-gap issue (release numbers are what users see and nothing in CI tracks them), (5) re-evaluate Deno Desktop + Tauri #9285 in ~12 months.

@@ -1,4 +1,3 @@
-import { isBuiltin } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
@@ -19,14 +18,22 @@ const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
   (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
 )
 
-function isExternalMainModule(source: string): boolean {
-  if (isBuiltin(source) || source === 'electron' || source.startsWith('electron/')) {
-    return true
-  }
-  return EXTERNAL_MAIN_DEPENDENCIES.some(
-    (dependency) => source === dependency || source.startsWith(`${dependency}/`)
-  )
-}
+// Default OFF; flip per build with ORCA_REACT_COMPILER_ENABLED=1.
+const reactCompilerEnabled = process.env.ORCA_REACT_COMPILER_ENABLED === '1'
+
+// Regex form: Rolldown's native binding rejects function-form external, and
+// the output-contract test asserts this pattern's match behavior directly.
+const EXTERNAL_MAIN_MODULE_PATTERN = new RegExp(
+  [
+    // isBuiltin equivalent: bare builtins (fs, path, ...) plus node: prefixed.
+    '^(?:assert|async_hooks|buffer|child_process|cluster|console|constants|crypto|dgram|diagnostics_channel|dns|domain|events|fs|http|http2|https|inspector|module|net|os|path|perf_hooks|process|punycode|querystring|readline|repl|stream|string_decoder|sys|timers|tls|trace_events|tty|url|util|v8|vm|wasi|worker_threads|zlib)(/|$)',
+    '^(node:)?electron(/|$)',
+    '^node:',
+    ...EXTERNAL_MAIN_DEPENDENCIES.map(
+      (dependency) => `^${dependency.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')}(/|$)`
+    )
+  ].join('|')
+)
 
 // Why: the telemetry transport is gated by two compile-time constants that
 // only the official CI release workflow sets. Contributor / `pnpm dev` /
@@ -204,7 +211,8 @@ export const electronViteConfig: UserConfig = {
       rollupOptions: {
         // Why: native dependencies must resolve from packaged node_modules,
         // while the unpacked daemon needs its pure-JS xterm graph bundled.
-        external: isExternalMainModule,
+        // Regex form: Rolldown's native binding rejects function-form external.
+        external: EXTERNAL_MAIN_MODULE_PATTERN,
         input: {
           index: resolve('src/main/index.ts'),
           // Why: sandboxed webview preloads cannot load Rollup helper chunks.
@@ -291,7 +299,7 @@ export const electronViteConfig: UserConfig = {
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react({ compiler: reactCompilerEnabled }), tailwindcss()],
     worker: {
       format: 'es'
     },

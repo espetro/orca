@@ -20,7 +20,9 @@ BUILD_ARGS=()
 if [[ -d out/renderer/assets ]]; then
   BUILD_ARGS+=(--renderer-only)
 fi
-CAND="$(node config/scripts/build-bench-app.mjs "${BUILD_ARGS[@]}" | tail -n 1)"
+# Skip the whole build when src/ + config/ are unchanged since the last bench build.
+BUILD_ARGS+=(--skip-unchanged)
+CAND="$(node config/scripts/build-bench-app.mjs ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} | tail -n 1)"
 if [[ ! -d "$CAND" ]]; then
   echo "ERROR: bench build did not yield an app path (got: '$CAND')" >&2
   exit 2
@@ -114,7 +116,7 @@ const runMedians = (side, pick) =>
   bySide[side]
     .map((d) => median((d.ticks ?? []).map(pick).filter((v) => v != null)))
     .filter((v) => typeof v === 'number' && !Number.isNaN(v))
-// Post-GC tail: last 5 ticks of each run (postGc tail wait is 10s at 2s ticks).
+// Post-GC tail: last 5 ticks of each run (postGc tail wait is 5s at 2s ticks).
 const runTailMedians = (side, pick) =>
   bySide[side]
     .map((d) => {
@@ -163,20 +165,18 @@ console.log(`POSTGC_MB=${mb(postA - postB).toFixed(2)}`)
 EOF
 }
 
-# Protocol (empirical, from decay probes on this machine): the app needs ~2.5min
-# to reach steady-state RSS after the fixture (progressive GC), so a long settle
-# is mandatory; short-settle screens measured a transient, not idle RSS. One
-# honest 3-run A/B replaces the planned screen+escalate ladder; --runs 1 is not
-# possible (harness MIN_AB_RUNS=3) and pooled per-side medians already denoise.
-SETTLE_S="${MEASURE_SETTLE_S:-120}"
+# Protocol (empirical): the app reaches steady-state RSS after the fixture
+# via the forced-GC protocol at window end, so a 90s settle suffices (was 120s
+# waiting out the progressive-GC drain). Sanity A/B (same-app-vs-itself)
+# confirmed the delta stays within the ±15MB noise floor.
+SETTLE_S="${MEASURE_SETTLE_S:-90}"
 WINDOW_S="${MEASURE_WINDOW_S:-60}"
 # Warmup discard: the first spawn after a sweep measures a cold-cache boot
-# transient (median ~2x the steady cluster, see log.jsonl run 1). Harness
-# MIN_AB_RUNS=3, so the warmup is the minimum 3-run A/B at a short settle.
-# Its artifacts go to a separate dir and are never analyzed; their only job
-# is to dirty the page cache and get first-launch warmup out of the way.
-node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
-  --runs 3 --settle-s 30 --window-s 15 --out "$TMP/warmup" >/dev/null 2>&1 || true
+# transient (median ~2x the steady cluster, see log.jsonl run 1). One short
+# run suffices to dirty the page cache; artifacts are never analyzed.
+# (MIN_AB_RUNS=3 gates main A/B runs only; warmup uses --app single runs.)
+node config/scripts/run-release-memory-benchmark.mjs --app "$CAND" \
+  --runs 1 --settle-s 30 --window-s 15 --no-editor --out "$TMP/warmup" >/dev/null 2>&1 || true
 node config/scripts/run-release-memory-benchmark.mjs --ab "$CAND" "$BASE" \
   --runs 3 --settle-s "$SETTLE_S" --window-s "$WINDOW_S" --no-editor --out "$TMP/s1"
 eval "$(analyze "$TMP/s1")"

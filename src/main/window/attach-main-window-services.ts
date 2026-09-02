@@ -67,6 +67,7 @@ import {
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
+import { getBenchStartupSwitches } from '../bench-startup-switches'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
@@ -170,6 +171,10 @@ export function attachMainWindowServices(
       return
     }
     updaterSetupDone = true
+    // Bench gate: updates are always disabled in bench mode (Chromium --enable-benchmarking analogue).
+    if (getBenchStartupSwitches().benchMode) {
+      return
+    }
     setupAutoUpdater(mainWindow, {
       getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
       onBeforeQuit: async () => {

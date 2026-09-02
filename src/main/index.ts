@@ -14,6 +14,7 @@ import {
   session
 } from 'electron'
 import { applyMacPressAndHoldDefaultAtStartup } from './macos-press-and-hold-default'
+import { getBenchStartupSwitches } from './bench-startup-switches'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -2429,6 +2430,7 @@ void app.whenReady().then(async () => {
     managedWslCliReconciliationReady
   )
 
+  const benchSwitches = getBenchStartupSwitches()
   const activeOrcaProfile = ensureActiveOrcaProfile()
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
@@ -2543,19 +2545,21 @@ void app.whenReady().then(async () => {
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
-  initializeBrowserSessionsForApp({
-    orcaProfileId: activeOrcaProfile.profile.id,
-    profileDirectory: activeOrcaProfile.profileDirectory,
-    // Why: local direct-SSH partitions are scoped to targets, and the orphan
-    // sweep must see the live target list or it would clear their cookie jars.
-    listLocalSshTargetIds: () => {
-      if (!store) {
-        // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
-        throw new Error('ssh target store unavailable at partition sweep')
+  if (!benchSwitches.disabled.includes('browser')) {
+    initializeBrowserSessionsForApp({
+      orcaProfileId: activeOrcaProfile.profile.id,
+      profileDirectory: activeOrcaProfile.profileDirectory,
+      // Why: local direct-SSH partitions are scoped to targets, and the orphan
+      // sweep must see the live target list or it would clear their cookie jars.
+      listLocalSshTargetIds: () => {
+        if (!store) {
+          // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
+          throw new Error('ssh target store unavailable at partition sweep')
+        }
+        return store.getSshTargets().map((target) => target.id)
       }
-      return store.getSshTargets().map((target) => target.id)
-    }
-  })
+    })
+  }
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setMode(
@@ -2618,7 +2622,9 @@ void app.whenReady().then(async () => {
     unsubscribeHookStatusClear()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
-  initTelemetry(store)
+  if (!benchSwitches.benchMode) {
+    initTelemetry(store)
+  }
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after
@@ -2653,9 +2659,9 @@ void app.whenReady().then(async () => {
     packaged: app.isPackaged,
     platform: process.platform
   })
-  const skillTransactionRecovery = recoverPendingSkillTransactions(
-    join(app.getPath('userData'), 'skill-installs')
-  )
+  const skillTransactionRecovery = benchSwitches.benchMode
+    ? Promise.resolve({ scanned: 0, recovered: 0, failures: [], truncated: false })
+    : recoverPendingSkillTransactions(join(app.getPath('userData'), 'skill-installs'))
   void skillTransactionRecovery
     .then((report) => {
       if (report.scanned || report.failures.length || report.truncated) {
@@ -2669,8 +2675,10 @@ void app.whenReady().then(async () => {
     })
     .catch((error) => console.warn('[skills] startup transaction recovery failed:', error))
   // Why: cohort-classifier reads repo count synchronously at every emit, so hydrate it here — before any IPC handler or window can trigger track().
-  initCohortClassifier(store)
-  initOnboardingCohortClassifier(store)
+  if (!benchSwitches.benchMode) {
+    initCohortClassifier(store)
+    initOnboardingCohortClassifier(store)
+  }
   stats = new StatsCollector()
   // Agent-session stats come from hook status transitions, the same truth the
   // sidebar and dashboard read — never from OSC terminal titles, which miss
@@ -2900,118 +2908,132 @@ void app.whenReady().then(async () => {
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })
-  automations = new AutomationService(store, {
-    claudeUsage,
-    codexUsage,
-    terminalObserver: createRuntimeAutomationRunTerminalObserver(runtimeService),
-    onAutomationsChanged: (payload) => runtimeService.notifyAutomationsChanged(payload),
-    // Why: desktop clients mirror remote-host automations, but only a server process should execute remote_host_service-owned schedules.
-    allowRemoteHostScheduling: isServeMode,
-    headlessDispatcher: isServeMode
-      ? async ({ automation, run, target }) => {
-          const terminalSnapshotLimit = 2_000
-          let terminalHandle: string
-          let terminalSessionId: string | null = null
-          let terminalPaneKey: string | null = null
-          let terminalPtyId: string | null = null
-          let workspaceId: string
-          let workspaceDisplayName: string | null = null
+  const automationsGatedOff =
+    benchSwitches.only.length > 0 && !benchSwitches.only.includes('automations')
+  automations = automationsGatedOff
+    ? null
+    : new AutomationService(store, {
+        claudeUsage,
+        codexUsage,
+        terminalObserver: createRuntimeAutomationRunTerminalObserver(runtimeService),
+        onAutomationsChanged: (payload) => runtimeService.notifyAutomationsChanged(payload),
+        // Why: desktop clients mirror remote-host automations, but only a server process should execute remote_host_service-owned schedules.
+        allowRemoteHostScheduling: isServeMode,
+        headlessDispatcher: isServeMode
+          ? async ({ automation, run, target }) => {
+              const terminalSnapshotLimit = 2_000
+              let terminalHandle: string
+              let terminalSessionId: string | null = null
+              let terminalPaneKey: string | null = null
+              let terminalPtyId: string | null = null
+              let workspaceId: string
+              let workspaceDisplayName: string | null = null
 
-          if (automation.workspaceMode === 'new_per_run') {
-            const created = await runtimeService.createManagedWorktree({
-              ...buildHeadlessAutomationWorktreeCreateArgs({
-                automation,
-                run,
-                repo: target.repo
-              })
-            })
-            terminalHandle = created.startupTerminal?.handle ?? ''
-            terminalSessionId = created.startupTerminal?.tabId ?? null
-            terminalPaneKey = created.startupTerminal?.paneKey ?? null
-            terminalPtyId = created.startupTerminal?.ptyId ?? null
-            workspaceId = created.worktree.id
-            workspaceDisplayName = created.worktree.displayName ?? null
-            if (!terminalHandle) {
-              throw new Error(
-                created.warning ||
-                  'Automation workspace was created, but no agent terminal started.'
-              )
-            }
-          } else {
-            if (!automation.workspaceId) {
-              throw new Error('The target workspace is no longer available.')
-            }
-            const terminal = await runtimeService.launchAgentTerminal(
-              `id:${automation.workspaceId}`,
-              {
-                agent: automation.agentId,
-                prompt: automation.prompt,
-                title: run.title
+              if (automation.workspaceMode === 'new_per_run') {
+                const created = await runtimeService.createManagedWorktree({
+                  ...buildHeadlessAutomationWorktreeCreateArgs({
+                    automation,
+                    run,
+                    repo: target.repo
+                  })
+                })
+                terminalHandle = created.startupTerminal?.handle ?? ''
+                terminalSessionId = created.startupTerminal?.tabId ?? null
+                terminalPaneKey = created.startupTerminal?.paneKey ?? null
+                terminalPtyId = created.startupTerminal?.ptyId ?? null
+                workspaceId = created.worktree.id
+                workspaceDisplayName = created.worktree.displayName ?? null
+                if (!terminalHandle) {
+                  throw new Error(
+                    created.warning ||
+                      'Automation workspace was created, but no agent terminal started.'
+                  )
+                }
+              } else {
+                if (!automation.workspaceId) {
+                  throw new Error('The target workspace is no longer available.')
+                }
+                const terminal = await runtimeService.launchAgentTerminal(
+                  `id:${automation.workspaceId}`,
+                  {
+                    agent: automation.agentId,
+                    prompt: automation.prompt,
+                    title: run.title
+                  }
+                )
+                terminalHandle = terminal.handle
+                terminalSessionId = terminal.tabId ?? null
+                terminalPaneKey = terminal.paneKey ?? null
+                terminalPtyId = terminal.ptyId ?? null
+                workspaceId = terminal.worktreeId
+                const worktree = await runtimeService.showManagedWorktree(`id:${workspaceId}`)
+                workspaceDisplayName = worktree.displayName ?? null
               }
-            )
-            terminalHandle = terminal.handle
-            terminalSessionId = terminal.tabId ?? null
-            terminalPaneKey = terminal.paneKey ?? null
-            terminalPtyId = terminal.ptyId ?? null
-            workspaceId = terminal.worktreeId
-            const worktree = await runtimeService.showManagedWorktree(`id:${workspaceId}`)
-            workspaceDisplayName = worktree.displayName ?? null
-          }
 
-          const completion = (async () => {
-            const wait = await runtimeService.waitForTerminal(terminalHandle, {
-              condition: 'tui-idle'
-            })
-            const read = await runtimeService.readTerminal(terminalHandle, {
-              limit: terminalSnapshotLimit
-            })
-            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
-            snapshotBuffer.append(read.tail.join('\n'))
-            if (wait.satisfied) {
+              const completion = (async () => {
+                const wait = await runtimeService.waitForTerminal(terminalHandle, {
+                  condition: 'tui-idle'
+                })
+                const read = await runtimeService.readTerminal(terminalHandle, {
+                  limit: terminalSnapshotLimit
+                })
+                const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+                snapshotBuffer.append(read.tail.join('\n'))
+                if (wait.satisfied) {
+                  return {
+                    status: 'completed' as const,
+                    outputSnapshot: snapshotBuffer.snapshot(),
+                    error: null
+                  }
+                }
+                return {
+                  status: 'dispatch_failed' as const,
+                  outputSnapshot: snapshotBuffer.snapshot(),
+                  error: wait.blockedReason
+                    ? `Automation agent is blocked: ${wait.blockedReason}.`
+                    : 'Automation agent did not report completion.'
+                }
+              })()
+
               return {
-                status: 'completed' as const,
-                outputSnapshot: snapshotBuffer.snapshot(),
-                error: null
+                workspaceId,
+                workspaceDisplayName,
+                terminalSessionId,
+                terminalPaneKey,
+                terminalPtyId,
+                completion
               }
             }
-            return {
-              status: 'dispatch_failed' as const,
-              outputSnapshot: snapshotBuffer.snapshot(),
-              error: wait.blockedReason
-                ? `Automation agent is blocked: ${wait.blockedReason}.`
-                : 'Automation agent did not report completion.'
-            }
-          })()
-
-          return {
-            workspaceId,
-            workspaceDisplayName,
-            terminalSessionId,
-            terminalPaneKey,
-            terminalPtyId,
-            completion
-          }
-        }
-      : undefined
-  })
-  runtimeService.setAutomationService(automations)
-  runtimeService.setArtifactService(
-    new ArtifactCloudService(app.getPath('userData'), () =>
-      isArtifactSharingEnabled(store?.getSettings())
+          : undefined
+      })
+  if (automations) {
+    runtimeService.setAutomationService(automations)
+  }
+  if (!benchSwitches.only.length) {
+    runtimeService.setArtifactService(
+      new ArtifactCloudService(app.getPath('userData'), () =>
+        isArtifactSharingEnabled(store?.getSettings())
+      )
     )
-  )
-  runtimeService.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
+    runtimeService.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
+  }
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
     prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
+  // Bench gate: skip plugin system when --only names a subset that excludes plugins.
+  const pluginsGatedOff = benchSwitches.only.length > 0 && !benchSwitches.only.includes('plugins')
   const pluginSystemStartupStartedAt = performance.now()
-  pluginKillListService = new PluginKillListService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
-  })
-  await pluginKillListService.initialize()
+  pluginKillListService = pluginsGatedOff
+    ? null
+    : new PluginKillListService({
+        pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
+      })
+  if (pluginKillListService) {
+    await pluginKillListService.initialize()
+  }
   pluginMarketplaceService = new PluginMarketplaceService({
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
     getKillListEntry: (pluginKey) => pluginKillListService?.find(pluginKey) ?? null
@@ -3067,7 +3089,7 @@ void app.whenReady().then(async () => {
         console.warn('[plugins] failed to bootstrap bundled plugins:', error)
       })
   }
-  pluginKillListService.onChanged(() => {
+  pluginKillListService?.onChanged(() => {
     void pluginService?.reconcileActivationState().catch((error) => {
       console.warn('[plugins] failed to apply plugin safety-list refresh:', error)
     })
@@ -3094,21 +3116,23 @@ void app.whenReady().then(async () => {
   })
   // Lazy kernel: initialize() only discovers manifests — no worker forks, no
   // panel reads. Zero plugin code runs before an explicit trigger.
-  void pluginService
-    .initialize()
-    .then(() => {
-      logStartupMilestone('plugin-system-initialized', {
-        durationMs: Number((performance.now() - pluginSystemStartupStartedAt).toFixed(2)),
-        installedPlugins: pluginService?.getDiscovered().length ?? 0
+  if (!pluginsGatedOff) {
+    void pluginService
+      .initialize()
+      .then(() => {
+        logStartupMilestone('plugin-system-initialized', {
+          durationMs: Number((performance.now() - pluginSystemStartupStartedAt).toFixed(2)),
+          installedPlugins: pluginService?.getDiscovered().length ?? 0
+        })
       })
-    })
-    .catch((error) => {
-      console.warn('[plugins] failed to initialize plugin service:', error)
-    })
-  if (app.isPackaged && store?.getSettings().pluginSystemEnabled === true) {
-    void pluginKillListService.refresh().catch((error) => {
-      console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
-    })
+      .catch((error) => {
+        console.warn('[plugins] failed to initialize plugin service:', error)
+      })
+    if (app.isPackaged && store?.getSettings().pluginSystemEnabled === true) {
+      void pluginKillListService?.refresh().catch((error) => {
+        console.warn('[plugins] failed to refresh plugin safety list; using cached state:', error)
+      })
+    }
   }
   pluginService.onChanged((event) => {
     if (
@@ -3482,7 +3506,7 @@ void app.whenReady().then(async () => {
       }
     }
     // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
-    automations.start()
+    automations?.start()
     // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
     // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
     scheduleAllPendingHistoryTreeRemovals()

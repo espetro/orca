@@ -95,6 +95,7 @@ export type RecorderOptions = {
 ## CLI contract (owner: M3) — `config/scripts/resource-metrics-analysis.mjs`
 
 Exports (pure, for tests + M4):
+
 ```js
 export function loadDump(jsonOrPath) // accepts object or path string
 export function perMetricStats(ticks, role, metric) // -> { median, q1, q3, iqr, p10, p90, min, max, n }
@@ -105,6 +106,7 @@ export function compareDumps(dumpA, dumpB) // -> { metrics: [{ role, metric, a: 
 export function renderMarkdownReport(comparison) // deterministic string (sorted keys)
 export function buildComparisonArtifact(comparison) // JSON.stringify with sorted keys, 2-space
 ```
+
 - Metric keys: `<role>.rssBytes`, `<role>.footprintBytes`, `<role>.cpuPercent`, plus `mainProcess.heapUsedBytes`, `host.availableMemoryBytes`.
 - Verdict rule: IQRs disjoint → improved (A) / regressed (B) by median direction; else `inconclusive`.
 - Deviance flags: `thermal-limit`, `host-degraded-source`, `loadavg-spike`, `snapshot-taken-in-window`, `drift-suspected` (|slope| > 1MB/min), `marker-step`, `stale-samples`, `low-sample-count`.
@@ -115,6 +117,7 @@ export function buildComparisonArtifact(comparison) // JSON.stringify with sorte
 ## Harness v2 (owner: M4) — extend `config/scripts/run-release-memory-benchmark.mjs` + `.test.mjs`
 
 Start from the w1 version (`orca-mem-worktrees/w1:config/scripts/run-release-memory-benchmark.mjs`, 473 lines; branch exp/mem-obs-m4 is at b3dd46d4 which does NOT have it — `git checkout exp/mem-w1 -- config/scripts/run-release-memory-benchmark.mjs config/scripts/run-release-memory-benchmark.test.mjs` first).
+
 - New args: `--settle-s` (default 30), `--window-s` (default 120, replaces --duration as default path but keep --duration alias), `--no-editor`, `--ab <dumpA> <dumpB>` (order A,B,B,A,A,B), `--runs N` (default 3, enforced ≥3 for --ab), `--recorder` (default on; sets ORCA_RESOURCE_RECORDER=1 in child env).
 - Flow per run: spawn (isolated env unchanged + ORCA_RESOURCE_RECORDER=1) → fixture → wait for `window.__orcaE2E__.resources` then `mark('fixture-ready')` → settle → sample window → heap snapshot AFTER window + `mark('snapshot-taken')` → `resources.dump()` → artifact = dump + external ps cross-check (single sweep at window end) + fixture fields (`fixture: 'standard'|'no-editor'`, runIndex, label).
 - Drop CDP role classification for metrics (CDP still used for fixture control + heap snapshots).

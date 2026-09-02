@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 
