@@ -8,13 +8,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import {
+  DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS,
   DAEMON_SESSION_SCROLLBACK_ROWS,
   resolveDaemonSessionScrollbackRows
 } from './daemon-session-scrollback-window'
 
+const GIB = 1024 * 1024 * 1024
+
 describe('resolveDaemonSessionScrollbackRows', () => {
-  it('defaults to the flat window', () => {
-    expect(resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv)).toBe(
+  it('defaults to 500 rows on low memory tier and 1000 rows on mid/high memory tier', () => {
+    expect(resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv, 8 * GIB)).toBe(
+      DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS
+    )
+    expect(resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv, 16 * GIB)).toBe(
       DAEMON_SESSION_SCROLLBACK_ROWS
     )
   })
@@ -28,7 +34,10 @@ describe('resolveDaemonSessionScrollbackRows', () => {
     // unbounded retention this window exists to prevent.
     for (const raw of ['0', '50', '99', '5001', '50000', '-1', '3.5', 'nonsense', '']) {
       const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
-      expect(resolveDaemonSessionScrollbackRows(env)).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(resolveDaemonSessionScrollbackRows(env, 16 * GIB)).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(resolveDaemonSessionScrollbackRows(env, 8 * GIB)).toBe(
+        DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS
+      )
     }
   })
 })
@@ -76,7 +85,8 @@ describe('daemon session scrollback window', () => {
       rows: 24,
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
-    const total = DAEMON_SESSION_SCROLLBACK_ROWS + 500
+    const windowRows = resolveDaemonSessionScrollbackRows()
+    const total = windowRows + 500
     for (let i = 1; i <= total; i += 1) {
       dataCb?.(`LINE_${String(i).padStart(5, '0')}\r\n`)
     }
@@ -88,8 +98,8 @@ describe('daemon session scrollback window', () => {
       expect(text).toContain(`LINE_${String(total).padStart(5, '0')}`)
       expect(text).not.toContain('LINE_00001')
       const retainedMatches = text.match(/LINE_\d{5}/g) ?? []
-      expect(retainedMatches.length).toBeLessThanOrEqual(DAEMON_SESSION_SCROLLBACK_ROWS + 24)
-      expect(retainedMatches.length).toBeGreaterThan(DAEMON_SESSION_SCROLLBACK_ROWS - 50)
+      expect(retainedMatches.length).toBeLessThanOrEqual(windowRows + 24)
+      expect(retainedMatches.length).toBeGreaterThan(windowRows - 50)
     })
   })
 })

@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
+import { deriveHostMemoryBudget, type HostMemoryBudget } from './host-memory-budget'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -274,11 +275,17 @@ export function installDevParentSignalQuit(isDev: boolean): void {
   process.once('SIGTERM', onSignal)
 }
 
-export function enableMainProcessGpuFeatures(): void {
-  if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
-    // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
+export function enableMainProcessGpuFeatures(
+  budget: HostMemoryBudget = deriveHostMemoryBudget()
+): void {
+  if (
+    process.env.ORCA_DISABLE_GPU === '1' ||
+    (process.platform === 'linux' && getMainE2EConfig().userDataDir)
+  ) {
+    // Why: software path eliminates the entire GPU process footprint when explicitly requested or on headless test runners.
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu')
+    app.commandLine.appendSwitch('disable-software-rasterizer')
     return
   }
 
@@ -287,6 +294,21 @@ export function enableMainProcessGpuFeatures(): void {
     // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
     // reaches macOS this must move out of this path or Macs silently lose the fix.
     app.commandLine.appendSwitch('disable-skia-graphite')
+  }
+
+  // Why: low-memory hosts drop zero-copy video frames to constrain GPU memory usage.
+  if (budget.disableGpuMemoryBufferVideoFrames) {
+    app.commandLine.appendSwitch('disable-gpu-memory-buffer-video-frames')
+  }
+
+  if (budget.enableLowEndDeviceMode) {
+    // Why: forces Chromium to cut image decode caches in half and aggressively purge background buffers.
+    app.commandLine.appendSwitch('enable-low-end-device-mode')
+  }
+
+  if (budget.rendererProcessLimit !== null) {
+    // Why: consolidates isolated webviews/browsers to avoid spawning runaway renderer processes.
+    app.commandLine.appendSwitch('renderer-process-limit', String(budget.rendererProcessLimit))
   }
 
   // Why: Blink evicts the oldest WebGL context past 16/renderer and each terminal pane holds one, silently downgrading panes to DOM.
@@ -309,14 +331,18 @@ export function enableMainProcessGpuFeatures(): void {
     app.commandLine.appendSwitch('disable-gpu-sandbox')
   }
 
-  const existingFeatures = app.commandLine.getSwitchValue('enable-features')
-  const features = [
-    // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
-    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
-    existingFeatures
-  ]
+  const existingFeatures = app.commandLine
+    .getSwitchValue('enable-features')
+    .split(',')
+    .map((feature) => feature.trim())
     .filter(Boolean)
-    .join(',')
+  const features = Array.from(
+    new Set([
+      ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+      ...(budget.purgeAndSuspendGpu ? ['PurgeAndSuspend'] : []),
+      ...existingFeatures
+    ])
+  ).join(',')
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
   }

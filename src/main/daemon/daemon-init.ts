@@ -50,6 +50,7 @@ import {
   rebindLocalProviderListeners
 } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
+import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
@@ -584,6 +585,7 @@ function createOutOfProcessLauncher(
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
+      const budget = deriveHostMemoryBudget()
       const child = fork(
         forkEntryPath,
         [
@@ -610,6 +612,7 @@ function createOutOfProcessLauncher(
           // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
           detached: true,
           stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+          execArgv: [`--max-old-space-size=${budget.daemonMaxOldSpaceMb}`],
           // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
           ...(relocatedHost ? { execPath: relocatedHost.execPath } : {}),
           // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.

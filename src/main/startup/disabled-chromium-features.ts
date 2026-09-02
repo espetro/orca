@@ -5,5 +5,9 @@ export const DISABLED_CHROMIUM_FEATURES = [
   // trips a mojo ReportBadMessage that kills the guest renderer — a page-triggerable kill that pollutes crash telemetry.
   'DirectSockets',
   'DirectSocketsInSharedWorkers',
-  'DirectSocketsInServiceWorkers'
+  'DirectSocketsInServiceWorkers',
+  // Why: unused consumer browser services allocate models, background tasks, and feed caches.
+  'Translate',
+  'InterestFeedContentSuggestions',
+  'OptimizationHints'
 ] as const

@@ -72,6 +72,29 @@ export function installMainWindowStateLifecycle(args: {
     mainWindow.webContents.on('did-finish-load', revealInitialWindow)
   }
 
+  const isExposeGcEnabled =
+    app.commandLine.getSwitchValue('js-flags').includes('--expose-gc') ||
+    process.execArgv.includes('--expose-gc') ||
+    typeof global.gc === 'function'
+
+  if (isExposeGcEnabled) {
+    // Why: low-memory tier sweeps post-load allocations to return unreferenced startup memory to the OS.
+    mainWindow.webContents.on('did-finish-load', () => {
+      const idleGcTimer = setTimeout(() => {
+        if (global.gc) {
+          global.gc()
+        }
+        if (!mainWindow.isDestroyed()) {
+          void mainWindow.webContents.executeJavaScript(
+            'if (typeof window.gc === "function") window.gc();',
+            true
+          )
+        }
+      }, 10_000)
+      idleGcTimer.unref?.()
+    })
+  }
+
   // Why: persist window bounds to restore last position/size; debounce to avoid hammering persistence during resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
   // Why: teardown still emits resize/move/unmaximize at near-min bounds; freeze persistence once closing so they can't clobber the saved size.

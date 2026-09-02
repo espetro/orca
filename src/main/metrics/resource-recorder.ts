@@ -27,7 +27,6 @@ type ResolvedOptions = Required<RecorderOptions>
 /** Electron `app` read lazily so unit tests import this module without electron. */
 function readElectronAppVersion(): string | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const electron = require('electron') as { app?: { getVersion(): string } }
     return electron.app?.getVersion() ?? null
   } catch {

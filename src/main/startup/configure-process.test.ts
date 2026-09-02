@@ -23,6 +23,22 @@ vi.mock('electron', () => {
   }
 })
 
+vi.mock('./host-memory-budget', () => ({
+  deriveHostMemoryBudget: vi.fn(() => ({
+    tier: 'mid',
+    totalGib: 16,
+    rendererMaxOldSpaceMb: 2048,
+    optimizeForSize: false,
+    exposeGc: false,
+    daemonMaxOldSpaceMb: 256,
+    pluginHostMaxOldSpaceMb: 256,
+    parcelWatcherMaxOldSpaceMb: 160,
+    disableGpuMemoryBufferVideoFrames: false,
+    purgeAndSuspendGpu: false,
+    maxRetainedHiddenWebglContexts: 2
+  }))
+}))
+
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -397,7 +413,7 @@ describe('configureElectronNetworkCompatibility', () => {
 })
 
 const EXPECTED_DISABLED_FEATURES =
-  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers'
+  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers,Translate,InterestFeedContentSuggestions,OptimizationHints'
 
 describe('disableUnsupportedChromiumFeatures', () => {
   it('matches the shared list the real-Electron egress probes launch with', async () => {
@@ -738,6 +754,40 @@ describe('enableMainProcessGpuFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
+  })
+
+  it('appends low-memory GPU switches when budget specifies them', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('')
+    enableMainProcessGpuFeatures({
+      tier: 'low',
+      totalGib: 8,
+      rendererMaxOldSpaceMb: 768,
+      optimizeForSize: true,
+      exposeGc: true,
+      daemonMaxOldSpaceMb: 128,
+      pluginHostMaxOldSpaceMb: 128,
+      parcelWatcherMaxOldSpaceMb: 96,
+      disableGpuMemoryBufferVideoFrames: true,
+      purgeAndSuspendGpu: true,
+      maxRetainedHiddenWebglContexts: 0,
+      enableLowEndDeviceMode: true,
+      rendererProcessLimit: 2
+    })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-gpu-memory-buffer-video-frames'
+    )
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-low-end-device-mode')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('renderer-process-limit', '2')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync,PurgeAndSuspend'
+    )
   })
 })
 
