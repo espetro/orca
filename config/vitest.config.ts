@@ -47,6 +47,16 @@ export default defineConfig({
   // in sharedResolve and spread it both here and into every project.
   resolve: sharedResolve,
   test: {
+    // Why: deterministic discovery for deps.optimizer candidates — surfaces per-module
+    // import self/transform time instead of guessing. 'on-warn' keeps output quiet
+    // until something crosses the warn threshold.
+    experimental: {
+      importDurations: {
+        print: 'on-warn',
+        limit: 10,
+        thresholds: { warn: 100, danger: 500 }
+      }
+    },
     ...sharedTestOptions,
     ...testWorkerOptions,
     projects: [
@@ -94,6 +104,11 @@ export default defineConfig({
           include: ['src/renderer/**/*.test.{ts,tsx}', 'src/preload/**/*.test.{ts,tsx}'],
           // Why: transform cost dominates renderer tests; pre-bundling the heavy
           // deps once removes per-worker ESM-to-ESM transform passes.
+          // Policy: only add a lib here when root-level `experimental.importDurations`
+          // shows it repeatedly above the warn threshold across test files. One-off
+          // slow imports don't qualify; xterm is in because ~70 test files import
+          // @xterm/xterm or @xterm/headless and optimizer prebundling cut their
+          // transform+import time by ~18% (measured A/B).
           deps: {
             optimizer: {
               web: {
@@ -105,7 +120,9 @@ export default defineConfig({
                   'i18next',
                   'react-i18next',
                   'zustand',
-                  'react-router'
+                  'react-router',
+                  '@xterm/xterm',
+                  '@xterm/headless'
                 ]
               }
             }
