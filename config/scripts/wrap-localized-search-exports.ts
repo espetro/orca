@@ -54,7 +54,6 @@ function wrapExportConst(sourceText: string): { sourceText: string; replacements
     }
     const getter = getterName(exportName)
     const wrapped = `export const ${getter} = createLocalizedCatalog(() => ${value.trim()})`
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     replacements.push({ exportName, getter, fullMatch, wrapped })
   }
 
