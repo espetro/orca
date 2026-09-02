@@ -168,6 +168,10 @@ import {
   installUnhandledRejectionLogging
 } from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
+import {
+  configureSessionCodeCache,
+  enableMainProcessCompileCache
+} from './startup/native-code-cache'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
@@ -1001,6 +1005,7 @@ if (hasSingleInstanceLock) {
     platform: process.platform,
     ...getMainProcessLifecycleIdentity()
   })
+  enableMainProcessCompileCache()
   disableUnsupportedChromiumFeatures()
   // Why: unconditional — a GPU-fallback launch skips enableMainProcessGpuFeatures() below.
   optOutOfHiddenPageWakeUpThrottling()
@@ -2364,6 +2369,7 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 
 void app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
+  configureSessionCodeCache(session.defaultSession)
   startResourceRecorderIfEnabled()
   installResourceRecorderIpcHandlers()
   installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
