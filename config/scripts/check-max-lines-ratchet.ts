@@ -18,8 +18,8 @@ const MOBILE_CONFIG_PATH = 'mobile/.oxlintrc.json'
 // These two files legitimately contain the directive text as data (regex, fixtures),
 // so scanning them would self-flag. The ratchet does not police itself.
 const SELF_FILES = new Set([
-  'config/scripts/check-max-lines-ratchet.mjs',
-  'config/scripts/check-max-lines-ratchet.test.mjs'
+  'config/scripts/check-max-lines-ratchet.ts',
+  'config/scripts/check-max-lines-ratchet.test.ts'
 ])
 
 // Default max-lines budgets from .oxlintrc.json (counted lines).

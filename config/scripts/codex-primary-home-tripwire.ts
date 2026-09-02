@@ -155,7 +155,7 @@ export async function startCodexPrimaryHomeTripwire(
         const event = { detectedAt: new Date().toISOString(), ...change }
         events.push(event)
         currentSnapshot = nextSnapshot
-        await options.onChange?.(event)
+        options.onChange?.(event)
       }
     } catch (error) {
       const event: HomeChangeEvent = {
@@ -166,7 +166,7 @@ export async function startCodexPrimaryHomeTripwire(
         scanError: error instanceof Error ? error.message : String(error)
       }
       events.push(event)
-      await options.onChange?.(event)
+      options.onChange?.(event)
     } finally {
       scanInFlight = false
     }

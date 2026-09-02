@@ -172,7 +172,7 @@ export function budgetFailures(row: Record<string, unknown>): string[] {
       continue
     }
     if ((value as number) > budget) {
-      failures.push(`${key} ${value} > ${budget}`)
+      failures.push(`${key} ${String(value)} > ${budget}`)
     }
   }
   return failures

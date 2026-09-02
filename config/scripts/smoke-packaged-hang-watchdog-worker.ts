@@ -72,7 +72,7 @@ async function waitForExit(worker, workerError) {
     throw workerError.current
   }
   if (exitCode !== 0) {
-    throw new Error(`Packaged watchdog worker exited with code ${exitCode}`)
+    throw new Error(`Packaged watchdog worker exited with code ${String(exitCode)}`)
   }
 }
 

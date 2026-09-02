@@ -150,7 +150,7 @@ function createGitHubFetch(responses: unknown[]) {
       const response = responses.shift()
 
       if (response == null) {
-        throw new Error(`Unexpected request: ${method} ${rawUrl}`)
+        throw new Error(`Unexpected request: ${String(method)} ${String(rawUrl)}`)
       }
 
       requests.push({

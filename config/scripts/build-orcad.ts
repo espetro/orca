@@ -248,7 +248,7 @@ if (graphErrors.length > 0) {
   const watcherFailure = await smokeLoadWatcherChild()
   if (watcherFailure) {
     console.error(
-      `[build-orcad] the watcher child did not run under plain Node.\n${watcherFailure}`
+      `[build-orcad] the watcher child did not run under plain Node.\n${String(watcherFailure)}`
     )
     process.exitCode = 1
   }

@@ -145,7 +145,9 @@ function validateRow(row: Record<string, unknown>): string[] {
     }
   }
   if (checkedMetricCount === 0) {
-    failures.push(`${row.source} ${row.scenario}: no recognized budget metrics found`)
+    failures.push(
+      `${String(row.source)} ${String(row.scenario)}: no recognized budget metrics found`
+    )
   }
   return failures
 }

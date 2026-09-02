@@ -157,7 +157,7 @@ async function runPtySpawnHealthCheck(
     return true
   } catch (error) {
     log(
-      `PTY spawn health check skipped (best-effort): ${error instanceof Error ? error.message : error}`
+      `PTY spawn health check skipped (best-effort): ${error instanceof Error ? error.message : String(error)}`
     )
     return false
   }

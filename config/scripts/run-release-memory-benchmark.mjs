@@ -379,7 +379,7 @@ export async function forceGcOverCdp(cdpSession) {
         await cdpSession.send('HeapProfiler.collectGarbage')
       } catch {
         applied = false
-        console.warn(`[release-memory] collectGarbage failed: ${error}`)
+        console.warn(`[release-memory] collectGarbage failed: ${String(error)}`)
       }
     }
     if (i < FORCED_GC_CALLS - 1) {

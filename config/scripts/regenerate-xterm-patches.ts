@@ -395,7 +395,7 @@ function assertToolchain(upstreamRoot, manifest) {
     const actual = JSON.parse(readFileSync(installed, 'utf8')).version
     if (actual !== version) {
       throw new Error(
-        `Upstream ${name} resolved to ${actual}, manifest expects ${version}. Update the toolchain block only together with a verified rebuild.`
+        `Upstream ${name} resolved to ${String(actual)}, manifest expects ${String(version)}. Update the toolchain block only together with a verified rebuild.`
       )
     }
   }

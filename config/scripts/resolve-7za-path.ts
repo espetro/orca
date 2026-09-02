@@ -86,7 +86,9 @@ export async function resolve7zaPath(projectDir = process.cwd()) {
     }
     const toolsetPath = await withStdoutDivertedToStderr(() => getPath7za())
     if (typeof toolsetPath !== 'string' || !existsSync(toolsetPath)) {
-      throw new Error(`app-builder-lib returned a 7za path that does not exist: ${toolsetPath}`)
+      throw new Error(
+        `app-builder-lib returned a 7za path that does not exist: ${String(toolsetPath)}`
+      )
     }
     return toolsetPath
   } finally {

@@ -1,9 +1,8 @@
 import { ipcRenderer } from 'electron'
 import type { Merged } from '../api-types'
 import type { GithubPullRequestApi } from '../api/github-pull-request-api'
-import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { GithubWorkItemApi, GitHubRepoSelectorArgs } from '../api/github-work-item-api'
-import type { GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { GitHubCommentResult, GitHubReactionContent } from '../../shared/github/comment-types'
 import type {
   GitHubPRRefreshCandidate,

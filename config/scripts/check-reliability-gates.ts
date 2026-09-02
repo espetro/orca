@@ -278,7 +278,7 @@ function validateCoveredScope(gate, failures) {
     for (const platform of evidencePlatforms) {
       if (!gate.coveredPlatforms.includes(platform)) {
         failures.push(
-          `${gate.id}: coveredPlatforms must include passed evidence platform ${platform}`
+          `${gate.id}: coveredPlatforms must include passed evidence platform ${String(platform)}`
         )
       }
     }

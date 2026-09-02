@@ -1,8 +1,7 @@
 import type { IntlAiConfig } from '@intl-ai/api'
 
 import { INTL_AI_BRACE_PROCESSOR } from './intl-ai-brace-processor.ts'
-import { OPENROUTER_BASE_URL } from './intl-ai-model-policy.ts'
-import { OPENROUTER_FREE_ALIAS } from './intl-ai-model-policy.ts'
+import { OPENROUTER_BASE_URL, OPENROUTER_FREE_ALIAS } from './intl-ai-model-policy.ts'
 
 export const INTL_AI_LOCALES_DIR = 'src/renderer/src/i18n/locales'
 export const INTL_AI_DEFAULT_LOCALE = 'en'
