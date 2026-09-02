@@ -157,7 +157,7 @@ describe('verifyStoreExposure', () => {
 
 describe('createBenchBuild', () => {
   const assetsDir = mkdtempSync(path.join(tmpdir(), 'bench-assets-'))
-  writeFileSync(path.join(assetsDir, 'store-abc123.js'), 'const x = { __store: 1 }')
+  writeFileSync(path.join(assetsDir, 'client-abc123.js'), 'const x = { __store: 1 }')
 
   const stateWrites = []
 

@@ -258,8 +258,9 @@ export function createBenchBuild({
 
     log('verify renderer store exposure')
     const assetsDir = rendererAssetsDir
+    // Vite 8 renamed the store chunk (store-*.js -> client-*.js), so scan all JS assets.
     const storeAssets = existsSync(assetsDir)
-      ? readdirSync(assetsDir).filter((name) => /^store-.*\.js$/.test(name))
+      ? readdirSync(assetsDir).filter((name) => name.endsWith('.js'))
       : []
     let matchCount = 0
     for (const name of storeAssets) {
