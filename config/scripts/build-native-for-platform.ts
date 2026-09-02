@@ -38,7 +38,7 @@ function runPnpmScript(scriptName) {
   }
   const child = spawn(command, args, { stdio: 'inherit' })
 
-  return new Promise((resolve) => {
+  return new Promise<number>((resolve) => {
     child.on('error', () => resolve(1))
     child.on('close', (code, signal) => {
       if (signal) {
