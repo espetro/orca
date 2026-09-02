@@ -21,6 +21,10 @@ node_modules/
 # worktrees share an install) slipped past a bulk `git add` and got committed — twice.
 node_modules
 
+# Local git worktrees / folder workspaces nested in the repo (their node_modules symlinks
+# are how the twice-committed leak above happened).
+/.worktrees/
+
 # Build output
 dist/
 dist-electron/
