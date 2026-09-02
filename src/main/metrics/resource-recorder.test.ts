@@ -35,7 +35,8 @@ function makeRecorder(module: RecorderModule, overrides: Record<string, unknown>
 }
 
 const PS_STDOUT = '  111  51200\n  222  25600\n'
-const FOOTPRINT_STDOUT = 'Footprint: 1361 KB (16384 bytes per page)\n ...table...'
+const FOOTPRINT_STDOUT =
+  'Footprint: 1361 KB (16384 bytes per page)\n    phys_footprint: 1361 KB\n ...table...'
 const THERMAL_STDOUT = 'CPU_Speed_Limit = 100\n'
 const VM_STAT_1 = 'Page ins: 1000.\nPage outs: 500.\n'
 const VM_STAT_2 = 'Page ins: 1030.\nPage outs: 505.\n'

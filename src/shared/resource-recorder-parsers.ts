@@ -30,10 +30,22 @@ export function parsePsFootprint(stdout: string): Map<number, PsFootprintRow> {
   return rows
 }
 
-/** Parses `/usr/bin/footprint -p <pid>` stdout: `Footprint: <N> KB` line, in bytes. */
+/**
+ * Parses `/usr/bin/footprint -p <pid>` stdout. Prefers the exact
+ * `phys_footprint: <N> MB` detail line; falls back to the summary
+ * `Footprint: <N> <unit>` line. Bytes out; null when neither matches.
+ */
 export function parseFootprintTool(stdout: string): number | null {
-  const match = stdout.match(/^\s*Footprint:\s+(\d+)\s+KB\b/m)
-  return match ? Number(match[1]) * 1024 : null
+  const units = { KB: 1024, MB: 1048576, GB: 1073741824 } as const
+  const detail = stdout.match(/^\s*phys_footprint:\s+(\d+)\s+(KB|MB|GB)\b/m)
+  if (detail) {
+    return Number(detail[1]) * units[detail[2] as keyof typeof units]
+  }
+  const summary = stdout.match(/^\s*Footprint:\s+(\d+)\s+(KB|MB|GB)\b/m)
+  if (summary) {
+    return Number(summary[1]) * units[summary[2] as keyof typeof units]
+  }
+  return null
 }
 
 /** Parses `pmset -g therm`; null on n/a, unsupported output, or missing line. */

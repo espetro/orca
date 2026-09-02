@@ -130,6 +130,9 @@ const mainA = median(mainRunA)
 const mainB = median(mainRunB)
 const postA = median(runTailMedians('A', (t) => t.mainProcess?.rssBytes))
 const postB = median(runTailMedians('B', (t) => t.mainProcess?.rssBytes))
+// phys_footprint (pre-compression, GC-stable) per-role samples; null-tolerant.
+const fpRunA = runMedians('A', (t) => t.samples?.find((s) => s.type === 'main')?.footprintBytes)
+const fpRunB = runMedians('B', (t) => t.samples?.find((s) => s.type === 'main')?.footprintBytes)
 // Sanity check vs historical identical-code artifacts (expected p=1, cliffs ~0):
 //   MEASURE_KEEP_ARTIFACTS=1 node config/scripts/run-release-memory-benchmark.mjs \
 //     --ab <appA> <appA> --runs 3 --settle-s 120 --window-s 60 --no-editor --out /tmp/same && \
@@ -162,6 +165,9 @@ console.log(`HEAP_MB=${mb(heapA - heapB).toFixed(2)}`)
 console.log(`P=${pval.toFixed(4)}`)
 console.log(`CLIFFS=${cliffsVal.toFixed(3)}`)
 console.log(`POSTGC=${mb(postA - postB).toFixed(2)}`)
+console.log(`FP=${fpRunA.length && fpRunB.length ? Math.round(median(fpRunA) - median(fpRunB)) : 'null'}`)
+console.log(`FP_MB=${fpRunA.length && fpRunB.length ? mb(median(fpRunA) - median(fpRunB)).toFixed(2) : 'null'}`)
+console.log(`FP_P=${fpRunA.length >= 3 && fpRunB.length >= 3 ? mwU(fpRunA, fpRunB).toFixed(4) : 'null'}`)
 EOF
 }
 
@@ -187,6 +193,8 @@ echo "METRIC combined_rss_delta_mb=$(mb "$COMB")"
 echo "METRIC heap_used_delta_mb=$(mb "$HEAP")"
 echo "METRIC main_cpu_delta_pct=$CPU"
 echo "METRIC main_rss_postgc_delta_mb=$POSTGC"
+echo "METRIC main_footprint_delta_mb=$FP_MB"
+echo "METRIC main_footprint_pvalue=$FP_P"
 echo "METRIC main_rss_pvalue=$P"
 echo "METRIC main_rss_cliffs_delta=$CLIFFS"
 echo "# settle=${SETTLE_S}s window=${WINDOW_S}s runs=3 (+1 warmup discard)" >&2
