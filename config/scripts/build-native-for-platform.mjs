@@ -18,13 +18,15 @@ runPnpmScript('build:notification-status-macos')
 process.exit(0)
 
 function runPnpmScript(scriptName) {
+  // npm_execpath may be a native pnpm binary (@pnpm/exe) that node cannot execute.
   const npmExecPath = process.env.npm_execpath
-  const command = npmExecPath
+  const useNodeLoader = npmExecPath !== undefined && /\.(c|m)?js$/.test(npmExecPath)
+  const command = useNodeLoader
     ? process.execPath
     : process.platform === 'win32'
       ? 'pnpm.cmd'
       : 'pnpm'
-  const args = npmExecPath ? [npmExecPath, 'run', scriptName] : ['run', scriptName]
+  const args = useNodeLoader ? [npmExecPath, 'run', scriptName] : ['run', scriptName]
   const result = spawnSync(command, args, { stdio: 'inherit' })
 
   if (result.signal) {
