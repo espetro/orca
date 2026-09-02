@@ -53,8 +53,8 @@ describe('computer-use e2e workflow', () => {
         'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
         'config/scripts/computer-use-modifier-safety.test.mjs',
         'config/scripts/computer-use-skill-guidance.test.mjs',
-        'config/scripts/computer-use-smoke.mjs',
-        'config/scripts/computer-use-smoke.test.mjs',
+        'config/scripts/computer-use-smoke.ts',
+        'config/scripts/computer-use-smoke.test.ts',
         'skills/computer-use/SKILL.md',
         'src/main/computer/**',
         'src/main/runtime/rpc/dispatcher.ts',
@@ -83,7 +83,7 @@ describe('computer-use e2e workflow', () => {
       'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs',
       'config/scripts/computer-use-modifier-safety.test.mjs',
       'config/scripts/computer-use-skill-guidance.test.mjs',
-      'config/scripts/computer-use-smoke.test.mjs',
+      'config/scripts/computer-use-smoke.test.ts',
       'src/main/computer/computer-provider-lifecycle.test.ts',
       'src/main/computer/computer-provider-unavailable-message.test.ts',
       'src/main/computer/sidecar-client.test.ts',
@@ -200,8 +200,8 @@ describe('computer-use e2e workflow', () => {
     expect(cleanupIndex).toBeGreaterThanOrEqual(0)
     expect(parseIndex).toBeLessThan(cleanupIndex)
     expect(benchmark).toContain('trialCleanupSha256: artifactSha256(trialCleanupPath)')
-    expect(cleanup).toContain('killRecordedAndMatchingProcesses(options.recordPath')
-    expect(cleanup).toContain("signalValidatedProcessGroup(options.pid, options.marker, 'SIGKILL'")
+    expect(cleanup).toContain('killRecordedAndMatchingProcesses(recordPath, recordedFragment')
+    expect(cleanup).toContain("signalValidatedProcessGroup(pid, options.marker, 'SIGKILL'")
   })
 
   it('boots the built daemon under plain Node in the PR native-smoke job after the main build', () => {

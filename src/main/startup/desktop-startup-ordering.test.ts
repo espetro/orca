@@ -324,7 +324,7 @@ describe('startup ordering', () => {
     const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
     const serveReturn = source.indexOf('return', serveReady)
     const runtimeRpcStart = source.indexOf('await runtimeRpc.start()', serveStart)
-    const automationStart = source.indexOf('automations.start()', serveStart)
+    const automationStart = source.indexOf('automations?.start()', serveStart)
     const desktopSetWebContents = source.indexOf('automations.setWebContents(window.webContents)')
     const desktopAutomationStart = source.indexOf('automations.start()', desktopSetWebContents + 1)
 

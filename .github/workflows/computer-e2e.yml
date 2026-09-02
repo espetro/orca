@@ -18,7 +18,7 @@ on:
       - 'config/scripts/computer-use-modifier-safety.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.ts'
-      - 'config/scripts/computer-use-smoke.test.mjs'
+      - 'config/scripts/computer-use-smoke.test.ts'
       - 'config/scripts/daemon-boot-smoke.ts'
       - 'config/scripts/daemon-endpoint-handover-smoke.ts'
       - 'config/scripts/windows-daemon-workspace-close-repro.ts'
@@ -86,7 +86,7 @@ jobs:
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-modifier-safety.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
-          config/scripts/computer-use-smoke.test.mjs
+          config/scripts/computer-use-smoke.test.ts
           src/main/computer/computer-provider-lifecycle.test.ts
           src/main/computer/computer-provider-unavailable-message.test.ts
           src/main/computer/sidecar-client.test.ts

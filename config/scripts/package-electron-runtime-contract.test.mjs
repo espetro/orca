@@ -6,16 +6,16 @@ import { parse } from 'yaml'
 import { relayArtifactFilenames } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const readProjectFile = (relativePath) => readFileSync(join(projectDir, relativePath), 'utf8')
 const require = createRequire(import.meta.url)
 const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtime-node-modules.cjs')
-const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
+const packageJson = JSON.parse(readProjectFile('package.json'))
+// pnpm 10 reads install settings from pnpm-workspace.yaml, not the package.json "pnpm" field.
+const pnpmSettings = parse(readProjectFile('pnpm-workspace.yaml'))
 
 describe('Electron runtime package contract', () => {
   it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
-    const patch = readFileSync(
-      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
-      'utf8'
-    )
+    const patch = readProjectFile('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
 
     expect(patch).toContain('readonly clearModelGeneration: number')
     expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
@@ -26,22 +26,16 @@ describe('Electron runtime package contract', () => {
 
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.ts')
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
+    expect(pnpmSettings.onlyBuiltDependencies).not.toContain('electron')
   })
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
-    const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.ts'),
-      'utf8'
-    )
-    const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.ts'),
-      'utf8'
-    )
+    const rebuildScript = readProjectFile('config/scripts/rebuild-native-deps.ts')
+    const ensureScript = readProjectFile('config/scripts/ensure-native-runtime.ts')
     expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
     // Why: pnpm installs optional target architectures on every host; the root
     // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
+    expect(pnpmSettings.onlyBuiltDependencies).not.toContain('windows-native-registry')
     // Why assert the guard and the member separately: the list now carries more
     // than one addon, so pinning the whole literal only tested its formatting.
     expect(rebuildScript).toContain("rebuildPlatform === 'win32'")
@@ -69,25 +63,19 @@ describe('Electron runtime package contract', () => {
   })
 
   it('keeps the native Windows process-table addon optional and platform-gated', () => {
-    const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.ts'),
-      'utf8'
-    )
-    const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.ts'),
-      'utf8'
-    )
+    const rebuildScript = readProjectFile('config/scripts/rebuild-native-deps.ts')
+    const ensureScript = readProjectFile('config/scripts/ensure-native-runtime.ts')
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
     // Why: same rule as the registry addon -- pnpm installs optional deps on
     // every host, so macOS/Linux must never run node-gyp for a Windows addon.
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('@vscode/windows-process-tree')
+    expect(pnpmSettings.onlyBuiltDependencies).not.toContain('@vscode/windows-process-tree')
     expect(rebuildScript).toContain("'@vscode/windows-process-tree'")
     expect(ensureScript).toContain("'@vscode/windows-process-tree'")
     // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
     // libraries our build agents do not carry, and the enumeration stops after
     // 1024 processes -- on a busy host that silently hides the very descendants
     // teardown is looking for.
-    expect(packageJson.pnpm.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
+    expect(pnpmSettings.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
       'config/patches/@vscode__windows-process-tree@0.8.0.patch'
     )
     const packageTargets = {
@@ -157,14 +145,9 @@ describe('Electron runtime package contract', () => {
   })
 
   it('guards release publishing before electron-builder runs', () => {
-    const releaseWorkflow = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
+    const releaseWorkflow = readProjectFile('.github/workflows/release-cut.yml')
     const parsedWorkflow = parse(releaseWorkflow)
-    const macWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
-    )
+    const macWorkflow = parse(readProjectFile('.github/workflows/release-mac-build.yml'))
     const releaseCommands = new Map(
       parsedWorkflow.jobs.build.strategy.matrix.include.map(({ platform, release_command }) => [
         platform,
@@ -194,12 +177,8 @@ describe('Electron runtime package contract', () => {
   })
 
   it('blocks Linux and macOS release packaging on watcher process fault recovery', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const macWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
-    )
+    const releaseWorkflow = parse(readProjectFile('.github/workflows/release-cut.yml'))
+    const macWorkflow = parse(readProjectFile('.github/workflows/release-mac-build.yml'))
     const assertFaultGate = (steps, publishStepName, expectedCondition) => {
       const names = steps.map((step) => step.name)
       const gate = steps.find((step) => step.name === 'Gate runtime file-watcher process isolation')
@@ -225,21 +204,11 @@ describe('Electron runtime package contract', () => {
   })
 
   it('packages and release-gates the SSH relay watcher child', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.ts'), 'utf8')
-    const builderConfig = readFileSync(
-      join(projectDir, 'config/electron-builder.config.cjs'),
-      'utf8'
-    )
-    const remoteCommands = readFileSync(
-      join(projectDir, 'src/main/ssh/ssh-remote-commands.ts'),
-      'utf8'
-    )
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const macWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
-    )
+    const relayBuild = readProjectFile('config/scripts/build-relay.ts')
+    const builderConfig = readProjectFile('config/electron-builder.config.cjs')
+    const remoteCommands = readProjectFile('src/main/ssh/ssh-remote-commands.ts')
+    const releaseWorkflow = parse(readProjectFile('.github/workflows/release-cut.yml'))
+    const macWorkflow = parse(readProjectFile('.github/workflows/release-mac-build.yml'))
 
     expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
@@ -271,11 +240,10 @@ describe('Electron runtime package contract', () => {
   })
 
   it('packages and verifies the Windows SSH node-pty console-list fallback', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.ts'), 'utf8')
-    const relayDeploy = readFileSync(join(projectDir, 'src/main/ssh/ssh-relay-deploy.ts'), 'utf8')
-    const patchAsset = readFileSync(
-      join(projectDir, 'config/relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs'),
-      'utf8'
+    const relayBuild = readProjectFile('config/scripts/build-relay.ts')
+    const relayDeploy = readProjectFile('src/main/ssh/ssh-relay-deploy.ts')
+    const patchAsset = readProjectFile(
+      'config/relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs'
     )
 
     expect(relayBuild).toContain('copyFileSync(')
@@ -288,9 +256,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('pins the Windows release builder to the VS 2022 runner image', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
+    const releaseWorkflow = parse(readProjectFile('.github/workflows/release-cut.yml'))
     const windowsReleaseEntry = releaseWorkflow.jobs.build.strategy.matrix.include.find(
       ({ platform }) => platform === 'win'
     )
@@ -299,16 +265,11 @@ describe('Electron runtime package contract', () => {
   })
 
   it('keeps release-cut signing provenance on GitHub-hosted runners', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
+    const releaseWorkflow = parse(readProjectFile('.github/workflows/release-cut.yml'))
     const buildMatrixRunners = releaseWorkflow.jobs.build.strategy.matrix.include.map(
       ({ os }) => os
     )
-    const releaseWorkflowText = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
+    const releaseWorkflowText = readProjectFile('.github/workflows/release-cut.yml')
     const macDispatchStep = releaseWorkflow.jobs['build-mac'].steps.find(
       (step) => step.name === 'Run isolated macOS release build'
     )
@@ -325,10 +286,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('runs the macOS release build in an isolated Blacksmith workflow', () => {
-    const releaseMacWorkflowText = readFileSync(
-      join(projectDir, '.github/workflows/release-mac-build.yml'),
-      'utf8'
-    )
+    const releaseMacWorkflowText = readProjectFile('.github/workflows/release-mac-build.yml')
     const releaseMacWorkflow = parse(releaseMacWorkflowText)
     const buildMacJob = releaseMacWorkflow.jobs['build-mac']
     const checkoutStep = buildMacJob.steps.find((step) => step.name === 'Checkout')
@@ -351,10 +309,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('publishes both Linux release matrix entries', () => {
-    const releaseWorkflow = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
+    const releaseWorkflow = readProjectFile('.github/workflows/release-cut.yml')
     const parsedWorkflow = parse(releaseWorkflow)
     const publishLinuxStep = parsedWorkflow.jobs.build.steps.find(
       (step) => step.name === 'Publish release artifacts (Linux)'
@@ -366,10 +321,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('keeps Linux postinstall repairing Chromium sandbox permissions', () => {
-    const afterInstallScript = readFileSync(
-      join(projectDir, 'resources/linux/packaging/after-install.sh'),
-      'utf8'
-    )
+    const afterInstallScript = readProjectFile('resources/linux/packaging/after-install.sh')
 
     expect(afterInstallScript).toContain('chrome-sandbox')
     expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
@@ -377,10 +329,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('advances only the skill release ledger in a taggable release-cut commit', () => {
-    const releaseWorkflow = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
+    const releaseWorkflow = readProjectFile('.github/workflows/release-cut.yml')
     const parsedWorkflow = parse(releaseWorkflow)
     const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
@@ -419,10 +368,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('keeps release-cut RC retries monotonic across stale attempts', () => {
-    const releaseWorkflow = readFileSync(
-      join(projectDir, '.github/workflows/release-cut.yml'),
-      'utf8'
-    )
+    const releaseWorkflow = readProjectFile('.github/workflows/release-cut.yml')
     const parsedWorkflow = parse(releaseWorkflow)
     const versionStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Compute next version'
@@ -435,12 +381,8 @@ describe('Electron runtime package contract', () => {
   })
 
   it('bumps separate Homebrew casks for stable and RC desktop tags', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const homebrewWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/homebrew-bump.yml'), 'utf8')
-    )
+    const releaseWorkflow = parse(readProjectFile('.github/workflows/release-cut.yml'))
+    const homebrewWorkflow = parse(readProjectFile('.github/workflows/homebrew-bump.yml'))
 
     expect(releaseWorkflow.jobs['homebrew-bump'].if).toContain(
       "startsWith(needs.cut.outputs.tag, 'v')"
@@ -468,9 +410,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('installs the Electron package binary in the shared unit-test workflow', () => {
-    const unitTestWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/unit-tests.yml'), 'utf8')
-    )
+    const unitTestWorkflow = parse(readProjectFile('.github/workflows/unit-tests.yml'))
     const installStep = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
@@ -479,7 +419,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {
-    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
+    const prWorkflow = readProjectFile('.github/workflows/pr.yml')
     const parsedWorkflow = parse(prWorkflow)
     const smokeStep = parsedWorkflow.jobs.package.steps.find(
       (step) => step.name === 'Smoke packaged CLI'
@@ -492,9 +432,7 @@ describe('Electron runtime package contract', () => {
 
   it('keeps terminal scale perf wired to the report budget gate', () => {
     const packageScripts = packageJson.scripts
-    const terminalPerfWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/terminal-perf.yml'), 'utf8')
-    )
+    const terminalPerfWorkflow = parse(readProjectFile('.github/workflows/terminal-perf.yml'))
     const steps = terminalPerfWorkflow.jobs['terminal-perf'].steps
     const runStep = steps.find((step) => step.name === 'Run terminal scale perf report gate')
     const uploadStep = steps.find((step) => step.name === 'Upload terminal perf report')
@@ -543,12 +481,8 @@ describe('Electron runtime package contract', () => {
 
   it('keeps platform golden regressions in the manual and release workflows', () => {
     const packageScripts = packageJson.scripts
-    const goldenWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
-    )
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
+    const goldenWorkflow = parse(readProjectFile('.github/workflows/golden-e2e-experiment.yml'))
+    const releaseWorkflow = parse(readProjectFile('.github/workflows/release-cut.yml'))
     const steps = goldenWorkflow.jobs['golden-e2e'].steps
     const goldenPlatformLabels = new Map([
       ['linux', 'Linux'],

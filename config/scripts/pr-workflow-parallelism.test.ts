@@ -1,6 +1,7 @@
 import { globSync, readFileSync } from 'node:fs'
 import { parseWorkflow } from './github-workflow-yaml.ts'
 import { describe, expect, it } from 'vitest'
+import { parse as parseYaml } from 'yaml'
 
 const workflow = parseWorkflow(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unitTestWorkflow = parseWorkflow(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -11,6 +12,10 @@ const dependencyAction = parseWorkflow(
   readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+// pnpm 10 reads install settings from pnpm-workspace.yaml, not the package.json "pnpm" field.
+const pnpmSettings = parseYaml(readFileSync('pnpm-workspace.yaml', 'utf8')) as {
+  supportedArchitectures: { cpu: string[]; os: string[] }
+}
 const shellContractFiles = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
@@ -298,10 +303,10 @@ describe('PR workflow parallelism', () => {
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
-    expect(packageJson.pnpm.supportedArchitectures.os).toEqual(
+    expect(pnpmSettings.supportedArchitectures.os).toEqual(
       expect.arrayContaining(['current', 'win32'])
     )
-    expect(packageJson.pnpm.supportedArchitectures.cpu).toContain('current')
+    expect(pnpmSettings.supportedArchitectures.cpu).toContain('current')
     const prepareRuntime = dependencyAction.runs!.steps.find(
       (step) => step.name === 'Prepare native runtime'
     )!
