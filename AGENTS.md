@@ -30,7 +30,7 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 # Verifying Changes
 
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
-- **Test**: `pnpm test [path/to/file.test.ts]`
+- **Test**: `pnpm test [path/to/file.test.ts]`; `pnpm test:changed <files>` runs only tests importing the given modules (slow graph build, but far cheaper than the full suite). Unit tests are collected by the projects in `config/vitest.config.ts`: fast (shared/relay/cli/config scripts), main, renderer (renderer/preload), e2e-unit (`tests/e2e/*.unit.test.ts`). A test outside those roots never runs; `pnpm test:orphans` lists any. Playwright specs (`tests/e2e/*.spec.ts`) are not vitest.
 - **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
 
 # Considerations

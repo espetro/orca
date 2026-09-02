@@ -133,6 +133,9 @@ jobs:
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
+      - name: Check test project membership
+        run: pnpm run check:test-project-membership
+
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 
