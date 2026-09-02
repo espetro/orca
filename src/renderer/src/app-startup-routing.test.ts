@@ -7,6 +7,9 @@ function readSource(relativePath: string): string {
 }
 
 const APP_PATH = 'src/renderer/src/App.tsx'
+const MAIN_PATH = 'src/renderer/src/main.tsx'
+const LAYOUT_SERIALIZATION_PATH =
+  'src/renderer/src/components/terminal-pane/layout-serialization.ts'
 const STARTUP_HYDRATION_PATH = 'src/renderer/src/app-shell/use-app-startup-hydration.ts'
 const DEGRADED_RECOVERY_PATH = 'src/renderer/src/startup/startup-degraded-recovery.ts'
 const CHROME_LAYOUT_PATH = 'src/renderer/src/app-shell/use-app-chrome-layout.ts'
@@ -584,5 +587,78 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain("window.addEventListener('beforeunload', persistBeforeUnload)")
     expect(source.match(/window\.addEventListener\('beforeunload'/g) ?? []).toHaveLength(1)
     expect(source).not.toContain('window.api.ui.setSync')
+  })
+
+  it('does not eagerly import xterm or TerminalPane in App.tsx, main.tsx, or layout-serialization', () => {
+    const appSource = readSource(APP_PATH)
+    const mainSource = readSource(MAIN_PATH)
+    const layoutSource = readSource(LAYOUT_SERIALIZATION_PATH)
+
+    expect(appSource).not.toContain("from '@xterm/xterm'")
+    expect(appSource).not.toContain("from '@/components/terminal-pane/TerminalPane'")
+    expect(appSource).not.toContain("from './components/terminal-pane/TerminalPane'")
+
+    expect(mainSource).not.toContain("from '@xterm/xterm'")
+    expect(mainSource).not.toContain("from './components/terminal-pane/TerminalPane'")
+    expect(mainSource).not.toContain("from '@/components/terminal-pane/TerminalPane'")
+
+    expect(layoutSource).not.toContain("from './replay-guard'")
+    expect(layoutSource).not.toContain("from '@xterm/xterm'")
+    expect(layoutSource).not.toContain('restoreScrollbackBuffers')
+  })
+
+  it('lazy loads non-startup dialogs in App.tsx via lazyWithRetry', () => {
+    const appSource = readSource(APP_PATH)
+
+    const dialogs = [
+      'BrowserWebAuthnAccountDialog',
+      'DocPreviewExternalLinkConfirmation',
+      'LinkRoutingPreferenceDialogProvider',
+      'SkillFreshnessNudge',
+      'PinnedTabCloseDialog',
+      'RunningTerminalCloseDialog',
+      'WorktreeBaseFallbackDialog'
+    ]
+
+    for (const dialog of dialogs) {
+      expect(appSource).not.toMatch(
+        new RegExp(`import\\s+(?:{[^}]*\\b${dialog}\\b[^}]*}|${dialog})\\s+from`)
+      )
+      expect(appSource).toContain(`const ${dialog} = lazyWithRetry(`)
+    }
+  })
+
+  it('keeps main.tsx startup lightweight by deferring theme and diagnostics post-paint', () => {
+    const mainSource = readSource(MAIN_PATH)
+
+    // Crash diagnostics must remain eager
+    expect(mainSource).toContain(
+      "import {\n  installRendererCrashDiagnostics,\n  recordRendererCrashBreadcrumb\n} from './lib/crash-diagnostics'"
+    )
+    expect(mainSource).toContain('installRendererCrashDiagnostics()')
+
+    // Diagnostics and full theme engine must not be statically imported
+    expect(mainSource).not.toContain("from './lib/document-theme'")
+    expect(mainSource).not.toContain("from './lib/typing-latency-diagnostic'")
+    expect(mainSource).not.toContain("from './components/automations/automation-host-diagnostics'")
+    expect(mainSource).not.toContain("from './lib/resource-e2e-bridge'")
+    expect(mainSource).not.toContain(
+      "from './components/browser-pane/browser-client-page-renderer-installation'"
+    )
+    expect(mainSource).not.toContain("from './components/skills/SkillWarningPreviewLauncher'")
+
+    // Pre-paint theme class toggle exists
+    expect(mainSource).toContain("document.documentElement.classList.toggle(\n    'dark'")
+    expect(mainSource).toContain("document.documentElement.classList.toggle(\n    'light'")
+
+    // Post-paint dynamic imports exist
+    expect(mainSource).toContain("import('./lib/document-theme')")
+    expect(mainSource).toContain("import('./lib/typing-latency-diagnostic')")
+    expect(mainSource).toContain("import('./components/automations/automation-host-diagnostics')")
+    expect(mainSource).toContain("import('./lib/resource-e2e-bridge')")
+    expect(mainSource).toContain(
+      "import('./components/browser-pane/browser-client-page-renderer-installation')"
+    )
+    expect(mainSource).toContain("import('./components/skills/SkillWarningPreviewLauncher')")
   })
 })

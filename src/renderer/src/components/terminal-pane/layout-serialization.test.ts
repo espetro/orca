@@ -43,7 +43,6 @@ import {
 } from '../../../../shared/terminal-mode-reset-profiles'
 import {
   buildFontFamily,
-  restoreScrollbackBuffers,
   serializePaneTree,
   serializeTerminalLayout,
   replayTerminalLayout,
@@ -51,6 +50,7 @@ import {
   collectLeafIdsInOrder,
   collectLeafIdsInReplayCreationOrder
 } from './layout-serialization'
+import { restoreScrollbackBuffers } from './terminal-scrollback-restoration'
 
 // ---------------------------------------------------------------------------
 // Helper to create mock elements

@@ -142,7 +142,7 @@ vi.mock('../../../../shared/terminal-ligatures', () => ({
   resolveTerminalLigaturesEnabled: () => mockLigaturesAddon.enabled
 }))
 
-import { TerminalSettingsPreview } from './TerminalSettingsPreview'
+import { TerminalSettingsTerminalView } from './TerminalSettingsTerminalView'
 
 function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return {
@@ -169,11 +169,11 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
 }
 
 function renderPreview(settings = makeSettings()): void {
-  TerminalSettingsPreview({
-    title: 'Preview',
-    description: 'Preview description',
+  TerminalSettingsTerminalView({
     settings,
-    systemPrefersDark: true
+    systemPrefersDark: true,
+    effectiveMode: 'dark',
+    previewPaneDividerVisible: false
   })
 }
 

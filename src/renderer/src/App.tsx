@@ -1,14 +1,38 @@
-import { useCallback, useEffect } from 'react'
+import { Suspense, useCallback, useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
-import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
-import { DocPreviewExternalLinkConfirmation } from './components/browser-pane/workspace-doc/doc-preview-external-link-confirmation'
-import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
-import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
-import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
-import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
-import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
+
+const BrowserWebAuthnAccountDialog = lazyWithRetry(() =>
+  import('./components/browser-webauthn-account-dialog').then((m) => ({
+    default: m.BrowserWebAuthnAccountDialog
+  }))
+)
+const DocPreviewExternalLinkConfirmation = lazyWithRetry(() =>
+  import('./components/browser-pane/workspace-doc/doc-preview-external-link-confirmation').then(
+    (m) => ({ default: m.DocPreviewExternalLinkConfirmation })
+  )
+)
+const LinkRoutingPreferenceDialogProvider = lazyWithRetry(() =>
+  import('./components/link-routing-preference-dialog').then((m) => ({
+    default: m.LinkRoutingPreferenceDialogProvider
+  }))
+)
+const SkillFreshnessNudge = lazyWithRetry(() =>
+  import('./components/skills/SkillFreshnessNudge').then((m) => ({
+    default: m.SkillFreshnessNudge
+  }))
+)
+const PinnedTabCloseDialog = lazyWithRetry(
+  () => import('./components/terminal-pane/PinnedTabCloseDialog')
+)
+const RunningTerminalCloseDialog = lazyWithRetry(
+  () => import('./components/terminal-pane/RunningTerminalCloseDialog')
+)
+const WorktreeBaseFallbackDialog = lazyWithRetry(
+  () => import('./components/WorktreeBaseFallbackDialog')
+)
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
@@ -91,23 +115,27 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <DocPreviewExternalLinkConfirmation />
-          <LinkRoutingPreferenceDialogProvider>
-            <AppBackgroundServices />
-            <AppWorkspaceShell layout={layout} floatingWorkspace={floatingWorkspace} />
-            <AppRootSurfaces
-              floatingWorkspace={floatingWorkspace}
-              onboardingGate={onboardingGate}
-            />
-            <BrowserWebAuthnAccountDialog />
-          </LinkRoutingPreferenceDialogProvider>
+          <Suspense fallback={null}>
+            <DocPreviewExternalLinkConfirmation />
+            <LinkRoutingPreferenceDialogProvider>
+              <AppBackgroundServices />
+              <AppWorkspaceShell layout={layout} floatingWorkspace={floatingWorkspace} />
+              <AppRootSurfaces
+                floatingWorkspace={floatingWorkspace}
+                onboardingGate={onboardingGate}
+              />
+              <BrowserWebAuthnAccountDialog />
+            </LinkRoutingPreferenceDialogProvider>
+          </Suspense>
         </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
-      <SkillFreshnessNudge />
-      <WorktreeBaseFallbackDialog />
-      <PinnedTabCloseDialog />
-      <RunningTerminalCloseDialog />
+      <Suspense fallback={null}>
+        <SkillFreshnessNudge />
+        <WorktreeBaseFallbackDialog />
+        <PinnedTabCloseDialog />
+        <RunningTerminalCloseDialog />
+      </Suspense>
       {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>

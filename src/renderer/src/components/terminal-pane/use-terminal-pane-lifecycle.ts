@@ -73,9 +73,9 @@ import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
   normalizeTerminalLayoutSnapshot,
-  replayTerminalLayout,
-  restoreScrollbackBuffers
+  replayTerminalLayout
 } from './layout-serialization'
+import { restoreScrollbackBuffers } from './terminal-scrollback-restoration'
 import { RESET_KITTY_KEYBOARD_PROTOCOL } from '../../../../shared/terminal-mode-reset-profiles'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'

@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent
+} from 'react'
 import { Loader2 } from 'lucide-react'
-import TerminalPane from '@/components/terminal-pane/TerminalPane'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
+
+const TerminalPane = lazyWithRetry(() => import('@/components/terminal-pane/TerminalPane'))
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
@@ -330,19 +340,31 @@ export function OnboardingInlineCommandTerminal({
           onPointerDownCapture={() => onInteracted?.('pointer')}
         >
           {cwd && tabId ? (
-            <TerminalPane
-              tabId={tabId}
-              worktreeId={worktreeId}
-              cwd={cwd}
-              isActive
-              isVisible
-              showSplitButton={false}
-              onPtyExit={() => {
-                onTerminalExit?.()
-                closeTab(tabId, { recordInteraction: false, reason: 'pty-exit' })
-              }}
-              onCloseTab={() => closeTab(tabId, { recordInteraction: false, reason: 'cleanup' })}
-            />
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  {translate(
+                    'auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd',
+                    'Starting terminal...'
+                  )}
+                </div>
+              }
+            >
+              <TerminalPane
+                tabId={tabId}
+                worktreeId={worktreeId}
+                cwd={cwd}
+                isActive
+                isVisible
+                showSplitButton={false}
+                onPtyExit={() => {
+                  onTerminalExit?.()
+                  closeTab(tabId, { recordInteraction: false, reason: 'pty-exit' })
+                }}
+                onCloseTab={() => closeTab(tabId, { recordInteraction: false, reason: 'cleanup' })}
+              />
+            </Suspense>
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />

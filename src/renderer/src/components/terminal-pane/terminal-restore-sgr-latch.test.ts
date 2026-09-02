@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
 } from '../../../../shared/terminal-mode-reset-profiles'
-import { restoreScrollbackBuffers } from './layout-serialization'
+import { restoreScrollbackBuffers } from './terminal-scrollback-restoration'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const UNCLOSED_BOLD_FIXTURE = 'ORCA-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'

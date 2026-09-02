@@ -36,6 +36,18 @@ vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   )
 }))
 
+vi.mock('@/lib/lazy-with-retry', () => ({
+  lazyWithRetry: (factory: () => Promise<{ default: React.ComponentType<{ tabId: string }> }>) => {
+    let Component: React.ComponentType<{ tabId: string }> | null = null
+    void factory().then((mod) => {
+      Component = mod.default
+    })
+    return function MockLazyTerminalPane(props: { tabId: string }) {
+      return Component ? <Component {...props} /> : null
+    }
+  }
+}))
+
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
