@@ -91,7 +91,25 @@ export default defineConfig({
           name: 'renderer',
           // Per-file @vitest-environment happy-dom docblocks still apply within this node-default project.
           environment: 'node',
-          include: ['src/renderer/**/*.test.{ts,tsx}', 'src/preload/**/*.test.{ts,tsx}']
+          include: ['src/renderer/**/*.test.{ts,tsx}', 'src/preload/**/*.test.{ts,tsx}'],
+          // Why: transform cost dominates renderer tests; pre-bundling the heavy
+          // deps once removes per-worker ESM-to-ESM transform passes.
+          deps: {
+            optimizer: {
+              web: {
+                include: [
+                  'react',
+                  'react-dom',
+                  'react-dom/client',
+                  'react-dom/server',
+                  'i18next',
+                  'react-i18next',
+                  'zustand',
+                  'react-router'
+                ]
+              }
+            }
+          }
         }
       },
       {
