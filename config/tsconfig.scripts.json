@@ -1,6 +1,6 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": ["./scripts/**/*"],
+  "include": ["./scripts/**/*", "../src/types/build-constants.d.ts"],
   "compilerOptions": {
     "allowJs": false,
     "checkJs": false,

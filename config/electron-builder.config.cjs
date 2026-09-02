@@ -61,7 +61,19 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+// Derive slug from product name: 'Orca Canary' -> 'canary' (strip 'Orca ', lowercase, spaces to '-')
+function deriveProductSlug(productName) {
+  if (!productName || productName === 'Orca') {
+    return null
+  }
+  return productName
+    .replace(/^Orca\s+/i, '')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+}
+
+const productSlug = deriveProductSlug(process.env.ORCA_PRODUCT_NAME)
+const appId = productSlug ? `com.stablyai.orca.${productSlug}` : 'com.stablyai.orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -376,7 +388,7 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
   },
   mac: {
-    icon: 'resources/build/icon.icns',
+    icon: productSlug ? 'resources/build/icon-canary.icns' : 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {

@@ -13,6 +13,23 @@ describe('dev-instance-identity', () => {
     })
   })
 
+  it('makes a baked product name a full standalone variant identity', () => {
+    const g = globalThis as typeof globalThis & { ORCA_PRODUCT_NAME?: string | null }
+    g.ORCA_PRODUCT_NAME = 'Orca Canary'
+    try {
+      const identity = getDevInstanceIdentity(false, {})
+      expect(identity.name).toBe('Orca Canary')
+      // Own appName → own "Orca Canary Safe Storage" key, own AUMID (matches appId suffix).
+      expect(identity.appName).toBe('Orca Canary')
+      expect(identity.appUserModelId).toBe('com.stablyai.orca.canary')
+      expect(identity.isDev).toBe(false)
+      // No pre-ready rename: the key derives from its own CFBundleName.
+      expect(shouldApplyPreReadyAppName(identity)).toBe(false)
+    } finally {
+      delete g.ORCA_PRODUCT_NAME
+    }
+  })
+
   it('pins a stable dev appName across branches so the safeStorage key does not churn', () => {
     const a = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/a' })
     const b = getDevInstanceIdentity(true, { ORCA_DEV_BRANCH: 'feature/b' })
@@ -26,8 +43,8 @@ describe('dev-instance-identity', () => {
   })
 
   it('never renames a packaged build before ready', () => {
-    // Packaged builds must keep deriving the safeStorage key from their own CFBundleName;
-    // a pre-ready rename would repoint forks ("Orca ALab Edition") at Orca's key.
+    // Any packaged build (incl. Canary) derives its safeStorage key from its own
+    // CFBundleName; a pre-ready rename would orphan its encrypted secrets.
     expect(shouldApplyPreReadyAppName(getDevInstanceIdentity(false, {}))).toBe(false)
     expect(shouldApplyPreReadyAppName({ isDev: false })).toBe(false)
   })

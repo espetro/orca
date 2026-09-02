@@ -179,13 +179,31 @@ export function configureDevUserDataPath(isDev: boolean): void {
     return
   }
 
+  const overrideUserDataPath = process.env.ORCA_USER_DATA_PATH_OVERRIDE
+  if (overrideUserDataPath) {
+    // Why: explicit override (CI, profile-seeding repros) wins over all else.
+    app.setPath('userData', overrideUserDataPath)
+    return
+  }
+
+  const bakedProductName =
+    typeof ORCA_PRODUCT_NAME !== 'undefined'
+      ? ORCA_PRODUCT_NAME
+      : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+  if (bakedProductName && bakedProductName !== 'Orca') {
+    // Why: pin the variant's profile dir explicitly instead of relying on
+    // Electron deriving it from app.getName() later in startup.
+    app.setPath('userData', join(app.getPath('appData'), bakedProductName))
+    return
+  }
+
   if (!isDev) {
     return
   }
-  const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
-  if (overrideUserDataPath) {
+  const devOverride = process.env.ORCA_DEV_USER_DATA_PATH
+  if (devOverride) {
     // Why: automated repros need an isolated profile so the dev's persisted tabs/worktrees don't skew startup and hide window bugs.
-    app.setPath('userData', overrideUserDataPath)
+    app.setPath('userData', devOverride)
     return
   }
   // Why: without a dev-only path, pnpm dev overwrites the packaged app's runtime pointer under userData and breaks the orca CLI.

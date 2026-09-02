@@ -10,6 +10,8 @@
 // spoof transmission with a shell export.
 //
 declare const ORCA_BUILD_IDENTITY: 'stable' | 'rc' | null
+// Compile-time literal for packaged builds; null in dev / unset builds.
+declare const ORCA_PRODUCT_NAME: string | null
 declare const ORCA_POSTHOG_WRITE_KEY: string | null
 
 // Diagnostic-bundle upload endpoint for Mode 3 (telemetry-error-tracking.md

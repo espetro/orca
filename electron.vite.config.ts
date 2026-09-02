@@ -54,6 +54,11 @@ const ORCA_BUILD_IDENTITY_LITERAL =
   orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
     ? JSON.stringify(orcaBuildIdentity)
     : 'null'
+const orcaProductName = process.env.ORCA_PRODUCT_NAME
+const ORCA_PRODUCT_NAME_LITERAL =
+  typeof orcaProductName === 'string' && orcaProductName.length > 0
+    ? JSON.stringify(orcaProductName)
+    : 'null'
 const orcaPostHogWriteKey = process.env.ORCA_POSTHOG_WRITE_KEY
 const ORCA_POSTHOG_WRITE_KEY_LITERAL =
   typeof orcaPostHogWriteKey === 'string' && orcaPostHogWriteKey.length > 0
@@ -270,6 +275,7 @@ export const electronViteConfig: UserConfig = {
     // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
+      ORCA_PRODUCT_NAME: ORCA_PRODUCT_NAME_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
     },

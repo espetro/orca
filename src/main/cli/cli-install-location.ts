@@ -12,6 +12,7 @@ import {
   splitPathEntries,
   uniquePathEntries
 } from './cli-install-path-format'
+import { productVariantSlug } from '../startup/dev-instance-identity'
 import { runMacPrivilegedCommand, writeWindowsUserPath } from './cli-privileged-processes'
 import { getBundledLauncherPath, LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
 import {
@@ -53,7 +54,18 @@ export abstract class CliInstallLocation {
       return DEV_COMMAND_NAME
     }
     // Why: packaged Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
-    return this.platform === 'linux' ? LINUX_CLI_COMMAND_NAME : 'orca'
+    if (this.platform === 'linux') {
+      return LINUX_CLI_COMMAND_NAME
+    }
+    // A baked product variant ("Orca Canary") gets its own command so both CLIs coexist.
+    const bakedProductName =
+      typeof ORCA_PRODUCT_NAME !== 'undefined'
+        ? ORCA_PRODUCT_NAME
+        : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+    if (bakedProductName && bakedProductName !== 'Orca') {
+      return `orca-${productVariantSlug(bakedProductName)}`
+    }
+    return 'orca'
   }
 
   constructor(options: CliInstallerOptions = {}) {
@@ -75,7 +87,7 @@ export abstract class CliInstallLocation {
     const candidateMacPath = options.defaultMacCommandPath ?? DEFAULT_MAC_COMMAND_PATH
     this.macCommandPath = existsSync(dirname(candidateMacPath))
       ? candidateMacPath
-      : join(this.homePath, '.local', 'bin', 'orca')
+      : join(this.homePath, '.local', 'bin', this.commandName)
     this.privilegedRunner = options.privilegedRunner ?? runMacPrivilegedCommand
     this.userPathReader = options.userPathReader ?? readWindowsUserPathRegistry
     this.userPathMutationReader =
