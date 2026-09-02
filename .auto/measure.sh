@@ -100,28 +100,42 @@ for (const f of process.argv.slice(2)) {
   const m = /-(A|B)-\d+\.json$/.exec(f)
   if (!m) continue
   const art = JSON.parse(fs.readFileSync(f, 'utf8'))
-  if (art.schema === 'orca.resource-bench-run') bySide[m[1]].push(art.dump)
+  if (art.schema === 'orca.resource-bench-run') {
+    // postGc.startedAt lives on the artifact, not the dump; carry it over.
+    bySide[m[1]].push({ ...art.dump, artifactPostGc: art.postGc?.startedAt ? Date.parse(art.postGc.startedAt) : null })
+  }
 }
 const median = (xs) => {
   const s = xs.filter((v) => typeof v === 'number').sort((a, b) => a - b)
   const i = Math.floor(s.length / 2)
-  return s.length === 0 ? 0 : s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2
+  return s.length === 0 ? null : s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2
+}
+// Exclude the final tick: it samples teardown (footprint spikes +20-60MB in
+// 5/6 observed runs as the app closes) - a measurement artifact, not signal.
+// Sort by timestamp first: overlapping async ticks can land out of order.
+const windowTicks = (d) => {
+  const ticks = [...(d.ticks ?? [])].sort((a, b) => a.timestamp - b.timestamp)
+  return ticks.slice(0, -1)
 }
 const ROLES = ['main', 'renderer', 'gpu', 'utility', 'zygote', 'other']
-const stat = (dumps, pick) => median(dumps.flatMap((d) => (d.ticks ?? []).map(pick).filter((v) => v != null)))
+const stat = (dumps, pick) => median(dumps.flatMap((d) => windowTicks(d).map(pick).filter((v) => v != null)))
 const mb = (bytes) => bytes / 1048576
 // Per-run medians (3 per side) replace pooled tick medians: primary
-// main_rss_delta_mb = median(A run medians) - median(B run medians).
+// main_footprint_delta_mb = median(A run medians) - median(B run medians).
 const runMedians = (side, pick) =>
   bySide[side]
-    .map((d) => median((d.ticks ?? []).map(pick).filter((v) => v != null)))
+    .map((d) => median(windowTicks(d).map(pick).filter((v) => v != null)))
     .filter((v) => typeof v === 'number' && !Number.isNaN(v))
-// Post-GC tail: last 5 ticks of each run (postGc tail wait is 5s at 2s ticks).
+// Post-GC tail: ticks after postGc.startedAt (timestamp-bounded, not slice(-5),
+// because footprint probes make effective tick period 3-4s not 2s).
 const runTailMedians = (side, pick) =>
   bySide[side]
     .map((d) => {
-      const vals = (d.ticks ?? []).map(pick).filter((v) => v != null)
-      return median(vals.slice(-5))
+      const started = d.artifactPostGc ?? null
+      const ticks = windowTicks(d)
+      const bounded = started ? ticks.filter((t) => t.timestamp >= started) : ticks.slice(-3)
+      const vals = bounded.map(pick).filter((v) => v != null)
+      return median(vals.length ? vals : ticks.slice(-1).map(pick))
     })
     .filter((v) => typeof v === 'number' && !Number.isNaN(v))
 const mainRunA = runMedians('A', (t) => t.mainProcess?.rssBytes)
@@ -133,6 +147,12 @@ const postB = median(runTailMedians('B', (t) => t.mainProcess?.rssBytes))
 // phys_footprint (pre-compression, GC-stable) per-role samples; null-tolerant.
 const fpRunA = runMedians('A', (t) => t.samples?.find((s) => s.type === 'main')?.footprintBytes)
 const fpRunB = runMedians('B', (t) => t.samples?.find((s) => s.type === 'main')?.footprintBytes)
+// Noise-floor guard: identical code must yield ~0 delta; an empty side means
+// the harness broke - fail loudly instead of printing a clean-looking 0.
+if (fpRunA.length === 0 || fpRunB.length === 0) {
+  console.error('ANALYZE_FATAL: one side has no usable footprint samples')
+  process.exit(1)
+}
 // Sanity check vs historical identical-code artifacts (expected p=1, cliffs ~0):
 //   MEASURE_KEEP_ARTIFACTS=1 node config/scripts/run-release-memory-benchmark.mjs \
 //     --ab <appA> <appA> --runs 3 --settle-s 120 --window-s 60 --no-editor --out /tmp/same && \
