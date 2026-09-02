@@ -49,6 +49,12 @@ export type ParsedWindowsProcessSample = {
   cpuByPid: Map<number, WindowsCpuTimes>
 }
 
+type NativeProcessTableRow = {
+  pid: number
+  ppid: number
+  memoryBytes?: number
+}
+
 type TypeperfProcessFields = {
   pid?: number
   ppid?: number
@@ -119,6 +125,21 @@ function parseCimPageFileBytes(field: string | undefined): number | null {
 /** Parse tab-delimited PowerShell CIM process rows without deriving CPU deltas. */
 export function parseWindowsProcessOutput(stdout: string): WindowsProcessResourceRow[] {
   return parseWindowsProcessSample(stdout).rows
+}
+
+/**
+ * Map native process-table rows onto the sweep's resource shape.
+ *
+ * memoryBytes is working set (DWORD-clamped by the addon, absent when the
+ * process denied a query handle) and maps straight onto `memory`.
+ */
+export function parseNativeProcessRows(rows: NativeProcessTableRow[]): WindowsProcessResourceRow[] {
+  return rows.map((row) => ({
+    pid: row.pid,
+    ppid: row.ppid,
+    cpu: 0,
+    memory: row.memoryBytes !== undefined && row.memoryBytes > 0 ? row.memoryBytes : 0
+  }))
 }
 
 /** Parse one CSV sample from Windows Typeperf. */

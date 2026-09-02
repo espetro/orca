@@ -33,6 +33,10 @@ vi.mock('./pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
+vi.mock('../windows/windows-process-table', () => ({
+  readWindowsProcessTable: () => Promise.resolve([])
+}))
+
 function appEnvironment() {
   return {
     getPath: () => process.cwd(),

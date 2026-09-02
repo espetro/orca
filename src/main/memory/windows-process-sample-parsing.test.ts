@@ -66,6 +66,30 @@ describe('parseWindowsProcessOutput', () => {
   })
 })
 
+describe('parseNativeProcessRows', () => {
+  it('maps native table rows onto the resource shape with cpu zeroed', async () => {
+    const { parseNativeProcessRows } = await loadWindowsProcessSampleParsing()
+
+    expect(
+      parseNativeProcessRows([
+        { pid: 10, ppid: 1, memoryBytes: 1048576 },
+        { pid: 11, ppid: 10 }
+      ])
+    ).toEqual([
+      { pid: 10, ppid: 1, cpu: 0, memory: 1048576 },
+      { pid: 11, ppid: 10, cpu: 0, memory: 0 }
+    ])
+  })
+
+  it('keeps negative working sets out instead of propagating them', async () => {
+    const { parseNativeProcessRows } = await loadWindowsProcessSampleParsing()
+
+    expect(parseNativeProcessRows([{ pid: 10, ppid: 1, memoryBytes: -1 }])).toEqual([
+      { pid: 10, ppid: 1, cpu: 0, memory: 0 }
+    ])
+  })
+})
+
 describe('parseTypeperfProcessOutput', () => {
   it('joins PID, parent PID, and working-set counters by process instance', async () => {
     const { parseTypeperfProcessOutput } = await loadWindowsProcessSampleParsing()

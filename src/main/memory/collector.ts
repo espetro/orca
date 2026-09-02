@@ -5,7 +5,7 @@
  *   - Orca's own Electron processes, via `getAppEnvironment().getAppMetrics()`, bucketed
  *     into main / renderer / other.
  *   - Each registered PTY's process subtree, enumerated once from a host-
- *     wide process sweep (PowerShell CIM with a Typeperf fallback on Windows).
+ *     wide process sweep (the native Windows process table on Windows).
  *
  * Memory samples are held in a per-key ring (one key per worktree, plus
  * a reserved app-total key) so the UI can draw a trend sparkline.
