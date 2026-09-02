@@ -1,16 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
+import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import {
+  DEFAULT_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS,
+  LOW_MEMORY_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS,
+  MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS,
+  getHiddenWebglRetentionCap,
+  isLowMemoryTier,
   releaseHiddenWebglRetention,
   resetHiddenWebglRetentionForTest,
+  resolveDefaultHiddenWebglRetentionCap,
   retainedHiddenWebglOwnerCountForTest,
+  setHiddenWebglRetentionCap,
   tryRetainHiddenPanesWebgl
 } from './terminal-webgl-hidden-retention'
 
 function createPane(withAddon = true): ManagedPaneInternal {
   return {
-    terminal: { blur: vi.fn() },
+    id: 1,
+    terminal: {
+      blur: vi.fn(),
+      loadAddon: vi.fn(),
+      refresh: vi.fn()
+    },
+    terminalGpuAcceleration: 'on',
     webglAddon: withAddon
       ? ({ dispose: vi.fn() } as unknown as ManagedPaneInternal['webglAddon'])
       : null,
@@ -154,5 +168,99 @@ describe('terminal-webgl-hidden-retention', () => {
     const panesB = Array.from({ length: 6 }, () => createPane())
     suspendPaneRendering(panesB, retentionFor(ownerB, panesB))
     expect(panesB.every((pane) => pane.webglAddon != null)).toBe(true)
+  })
+
+  it('classifies memory tiers correctly based on deviceMemory', () => {
+    expect(isLowMemoryTier(4)).toBe(true)
+    expect(isLowMemoryTier(8)).toBe(true)
+    expect(isLowMemoryTier(11.9)).toBe(true)
+    expect(isLowMemoryTier(12)).toBe(false)
+    expect(isLowMemoryTier(16)).toBe(false)
+
+    expect(resolveDefaultHiddenWebglRetentionCap(8)).toBe(
+      LOW_MEMORY_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS
+    )
+    expect(resolveDefaultHiddenWebglRetentionCap(16)).toBe(
+      DEFAULT_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS
+    )
+    expect(MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS).toBe(DEFAULT_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS)
+  })
+
+  it('reattachWebglIfNeeded attaches WebGL when a pane has GPU rendering enabled and no addon', () => {
+    const pane = createPane(false)
+    expect(pane.webglAddon).toBeNull()
+    reattachWebglIfNeeded(pane)
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalled()
+  })
+
+  it('detects low-memory tier from navigator.deviceMemory', () => {
+    vi.stubGlobal('navigator', { deviceMemory: 8 })
+    expect(isLowMemoryTier()).toBe(true)
+    expect(resolveDefaultHiddenWebglRetentionCap()).toBe(0)
+
+    vi.stubGlobal('navigator', { deviceMemory: 16 })
+    expect(isLowMemoryTier()).toBe(false)
+    expect(resolveDefaultHiddenWebglRetentionCap()).toBe(6)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('returns false immediately from tryRetainHiddenPanesWebgl when retention cap is 0', () => {
+    setHiddenWebglRetentionCap(0)
+    expect(getHiddenWebglRetentionCap()).toBe(0)
+
+    const owner = {}
+    const panes = [createPane()]
+    expect(tryRetainHiddenPanesWebgl(owner, () => panes)).toBe(false)
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
+  })
+
+  it('suspend with 0 retention cap disposes all addons immediately', () => {
+    setHiddenWebglRetentionCap(0)
+    const owner = {}
+    const panes = [createPane(), createPane()]
+    const addons = panes.map((pane) => pane.webglAddon)
+
+    suspendPaneRendering(panes, retentionFor(owner, panes))
+
+    expect(panes.every((pane) => pane.webglAttachmentDeferred)).toBe(true)
+    expect(panes.every((pane) => pane.webglAddon === null)).toBe(true)
+    expect(panes.every((pane) => vi.mocked(pane.terminal.blur).mock.calls.length === 1)).toBe(true)
+    for (const addon of addons) {
+      expect(addon?.dispose).toHaveBeenCalledTimes(1)
+    }
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
+  })
+
+  it('evicts and disposes currently retained entries when retention cap drops to 0', () => {
+    const owner = {}
+    const panes = [createPane()]
+    const addon = panes[0].webglAddon
+    suspendPaneRendering(panes, retentionFor(owner, panes))
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(1)
+    expect(panes[0].webglAddon).not.toBeNull()
+
+    setHiddenWebglRetentionCap(0)
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
+    expect(addon?.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('seamlessly reattaches WebGL when foreground resume runs after 0-retention suspension', () => {
+    setHiddenWebglRetentionCap(0)
+    const owner = {}
+    const pane = createPane()
+    const firstAddon = pane.webglAddon
+
+    suspendPaneRendering([pane], retentionFor(owner, [pane]))
+    expect(firstAddon?.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.webglAttachmentDeferred).toBe(true)
+
+    resumePaneRendering([pane], owner)
+    expect(pane.webglAttachmentDeferred).toBe(false)
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalled()
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
   })
 })

@@ -133,14 +133,8 @@ export function shouldMountBackgroundWorktreeTab(
   return restrictedTabIds === null || restrictedTabIds.has(tabId)
 }
 
-// Why deferral exists: activating a worktree used to mount a TerminalPane for
-// every saved tab in one render pass. Each mount replays scrollback through
-// xterm, attaches a WebGL renderer, and issues a sync-IPC snapshot read, so a
-// worktree with many agent-session tabs froze the renderer for tens of
-// seconds (field trace: 200+ replay-guard stall releases in one activation
-// window). Deferred tabs behave like cold-parked tabs from birth: no view
-// until first reveal, parked byte watchers own their side effects meanwhile.
-export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 4
+// Why 0: startup virtualizes tabs so only active/visible tabs mount eager DOM + xterm, deferring all hidden tabs.
+export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 0
 
 export function canMountTerminalWorkspaceForStartup(args: {
   workspaceSessionReady: boolean
@@ -202,6 +196,7 @@ export function planColdActivationTabDeferral(opts: {
    *  is pending. Non-deferrable tabs mount immediately. */
   isTabDeferrable: (tabId: string) => boolean
   immediateTabIds: ReadonlySet<string>
+  deferThreshold?: number
 }): boolean {
   const {
     restrictions,
@@ -210,7 +205,8 @@ export function planColdActivationTabDeferral(opts: {
     allTabIds,
     isTabLive,
     isTabDeferrable,
-    immediateTabIds
+    immediateTabIds,
+    deferThreshold = COLD_ACTIVATION_TAB_DEFER_THRESHOLD
   } = opts
   const previouslyAllowed = restrictions.get(worktreeId)
   const initial = new Set<string>()
@@ -227,7 +223,7 @@ export function planColdActivationTabDeferral(opts: {
     }
   }
   const deferredCount = allTabIds.length - initial.size
-  if (deferredCount <= COLD_ACTIVATION_TAB_DEFER_THRESHOLD) {
+  if (deferredCount <= deferThreshold) {
     restrictions.delete(worktreeId)
     deferredMountTabIdsByWorktree.delete(worktreeId)
     return false

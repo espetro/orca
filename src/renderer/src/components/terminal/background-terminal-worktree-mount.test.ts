@@ -224,7 +224,7 @@ describe('cold activation tab deferral', () => {
     expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
   })
 
-  it('mounts everything at once when few tabs would defer', () => {
+  it('mounts everything at once when no tabs would defer', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
     const deferring = planColdActivationTabDeferral({
@@ -239,6 +239,23 @@ describe('cold activation tab deferral', () => {
     expect(deferring).toBe(false)
     expect(restrictions.has('wt-1')).toBe(false)
     expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
+  })
+
+  it('defers hidden tabs when at least one tab can defer', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(2),
+      isTabLive: () => false,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(['tab-1'])
+    })
+    expect(deferring).toBe(true)
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1']))
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-2']))
   })
 
   it('restricts a cold activation with many tabs to the immediate set', () => {
@@ -354,7 +371,23 @@ describe('cold activation tab deferral', () => {
     expect(resolve).toHaveBeenCalledOnce()
   })
 
-  it('does not defer when most tabs are already live', () => {
+  it('does not defer when all tabs are already live', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(10),
+      isTabLive: () => true,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set()
+    })
+    expect(deferring).toBe(false)
+    expect(restrictions.has('wt-1')).toBe(false)
+  })
+
+  it('defers even when only a single tab is not yet live', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
     const deferring = planColdActivationTabDeferral({
@@ -365,6 +398,26 @@ describe('cold activation tab deferral', () => {
       isTabLive: (tabId) => tabId !== 'tab-10',
       isTabDeferrable: () => true,
       immediateTabIds: new Set()
+    })
+    expect(deferring).toBe(true)
+    expect(restrictions.get('wt-1')).toEqual(
+      new Set(['tab-1', 'tab-2', 'tab-3', 'tab-4', 'tab-5', 'tab-6', 'tab-7', 'tab-8', 'tab-9'])
+    )
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-10']))
+  })
+
+  it('honors an explicit deferThreshold override if provided', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(10),
+      isTabLive: (tabId) => tabId !== 'tab-10',
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(),
+      deferThreshold: 4
     })
     expect(deferring).toBe(false)
     expect(restrictions.has('wt-1')).toBe(false)

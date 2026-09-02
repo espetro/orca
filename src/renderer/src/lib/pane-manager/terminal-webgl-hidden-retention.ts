@@ -1,10 +1,53 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposeWebgl } from './pane-webgl-renderer'
 
+export const DEFAULT_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = 6
+export const LOW_MEMORY_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = 0
+
+// Why: deviceMemory <= 8 or < 12 signals low-memory tier where GPU memory pressure aborts the renderer.
+export function isLowMemoryTier(deviceMemory?: number): boolean {
+  const memory =
+    deviceMemory ??
+    (typeof navigator !== 'undefined'
+      ? (navigator as unknown as { deviceMemory?: number }).deviceMemory
+      : undefined)
+  return memory !== undefined && (memory <= 8 || memory < 12)
+}
+
+export function resolveDefaultHiddenWebglRetentionCap(deviceMemory?: number): number {
+  return isLowMemoryTier(deviceMemory)
+    ? LOW_MEMORY_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS
+    : DEFAULT_MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS
+}
+
+let configuredRetentionCap: number | null = null
+
+export function setHiddenWebglRetentionCap(cap: number | null): void {
+  configuredRetentionCap = cap
+  MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = getHiddenWebglRetentionCap()
+  if (MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS <= 0 && retainedEntries.length > 0) {
+    while (retainedEntries.length > 0) {
+      const evicted = retainedEntries.shift()!
+      disposeEntryContexts(evicted)
+    }
+  }
+}
+
+export function getHiddenWebglRetentionCap(): number {
+  if (configuredRetentionCap !== null) {
+    return configuredRetentionCap
+  }
+  return resolveDefaultHiddenWebglRetentionCap()
+}
+
+export const setMaxRetainedHiddenWebglContexts = setHiddenWebglRetentionCap
+export const getMaxRetainedHiddenWebglContexts = getHiddenWebglRetentionCap
+
 // Orca raises Blink's active-context ceiling to 128, but retained contexts
 // still consume GPU memory. Six keeps recent switch-backs on WebGL without
-// letting hidden worktrees grow that cost with the mounted-pane population.
-const MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = 6
+// letting hidden worktrees grow that cost with the mounted-pane population;
+// low-memory tiers set this to 0 to dispose all hidden contexts immediately.
+export let MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = resolveDefaultHiddenWebglRetentionCap()
 
 type RetainedHiddenEntry = {
   owner: object
@@ -47,18 +90,22 @@ export function tryRetainHiddenPanesWebgl(
   livePanes: () => Iterable<ManagedPaneInternal>
 ): boolean {
   removeEntry(owner)
+  const cap = getHiddenWebglRetentionCap()
+  if (cap <= 0) {
+    return false
+  }
   const entry: RetainedHiddenEntry = { owner, livePanes }
   const ownCount = liveContextCount(entry)
   // Nothing to retain (GPU off / first-mount hidden), or a single tab too wide
   // for the cap — normal dispose keeps eviction from thrashing every other tab.
-  if (ownCount === 0 || ownCount > MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS) {
+  if (ownCount === 0 || ownCount > cap) {
     return false
   }
   let total = ownCount
   for (const other of retainedEntries) {
     total += liveContextCount(other)
   }
-  while (total > MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS && retainedEntries.length > 0) {
+  while (total > cap && retainedEntries.length > 0) {
     const evicted = retainedEntries.shift()!
     total -= liveContextCount(evicted)
     disposeEntryContexts(evicted)
@@ -78,4 +125,6 @@ export function retainedHiddenWebglOwnerCountForTest(): number {
 
 export function resetHiddenWebglRetentionForTest(): void {
   retainedEntries.length = 0
+  configuredRetentionCap = null
+  MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = getHiddenWebglRetentionCap()
 }
