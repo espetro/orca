@@ -161,7 +161,7 @@ console.log(`COMB_MB=${mb(comb).toFixed(2)}`)
 console.log(`HEAP_MB=${mb(heapA - heapB).toFixed(2)}`)
 console.log(`P=${pval.toFixed(4)}`)
 console.log(`CLIFFS=${cliffsVal.toFixed(3)}`)
-console.log(`POSTGC_MB=${mb(postA - postB).toFixed(2)}`)
+console.log(`POSTGC=${mb(postA - postB).toFixed(2)}`)
 EOF
 }
 
@@ -186,7 +186,7 @@ echo "METRIC main_rss_delta_mb=$(mb "$MAIN")"
 echo "METRIC combined_rss_delta_mb=$(mb "$COMB")"
 echo "METRIC heap_used_delta_mb=$(mb "$HEAP")"
 echo "METRIC main_cpu_delta_pct=$CPU"
-echo "METRIC main_rss_postgc_delta_mb=$(mb "$POSTGC")"
+echo "METRIC main_rss_postgc_delta_mb=$POSTGC"
 echo "METRIC main_rss_pvalue=$P"
 echo "METRIC main_rss_cliffs_delta=$CLIFFS"
 echo "# settle=${SETTLE_S}s window=${WINDOW_S}s runs=3 (+1 warmup discard)" >&2
