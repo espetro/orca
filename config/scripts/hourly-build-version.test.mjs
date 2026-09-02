@@ -3,7 +3,7 @@ import {
   createHourlyBuildVersion,
   formatHourlyReleaseName,
   nextHourlyBuildNumber
-} from './hourly-build-version.mjs'
+} from './hourly-build-version.ts'
 import { compareAppVersions } from '../../src/shared/app-version'
 
 describe('createHourlyBuildVersion', () => {

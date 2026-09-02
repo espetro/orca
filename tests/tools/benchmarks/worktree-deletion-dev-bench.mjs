@@ -137,7 +137,7 @@ function launchDevInstance({ label, repoRoot }, fixture, port) {
     REMOTE_DEBUGGING_PORT: String(port)
   }
   delete env.ELECTRON_RUN_AS_NODE
-  const child = spawn(process.execPath, ['config/scripts/run-electron-vite-dev.mjs'], {
+  const child = spawn(process.execPath, ['config/scripts/run-electron-vite-dev.ts'], {
     cwd: repoRoot,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

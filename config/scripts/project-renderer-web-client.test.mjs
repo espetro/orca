@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 
-const scriptPath = resolve('config/scripts/project-renderer-web-client.mjs')
+const scriptPath = resolve('config/scripts/project-renderer-web-client.ts')
 const temporaryRoots = []
 
 function writeFixtureFile(root, relativePath, contents) {

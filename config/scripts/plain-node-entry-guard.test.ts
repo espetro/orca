@@ -32,7 +32,7 @@ function createBundle(code = ''): Rollup.OutputBundle {
       imports: [],
       isEntry: true,
       name: 'daemon-entry'
-    } as Rollup.OutputChunk
+    } as unknown as Rollup.OutputChunk
   }
 }
 
@@ -180,7 +180,7 @@ describe('worker thread entry guard', () => {
       imports,
       isEntry: true,
       name
-    } as Rollup.OutputChunk
+    } as unknown as Rollup.OutputChunk
   }
 
   it('rejects an Electron require reachable from a worker entry', () => {
@@ -222,7 +222,7 @@ describe('worker thread entry guard', () => {
         imports: [],
         isEntry: false,
         name: 'shared'
-      } as Rollup.OutputChunk
+      } as unknown as Rollup.OutputChunk
     } as Rollup.OutputBundle
 
     expect(() => runWorkerWriteBundle(plugin, bundle)).toThrow('chunks/shared.js')

@@ -9,8 +9,8 @@ on:
     paths: &skill-roundtrip-paths
       - 'skills/**'
       - 'resources/skills/**'
-      - 'config/scripts/verify-skill-update-roundtrip.mjs'
-      - 'config/scripts/skill-update-roundtrip-workflow.test.mjs'
+      - 'config/scripts/verify-skill-update-roundtrip.ts'
+      - 'config/scripts/skill-update-roundtrip-workflow.test.ts'
       - 'src/main/skills/skill-freshness-eligibility.ts'
       - 'src/shared/skill-freshness.ts'
       - '.github/workflows/skill-update-roundtrip.yml'
@@ -52,7 +52,7 @@ jobs:
           SKILL_UPDATE_SOURCE: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           SKILL_UPDATE_REF: ${{ github.head_ref || github.ref_name }}
         run: >-
-          node config/scripts/verify-skill-update-roundtrip.mjs
+          node config/scripts/verify-skill-update-roundtrip.ts
           --cli=${{ matrix.skills-cli }}
           --autocrlf=${{ matrix.autocrlf }}
           --shape=${{ matrix.shape }}

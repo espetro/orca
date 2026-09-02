@@ -53,7 +53,7 @@ live, so the patch's `binding.gyp` `ldflags` force
 The shim is guarded by `#if defined(__linux__)`; macOS and Windows are untouched.
 
 **2. Gate packaging (the regression guard).**
-[`config/scripts/verify-linux-glibc-floor.cjs`](../../config/scripts/verify-linux-glibc-floor.cjs)
+[`config/scripts/verify-linux-glibc-floor.cts`](../../config/scripts/verify-linux-glibc-floor.cts)
 runs in the electron-builder `afterPack` hook for Linux. It reads every bundled
 native binary's version needs (`objdump -p` "Version References" — the
 authoritative load-time list, which also captures symbol-less markers like
@@ -96,7 +96,7 @@ as unverifiable and boots anyway, because a silent probe is not evidence. Whatev
 finds is published in `status.get`'s `degradations[]` under `terminal_unavailable`.
 
 **4. Ship the binary, built from patched sources.**
-[`config/scripts/build-orcad-prebuilds.mjs`](../../config/scripts/build-orcad-prebuilds.mjs)
+[`config/scripts/build-orcad-prebuilds.ts`](../../config/scripts/build-orcad-prebuilds.ts)
 (`pnpm run build:orcad-prebuilds`, after `build:orcad`) compiles node-pty for the current
 host and files it under `out/orcad/prebuilds/<slot>/`, where a slot is
 `linux-{x64,arm64}-{glibc,musl}` or `darwin-{x64,arm64}`. libc is part of the slot name

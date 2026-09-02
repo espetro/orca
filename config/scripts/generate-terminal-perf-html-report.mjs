@@ -8,7 +8,7 @@ import {
   formatMs,
   readJsonReport,
   scenarioTitle
-} from './terminal-perf-report-rows.mjs'
+} from './terminal-perf-report-rows.ts'
 import { basename, dirname } from 'node:path'
 
 const DEFAULT_OUTPUT_PATH = 'test-results/terminal-perf-impact-report.html'

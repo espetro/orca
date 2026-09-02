@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   parsePhysicalFootprintBytes,
   parseProcessCpuTimeMs
-} from './hang-watchdog-process-metrics.mjs'
+} from './hang-watchdog-process-metrics.ts'
 
 describe('hang watchdog process metrics', () => {
   it('uses the de-duplicated summary for multiple processes', () => {

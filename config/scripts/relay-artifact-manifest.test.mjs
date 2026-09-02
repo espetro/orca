@@ -22,7 +22,7 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const relayOutDir = mkdtempSync(join(tmpdir(), 'orca-relay-contract-'))
 
 beforeAll(() => {
-  execFileSync('node', [join(projectDir, 'config', 'scripts', 'build-relay.mjs')], {
+  execFileSync('node', [join(projectDir, 'config', 'scripts', 'build-relay.ts')], {
     cwd: projectDir,
     stdio: 'pipe',
     env: { ...process.env, ORCA_RELAY_OUT_ROOT: relayOutDir }

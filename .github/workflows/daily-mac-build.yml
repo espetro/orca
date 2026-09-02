@@ -181,7 +181,7 @@ jobs:
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
         if: steps.freshness.outputs.should_build == 'true'
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/verify-macos-release-env.ts
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -219,7 +219,7 @@ jobs:
             --json tagName --jq '.[].tagName' || true)"
           echo "Highest published tag seen: $(head -1 <<<"$published")"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_DAILY_RELEASE_NAMES="$names" \
-            node config/scripts/daily-build-version.mjs \
+            node config/scripts/daily-build-version.ts \
             >"$RUNNER_TEMP/daily-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/daily-identity.txt"
           # Why check rather than trust: the checkout above pins `ref: main`, but a
@@ -228,7 +228,7 @@ jobs:
           # an empty name and an untitled release — silent, and only visible once
           # someone opens the releases page. Fail here instead.
           if ! grep -q '^name=' "$RUNNER_TEMP/daily-identity.txt"; then
-            echo "::error::daily-build-version.mjs emitted no release name; this workflow and main's copy of the script are out of sync."
+            echo "::error::daily-build-version.ts emitted no release name; this workflow and main's copy of the script are out of sync."
             exit 1
           fi
           cat "$RUNNER_TEMP/daily-identity.txt" >>"$GITHUB_OUTPUT"
@@ -320,7 +320,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node config/scripts/ensure-native-runtime.ts --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-daily.

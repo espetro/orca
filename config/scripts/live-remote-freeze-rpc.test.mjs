@@ -3,7 +3,7 @@ import {
   appendOrcaRpcOutput,
   resolveOrcaCliCommand,
   resolveOrcaCliInvocation
-} from './live-remote-freeze-rpc.mjs'
+} from './live-remote-freeze-rpc.ts'
 
 describe('live remote freeze RPC', () => {
   it('resolves the Orca CLI for managed, dev, Linux, and default runtimes', () => {

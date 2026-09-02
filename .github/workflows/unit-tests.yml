@@ -34,7 +34,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/install-electron-package-binary.ts
 
       - name: Test shard
         run: |

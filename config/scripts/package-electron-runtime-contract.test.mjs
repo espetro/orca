@@ -25,17 +25,17 @@ describe('Electron runtime package contract', () => {
   })
 
   it('keeps root postinstall as the single Electron binary install owner', () => {
-    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
+    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.ts')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
   })
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
     const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      join(projectDir, 'config/scripts/rebuild-native-deps.ts'),
       'utf8'
     )
     const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      join(projectDir, 'config/scripts/ensure-native-runtime.ts'),
       'utf8'
     )
     expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
@@ -70,11 +70,11 @@ describe('Electron runtime package contract', () => {
 
   it('keeps the native Windows process-table addon optional and platform-gated', () => {
     const rebuildScript = readFileSync(
-      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      join(projectDir, 'config/scripts/rebuild-native-deps.ts'),
       'utf8'
     )
     const ensureScript = readFileSync(
-      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      join(projectDir, 'config/scripts/ensure-native-runtime.ts'),
       'utf8'
     )
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
@@ -152,8 +152,8 @@ describe('Electron runtime package contract', () => {
   })
 
   it('runs the web build through the heap-sized Vite wrapper', () => {
-    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.mjs')
-    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.mjs')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.ts')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.ts')
   })
 
   it('guards release publishing before electron-builder runs', () => {
@@ -177,7 +177,7 @@ describe('Electron runtime package contract', () => {
 
     expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'win'])
     for (const command of [...releaseCommands.values(), macReleaseCommand]) {
-      expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
+      expect(command).toContain('node config/scripts/ensure-native-runtime.ts --runtime=electron')
       expect(command).toContain('electron-builder')
       expect(command.indexOf('ensure-native-runtime')).toBeLessThan(
         command.indexOf('electron-builder')
@@ -206,7 +206,7 @@ describe('Electron runtime package contract', () => {
 
       expect(gate.if).toBe(expectedCondition)
       expect(gate['continue-on-error']).toBeUndefined()
-      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.ts')
       expect(gate.run).toContain('ELECTRON_RUN_AS_NODE=1 pnpm exec electron')
       expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
       expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
@@ -225,7 +225,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('packages and release-gates the SSH relay watcher child', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.ts'), 'utf8')
     const builderConfig = readFileSync(
       join(projectDir, 'config/electron-builder.config.cjs'),
       'utf8'
@@ -257,7 +257,7 @@ describe('Electron runtime package contract', () => {
       const names = steps.map((step) => step.name)
       const gate = steps.find((step) => step.name === 'Gate SSH relay watcher process isolation')
       expect(gate['continue-on-error']).toBeUndefined()
-      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.ts')
       expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
       expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
     }
@@ -271,7 +271,7 @@ describe('Electron runtime package contract', () => {
   })
 
   it('packages and verifies the Windows SSH node-pty console-list fallback', () => {
-    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.ts'), 'utf8')
     const relayDeploy = readFileSync(join(projectDir, 'src/main/ssh/ssh-relay-deploy.ts'), 'utf8')
     const patchAsset = readFileSync(
       join(projectDir, 'config/relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs'),
@@ -316,7 +316,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseWorkflowText).not.toContain('blacksmith-')
     expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
     expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
-    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mjs')
+    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.ts')
     expect(macDispatchStep.env.RELEASE_MAC_BUILD_WORKFLOW).toBe('release-mac-build.yml')
     expect(macDispatchStep.env.RELEASE_MAC_BUILD_TAG).toBe('${{ needs.cut.outputs.tag }}')
     expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
@@ -391,7 +391,7 @@ describe('Electron runtime package contract', () => {
       'npm version "$VERSION" --no-git-tag-version --allow-same-version'
     )
     const generateIndex = bumpStep.run.indexOf(
-      'node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"'
+      'node config/scripts/generate-skill-bundle-manifest.ts --release "$VERSION"'
     )
     const commands = bumpStep.run.replace(/^\s*#.*$/gm, '')
     // Unanchored: a `git add` chained after `&&` stages just as effectively.
@@ -428,7 +428,7 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Compute next version'
     )
 
-    expect(versionStep.run).toContain('node config/scripts/release-rc-history.mjs "$1"')
+    expect(versionStep.run).toContain('node config/scripts/release-rc-history.ts "$1"')
     expect(versionStep.run).toContain('tag_matches_current_ref')
     expect(versionStep.run).toContain('cutting the next version instead of reusing stale artifacts')
     expect(versionStep.run).toContain('git rev-parse "$existing_rc_tag"')
@@ -475,7 +475,7 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
-    expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.mjs')
+    expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.ts')
   })
 
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {
@@ -486,7 +486,7 @@ describe('Electron runtime package contract', () => {
     )
 
     expect(smokeStep.run).toBe(
-      'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked'
+      'node config/scripts/smoke-packaged-cli.ts --app-dir=dist/linux-unpacked'
     )
   })
 

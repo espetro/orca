@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { plainClassName } from '../oxlint-plugins/renderer-scrollbar-style.mjs'
-import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mjs'
+import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.ts'
 
 const pluginPath = path.resolve('config/oxlint-plugins/renderer-scrollbar-style.mjs')
 

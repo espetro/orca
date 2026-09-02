@@ -52,7 +52,7 @@ export function observedSkillPackagesMatch(
 // Only OS-authored names belong here. Tolerating unexpected files in general would let a
 // modified skill pass: the entry is safe precisely because an official SKILL.md never
 // references these, so no agent can be routed into one. Mirrored in
-// config/scripts/generate-skill-bundle-manifest.mjs so neither side of the comparison can
+// config/scripts/generate-skill-bundle-manifest.ts so neither side of the comparison can
 // bake one in. Deliberately NOT extended to mode bits — that would weaken identity for
 // real scripts.
 const OS_METADATA_FILE_NAMES = new Set(['.ds_store', 'thumbs.db', 'ehthumbs.db', 'desktop.ini'])

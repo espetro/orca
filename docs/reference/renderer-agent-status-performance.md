@@ -200,10 +200,10 @@ which composes four modules:
 
 | Module                                | Responsibility                                                                                    |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `idle-cpu-renderer-scale-fixture.mjs` | Seeds the lineage, agent rows, and sidebar view state; takes the mounted-card and listener census |
-| `idle-cpu-renderer-timing-probe.mjs`  | In-page timer drift and long-task probe; runs the no-op publication workload                      |
-| `idle-cpu-process-sampling.mjs`       | Classifies the Electron process tree and samples per-role CPU/RSS                                 |
-| `idle-cpu-synthetic-spinners.mjs`     | Measurement-only visible spinners                                                                 |
+| `idle-cpu-renderer-scale-fixture.ts` | Seeds the lineage, agent rows, and sidebar view state; takes the mounted-card and listener census |
+| `idle-cpu-renderer-timing-probe.ts`  | In-page timer drift and long-task probe; runs the no-op publication workload                      |
+| `idle-cpu-process-sampling.ts`       | Classifies the Electron process tree and samples per-role CPU/RSS                                 |
+| `idle-cpu-synthetic-spinners.ts`     | Measurement-only visible spinners                                                                 |
 
 The sampling window extends past `--sample-ms` until the workload settles, and
 fails the run rather than reporting a truncated window if the workload overruns

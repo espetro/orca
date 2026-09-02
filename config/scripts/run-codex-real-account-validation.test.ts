@@ -77,7 +77,7 @@ describe('Codex real-account validation harness', () => {
     cleanupPaths.push(layout.tempRoot)
 
     expect(snapshot.throwawayCodex.auth.sha256).toMatch(/^[a-f0-9]{64}$/)
-    expect(snapshot.managedHomes[0].auth.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(snapshot.managedHomes[0]!.auth.sha256).toMatch(/^[a-f0-9]{64}$/)
     expect(JSON.stringify(snapshot)).not.toContain('system-secret')
     expect(JSON.stringify(snapshot)).not.toContain('never-report-me')
   })

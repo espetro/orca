@@ -26,6 +26,12 @@
       "rules": {
         "typescript/await-thenable": "off"
       }
+    },
+    {
+      "files": ["config/scripts/**", "**/*.cts"],
+      "rules": {
+        "typescript/no-floating-promises": "warn"
+      }
     }
   ],
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]

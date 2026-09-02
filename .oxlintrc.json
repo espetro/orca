@@ -147,6 +147,12 @@
       }
     },
     {
+      "files": ["config/scripts/**"],
+      "rules": {
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
       "files": ["**/*.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
@@ -154,6 +160,12 @@
     },
     {
       "files": ["**/*.mjs"],
+      "rules": {
+        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["**/*.cts"],
       "rules": {
         "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
       }

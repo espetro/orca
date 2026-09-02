@@ -6,7 +6,7 @@ import {
   DEV_HELPER_BUNDLE_ID,
   getDevBundlePlistPatches,
   getDevHelperPlistPatches
-} from './dev-electron-bundle-identity.mjs'
+} from './dev-electron-bundle-identity.ts'
 
 const BRANCH_ENV_KEYS = [
   'ORCA_DEV_DOCK_TITLE',

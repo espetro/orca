@@ -6,7 +6,7 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.cts'])
 // Why: test-only modules live beside their spec as `*-test-harness.ts` / `*-fixtures.ts` here, not under `__tests__/`.
 const TEST_SUPPORT_FILE_PATTERN =
   /[.-](?:test-harness|test-fixtures?|test-state|test-support|fixtures?)\.[cm]?[jt]sx?$/

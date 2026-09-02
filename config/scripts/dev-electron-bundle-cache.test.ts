@@ -3,7 +3,7 @@ import {
   IN_PROGRESS_WINDOW_MS,
   isDevBundleInUse,
   selectStaleDevBundleDirs
-} from './dev-electron-bundle-cache.mjs'
+} from './dev-electron-bundle-cache.ts'
 
 const NOW = 1_800_000_000_000
 const ROOT = '/repo/out/electron-dev'

@@ -5,7 +5,7 @@ import {
   isMovedCode,
   overlapsAddedLines,
   parseAddedLineRanges
-} from './check-changed-code-quality.mjs'
+} from './check-changed-code-quality.ts'
 
 describe('changed-code quality line matching', () => {
   it('parses added and replaced hunk ranges while ignoring deletions', () => {

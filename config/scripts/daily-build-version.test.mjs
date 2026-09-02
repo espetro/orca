@@ -3,7 +3,7 @@ import {
   createDailyBuildVersion,
   formatDailyReleaseName,
   nextDailyBuildNumber
-} from './daily-build-version.mjs'
+} from './daily-build-version.ts'
 import { compareAppVersions } from '../../src/shared/app-version'
 
 describe('createDailyBuildVersion', () => {

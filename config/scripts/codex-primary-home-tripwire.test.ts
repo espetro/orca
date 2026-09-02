@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const cleanupPaths: string[] = []
-const tripwireScriptPath = path.resolve('config/scripts/codex-primary-home-tripwire.mjs')
+const tripwireScriptPath = path.resolve('config/scripts/codex-primary-home-tripwire.ts')
 const tripwireModuleUrl = pathToFileURL(tripwireScriptPath).href
 // Why: native Windows process startup can exceed two seconds under a loaded test worker.
 const STANDALONE_START_TIMEOUT_MS = 10_000
@@ -61,7 +61,7 @@ describe('Codex primary-home tripwire', () => {
       [primaryHome]
     )
     expect(status.clean).toBe(false)
-    expect(status.events[0].changedPaths).toContain('hooks.json')
+    expect(status.events[0]!.changedPaths).toContain('hooks.json')
     expect(JSON.stringify(status)).not.toContain('not-read')
   })
 

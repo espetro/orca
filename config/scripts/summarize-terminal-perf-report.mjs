@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { collectTerminalPerfRows, readJsonReport } from './terminal-perf-report-annotations.mjs'
+import { collectTerminalPerfRows, readJsonReport } from './terminal-perf-report-annotations.ts'
 
 const reportPaths = process.argv.slice(2)
 if (reportPaths[0] === '--') {
