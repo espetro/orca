@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import {
   buildComparisonArtifact,
   compareDumps,
   detectMarkerAlignedSteps,
   detectTrend,
   devianceReport,
+  expandPaths,
   loadDump,
+  loadDumps,
+  mergeDumps,
+  parseArgs,
   perMetricStats,
   renderMarkdownReport
 } from './resource-metrics-analysis.mjs'
@@ -295,5 +299,104 @@ describe('determinism', () => {
     // key order is sorted
     const parsedKeys = json1.slice(0, json1.indexOf(':')).trim()
     expect(parsedKeys).toBe('{\n  "deviance"')
+  })
+})
+
+describe('multi-dump glob pooling', () => {
+  const tmpDir = `${import.meta.dirname}/tmp-glob-pooling-fixture`
+
+  function writeRun(name, rssBytes) {
+    const path = `${tmpDir}/${name}`
+    writeFileSync(path, JSON.stringify(makeDump(constantTicks(10, rssBytes))))
+    return path
+  }
+
+  function withTmpDir(fn) {
+    mkdirSync(tmpDir, { recursive: true })
+    try {
+      return fn()
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  }
+
+  it('expandPaths expands globs to sorted matching files', () => {
+    withTmpDir(() => {
+      const bPath = writeRun('run-2-b.json', 200e6)
+      const aPath = writeRun('run-1-a.json', 100e6)
+      expect(expandPaths([`${tmpDir}/run-*-a.json`])).toEqual([aPath])
+      expect(expandPaths([`${tmpDir}/run-*.json`])).toEqual([aPath, bPath])
+    })
+  })
+
+  it('expandPaths errors when a glob matches zero files', () => {
+    expect(() => expandPaths(['/nonexistent-dir-xyz/*.json'])).toThrow(/matched no files/)
+  })
+
+  it('expandPaths keeps literal paths as-is', () => {
+    expect(expandPaths(['some/literal.json'])).toEqual(['some/literal.json'])
+  })
+
+  it('parseArgs accepts --a/--b with multiple values and repeated flags', () => {
+    const args = parseArgs(['--a', 'a1.json', 'a2.json', '--b', 'b1.json', '--b', 'b2.json'])
+    expect(args.dumpAPaths).toEqual(['a1.json', 'a2.json'])
+    expect(args.dumpBPaths).toEqual(['b1.json', 'b2.json'])
+  })
+
+  it('parseArgs keeps two-positional form and rejects mixing', () => {
+    expect(parseArgs(['a.json', 'b.json']).dumpAPaths).toEqual(['a.json'])
+    expect(() => parseArgs(['x.json', '--a', 'a.json'])).toThrow(/cannot mix/)
+    expect(() => parseArgs(['--a', 'a.json'])).toThrow(/Usage:/)
+  })
+
+  it('mergeDumps concatenates ticks and hostSamples across runs', () => {
+    const merged = mergeDumps([
+      makeDump(constantTicks(2, 100e6)),
+      makeDump(constantTicks(3, 100e6))
+    ])
+    expect(merged.ticks).toHaveLength(5)
+    expect(merged.hostSamples).toHaveLength(5)
+  })
+
+  it('compareDumps accepts dump arrays and pools stats per side', () => {
+    const a1 = makeDump(constantTicks(10, 100e6))
+    const a2 = makeDump(constantTicks(10, 120e6))
+    const b1 = makeDump(constantTicks(10, 200e6))
+    const b2 = makeDump(constantTicks(10, 220e6))
+    const rss = compareDumps([a1, a2], [b1, b2]).metrics.find(
+      (m) => m.role === 'renderer' && m.metric === 'rssBytes'
+    )
+    expect(rss.a.n).toBe(20)
+    expect(rss.b.n).toBe(20)
+    expect(rss.verdict).toBe('improved')
+    expect(rss.deltaMedian).toBe(-100e6)
+  })
+
+  it('loadDumps unwraps run artifacts and loadDump stays backward compatible', () => {
+    withTmpDir(() => {
+      const path = `${tmpDir}/artifact.json`
+      writeFileSync(
+        path,
+        JSON.stringify({ schema: 'orca.resource-bench-run', dump: makeDump(constantTicks(1, 100)) })
+      )
+      const [dump] = loadDumps([path])
+      expect(dump.schema).toBe('orca.resource-dump')
+    })
+  })
+
+  it('pooled A of disjoint runs still wins against pooled B', () => {
+    withTmpDir(() => {
+      writeRun('run-1-a.json', 90e6)
+      writeRun('run-2-a.json', 130e6)
+      writeRun('run-1-b.json', 200e6)
+      writeRun('run-2-b.json', 240e6)
+      const aPaths = expandPaths([`${tmpDir}/run-*-a.json`])
+      const bPaths = expandPaths([`${tmpDir}/run-*-b.json`])
+      const rss = compareDumps(loadDumps(aPaths), loadDumps(bPaths)).metrics.find(
+        (m) => m.role === 'renderer' && m.metric === 'rssBytes'
+      )
+      expect(rss.a.n).toBe(20)
+      expect(rss.verdict).toBe('improved')
+    })
   })
 })

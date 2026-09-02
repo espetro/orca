@@ -1,11 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseDarwinThermal,
+  parseFootprintTool,
   parsePsFootprint,
   parseVmStatDeltas
 } from './resource-recorder-parsers'
 
 describe('parsePsFootprint', () => {
+  it('parses phys_footprint from real /usr/bin/footprint output (MB units)', () => {
+    const stdout = [
+      '======================================================================',
+      'Orca Helper [77425]: 64-bit    Footprint: 22 MB (16384 bytes per page)',
+      '    phys_footprint: 22 MB',
+      '    phys_footprint_peak: 27 MB',
+      '======================================================================'
+    ].join('\n')
+    expect(parseFootprintTool(stdout)).toBe(22 * 1048576)
+  })
+
+  it('falls back to the summary Footprint line in KB', () => {
+    expect(parseFootprintTool('Footprint: 1361 KB (16384 bytes per page)')).toBe(1361 * 1024)
+  })
+
+  it('returns null on unrelated output', () => {
+    expect(parseFootprintTool('no such process')).toBeNull()
+  })
   it('parses pid, rss (KB), and phys_footprint (bytes)', () => {
     const rows = parsePsFootprint('  1234  51200  104857600\n  5678  25600  52428800\n')
 

@@ -1,7 +1,11 @@
 // Memory benchmark dump comparison. Lower is better for every compared
 // metric (rss/footprint/heap are memory, cpuPercent is load), so an A-side
 // median below B-side median counts as 'improved' across the board.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+
+const USAGE =
+  'Usage: node config/scripts/resource-metrics-analysis.mjs <dumpA.json> <dumpB.json> ' +
+  '[--a <glob-or-path>...] [--b <glob-or-path>...] [--out report.md] [--json artifact.json]'
 
 const ROLES = ['main', 'renderer', 'gpu', 'utility', 'zygote', 'other']
 const SAMPLE_METRICS = ['rssBytes', 'footprintBytes', 'cpuPercent', 'workingSetKb']
@@ -27,6 +31,96 @@ export function loadDump(jsonOrPath) {
     return parsed.dump
   }
   return parsed
+}
+
+// Load each path (or inline JSON) into a dump; wraps loadDump.
+export function loadDumps(paths) {
+  return paths.map((p) => loadDump(p))
+}
+
+const GLOB_CHARS = /[*?[]/
+
+function globToRegExp(pattern) {
+  const source = pattern
+    .replace(/[.+^${}()|\\]/g, '\\$&')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '.')
+  return new RegExp(`^${source}$`)
+}
+
+// Expand one shell-style glob (only * and ?) relative to cwd via readdirSync.
+function expandGlob(pattern) {
+  const absolute = pattern.startsWith('/')
+  const parts = pattern.split('/')
+  let candidates = [absolute ? '/' : '.']
+  for (const part of parts) {
+    if (part === '') {
+      continue
+    }
+    if (!GLOB_CHARS.test(part)) {
+      candidates = candidates.map((c) => `${c === '.' ? '' : c}/${part}`.replace(/^\/\//, '/'))
+      continue
+    }
+    const re = globToRegExp(part)
+    const next = []
+    for (const dir of candidates) {
+      let entries
+      try {
+        entries = readdirSync(dir === '.' ? '.' : dir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of entries) {
+        if (re.test(entry.name) && !entry.name.startsWith('.')) {
+          next.push(`${dir === '/' ? '' : dir}/${entry.name}`)
+        }
+      }
+    }
+    candidates = next
+  }
+  return candidates.filter((c) => {
+    try {
+      return c !== '/' && c !== '.' && statSync(c).isFile()
+    } catch {
+      return false
+    }
+  })
+}
+
+// Expand patterns/literals to existing files; literal paths are kept as-is and
+// validated by loadDump. Errors when a glob pattern matches nothing.
+export function expandPaths(patterns) {
+  const expanded = []
+  for (const pattern of patterns) {
+    if (!GLOB_CHARS.test(pattern)) {
+      expanded.push(pattern)
+      continue
+    }
+    const matches = expandGlob(pattern).sort()
+    if (matches.length === 0) {
+      throw new Error(`glob pattern matched no files: ${pattern}`)
+    }
+    expanded.push(...matches)
+  }
+  if (expanded.length === 0) {
+    throw new Error('no dump files given')
+  }
+  return expanded
+}
+
+// Pool multiple dumps into one by concatenating time series so medians/IQR
+// aggregate over all ticks (median-of-runs via pooled samples).
+export function mergeDumps(dumps) {
+  if (dumps.length === 1) {
+    return dumps[0]
+  }
+  const mergeBy = (key) => dumps.flatMap((d) => d[key] ?? [])
+  return {
+    ...dumps[0],
+    ticks: mergeBy('ticks'),
+    markers: mergeBy('markers'),
+    hostSamples: mergeBy('hostSamples')
+  }
 }
 
 // Linear-interpolation percentile (standard method, R-7).
@@ -330,8 +424,10 @@ function collectMetricEntries(ticks) {
 }
 
 export function compareDumps(dumpA, dumpB) {
-  const entriesA = collectMetricEntries(dumpA.ticks ?? [])
-  const entriesB = collectMetricEntries(dumpB.ticks ?? [])
+  const a = Array.isArray(dumpA) ? mergeDumps(dumpA) : dumpA
+  const b = Array.isArray(dumpB) ? mergeDumps(dumpB) : dumpB
+  const entriesA = collectMetricEntries(a.ticks ?? [])
+  const entriesB = collectMetricEntries(b.ticks ?? [])
   const keyOf = (e) => `${e.role}.${e.metric}`
   const entries = [...new Map([...entriesA, ...entriesB].map((e) => [keyOf(e), e])).values()]
   entries.sort((x, y) => {
@@ -348,24 +444,31 @@ export function compareDumps(dumpA, dumpB) {
 
   const metrics = []
   for (const { role, metric } of entries) {
-    const a = perMetricStats(dumpA.ticks ?? [], role, metric)
-    const b = perMetricStats(dumpB.ticks ?? [], role, metric)
-    if (a.n === 0 && b.n === 0) {
+    const statsA = perMetricStats(a.ticks ?? [], role, metric)
+    const statsB = perMetricStats(b.ticks ?? [], role, metric)
+    if (statsA.n === 0 && statsB.n === 0) {
       continue
     }
     let verdict
-    if (a.n === 0 || b.n === 0) {
+    if (statsA.n === 0 || statsB.n === 0) {
       verdict = 'inconclusive'
-    } else if (iqrOverlaps(a, b)) {
+    } else if (iqrOverlaps(statsA, statsB)) {
       verdict = 'inconclusive'
     } else {
-      verdict = compareMetric(a, b)
+      verdict = compareMetric(statsA, statsB)
     }
-    metrics.push({ role, metric, a, b, verdict, deltaMedian: round6(a.median - b.median) })
+    metrics.push({
+      role,
+      metric,
+      a: statsA,
+      b: statsB,
+      verdict,
+      deltaMedian: round6(statsA.median - statsB.median)
+    })
   }
   return {
     metrics,
-    deviance: { a: devianceReport(dumpA), b: devianceReport(dumpB) }
+    deviance: { a: devianceReport(a), b: devianceReport(b) }
   }
 }
 
@@ -427,36 +530,49 @@ function stableStringifyIndent(value, depth) {
   return `{\n${keys.map((k) => `${padInner}${JSON.stringify(k)}: ${stableStringifyIndent(value[k], depth + 1)}`).join(',\n')}\n${pad}}`
 }
 
+const FLAG_VALUE_CONSUMERS = new Set(['--out', '--json', '--a', '--b'])
+
 export function parseArgs(argv) {
   const positional = []
+  const aPaths = []
+  const bPaths = []
   let out = null
   let json = null
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--out') {
       out = argv[++i]
-      if (!out) {
-        throw new Error(
-          'Usage: node config/scripts/resource-metrics-analysis.mjs <dumpA.json> <dumpB.json> [--out report.md] [--json artifact.json]'
-        )
-      }
     } else if (arg === '--json') {
       json = argv[++i]
-      if (!json) {
-        throw new Error(
-          'Usage: node config/scripts/resource-metrics-analysis.mjs <dumpA.json> <dumpB.json> [--out report.md] [--json artifact.json]'
-        )
+    } else if (arg === '--a') {
+      while (argv[i + 1] !== undefined && !FLAG_VALUE_CONSUMERS.has(argv[i + 1])) {
+        aPaths.push(argv[++i])
+      }
+    } else if (arg === '--b') {
+      while (argv[i + 1] !== undefined && !FLAG_VALUE_CONSUMERS.has(argv[i + 1])) {
+        bPaths.push(argv[++i])
       }
     } else {
       positional.push(arg)
     }
   }
-  if (positional.length !== 2) {
-    throw new Error(
-      'Usage: node config/scripts/resource-metrics-analysis.mjs <dumpA.json> <dumpB.json> [--out report.md] [--json artifact.json]'
-    )
+  if ((aPaths.length > 0 || bPaths.length > 0) && positional.length > 0) {
+    throw new Error('cannot mix positional dump paths with --a/--b flags')
   }
-  return { dumpAPath: positional[0], dumpBPath: positional[1], out, json }
+  if (positional.length > 0 && positional.length !== 2) {
+    throw new Error(USAGE)
+  }
+  if (positional.length === 0 && (aPaths.length === 0 || bPaths.length === 0)) {
+    throw new Error(USAGE)
+  }
+  return {
+    dumpAPaths: positional.length > 0 ? [positional[0]] : aPaths,
+    dumpBPaths: positional.length > 0 ? [positional[1]] : bPaths,
+    dumpAPath: positional[0] ?? null,
+    dumpBPath: positional[1] ?? null,
+    out,
+    json
+  }
 }
 
 async function main(argv) {
@@ -467,9 +583,16 @@ async function main(argv) {
     console.error(error.message)
     return 1
   }
-  const dumpA = loadDump(args.dumpAPath)
-  const dumpB = loadDump(args.dumpBPath)
-  const comparison = compareDumps(dumpA, dumpB)
+  let dumpAPaths
+  let dumpBPaths
+  try {
+    dumpAPaths = expandPaths(args.dumpAPaths)
+    dumpBPaths = expandPaths(args.dumpBPaths)
+  } catch (error) {
+    console.error(error.message)
+    return 1
+  }
+  const comparison = compareDumps(loadDumps(dumpAPaths), loadDumps(dumpBPaths))
   const markdown = renderMarkdownReport(comparison)
   const artifact = buildComparisonArtifact(comparison)
   if (args.out) {
