@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_GUEST_RECOVERY_TIMEOUT_MS,

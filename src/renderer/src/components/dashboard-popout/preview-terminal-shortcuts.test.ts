@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { _setLayoutMapForTests } from '../../lib/keyboard-layout/layout-base-character'

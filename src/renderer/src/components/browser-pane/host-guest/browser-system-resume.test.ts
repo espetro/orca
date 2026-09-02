@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const onSystemResumed = vi.fn()

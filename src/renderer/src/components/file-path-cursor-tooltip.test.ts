@@ -1,5 +1,3 @@
-// @vitest-environment happy-dom
-
 import { describe, expect, it } from 'vitest'
 import { cursorTooltipOffsets, splitTrailingSegment } from './file-path-cursor-tooltip'
 

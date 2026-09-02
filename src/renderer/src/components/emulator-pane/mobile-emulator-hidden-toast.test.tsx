@@ -1,5 +1,3 @@
-// @vitest-environment happy-dom
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'

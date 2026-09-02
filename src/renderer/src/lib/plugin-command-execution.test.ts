@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { registerAppCommandDispatcher } from './app-command-dispatch'

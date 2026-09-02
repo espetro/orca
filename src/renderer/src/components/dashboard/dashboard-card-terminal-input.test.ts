@@ -1,5 +1,3 @@
-// @vitest-environment happy-dom
-
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {

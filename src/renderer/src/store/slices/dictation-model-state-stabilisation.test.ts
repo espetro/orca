@@ -1,4 +1,4 @@
-/** @vitest-environment happy-dom */
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, type StateCreator } from 'zustand'
 import type { SpeechModelState } from '../../../../shared/speech-types'
