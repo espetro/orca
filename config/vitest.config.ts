@@ -43,12 +43,9 @@ export default defineConfig({
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true'
   },
-  resolve: {
-    alias: {
-      '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src')
-    }
-  },
+  // Why: projects build independent Vite servers; keep the canonical alias table
+  // in sharedResolve and spread it both here and into every project.
+  resolve: sharedResolve,
   test: {
     ...sharedTestOptions,
     ...testWorkerOptions,
