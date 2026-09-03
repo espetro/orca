@@ -183,6 +183,7 @@ function TerminalPane(
     setupSplit,
     issueCommandSplit,
     onPtyExitRef,
+    settleTabStartupCommand
   } = useTerminalPanePaneBootstrap({ tabId, worktreeId, isActive, isVisible, isWorktreeActive, onPtyExit })
   const {
     setTabLayout,

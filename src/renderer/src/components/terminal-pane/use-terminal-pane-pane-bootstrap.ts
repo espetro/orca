@@ -158,6 +158,7 @@ export function useTerminalPanePaneBootstrap({
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => startup !== undefined && !isVisible
   )
@@ -216,6 +217,12 @@ export function useTerminalPanePaneBootstrap({
 
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
+
+  const settleTabStartupCommand = useCallback(() => {
+    if (startup) {
+      consumeTabStartupCommand(tabId, startup)
+    }
+  }, [consumeTabStartupCommand, startup, tabId])
 
   return {
     managerRef,
@@ -291,6 +298,7 @@ export function useTerminalPanePaneBootstrap({
     setupSplit,
     issueCommandSplit,
     bindSessionRestoredBannerDismiss,
-    onPtyExitRef
+    onPtyExitRef,
+    settleTabStartupCommand
   }
 }
