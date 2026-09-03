@@ -58,7 +58,8 @@ export const BOOLEAN_FLAGS = new Set([
   'wait'
 ])
 
-export const REPEATED_FLAG_SEPARATOR = '\u0000'
+import { REPEATED_FLAG_SEPARATOR } from './flag-constants'
+export { REPEATED_FLAG_SEPARATOR }
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {

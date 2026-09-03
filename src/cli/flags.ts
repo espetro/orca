@@ -1,5 +1,5 @@
 import { RuntimeClientError } from './runtime/types'
-import { REPEATED_FLAG_SEPARATOR } from './args'
+import { REPEATED_FLAG_SEPARATOR } from './flag-constants'
 
 export function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)

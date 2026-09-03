@@ -1,0 +1,1 @@
+export const REPEATED_FLAG_SEPARATOR = '\u0000'

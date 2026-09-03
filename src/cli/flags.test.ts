@@ -3,9 +3,29 @@ import { describe, expect, it } from 'vitest'
 import { getRequiredStringFlagAllowingEmpty } from './flags'
 
 describe('CLI flags', () => {
-  it('allows required string flags to be empty when the command opts in', () => {
-    const flags = new Map<string, string | boolean>([['value', '']])
+  it.each([
+    {
+      flag: 'value',
+      input: new Map([['value', '']]),
+      expected: ''
+    },
+    {
+      flag: 'value',
+      input: new Map([['value', 'hello']]),
+      expected: 'hello'
+    }
+  ])('getRequiredStringFlagAllowingEmpty parses correctly for %j', ({ flag, input, expected }) => {
+    expect(getRequiredStringFlagAllowingEmpty(input, flag)).toBe(expected)
+  })
 
-    expect(getRequiredStringFlagAllowingEmpty(flags, 'value')).toBe('')
+  it.each([
+    { input: new Map([['foo', '']]), flag: 'foo', shouldThrow: true },
+    { input: new Map([['bar', 'val']]), flag: 'bar', shouldThrow: false }
+  ])('getRequiredStringFlag validates presence for %j', ({ input, flag, shouldThrow }) => {
+    if (shouldThrow) {
+      expect(() => getRequiredStringFlagAllowingEmpty(new Map(), flag)).toThrow()
+    } else {
+      expect(getRequiredStringFlagAllowingEmpty(input, flag)).toBe('val')
+    }
   })
 })
