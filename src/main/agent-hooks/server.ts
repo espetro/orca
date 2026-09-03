@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: this file owns the loopback HTTP adapter, the on-disk last-status persistence layer (hydrate, sanitize, TTL, atomic write, drop), and the relay ingest path in one place so the cache lifecycle (set → schedule → drain) lives next to the surfaces that mutate it. Splitting would force mutual `private` accessor scaffolding for a single class. */
 // Why: this main-process adapter keeps listener internals in shared/ (`src/shared/agent-hook-listener.ts`) so the relay can host the same pipeline without Electron; parsing that drifts back into this file stops applying to SSH panes.
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -38,19 +37,13 @@ import {
   preparePendingGrokResultDiscovery
 } from '../../shared/agent-hook-listener/grok-result-discovery'
 import {
-  HOOK_REQUEST_SLOWLORIS_MS,
   MAX_PANE_KEY_LEN,
   normalizeClaudePromptId,
   warnOnHookEnvOrVersionMismatch
 } from '../../shared/agent-hook-listener/listener-limits'
 import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
-import { mergeAgentHookRequestHeaders } from '../../shared/agent-hook-listener/hook-envelope'
-import {
-  parseFormEncodedBody,
-  readRequestBody
-} from '../../shared/agent-hook-listener/request-body'
-import { resolveHookSource } from '../../shared/agent-hook-listener/source-routing'
+import { parseFormEncodedBody } from '../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import {
   canAcceptClaudeCompactCompletion,
@@ -61,7 +54,6 @@ import {
 import {
   createHookTransportInterferenceTracker,
   describeHookTransportInterference,
-  isHookRequestTruncatedError,
   type HookTransportInterferenceReport
 } from '../../shared/agent-hook-transport-interference'
 import {
@@ -69,11 +61,7 @@ import {
   restoreShedStatusFields,
   type AgentHookSource
 } from '../../shared/agent-hook-relay'
-import {
-  CLAUDE_STATUSLINE_PATHNAME,
-  parseClaudeStatusLineBody,
-  type ClaudeStatusLineRateLimits
-} from '../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusClearIpcPayload,
@@ -137,7 +125,6 @@ import {
   shouldKeepClaudePermissionVisible,
   STATUS_PERSIST_DEBOUNCE_MS,
   toAgentStatusIpcPayload,
-  trackEmptyPaneKeyHook,
   type AgentHookAuthorityAttestation,
   type AgentHookAuthorityEvidence,
   type AgentHookProviderSessionIdentity,
@@ -182,12 +169,11 @@ export {
   type RetiredPaneFence
 } from './pane-authority-transfer'
 import { AgentStatusPersistence } from './agent-status-persistence'
+import { AgentHookHttpServer, type AgentHookHttpServerDeps } from './agent-hook-http-server'
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 
 export class AgentHookServer {
-  private server: ReturnType<typeof createServer> | null = null
-  private port = 0
   private token = ''
   // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
   private env = 'production'
@@ -229,6 +215,7 @@ export class AgentHookServer {
   private readonly paneAuthority = new PaneAuthorityRegistry(this)
   private connectionTimestampWatermarkById = new Map<string, number>()
   private readonly persistence: AgentStatusPersistence
+  private readonly http = new AgentHookHttpServer(this as unknown as AgentHookHttpServerDeps)
   // Why: main is the pane authority for local/WSL/SSH panes — hook HTTP, relay, and its own
   // OSC parse all converge on applyNormalizedStatus, so one sequencer covers every ingress here.
   private readonly observations = new AgentStatusObservationSequencer(
@@ -1009,7 +996,7 @@ export class AgentHookServer {
     userDataPath?: string
     endpointNamespace?: string
   }): Promise<void> {
-    if (this.server) {
+    if (this.http.running) {
       return
     }
 
@@ -1041,123 +1028,13 @@ export class AgentHookServer {
         ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
       })
     }
-    const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-      if (req.method !== 'POST') {
-        res.writeHead(404)
-        res.end()
-        return
-      }
-
-      if (req.headers['x-orca-agent-hook-token'] !== this.token) {
-        res.writeHead(403)
-        res.end()
-        return
-      }
-
-      // Why: bound request time so a stalled client can't hold a socket open (slowloris).
-      // Why: track our own destroy so the slowloris cap can't be misread as outside interference.
-      let destroyedBySlowlorisCap = false
-      req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
-        destroyedBySlowlorisCap = true
-        req.destroy()
-      })
-
-      const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
-      try {
-        const body = await readRequestBody(req)
-        if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
-          const statusLineEvent = parseClaudeStatusLineBody(body)
-          if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
-          }
-          res.writeHead(204)
-          res.end()
-          return
-        }
-        const source = resolveHookSource(pathname)
-        if (!source) {
-          res.writeHead(404)
-          res.end()
-          return
-        }
-
-        const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-        trackEmptyPaneKeyHook(hookBody)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        const statusDisposition = normalized.event
-          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
-              hookEventName: normalized.event.hookEventName,
-              isReplay: normalized.event.isReplay,
-              hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
-            })
-          : 'suppress'
-        if (normalized.event && statusDisposition !== 'suppress') {
-          const event =
-            statusDisposition === 'restart'
-              ? { ...normalized.event, launchToken: undefined }
-              : normalized.event
-          if (statusDisposition === 'restart') {
-            // Why: a retired pane accepting a new turn is a different agent session behind the
-            // same key — later observations must not be ordered against the retired one.
-            this.observations.rebind(event.paneKey)
-          }
-          this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
-        }
-
-        res.writeHead(204)
-        res.end()
-      } catch (error) {
-        // Why (#11217): an authenticated POST whose body dies short of its own Content-Length was cut
-        // by something on the loopback path, not by a bad payload. Fail open as before, but count it —
-        // this is the one failure mode that silently stops status for every runtime at once.
-        if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
-          this.transportInterference.record({ source: resolveHookSource(pathname) ?? null, error })
-        }
-        // Why: fail open — return success on malformed payloads so a broken hook never blocks the agent.
-        res.writeHead(204)
-        res.end()
-      }
-    }
-    // Why: node ignores a returned promise, so the handler must settle it itself; handleRequest never rejects.
-    this.server = createServer((req, res) => {
-      void handleRequest(req, res)
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      // Why: swap the startup reject-handler for a logging one so a later runtime 'error' can't crash main as an unhandled event.
-      const onStartupError = (err: Error): void => {
-        this.server?.off('listening', onListening)
-        reject(err)
-      }
-      const onListening = (): void => {
-        this.server?.off('error', onStartupError)
-        this.server?.on('error', (err) => {
-          console.error('[agent-hooks] server error', err)
-        })
-        const address = this.server!.address()
-        if (address && typeof address === 'object') {
-          this.port = address.port
-        }
-        this.maybeWriteEndpointFile()
-        resolve()
-      }
-      this.server!.once('error', onStartupError)
-      this.server!.listen(0, '127.0.0.1', onListening)
-    })
+    await this.http.start()
   }
 
   stop(): void {
     this.flushStatusPersistSync()
     this.persistence.stop()
-    this.server?.close()
-    this.server = null
-    this.port = 0
+    this.http.close()
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
@@ -1371,12 +1248,12 @@ export class AgentHookServer {
   }
 
   buildPtyEnv(): Record<string, string> {
-    if (this.port <= 0 || !this.token) {
+    if (this.http.port <= 0 || !this.token) {
       return {}
     }
 
     const env: Record<string, string> = {
-      ORCA_AGENT_HOOK_PORT: String(this.port),
+      ORCA_AGENT_HOOK_PORT: String(this.http.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
       ORCA_AGENT_HOOK_ENV: this.env,
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
@@ -1404,7 +1281,7 @@ export class AgentHookServer {
     }
     this.endpointFileWritten = false
     const ok = writeEndpointFile(this.endpointDir, this.endpointFilePathCache, {
-      port: this.port,
+      port: this.http.port,
       token: this.token,
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION,
