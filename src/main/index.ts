@@ -756,6 +756,7 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+setAppEnvironment(new ElectronAppEnvironment())
 installServeSupervisorDisconnectQuit(isServeMode)
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
@@ -935,8 +936,6 @@ if (hasSingleInstanceLock) {
   // may resolve a path or read a credential. Neither constructor touches `app` or
   // `safeStorage` — they resolve lazily per call — so installing here changes no
   // timing, in particular not the pre-ready Keychain service-name resolution and
-  // the app.setName ordering the userData captures below depend on.
-  setAppEnvironment(new ElectronAppEnvironment())
   setSecretStore(new ElectronSecretStore())
   // Why at process level, not per-window: pty.ts registers against injected surfaces so
   // it can load without electron, and an Electron main process always has ipcMain —
@@ -2087,6 +2086,7 @@ type ServeOptions = {
   wsPort?: number
   pairingAddress: string | null
   noPairing: boolean
+  noOpen?: boolean
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
@@ -2115,6 +2115,7 @@ function getServeOptions(argv = process.argv): ServeOptions {
     ...(wsPort !== undefined ? { wsPort } : {}),
     pairingAddress: valueAfter('--serve-pairing-address'),
     noPairing: argv.includes('--serve-no-pairing'),
+    noOpen: argv.includes('--serve-no-open'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root')

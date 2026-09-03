@@ -20,7 +20,8 @@ function env(name: string): string | null {
 
 /** XDG-ish data root. `$ORCA_USER_DATA` wins so a smoke test can isolate state. */
 export function resolveUserDataPath(): string {
-  const explicit = env('ORCA_USER_DATA')
+  const explicit =
+    env('ORCA_USER_DATA_PATH_OVERRIDE') ?? env('ORCA_USER_DATA_PATH') ?? env('ORCA_USER_DATA')
   if (explicit) {
     return explicit
   }

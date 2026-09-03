@@ -18,17 +18,17 @@ Launch A (coarse): root pid 130MB @5s → 53MB @30s → 82MB @60s → 85MB @120s
 Launch B (2s resolution, first 60s):
 
 | t (s) | root RSS |
-|---|---|
-| 2 | 309MB |
-| 4 | 245MB |
-| 6 | 173MB |
-| 8 | 114MB |
-| 10 | 105MB |
-| 18 | 128MB |
-| 30 | 129MB |
-| 32 | 176MB |
-| 60 | 174MB |
-| ~105 | 177MB |
+| ----- | -------- |
+| 2     | 309MB    |
+| 4     | 245MB    |
+| 6     | 173MB    |
+| 8     | 114MB    |
+| 10    | 105MB    |
+| 18    | 128MB    |
+| 30    | 129MB    |
+| 32    | 176MB    |
+| 60    | 174MB    |
+| ~105  | 177MB    |
 
 `footprint` = 184-186MB at both 60s and 105s.
 
@@ -48,19 +48,19 @@ Startup log (fresh profile) confirms one-time work, all bounded: `[skills] scan 
 
 All `closed` listeners attached to the main BrowserWindow, per window creation:
 
-| # | Site |
-|---|---|
-| 1 | `src/main/index.ts:1691` (clear `mainWindow` ref / expected-reload state) |
-| 2 | `src/main/window/createMainWindow.ts:188` |
-| 3 | `src/main/window/attach-main-window-services.ts:231` (browserManager.unregisterAll) |
-| 4 | `src/main/window/attach-main-window-services.ts:281` (TCC handler token cleanup) |
-| 5 | `src/main/window/attach-main-window-services.ts:314` (renderer reload handler token) |
-| 6 | `src/main/window/attach-main-window-services.ts:530` (rendererNotifications/runtime notifier teardown) |
-| 7 | `src/main/window/attach-main-window-services.ts:561` (remove `ipcMain` terminal file-drop relay) |
-| 8 | `src/main/rate-limits/service.ts:358` (`rateLimits.attach`, removed on closed at :344) |
-| 9 | `src/main/window/main-window-visual-lifecycle.ts:92` (delayed repaint / ipc cleanup) |
-| 10 | `src/main/ipc/worktree-base-directory-watcher.ts:281` (clear `latestSyncContext`) |
-| 11 | `src/main/macos-tcc-prompt-notice.ts:165` (`initTccPromptNotice`, wired at `src/main/index.ts:1687`) |
+| #   | Site                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------------ |
+| 1   | `src/main/index.ts:1691` (clear `mainWindow` ref / expected-reload state)                              |
+| 2   | `src/main/window/createMainWindow.ts:188`                                                              |
+| 3   | `src/main/window/attach-main-window-services.ts:231` (browserManager.unregisterAll)                    |
+| 4   | `src/main/window/attach-main-window-services.ts:281` (TCC handler token cleanup)                       |
+| 5   | `src/main/window/attach-main-window-services.ts:314` (renderer reload handler token)                   |
+| 6   | `src/main/window/attach-main-window-services.ts:530` (rendererNotifications/runtime notifier teardown) |
+| 7   | `src/main/window/attach-main-window-services.ts:561` (remove `ipcMain` terminal file-drop relay)       |
+| 8   | `src/main/rate-limits/service.ts:358` (`rateLimits.attach`, removed on closed at :344)                 |
+| 9   | `src/main/window/main-window-visual-lifecycle.ts:92` (delayed repaint / ipc cleanup)                   |
+| 10  | `src/main/ipc/worktree-base-directory-watcher.ts:281` (clear `latestSyncContext`)                      |
+| 11  | `src/main/macos-tcc-prompt-notice.ts:165` (`initTccPromptNotice`, wired at `src/main/index.ts:1687`)   |
 
 Behavior:
 

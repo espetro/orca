@@ -11,6 +11,8 @@
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
@@ -92,6 +94,18 @@ export type OrcadOptions = {
   pairingAddress?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
+  recipeJson?: boolean
+  projectRoot?: string
+}
+
+export function resolveOrcadWebClientRoot(): string | undefined {
+  const installRoot = resolveOrcadInstallRoot()
+  const roots = [
+    join(installRoot, '..', 'web'),
+    join(installRoot, 'out', 'web'),
+    join(installRoot, 'web')
+  ]
+  return roots.find((root) => existsSync(join(root, 'web-index.html')))
 }
 
 export type OrcadHandle = {
@@ -146,6 +160,7 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
+  const { HEADLESS_RUNTIME_WINDOW_ID } = await import('../../shared/runtime-types')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -200,7 +215,11 @@ async function startOrcadRuntime(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
 
+  // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+
   const bindHost = resolveOrcadBindHost(options.bind)
+  const webClientRoot = resolveOrcadWebClientRoot()
   const rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
@@ -210,6 +229,7 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
+    webClientRoot,
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
@@ -255,9 +275,23 @@ async function startOrcadRuntime(
     health: await collectOrcadHealth(getAppEnvironment().getVersion())
   }
 
-  await new ServeReadinessPublisher().publish(readiness, {
-    mode: options.json ? 'json' : 'human'
-  })
+  await new ServeReadinessPublisher().publish(
+    readiness,
+    options.recipeJson && options.projectRoot
+      ? { mode: 'recipe-json', projectRoot: options.projectRoot }
+      : { mode: options.json ? 'json' : 'human' }
+  )
+
+  if (!options.json && options.noPairing && boundEndpoint) {
+    try {
+      const parsed = new URL(boundEndpoint)
+      if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
+        console.log(`Web client URL: http://${parsed.hostname}:${parsed.port}`)
+      }
+    } catch {
+      // Ignore malformed URL
+    }
+  }
 
   return {
     readiness,
@@ -307,6 +341,15 @@ export function parseArgs(argv: string[]): OrcadOptions {
         throw new Error('--pairing-address expects a value')
       }
       options.pairingAddress = value
+      i += 1
+    } else if (arg === '--recipe-json') {
+      options.recipeJson = true
+    } else if (arg === '--project-root') {
+      const value = argv[i + 1]
+      if (!value) {
+        throw new Error('--project-root expects a value')
+      }
+      options.projectRoot = value
       i += 1
     } else {
       throw new Error(`Unknown argument: ${arg}`)

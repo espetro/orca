@@ -36,6 +36,7 @@ export const BOOLEAN_FLAGS = new Set([
   'me',
   'mobile',
   'mobile-pairing',
+  'no-open',
   'no-pairing',
   'screen',
   'parent-current',

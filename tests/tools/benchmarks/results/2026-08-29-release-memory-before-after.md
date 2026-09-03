@@ -11,14 +11,14 @@ isolated HOME, mock keychain) so the stable instance is untouched.
 
 ## Result: experimental is WORSE, not better
 
-| metric (median RSS) | base MB | exp MB | delta MB |
-|---|---:|---:|---:|
-| renderer | 246.3 | 356.3 | **+110.0** |
-| main | 187.6 | 253.6 | **+65.9** |
-| gpu | 84.8 | 105.1 | +20.3 |
-| daemon | 68.1 | 71.7 | +3.6 |
-| utility | 49.7 | 52.2 | +2.5 |
-| **total** | **636.5** | **838.8** | **+202.3** |
+| metric (median RSS) |   base MB |    exp MB |   delta MB |
+| ------------------- | --------: | --------: | ---------: |
+| renderer            |     246.3 |     356.3 | **+110.0** |
+| main                |     187.6 |     253.6 |  **+65.9** |
+| gpu                 |      84.8 |     105.1 |      +20.3 |
+| daemon              |      68.1 |      71.7 |       +3.6 |
+| utility             |      49.7 |      52.2 |       +2.5 |
+| **total**           | **636.5** | **838.8** | **+202.3** |
 
 Renderer heap snapshot totalSelf bytes are ~equal (4.4 vs 4.3 MB), so the
 renderer delta is not JS-heap objects measured by the snapshot summary; it is

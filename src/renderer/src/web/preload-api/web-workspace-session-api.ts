@@ -13,23 +13,48 @@ import { readLocalWebUIState } from './web-preferences-store'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { SESSION_STORAGE_KEY, readJson, writeJson } from './web-storage'
 
+function getWebSessionScope(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const params = new URLSearchParams(window.location?.search ?? '')
+    const workspaceParam = params.get('workspace')
+    if (workspaceParam && workspaceParam.trim().length > 0) {
+      return `workspace:${workspaceParam.trim()}`
+    }
+    const storage = window.sessionStorage
+    if (!storage) {
+      return null
+    }
+    let tabId = storage.getItem('orca.web.tab.id')
+    if (!tabId) {
+      tabId = Math.random().toString(36).slice(2, 10)
+      storage.setItem('orca.web.tab.id', tabId)
+    }
+    return `tab:${tabId}`
+  } catch {
+    return null
+  }
+}
+
 export function sessionStorageKeyForHost(hostId?: string | null): string {
   const resolved = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
-  return resolved === LOCAL_EXECUTION_HOST_ID
-    ? SESSION_STORAGE_KEY
-    : `${SESSION_STORAGE_KEY}.${resolved}`
+  const scope = getWebSessionScope()
+  const baseKey = scope ? `${SESSION_STORAGE_KEY}.${scope}` : SESSION_STORAGE_KEY
+  return resolved === LOCAL_EXECUTION_HOST_ID ? baseKey : `${baseKey}.${resolved}`
 }
 
 export function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionState {
   const resolvedHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  const scopedKey = sessionStorageKeyForHost(resolvedHostId)
   if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
     return sanitizeWebRuntimeWorkspaceSession(
-      readJson(sessionStorageKeyForHost(resolvedHostId), getDefaultWorkspaceSession())
+      readJson(scopedKey, readJson(sessionStorageKeyForHost(), getDefaultWorkspaceSession()))
     )
   }
-  const localSession = sanitizeWebRuntimeWorkspaceSession(
-    readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
-  )
+  const fallback = readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
+  const localSession = sanitizeWebRuntimeWorkspaceSession(readJson(scopedKey, fallback))
   if (!requireActiveEnvironmentOrNull()) {
     return localSession
   }

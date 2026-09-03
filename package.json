@@ -34,6 +34,8 @@
     "test:orphans": "node config/scripts/check-test-project-membership.mjs",
     "check:ipc-channel-parity": "node config/scripts/check-ipc-channel-parity.mjs",
     "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.ts",
+    "check:shell-electron-ratchet": "node config/scripts/check-shell-electron-ratchet.ts",
+    "check:web-preload-parity": "node config/scripts/check-web-preload-parity.ts",
     "build:orcad": "node config/scripts/build-orcad.ts",
     "build:orcad-prebuilds": "node config/scripts/build-orcad-prebuilds.ts",
     "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.ts --runtime=node && pnpm run build:cli && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",

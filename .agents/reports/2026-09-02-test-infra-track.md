@@ -54,13 +54,13 @@ docblocked files pay happy-dom); fast/main optimizer includes not added (no impo
 
 ## 4. Computed deltas
 
-| Step | Delta |
-|---|---|
-| `test:changed` | leaf-change verification ~90s vs ~15min full suite (~10x) |
-| deps.optimizer (react/i18n/router/zustand) | warm renderer slice 7.89s -> 6.76s (~14%) |
-| xterm added | transform 2.2s -> 1.7s, import 0.5s -> 0.33s, wall ~18% on ~70 xterm-heavy files |
-| docblock drops | ~200-250ms x 18 files per renderer run |
-| worker pinning + compile cache | enabler for everything; removed oversubscription thrash |
+| Step                                       | Delta                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `test:changed`                             | leaf-change verification ~90s vs ~15min full suite (~10x)                        |
+| deps.optimizer (react/i18n/router/zustand) | warm renderer slice 7.89s -> 6.76s (~14%)                                        |
+| xterm added                                | transform 2.2s -> 1.7s, import 0.5s -> 0.33s, wall ~18% on ~70 xterm-heavy files |
+| docblock drops                             | ~200-250ms x 18 files per renderer run                                           |
+| worker pinning + compile cache             | enabler for everything; removed oversubscription thrash                          |
 
 Cumulative: inner dev loop went from "hand-pick tests or eat 15 minutes" to
 `pnpm tc` (~3s) + `pnpm test:changed` (~90s worst case); full renderer suite ~14-18% faster;

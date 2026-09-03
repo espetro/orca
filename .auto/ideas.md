@@ -29,6 +29,7 @@ This machine had real memory-pressure sources that inflate benchmark noise. Befo
 - Long-run renderer growth (465MB after ~1 day) is itself evidence of retention worth investigating later, but it is out of scope for the idle-RSS metric.
 
 # Loop experiment ideas (2026-08-31 research pass)
+
 - V8 flags as loop experiments: --max-semi-space-size, --max-old-space-size
 - Buffer hygiene: Buffer.from(chunk.subarray(...)) copies vs pinned parents; allocUnsafeSlow for persistent small buffers
 - GC telemetry via perf_hooks PerformanceObserver(entryTypes:['gc']) for allocation-rate signal (needs in-app hook; later iteration)

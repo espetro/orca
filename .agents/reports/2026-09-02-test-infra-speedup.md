@@ -57,13 +57,13 @@ split must spread shared options per project — this became `sharedTestOptions`
 
 **Tooling options rejected after research** (kept on record so we don't re-litigate):
 
-| Option | Verdict | Reason |
-|---|---|---|
-| SWC swap for Babel | Reject | Vite 8 + `@vitejs/plugin-react` v6 already use native oxc for JSX; Babel remains only on the React Compiler path; Vitest never routes through the react plugin |
-| Global stubs for electron/node-pty | Reject | 633 per-file mocks exist; aliasing stubs globally is unsafe |
-| `oj` build tool | Reject | Alpha, solo-maintained, unproven on win32 |
-| rolldown `bundleAnalyzerPlugin` for tests | Reject | It is a `generateBundle`/`writeBundle` hook: applies to production build audits, not `deps.optimizer` measurement (verified empirically) |
-| Catch-all trailing project for orphans | Reject | In Vitest 4, projects collect independently; overlapping includes double-run files rather than catching misses |
+| Option                                    | Verdict | Reason                                                                                                                                                         |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SWC swap for Babel                        | Reject  | Vite 8 + `@vitejs/plugin-react` v6 already use native oxc for JSX; Babel remains only on the React Compiler path; Vitest never routes through the react plugin |
+| Global stubs for electron/node-pty        | Reject  | 633 per-file mocks exist; aliasing stubs globally is unsafe                                                                                                    |
+| `oj` build tool                           | Reject  | Alpha, solo-maintained, unproven on win32                                                                                                                      |
+| rolldown `bundleAnalyzerPlugin` for tests | Reject  | It is a `generateBundle`/`writeBundle` hook: applies to production build audits, not `deps.optimizer` measurement (verified empirically)                       |
+| Catch-all trailing project for orphans    | Reject  | In Vitest 4, projects collect independently; overlapping includes double-run files rather than catching misses                                                 |
 
 **Prioritization.** Rank by (cost removed) / (effort + regression risk):
 
@@ -78,19 +78,19 @@ split must spread shared options per project — this became `sharedTestOptions`
 
 Chronological, with what each step actually did:
 
-| # | Commit | Date | Change |
-|---|---|---|---|
-| 0 | `10f5b235`, `9b91ed4`, `bca1206` | Sep 1 21:10-21:19 | Vite 8 + electron-vite 6 beta + React Compiler wiring (default off). Native oxc transforms land before test work begins. |
-| 1 | `76b7bede` | Sep 1 20:25 | Pin `minWorkers=maxWorkers=cpus-1` (win32 stays 4); `NODE_COMPILE_CACHE` V8 compile cache on the test script. |
-| 2 | `b5cf5bd8` | Sep 1 22:43 | Project split: `fast` (shared/relay/cli/scripts, forks+isolated), `main` (src/main, forks), `renderer` (src/renderer+preload, node env + per-file happy-dom), `e2e-unit`. Shared options/aliases spread per project (Vitest 4 does not inherit them). |
-| 3 | `3b7d2303` | Sep 1 22:43 | Env determinism: `GIT_CONFIG_GLOBAL/SYSTEM` pinning for fixture git + code-under-test spawns; bash banner/`TERM_PROGRAM` scrubbing; IPC parity test reads the split bridge dir. |
-| 4 | `f62a88a4` | Sep 2 07:47 | Root `resolve` deduped against `sharedResolve`. |
-| 5 | `df171a51` | Sep 2 08:33 | `test:changed` = `vitest related` with 8GB heap (graph build OOMs at 2GB on this repo); remaining env-sensitive fixtures isolated; parity step wired into pr.yml. |
-| 6 | `11b18a48` | Sep 2 08:38 | `check-test-project-membership.mjs` orphan guard, wired into `pnpm lint`, PR CI, and `test:orphans`. |
-| 7 | `eae9bfec` | Sep 2 09:05 | happy-dom docblock drops: 33 static-markup candidates found, 18 converted green, 15 reverted after runs showed transitive window/document use (~45% false-positive rate for static grep; never trusted without a run). 767 docblocks remain. |
-| 8 | `c5d851dc` | Sep 2 09:14 | Renderer `deps.optimizer.web.include`: react, react-dom(+client/server), i18next, react-i18next, zustand, react-router. |
-| 9 | `ed2c7c71` | Sep 2 09:14 | AGENTS.md documents the tc-first inner loop. |
-| 10 | `cba4ed23` | Sep 2 09:55 | `experimental.importDurations` telemetry (on-warn, thresholds 100ms/500ms); `@xterm/xterm` + `@xterm/headless` added to optimizer include; policy comment: a lib qualifies only when importDurations repeatedly shows it above warn threshold. |
+| #   | Commit                           | Date              | Change                                                                                                                                                                                                                                                |
+| --- | -------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | `10f5b235`, `9b91ed4`, `bca1206` | Sep 1 21:10-21:19 | Vite 8 + electron-vite 6 beta + React Compiler wiring (default off). Native oxc transforms land before test work begins.                                                                                                                              |
+| 1   | `76b7bede`                       | Sep 1 20:25       | Pin `minWorkers=maxWorkers=cpus-1` (win32 stays 4); `NODE_COMPILE_CACHE` V8 compile cache on the test script.                                                                                                                                         |
+| 2   | `b5cf5bd8`                       | Sep 1 22:43       | Project split: `fast` (shared/relay/cli/scripts, forks+isolated), `main` (src/main, forks), `renderer` (src/renderer+preload, node env + per-file happy-dom), `e2e-unit`. Shared options/aliases spread per project (Vitest 4 does not inherit them). |
+| 3   | `3b7d2303`                       | Sep 1 22:43       | Env determinism: `GIT_CONFIG_GLOBAL/SYSTEM` pinning for fixture git + code-under-test spawns; bash banner/`TERM_PROGRAM` scrubbing; IPC parity test reads the split bridge dir.                                                                       |
+| 4   | `f62a88a4`                       | Sep 2 07:47       | Root `resolve` deduped against `sharedResolve`.                                                                                                                                                                                                       |
+| 5   | `df171a51`                       | Sep 2 08:33       | `test:changed` = `vitest related` with 8GB heap (graph build OOMs at 2GB on this repo); remaining env-sensitive fixtures isolated; parity step wired into pr.yml.                                                                                     |
+| 6   | `11b18a48`                       | Sep 2 08:38       | `check-test-project-membership.mjs` orphan guard, wired into `pnpm lint`, PR CI, and `test:orphans`.                                                                                                                                                  |
+| 7   | `eae9bfec`                       | Sep 2 09:05       | happy-dom docblock drops: 33 static-markup candidates found, 18 converted green, 15 reverted after runs showed transitive window/document use (~45% false-positive rate for static grep; never trusted without a run). 767 docblocks remain.          |
+| 8   | `c5d851dc`                       | Sep 2 09:14       | Renderer `deps.optimizer.web.include`: react, react-dom(+client/server), i18next, react-i18next, zustand, react-router.                                                                                                                               |
+| 9   | `ed2c7c71`                       | Sep 2 09:14       | AGENTS.md documents the tc-first inner loop.                                                                                                                                                                                                          |
+| 10  | `cba4ed23`                       | Sep 2 09:55       | `experimental.importDurations` telemetry (on-warn, thresholds 100ms/500ms); `@xterm/xterm` + `@xterm/headless` added to optimizer include; policy comment: a lib qualifies only when importDurations repeatedly shows it above warn threshold.        |
 
 Two deliberate non-actions, recorded to prevent rework:
 
@@ -103,13 +103,13 @@ Two deliberate non-actions, recorded to prevent rework:
 
 Numbers as measured at each step (locally, warm caches where stated):
 
-| Step | Delta | Scope |
-|---|---|---|
-| V8 compile cache + worker pinning | not separately measured (enabler step) | all projects |
-| `test:changed` (vitest related) | leaf-change verification ~90s vs ~15min full suite (~10x) | dev loop |
-| happy-dom docblock drops | ~200-250ms saved per file x 18 files (~4s per full renderer run) | renderer |
-| deps.optimizer (react/i18n/router/zustand) | warm renderer slice 7.89s -> 6.76s (~14%); transform 8.06s -> 7.32s | renderer |
-| xterm added to optimizer | transform 2.2s -> 1.7s, import 0.5s -> 0.33s; wall ~4.2s -> ~3.5s (~18%) on xterm-heavy files (~70 files) | renderer |
+| Step                                       | Delta                                                                                                     | Scope        |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------ |
+| V8 compile cache + worker pinning          | not separately measured (enabler step)                                                                    | all projects |
+| `test:changed` (vitest related)            | leaf-change verification ~90s vs ~15min full suite (~10x)                                                 | dev loop     |
+| happy-dom docblock drops                   | ~200-250ms saved per file x 18 files (~4s per full renderer run)                                          | renderer     |
+| deps.optimizer (react/i18n/router/zustand) | warm renderer slice 7.89s -> 6.76s (~14%); transform 8.06s -> 7.32s                                       | renderer     |
+| xterm added to optimizer                   | transform 2.2s -> 1.7s, import 0.5s -> 0.33s; wall ~4.2s -> ~3.5s (~18%) on xterm-heavy files (~70 files) | renderer     |
 
 Cumulative effect on the two loops that matter:
 
@@ -138,19 +138,19 @@ Cumulative effect on the two loops that matter:
 
 Inspected upstream/main directly (`git show`/`git grep`, no checkout):
 
-| Area | upstream/main | our fork |
-|---|---|---|
-| Vitest config | single flat config, no projects | 4 projects, per-project env/pool/isolation |
-| deps.optimizer | absent | renderer: 10 packages prebundled |
-| importDurations telemetry | absent | on-warn with thresholds + adoption policy |
-| Incremental entry point | none (monolithic `vitest run` only) | `test:changed` (vitest related, ~90s vs ~15min) |
-| Orphan guard | absent | membership check in lint + CI |
-| V8 compile cache | absent | enabled on test script |
-| Worker pinning | only Windows maxWorkers:4 | all platforms, cpus-1 |
-| happy-dom docblocks | 837 in one flat run | 767, and renderer-project scoped; 18 proven-unneeded files dropped |
-| Vite generation | rolldown-vite 7.3.1 | Vite 8 (native oxc) + electron-vite 6 beta |
-| Env determinism | machine-dependent fixtures possible | git-config/shell-noise isolation landed |
-| CI excludes | 16 hardcoded inline in workflow | none needed; project globs own routing |
+| Area                      | upstream/main                       | our fork                                                           |
+| ------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| Vitest config             | single flat config, no projects     | 4 projects, per-project env/pool/isolation                         |
+| deps.optimizer            | absent                              | renderer: 10 packages prebundled                                   |
+| importDurations telemetry | absent                              | on-warn with thresholds + adoption policy                          |
+| Incremental entry point   | none (monolithic `vitest run` only) | `test:changed` (vitest related, ~90s vs ~15min)                    |
+| Orphan guard              | absent                              | membership check in lint + CI                                      |
+| V8 compile cache          | absent                              | enabled on test script                                             |
+| Worker pinning            | only Windows maxWorkers:4           | all platforms, cpus-1                                              |
+| happy-dom docblocks       | 837 in one flat run                 | 767, and renderer-project scoped; 18 proven-unneeded files dropped |
+| Vite generation           | rolldown-vite 7.3.1                 | Vite 8 (native oxc) + electron-vite 6 beta                         |
+| Env determinism           | machine-dependent fixtures possible | git-config/shell-noise isolation landed                            |
+| CI excludes               | 16 hardcoded inline in workflow     | none needed; project globs own routing                             |
 
 Interpretation: upstream's setup is exactly our baseline. Their CI spreads 837 happy-dom boots
 across 8 shards with no prebundling and no incremental path; their contributors run the full

@@ -5,6 +5,7 @@ Window: Aug 29 - Sep 2, 2026 (125 fork commits since Aug 27; ~66 local)
 Program: three sequential tracks, one shared premise.
 
 Companion per-track reports:
+
 - `.agents/reports/2026-09-02-memory-harness-track.md`
 - `.agents/reports/2026-09-02-dev-lifecycle-track.md`
 - `.agents/reports/2026-09-02-test-infra-track.md` (full: `2026-09-02-test-infra-speedup.md`)
@@ -27,6 +28,7 @@ instrumented for it.
 ## 2. The three tracks (in execution order)
 
 ### Track A - Memory measurement harness & host-noise elimination (Aug 29 - Sep 1)
+
 Branch `exp/mem-observability` + `exp/mem-autoresearch` (unmerged)
 
 Built the measurement instrument: in-app `ResourceRecorder` (tick loop, ring buffer, dump)
@@ -46,6 +48,7 @@ null run; ~38MB per-run median half-spread as the stated resolution limit; warmu
 eliminated). Measurement went from ad-hoc ps reads to a validated ~16-18min A/B iteration.
 
 ### Track B - Development lifecycle & tooling (Aug 30 - Sep 1)
+
 Branch `main` (toolchain, preload, guards) + `migrate/scripts-to-ts` (84 commits, unmerged)
 
 Migrated the CI/script tree from untyped JS to typechecked TS: Phase 0 deleted 27 zero-caller
@@ -62,6 +65,7 @@ wiring default-off. Replaced Google-endpoint locale scraping with the intl-ai/Op
 (branch-only).
 
 ### Track C - Test infrastructure (Sep 1 - Sep 2, ~13.5h)
+
 Branch `main`, 11 commits
 
 Split the monolithic Vitest config into 4 projects with correct pool/isolation semantics (read
@@ -80,17 +84,17 @@ runs 14-18% faster from prebundling; zero orphans; guards in CI.
 
 ### Feedback loop, end to end (the program's actual product)
 
-| Operation | Before (Aug 29) | After (Sep 2) |
-|---|---|---|
-| Verify a one-file change | hand-pick tests or ~15min full suite | `pnpm tc` ~3s + `test:changed` ~90s worst case (seconds for leaves) |
-| Typecheck everything incl. scripts | scripts untypechecked | 4-project parallel `tc` (~3s warm) |
-| Trust a memory A/B | impossible (noise > signal, +19MB floor on identical binaries) | validated 3-run A/B, ~16-18min, stated 38MB resolution, deviance flags |
-| Find a slow dependency | guesswork | importDurations warn lines -> A/B -> adopt/revert |
-| Break main<->preload IPC contract | silent, found at runtime | lint failure before push |
-| Add a test file that matches no project | silently never runs | lint/CI failure |
-| Merge upstream (463 commits ahead) | each rebase re-paid full test cost, no incremental path | rebase verified ~10x cheaper; guards catch glob drift |
-| Iterate on locale catalogs | slow endpoint scraping | cached OpenRouter fills with stale detection (branch) |
-| CI script breakage | discovered by red CI | typecheck failure in ~3s locally |
+| Operation                               | Before (Aug 29)                                                | After (Sep 2)                                                          |
+| --------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Verify a one-file change                | hand-pick tests or ~15min full suite                           | `pnpm tc` ~3s + `test:changed` ~90s worst case (seconds for leaves)    |
+| Typecheck everything incl. scripts      | scripts untypechecked                                          | 4-project parallel `tc` (~3s warm)                                     |
+| Trust a memory A/B                      | impossible (noise > signal, +19MB floor on identical binaries) | validated 3-run A/B, ~16-18min, stated 38MB resolution, deviance flags |
+| Find a slow dependency                  | guesswork                                                      | importDurations warn lines -> A/B -> adopt/revert                      |
+| Break main<->preload IPC contract       | silent, found at runtime                                       | lint failure before push                                               |
+| Add a test file that matches no project | silently never runs                                            | lint/CI failure                                                        |
+| Merge upstream (463 commits ahead)      | each rebase re-paid full test cost, no incremental path        | rebase verified ~10x cheaper; guards catch glob drift                  |
+| Iterate on locale catalogs              | slow endpoint scraping                                         | cached OpenRouter fills with stale detection (branch)                  |
+| CI script breakage                      | discovered by red CI                                           | typecheck failure in ~3s locally                                       |
 
 ### Composite effect
 
@@ -106,18 +110,18 @@ of it survives weekly upstream merges.
 
 Ranked by (frequency x cost removed) / effort, using measured numbers:
 
-| Rank | Action | Cost | Payback evidence |
-|---|---|---|---|
-| 1 | `test:changed` incremental entry point (Track C) | ~2h | ~90s vs ~15min per verification; used on every single change; payback in <1 day of iteration |
-| 2 | Bench harness v2 + hardening (Track A) | ~1.5 days | Without it, zero RSS conclusions were possible; every future intervention depends on it; also stopped a live ~225MB/session host leak |
-| 3 | Vitest project split + worker pinning + compile cache (Track C) | ~4h | Enables targeted runs, removed oversubscription; prerequisite for rank 1 |
-| 4 | `tc:scripts` + JS->TS migration (Track B) | ~3-4 days | Found 5 silent data-corruption bugs + ~17 latent errors during migration itself; converts CI breakage from minutes-late to 3s-local |
-| 5 | Preload split + parity guard (Track B) | ~1.5 days | Fixed 1 shipped latent bug; guard cost ~4h prevents the whole regression class permanently |
-| 6 | deps.optimizer + xterm + importDurations (Track C) | ~3h | 14-18% renderer runs; telemetry makes future candidates cheap to evaluate |
-| 7 | Vite 8 + electron-vite 6 + React Compiler wiring (Track B) | ~half day | Unblocked Track C entirely; parity with (actually ahead of) upstream toolchain |
-| 8 | Env-determinism fixes + orphan guard (Tracks B/C) | ~half day | Correctness of every other number; tiny cost |
-| 9 | intl-ai locale pipeline (Track B) | ~1 day (branch) | Slow scrape -> cached fills; payback each locale sync |
-| 10 | happy-dom docblock pruning (Track C) | ~2h | Smallest, bounded; ~4s/renderer run; stops here by design |
+| Rank | Action                                                          | Cost            | Payback evidence                                                                                                                      |
+| ---- | --------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `test:changed` incremental entry point (Track C)                | ~2h             | ~90s vs ~15min per verification; used on every single change; payback in <1 day of iteration                                          |
+| 2    | Bench harness v2 + hardening (Track A)                          | ~1.5 days       | Without it, zero RSS conclusions were possible; every future intervention depends on it; also stopped a live ~225MB/session host leak |
+| 3    | Vitest project split + worker pinning + compile cache (Track C) | ~4h             | Enables targeted runs, removed oversubscription; prerequisite for rank 1                                                              |
+| 4    | `tc:scripts` + JS->TS migration (Track B)                       | ~3-4 days       | Found 5 silent data-corruption bugs + ~17 latent errors during migration itself; converts CI breakage from minutes-late to 3s-local   |
+| 5    | Preload split + parity guard (Track B)                          | ~1.5 days       | Fixed 1 shipped latent bug; guard cost ~4h prevents the whole regression class permanently                                            |
+| 6    | deps.optimizer + xterm + importDurations (Track C)              | ~3h             | 14-18% renderer runs; telemetry makes future candidates cheap to evaluate                                                             |
+| 7    | Vite 8 + electron-vite 6 + React Compiler wiring (Track B)      | ~half day       | Unblocked Track C entirely; parity with (actually ahead of) upstream toolchain                                                        |
+| 8    | Env-determinism fixes + orphan guard (Tracks B/C)               | ~half day       | Correctness of every other number; tiny cost                                                                                          |
+| 9    | intl-ai locale pipeline (Track B)                               | ~1 day (branch) | Slow scrape -> cached fills; payback each locale sync                                                                                 |
+| 10   | happy-dom docblock pruning (Track C)                            | ~2h             | Smallest, bounded; ~4s/renderer run; stops here by design                                                                             |
 
 The pattern the ranking shows: **measurement and entry points first, guards second, micro-
 optimizations last** - which is the order execution actually followed.

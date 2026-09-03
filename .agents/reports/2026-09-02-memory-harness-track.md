@@ -76,18 +76,18 @@ addressable share of recent issue load is ~25-35%, and maintainer investment is 
 All on `exp/mem-observability` (lanes M1-M6, merged Aug 30 09:39-09:43) plus hardening on
 `exp/mem-autoresearch`:
 
-| Commit | What it added |
-|---|---|
-| `025b2fbbe9` | Pure ps/pmset/vm_stat parsers + injectable execFile helper (M1) |
-| `a140f0cd9b` | `src/main/metrics/resource-recorder.ts`: in-app tick loop, ring buffer, dump; singleton behind `ORCA_RESOURCE_RECORDER=1` (M1) |
-| `a823dc4ec1` | `window.__orcaE2E__.resources.{dump,mark}` bridge over preload IPC, e2e-gated (M2) |
-| `0e4230825f` | `resource-metrics-analysis.mjs` comparison CLI: IQR-disjoint verdicts (improved/regressed/inconclusive) + 8 deviance flags (M3) |
-| `c4be8530b5` | Harness v2: `--ab A B --runs 3` (min 3 enforced), interleaved A,B,B,A,A,B order, `--settle-s`/`--window-s`, per-run `orca.resource-bench-run/1` artifacts, ps cross-checks (M4) |
-| `1122c6b0e8` | `bench:compare-memory` script wiring |
-| `508f7c8eca` | `RESOURCE-BENCH-PLAYBOOK.md`: metric semantics, verdict rules, confounds, null-test-first rule (M5) |
-| `ae849f26aa` | Committed null A/B validation artifacts - verdict `inconclusive` on every metric, as required (M6) |
-| `88612f738d` + `251f005f06` | ps `phys_footprint` keyword removal handled: parsers accept null, CLI unwraps artifacts |
-| `c229b7065e` | Harness hardening: detached spawn + process-tree group kill, `reapLeftovers` pre-run sweep, `pickFreePort` (replaces fixed 9223), SIGINT/SIGTERM/exit reaping, CDP snapshot failures degrade to null instead of aborting |
+| Commit                      | What it added                                                                                                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `025b2fbbe9`                | Pure ps/pmset/vm_stat parsers + injectable execFile helper (M1)                                                                                                                                                          |
+| `a140f0cd9b`                | `src/main/metrics/resource-recorder.ts`: in-app tick loop, ring buffer, dump; singleton behind `ORCA_RESOURCE_RECORDER=1` (M1)                                                                                           |
+| `a823dc4ec1`                | `window.__orcaE2E__.resources.{dump,mark}` bridge over preload IPC, e2e-gated (M2)                                                                                                                                       |
+| `0e4230825f`                | `resource-metrics-analysis.mjs` comparison CLI: IQR-disjoint verdicts (improved/regressed/inconclusive) + 8 deviance flags (M3)                                                                                          |
+| `c4be8530b5`                | Harness v2: `--ab A B --runs 3` (min 3 enforced), interleaved A,B,B,A,A,B order, `--settle-s`/`--window-s`, per-run `orca.resource-bench-run/1` artifacts, ps cross-checks (M4)                                          |
+| `1122c6b0e8`                | `bench:compare-memory` script wiring                                                                                                                                                                                     |
+| `508f7c8eca`                | `RESOURCE-BENCH-PLAYBOOK.md`: metric semantics, verdict rules, confounds, null-test-first rule (M5)                                                                                                                      |
+| `ae849f26aa`                | Committed null A/B validation artifacts - verdict `inconclusive` on every metric, as required (M6)                                                                                                                       |
+| `88612f738d` + `251f005f06` | ps `phys_footprint` keyword removal handled: parsers accept null, CLI unwraps artifacts                                                                                                                                  |
+| `c229b7065e`                | Harness hardening: detached spawn + process-tree group kill, `reapLeftovers` pre-run sweep, `pickFreePort` (replaces fixed 9223), SIGINT/SIGTERM/exit reaping, CDP snapshot failures degrade to null instead of aborting |
 
 Protocol facts baked in: 120s settle mandatory (shorter samples the GC transient), discarded
 warmup run after every process sweep, no UI interaction during measurement, bench bases outside

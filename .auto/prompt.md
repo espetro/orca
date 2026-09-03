@@ -38,7 +38,7 @@ Reduce idle process phys_footprint (main, renderer, and forked helper processes)
 
 - .auto/checks.sh (coordinator-owned); .auto/measure.sh analysis logic (if you find a genuine measurement bug, note it in log.jsonl as a comment instead of editing - coordinator applies fixes)
 - run-release-memory-benchmark.mjs and resource-metrics-analysis.mjs semantics
-- Native module sources unless config-only; docs/**; CI
+- Native module sources unless config-only; docs/\*\*; CI
 - The baseline app under ../bench-bases/ (read-only pin)
 
 # Constraints

@@ -51,12 +51,12 @@ unit of risk. Analysis points:
 
 ### 4.1 JS -> TS scripts migration (branch `migrate/scripts-to-ts`, tip `c52cdec1`, 84 commits)
 
-| Phase | Commits | What |
-|---|---|---|
-| Phase 0 | `edd61b58`, `6eb1ff88` | Deleted 27 zero-caller microbenches (~6.3k LoC, ~10% of surface, each verified caller-free); `locale-overrides` barrel consolidating 22 locale data files |
-| Phase 1 | `7228920b` | `config/tsconfig.scripts.json`, `tc:scripts`, parallel 4-project typecheck runner, oxlint `.mts`/`.cts` overrides, `no-floating-promises` scoped to scripts, migration docs |
+| Phase       | Commits                                                                                                                                                                | What                                                                                                                                                                                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 0     | `edd61b58`, `6eb1ff88`                                                                                                                                                 | Deleted 27 zero-caller microbenches (~6.3k LoC, ~10% of surface, each verified caller-free); `locale-overrides` barrel consolidating 22 locale data files                                                                                                            |
+| Phase 1     | `7228920b`                                                                                                                                                             | `config/tsconfig.scripts.json`, `tc:scripts`, parallel 4-project typecheck runner, oxlint `.mts`/`.cts` overrides, `no-floating-promises` scoped to scripts, migration docs                                                                                          |
 | Batches 1-7 | `9406f6c1`, `e998a6ad`, `4f25814c`, `56198cc5`, `fb48c90f`, `72277cbf`, `c14096f4`, `7e42f53c`, `8a966fe7`, `181c444f`, `81d743ac`, `f4931d0f`, `e0bdde14`, `c52cdec1` | Atomic renames: locale data (24 files), build/release versioning (13), telemetry (15), vite runners, esbuild bundlers, platform/native build, native-dep `.cjs` loaders, CI-invoked scripts, package.json entry points, locale tests, contract tests (46 test files) |
-| Finish | `c626ec73`, `2895032c` | Mass `.mts` -> `.ts` rename (299 files); all workflows on Node 24 |
+| Finish      | `c626ec73`, `2895032c`                                                                                                                                                 | Mass `.mts` -> `.ts` rename (299 files); all workflows on Node 24                                                                                                                                                                                                    |
 
 End state on branch: `config/scripts` has 246 `.ts`/`.cts` files; 52 runtime `.mjs`/`.cjs` remain
 (validated keepers: `electron-builder.config.cjs`, node-pty patch/loader `.cjs`, live-remote repro
@@ -104,14 +104,14 @@ diff only).
 
 ## 5. Computed deltas
 
-| Change | Delta |
-|---|---|
-| `tc:scripts` wired into parallel `pnpm tc` | CI-script breakage moves from "red CI minutes later" to "~3s local failure"; 5 real latent bugs found during migration alone |
-| Phase 0 dead-code deletion | -6.3k LoC maintained, linted, and tested forever after (~10% of the script tree) |
-| Preload split | 4,900 -> 246 lines (95% reduction in monolith size); 49 modules each under 300-line ceiling; 1 latent runtime bug fixed |
-| IPC parity guard | channel drift class eliminated (57+ gh: channels covered); would have caught the awaitBeforeUnloadCheckpoint bug class |
-| Vite 8 native oxc | prerequisite for all report-3 test-transform gains; build transform path no longer Babel-based |
-| intl-ai pipeline | replaces endpoint-scraping with cached, lockfile-driven fills; repeated locale syncs go from slow scrape to cache-hit + API delta |
+| Change                                     | Delta                                                                                                                             |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `tc:scripts` wired into parallel `pnpm tc` | CI-script breakage moves from "red CI minutes later" to "~3s local failure"; 5 real latent bugs found during migration alone      |
+| Phase 0 dead-code deletion                 | -6.3k LoC maintained, linted, and tested forever after (~10% of the script tree)                                                  |
+| Preload split                              | 4,900 -> 246 lines (95% reduction in monolith size); 49 modules each under 300-line ceiling; 1 latent runtime bug fixed           |
+| IPC parity guard                           | channel drift class eliminated (57+ gh: channels covered); would have caught the awaitBeforeUnloadCheckpoint bug class            |
+| Vite 8 native oxc                          | prerequisite for all report-3 test-transform gains; build transform path no longer Babel-based                                    |
+| intl-ai pipeline                           | replaces endpoint-scraping with cached, lockfile-driven fills; repeated locale syncs go from slow scrape to cache-hit + API delta |
 
 ## 6. Edge over upstream
 

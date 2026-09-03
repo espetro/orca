@@ -113,6 +113,7 @@ docs/**
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
+!docs/reference/orca-serve-setup-and-parity.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-process-enumeration.md
 !docs/reference/wsl-runner-verification.md

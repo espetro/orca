@@ -37,7 +37,7 @@ runs the CLI entrypoint under `ELECTRON_RUN_AS_NODE=1`. When that CLI then resol
 foreground serve executable, two failure modes exist:
 
 1. **Stable builds**: `serve` crashes with `AppEnvironment not initialized — call
-   setAppEnvironment() during startup before resolving app paths`. The serve-supervisor
+setAppEnvironment() during startup before resolving app paths`. The serve-supervisor
    install path in the packaged `app.asar` resolves app paths before the app environment is
    set.
 2. **Canary builds**: the bundled shim itself is broken. It hardcodes
@@ -58,7 +58,7 @@ user-data profile collide on the Electron single-instance lock:
 
 The env var the packaged app honors for profile isolation is `ORCA_USER_DATA_PATH_OVERRIDE`
 (`src/main/startup/configure-process.ts` — it wins over all other resolution). Plain
-`ORCA_USER_DATA_PATH` is not sufficient: main canonicalizes that env var *from*
+`ORCA_USER_DATA_PATH` is not sufficient: main canonicalizes that env var _from_
 `app.getPath('userData')`, so it cannot redirect the profile.
 
 ```sh

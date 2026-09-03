@@ -17070,23 +17070,33 @@
       "assertionRefs": [
         {
           "file": "src/shared/grok-session-paths.test.ts",
-          "assertions": ["closes the directory handle when listing grok session paths completes or throws"]
+          "assertions": [
+            "closes the directory handle when listing grok session paths completes or throws"
+          ]
         },
         {
           "file": "src/main/skills/skill-plugin-cache-scan.test.ts",
-          "assertions": ["closes the directory handle when scanning plugin cache entries completes or throws"]
+          "assertions": [
+            "closes the directory handle when scanning plugin cache entries completes or throws"
+          ]
         },
         {
           "file": "src/main/skills/skill-package-identity.test.ts",
-          "assertions": ["closes the directory handle when resolving package identity completes or throws"]
+          "assertions": [
+            "closes the directory handle when resolving package identity completes or throws"
+          ]
         },
         {
           "file": "src/main/window/clipboard-remote-file-staging-fs.test.ts",
-          "assertions": ["closes the directory handle when staging remote clipboard files completes or throws"]
+          "assertions": [
+            "closes the directory handle when staging remote clipboard files completes or throws"
+          ]
         },
         {
           "file": "src/main/daemon/history-reader.test.ts",
-          "assertions": ["closes the directory handle when reading daemon history sessions completes or throws"]
+          "assertions": [
+            "closes the directory handle when reading daemon history sessions completes or throws"
+          ]
         },
         {
           "file": "src/main/daemon/history-reader-memory.test.ts",

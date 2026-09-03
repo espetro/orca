@@ -88,6 +88,15 @@ describe('run-release-memory-benchmark helpers', () => {
     expect(parsed.runs).toBe(4)
     expect(parsed.recorder).toBe(false)
 
+    const orcadParsed = parseReleaseMemoryBenchmarkArgs(['--app', '/tmp/Orca.app', '--orcad'])
+    expect(orcadParsed.fixture).toBe('orcad')
+    expect(fixturePreset('orcad')).toEqual({
+      terminalPanes: 4,
+      editor: false,
+      browserTab: false,
+      orcad: true
+    })
+
     const ab = parseReleaseMemoryBenchmarkArgs([
       '--ab',
       '/tmp/A.app',

@@ -6,14 +6,14 @@ Question: does the renderer accumulate host events for post-reconnect replay, an
 
 ## Findings table
 
-| Item | Location | Bounded? | Cap | Worst-case retained |
-|---|---|---|---|---|
-| Replayable snapshot latch | `web-session-tabs-sync.ts:191` (`replayableSessionTabsSnapshotByWorktree`) | Yes (single record per key) | one `{publicationEpoch, snapshotVersion}` record per environment×worktree key; deleted on accept (`:692`), teardown (`:813`, `:842`) | bytes/key (two numbers), not snapshots |
-| Latest accepted snapshot freshness | `web-session-tabs-sync.ts:190` (`latestSessionTabsSnapshotByWorktree`) | Yes (single per key) | keyed overwrite only | bytes/key |
-| Latest received frame | `web-session-tabs-sync.ts:192,396` | Yes (single per key) | keyed overwrite | bytes/key |
-| Pending snapshot fan-out | `web-session-terminal-handle-events.ts:18-24` (`pendingSnapshotBySession`) | Yes | one snapshot reference per session key, consumed in a microtask (`:100-111`) | one live host snapshot ref per session, same object the store already holds |
-| Replay tag mechanism | `src/shared/runtime-subscription-replay.ts` | Yes | boolean flag on the response; no accumulation | 0 |
-| Event stream replay | `runtime-client-events.ts:14-39` | Yes | no queue at all; comment states lost events are lost, replay only triggers a resync signal | 0 |
+| Item                               | Location                                                                   | Bounded?                    | Cap                                                                                                                                  | Worst-case retained                                                         |
+| ---------------------------------- | -------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Replayable snapshot latch          | `web-session-tabs-sync.ts:191` (`replayableSessionTabsSnapshotByWorktree`) | Yes (single record per key) | one `{publicationEpoch, snapshotVersion}` record per environment×worktree key; deleted on accept (`:692`), teardown (`:813`, `:842`) | bytes/key (two numbers), not snapshots                                      |
+| Latest accepted snapshot freshness | `web-session-tabs-sync.ts:190` (`latestSessionTabsSnapshotByWorktree`)     | Yes (single per key)        | keyed overwrite only                                                                                                                 | bytes/key                                                                   |
+| Latest received frame              | `web-session-tabs-sync.ts:192,396`                                         | Yes (single per key)        | keyed overwrite                                                                                                                      | bytes/key                                                                   |
+| Pending snapshot fan-out           | `web-session-terminal-handle-events.ts:18-24` (`pendingSnapshotBySession`) | Yes                         | one snapshot reference per session key, consumed in a microtask (`:100-111`)                                                         | one live host snapshot ref per session, same object the store already holds |
+| Replay tag mechanism               | `src/shared/runtime-subscription-replay.ts`                                | Yes                         | boolean flag on the response; no accumulation                                                                                        | 0                                                                           |
+| Event stream replay                | `runtime-client-events.ts:14-39`                                           | Yes                         | no queue at all; comment states lost events are lost, replay only triggers a resync signal                                           | 0                                                                           |
 
 ## Answers
 

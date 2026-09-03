@@ -73,6 +73,23 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes noOpen flag to serveOrcaApp when --no-open is specified', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--no-open', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+      json: true,
+      port: null,
+      pairingAddress: null,
+      noPairing: false,
+      noOpen: true,
+      mobilePairing: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+  })
+
   it('starts a foreground headless server with mobile pairing enabled', async () => {
     serveOrcaAppMock.mockResolvedValue(0)
 

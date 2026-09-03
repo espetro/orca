@@ -198,8 +198,8 @@ comparison.
 `pnpm run bench:idle-cpu` drives `config/scripts/run-idle-cpu-benchmark.mjs`,
 which composes four modules:
 
-| Module                                | Responsibility                                                                                    |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Module                               | Responsibility                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `idle-cpu-renderer-scale-fixture.ts` | Seeds the lineage, agent rows, and sidebar view state; takes the mounted-card and listener census |
 | `idle-cpu-renderer-timing-probe.ts`  | In-page timer drift and long-task probe; runs the no-op publication workload                      |
 | `idle-cpu-process-sampling.ts`       | Classifies the Electron process tree and samples per-role CPU/RSS                                 |
