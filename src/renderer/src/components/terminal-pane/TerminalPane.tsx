@@ -12,7 +12,6 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
@@ -86,6 +85,7 @@ import {
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPanePasteEffects } from './use-terminal-pane-paste-effects'
 import { usePaneStateSubscriptions } from './use-terminal-pane-pane-state'
+import { useNativeChatHandlers } from './use-terminal-pane-native-chat'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
@@ -114,12 +114,6 @@ import {
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import { getAllDrivers, getDriverForPty, isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import {
-  nativeChatLaunchAgentForLeaf,
-  resolveNativeChatLeafRoute,
-  type NativeChatLeafRoute
-} from '../native-chat/native-chat-leaf-routing'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
@@ -544,98 +538,30 @@ function TerminalPane(
       unifiedTabLabel
     ]
   )
-  // Per-leaf: a split can mix supported/unsupported agents; the leaf's live agent is authoritative, tab-wide hints only fill in before hooks arrive.
-  const isChatEligibleForLeaf = useCallback(
-    (leafId: string | null): boolean => {
-      const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
-      const launchAgent = nativeChatLaunchAgentForLeaf({
-        launchAgent: terminalTab?.launchAgent,
-        launchAgentLeafId: getTabWideAgentHintLeafId(),
-        leafId,
-        leafIds: getNativeChatLeafIds()
-      })
-      return canToggleNativeChat({
-        experimentalNativeChatEnabled: nativeChatEnabled,
-        contentType: 'terminal',
-        launchAgent: detectedAgent ? null : launchAgent,
-        detectedAgent,
-        // A structured handoff keeps the durable provider identity even when the
-        // foreground hook has not republished agent status after returning to TUI.
-        resolvedAgent: detectedAgent
-          ? null
-          : ((structuredSessionAgent as TuiAgent | null) ?? resolveTitleAgentForLeaf(leafId)),
-        nativeChatTranscriptIsLocalReadable
-      })
-    },
-    [
-      tabAgentTypeByLeaf,
-      nativeChatEnabled,
-      structuredSessionAgent,
-      nativeChatTranscriptIsLocalReadable,
-      terminalTab?.launchAgent,
-      getNativeChatLeafIds,
-      getTabWideAgentHintLeafId,
-      resolveTitleAgentForLeaf
-    ]
-  )
-  const applyNativeChatLeafRoute = useCallback(
-    (route: NativeChatLeafRoute): void => {
-      if (route.chatLeafId !== chatLeafId) {
-        setChatLeafId(route.chatLeafId)
-      }
-      if (route.exitChat && unifiedTabId) {
-        // Why: event/effect replay must not flip terminal mode back to chat.
-        setTabViewMode(unifiedTabId, 'terminal')
-      }
-    },
-    [chatLeafId, setTabViewMode, unifiedTabId]
-  )
-  const handleConfirmedAgentExit = useCallback(
-    (leafId: string): void => {
-      if (leafId !== chatLeafId) {
-        return
-      }
-      const panes = managerRef.current?.getPanes() ?? []
-      const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
-      applyNativeChatLeafRoute(
-        resolveNativeChatLeafRoute({
-          isChatViewMode,
-          chatLeafId,
-          activeLeafId,
-          chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
-          activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true,
-          structuredSessionId
-        })
-      )
-    },
-    [
-      applyNativeChatLeafRoute,
-      chatLeafId,
-      isChatEligibleForLeaf,
-      isChatViewMode,
-      structuredSessionId
-    ]
-  )
-  useEffect(() => {
-    // Why: transport callbacks must observe only committed chat ownership; render work can be replayed/discarded under concurrent React.
-    onAgentExitedRef.current = handleConfirmedAgentExit
-  }, [handleConfirmedAgentExit])
-  // Stable identity: this reaches the session-option surface's useMemo deps, so an
-  // inline arrow would rebuild the surface on every TerminalPane render.
-  const switchNativeChatToTerminal = useCallback(() => {
-    if (chatLeafId && unifiedTabId) {
-      setChatLeafId(null)
-      setTabViewMode(unifiedTabId, 'terminal')
-    }
-  }, [chatLeafId, setChatLeafId, setTabViewMode, unifiedTabId])
-  const readNativeChatTerminalScreen = useCallback((): string | null => {
-    if (!chatLeafId) {
-      return null
-    }
-    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
-    return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
-  }, [chatLeafId])
+  const nativeChatHandlers = useNativeChatHandlers({
+    chatLeafId,
+    setChatLeafId,
+    managerRef,
+    onAgentExitedRef,
+    nativeChatEnabled,
+    nativeChatTranscriptIsLocalReadable,
+    structuredSessionAgent,
+    isChatViewMode,
+    structuredSessionId,
+    unifiedTabId,
+    setTabViewMode,
+    tabAgentTypeByLeaf,
+    terminalTab,
+    getNativeChatLeafIds,
+    getTabWideAgentHintLeafId,
+    resolveTitleAgentForLeaf
+  })
+  const {
+    isChatEligibleForLeaf,
+    applyNativeChatLeafRoute,
+    switchNativeChatToTerminal,
+    readNativeChatTerminalScreen
+  } = nativeChatHandlers
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
