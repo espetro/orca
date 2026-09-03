@@ -1,5 +1,6 @@
 # Build artifacts
 tsconfig.*.tsbuildinfo
+*.tsbuildinfo
 
 # TypeScript emit artifacts next to sources (tsc produced these accidentally;
 # real source lives in .ts/.tsx). Hand-authored declaration files are
