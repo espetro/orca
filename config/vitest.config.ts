@@ -15,11 +15,7 @@ const testWorkerOptions =
 // Shared options every project must carry: Vitest 4 projects do NOT inherit
 // root-level test options like setupFiles/timeouts/execArgv.
 const sharedTestOptions = {
-  // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
-  setupFiles: [
-    resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
-    resolve('config/scripts/vitest-host-ports-setup.ts')
-  ],
+  setupFiles: [resolve('config/scripts/vitest-host-ports-setup.ts')],
   // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
   // the Vitest 5s defaults are too tight for the slowest integration cases.
   hookTimeout: 60_000,
@@ -97,6 +93,10 @@ export default defineConfig({
         resolve: sharedResolve,
         test: {
           ...sharedTestOptions,
+          setupFiles: [
+            ...sharedTestOptions.setupFiles,
+            resolve('config/scripts/happy-dom-mutation-observer-retention.ts')
+          ],
           ...forkedPoolExecArgv,
           name: 'renderer',
           // Per-file @vitest-environment happy-dom docblocks still apply within this node-default project.
