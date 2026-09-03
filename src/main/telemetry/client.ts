@@ -8,9 +8,10 @@
 import { randomUUID } from 'node:crypto'
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { PostHog } from 'posthog-node'
+import type { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
+import { loadPostHogModule } from './posthog-module-loader'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
@@ -100,7 +101,7 @@ export function initTelemetry(store: Store): void {
     return
   }
 
-  posthog = new PostHog(WRITE_KEY as string, {
+  posthog = new (loadPostHogModule().PostHog)(WRITE_KEY as string, {
     host: 'https://us.i.posthog.com',
     flushAt: 20,
     flushInterval: 10_000,
