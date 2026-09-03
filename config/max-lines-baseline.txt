@@ -86,3 +86,5 @@ mobile-config src/browser/MobileBrowserPane.tsx
 mobile-config src/components/NewWorktreeModal.tsx
 mobile-config src/terminal/terminal-webview-html.ts
 mobile-config src/transport/rpc-client.ts
+inline src/main/agent-hooks/agent-status-ingest.ts
+inline src/main/agent-hooks/agent-status-ingest.ts

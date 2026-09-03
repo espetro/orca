@@ -25,6 +25,8 @@ src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
 src/cli/handlers/skills.ts
 src/cli/runtime/launch.ts
+src/cli/runtime/serve-recipe-json.ts
+src/cli/runtime/serve-launch.ts
 src/cli/runtime/serve-update-supervisor.ts
 src/main/agent-hooks/managed-hook-owner-identity.ts
 src/main/agent-hooks/managed-hook-runtime.ts
@@ -125,7 +127,7 @@ src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
-src/main/runtime/orca-runtime-files.ts
+src/main/runtime/runtime-file-listing-commands.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts

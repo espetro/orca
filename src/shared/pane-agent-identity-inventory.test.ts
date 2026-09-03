@@ -205,7 +205,8 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
       ['src/renderer/src/components/terminal-pane/pty-connection/shell-command-inference.ts', 2],
       ['src/renderer/src/lib/use-tab-agent.ts', 2],
-      ['src/renderer/src/runtime/web-session-tabs-sync.ts', 3]
+      ['src/renderer/src/runtime/web-session-tabs-mirrored-agent-status.ts', 2],
+      ['src/renderer/src/runtime/web-session-tabs-mirrored-terminal-tabs.ts', 2]
     ]
   },
   {

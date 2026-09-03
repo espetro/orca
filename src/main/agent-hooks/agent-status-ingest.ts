@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: in-flight split of AgentHookServer; same justification as server.ts. */
 import { createHash } from 'node:crypto'
 
 import type { HookListenerState } from '../../shared/agent-hook-listener/listener-state'
@@ -10,9 +11,7 @@ import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../shared/agent-hook-listener/grok-result-discovery'
-import {
-  isNewTurnEvent
-} from '../../shared/agent-hook-listener/provider-event-routing'
+import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import {
@@ -58,7 +57,7 @@ export type AgentHookServerIngestDeps = {
   enrichedStatusListeners: Set<(payload: EnrichedAgentHookEventPayload) => void>
   runtimeObservedStatusPaneKeys: Set<string>
   scheduleStatusPersist(): void
-  notifyStatusChangeListeners(): void
+  readonly inference: { notifyStatusChangeListeners(): void }
 }
 
 export class AgentStatusIngestRegistry {
@@ -103,7 +102,7 @@ export class AgentStatusIngestRegistry {
       this._server.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       this._server.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
       this._server.scheduleStatusPersist()
-      this._server.notifyStatusChangeListeners()
+      this._server.inference.notifyStatusChangeListeners()
       this._emitEnrichedStatus(enriched)
       return enriched
     }
@@ -246,7 +245,7 @@ export class AgentStatusIngestRegistry {
     }
     this._server.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this._server.scheduleStatusPersist()
-    this._server.notifyStatusChangeListeners()
+    this._server.inference.notifyStatusChangeListeners()
     this._emitEnrichedStatus(enriched)
     return enriched
   }
