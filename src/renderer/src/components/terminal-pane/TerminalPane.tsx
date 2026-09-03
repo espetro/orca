@@ -36,11 +36,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
-import {
-  collectLeafIdsInOrder,
-  EMPTY_LAYOUT,
-  serializeTerminalLayout
-} from './layout-serialization'
+import { collectLeafIdsInOrder } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
@@ -97,10 +93,12 @@ import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { useTerminalPaneChatSession } from './use-terminal-pane-chat-session'
+import { useTerminalPanePaneBootstrap } from './use-terminal-pane-pane-bootstrap'
+import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
+import { useTerminalPaneRemoteLayoutSync } from './use-terminal-pane-remote-layout-sync'
 import { connectPanePty } from './pty-connection'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
-import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import {
   getMobileFitOverridePtyIds,
   getFitOverrideForPty
@@ -111,7 +109,6 @@ import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import {
   armPrimarySelectionNativePasteSuppression,
   isPrimarySelectionEnabled,
@@ -121,10 +118,7 @@ import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
 import { isTerminalZeroDimensionsDiagnostic } from '../../../../shared/terminal-zero-dimensions-diagnostic'
-import {
-  isSyntheticSinglePaneTitle,
-  sanitizeTerminalLayoutPaneTitles
-} from '@/lib/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions
@@ -167,7 +161,6 @@ import {
 } from './terminal-remote-runtime-recovery-ui-state'
 
 // Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
-import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { executeTerminalPastePlan, planTerminalPasteWithYield } from './terminal-paste-coordinator'
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
@@ -247,108 +240,120 @@ function TerminalPane(
   }: TerminalPaneProps,
   ref: React.ForwardedRef<TerminalPaneHandle>
 ): React.JSX.Element {
-  const managerRef = useRef<PaneManager | null>(null)
-  const paneFontSizesRef = useRef<Map<number, number>>(new Map())
-  const expandedPaneIdRef = useRef<number | null>(null)
-  const expandedStyleSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
-    new Map()
-  )
-  const pendingPaneSizeRefreshFrameIdsRef = useRef<number[]>([])
-  // Separate from expandedStyleSnapshotRef so Activity's transient isolation override doesn't collide with the user's expanded-pane state or layout snapshot.
-  const activityIsolationSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
-    new Map()
-  )
-  const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
-  // Why: per-pane live cwd via OSC 7 for split-pane cwd inheritance; split actions read it at dispatch. See docs/ssh-split-pane-inherit-cwd.md.
-  const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
-  const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
-  // Why: per-pane mirror of kitty keyboard flags; the keyboard policy reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
-  const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
-  const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
-  const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
-  // Why: panes replaying recorded PTY bytes; while non-zero, pty-connection drops xterm onData so auto-replies don't leak to the shell. See replay-guard.ts.
-  const replayingPanesRef = useRef<Map<number, number>>(new Map())
-  const isActiveRef = useRef(isActive)
-  isActiveRef.current = isActive
-  const isRendererVisible = isVisible && isWorktreeActive
-  const isVisibleRef = useRef(isRendererVisible)
-  isVisibleRef.current = isRendererVisible
   const {
+    managerRef,
+    paneFontSizesRef,
+    expandedPaneIdRef,
+    expandedStyleSnapshotRef,
+    pendingPaneSizeRefreshFrameIdsRef,
+    activityIsolationSnapshotRef,
+    paneTransportsRef,
+    paneCwdRef,
+    paneMode2031Ref,
+    paneKittyKeyboardModesRef,
+    paneLastThemeModeRef,
+    panePtyBindingsRef,
+    replayingPanesRef,
+    isActiveRef,
+    isVisibleRef,
+    isRendererVisible,
     nativeChatTranscriptIsLocalReadable,
     sshReconnectEnvironmentId,
     sshReconnectError,
     sshReconnectStatus,
     sshReconnectTargetId,
     sshReconnectTargetLabel,
-    sshReconnectTargetRemoved
-  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
-  useEffect(() => {
-    if (!sshReconnectEnvironmentId) {
-      return
-    }
-    // Why: an SSH workspace can mirror before its environment bucket hydrated; overlay state must come from fetched evidence, not an empty default.
-    void hydrateRuntimeEnvironmentSshState(sshReconnectEnvironmentId).catch(() => {})
-  }, [sshReconnectEnvironmentId])
+    sshReconnectTargetRemoved,
+    expandedPaneId,
+    setExpandedPaneId,
+    paneCount,
+    setPaneCount,
+    paneLayoutRevision,
+    setPaneLayoutRevision,
+    terminalLinkActionRequest,
+    setTerminalLinkActionRequest,
+    quickCommandEditorOpen,
+    setQuickCommandEditorOpen,
+    quickCommandEditorHostId,
+    setQuickCommandEditorHostId,
+    chatLeafId,
+    setChatLeafId,
+    tabWideAgentHintLeafId,
+    setTabWideAgentHintLeafId,
+    agentSessionFork,
+    setAgentSessionFork,
+    agentSessionContinuation,
+    setAgentSessionContinuation,
+    terminalError,
+    setTerminalError,
+    paneProcessExitsByPaneId,
+    setPaneProcessExitsByPaneId,
+    ptyRecoveryStatesByPaneId,
+    setPtyRecoveryStatesByPaneId,
+    sessionStateSaveFailureOpen,
+    setSessionStateSaveFailureOpen,
+    paneTitles,
+    setPaneTitles,
+    paneTitlesRef,
+    removedTitleLeafIdsRef,
+    clearedScrollbackLeafIdsRef,
+    remotePaneLayoutPusherRef,
+    paneTitleOverlayRects,
+    setPaneTitleOverlayRects,
+    onPtyErrorRef,
+    onPtyRecoveryStateRef,
+    restoredLayout,
+    expectedLayoutLeafIds,
+    setTabLayout,
+    expectedLayoutLeafIdsAttr,
+    initialLayoutRef,
+    updateTabTitle,
+    setRuntimePaneTitle,
+    clearRuntimePaneTitle,
+    updateTabPtyId,
+    clearTabPtyId,
+    markWorktreeUnread,
+    markTerminalTabUnread,
+    markTerminalPaneUnread,
+    clearWorktreeUnread,
+    clearTerminalTabUnread,
+    clearTerminalPaneUnread,
+    openSpacePage,
+    refreshWorkspaceSpace,
+    settings,
+    settingsRef,
+    updateSettings,
+    requestLinkRoutingPreference,
+    keybindings,
+    rightClickToPaste,
+    forceBracketedMultilineTextPaste,
+    startup,
+    shouldMeasureHiddenStartup,
+    setShouldMeasureHiddenStartup,
+    sessionRestoredBannerPaneIds,
+    setSessionRestoredBannerPaneIds,
+    consumeTabStartupCommand,
+    setupSplit,
+    consumeTabSetupSplit,
+    issueCommandSplit,
+    consumeTabIssueCommandSplit,
+    bindSessionRestoredBannerDismiss,
+    openDiskSpaceAnalyzer,
+    effectiveMacOptionAsAlt,
+    macOptionAsAltRef,
+    onPtyExitRef,
+    systemPrefersDark,
+    dispatchNotification,
+    setCacheTimerStartedAt
+  } = useTerminalPanePaneBootstrap({ tabId, worktreeId, isActive, isVisible, isWorktreeActive, onPtyExit })
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
-  const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
-  // Why: React state (not the imperative managerRef) so the render re-runs on split/close; managerRef alone doesn't trigger React deps.
-  const [paneCount, setPaneCount] = useState<number>(0)
-  // Why: pane reorders can move panes without changing count or size, so overlay rects need an explicit layout-change render trigger.
-  const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
-  const [terminalLinkActionRequest, setTerminalLinkActionRequest] =
-    useState<TerminalLinkActionRequest | null>(null)
-  const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
-  const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
-    useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
-  const [chatLeafId, setChatLeafId] = useState<string | null>(null)
-  const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
-    undefined
-  )
-  const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
-  const [agentSessionContinuation, setAgentSessionContinuation] =
-    useState<AgentSessionContinuationRequest | null>(null)
   const paneStateSubscriptions = usePaneStateSubscriptions({ tabId, worktreeId, chatLeafId })
   // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
-  const [terminalError, setTerminalError] = useState<string | null>(null)
-  const [paneProcessExitsByPaneId, setPaneProcessExitsByPaneId] = useState<
-    Record<number, PaneProcessExit>
-  >({})
-  const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
-    Record<number, VisiblePtyRecoveryState>
-  >({})
-  const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   const { refreshMobileOverlays } = useMobileOverlayTicks({ managerRef, paneTransportsRef })
-
-  // Pane title state keyed by ephemeral paneId, persisted via titlesByLeafId; ref keeps persistLayoutSnapshot closures fresh.
-  const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
-  const paneTitlesRef = useRef<Record<number, string>>({})
-  paneTitlesRef.current = paneTitles
-  const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
-  const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
-  const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(null)
-  remotePaneLayoutPusherRef.current ??= createRemotePaneLayoutPusher()
-  const [paneTitleOverlayRects, setPaneTitleOverlayRects] = useState<
-    Record<number, PaneTitleOverlayRect>
-  >({})
-  const onPtyErrorRef = useRef((_paneId: number, message: string) => {
-    if (isTerminalSessionStateSaveFailure(message)) {
-      setTerminalError(null)
-      setSessionStateSaveFailureOpen(true)
-      return
-    }
-    setTerminalError((prev) => appendTerminalErrorMessage(prev, message))
-  })
-  const onPtyRecoveryStateRef = useRef(
-    (paneId: number, state: PtyTransportRecoveryState | null) => {
-      setPtyRecoveryStatesByPaneId((previous) =>
-        updateTerminalRemoteRuntimeRecoveryUiState(previous, paneId, state)
-      )
-    }
-  )
 
   const {
     setTabPaneExpanded,
@@ -371,14 +376,6 @@ function TerminalPane(
     savedLayout,
     terminalTab
   } = paneStateSubscriptions
-  const restoredLayout = useMemo(
-    () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
-    [savedLayout, terminalTab]
-  )
-  const expectedLayoutLeafIds = useMemo(
-    () => collectLeafIdsInOrder(restoredLayout.root),
-    [restoredLayout.root]
-  )
 
   const chatSessionHandlers = useTerminalPaneChatSession({
     chatLeafId,
@@ -419,44 +416,25 @@ function TerminalPane(
     activePaneCanContinueInNewSession,
     getContextMenuCanContinueInNewSession
   } = chatSessionHandlers
-  const setTabLayout = useAppStore((store) => store.setTabLayout)
-  const expectedLayoutLeafIdsAttr =
-    expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
-  const initialLayoutRef = useRef(restoredLayout)
-  const updateTabTitle = useAppStore((store) => store.updateTabTitle)
-  const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
-  const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
-  const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
-  const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
-  const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
-  const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
-  const markTerminalPaneUnread = useAppStore((store) => store.markTerminalPaneUnread)
-  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
-  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
-  const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
-  const openSpacePage = useAppStore((store) => store.openSpacePage)
-  const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
-  const settings = useAppStore((store) => store.settings)
-  const updateSettings = useAppStore((store) => store.updateSettings)
-  const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
-  const keybindings = useAppStore((store) => store.keybindings)
-  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
-  // Why: Windows ConPTY doesn't forward DECSET 2004 from TUIs, so xterm may not know multi-line paste needs bracketed protection.
-  const forceBracketedMultilineTextPaste = isWindowsUserAgent()
-  const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
-  const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
-    () => startup !== undefined && !isVisible
-  )
-  const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
-    Map<number, SessionRestoredBannerReason>
-  >(() => new Map())
-  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
-  const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
-  const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
-  const [issueCommandSplit] = useState(
-    () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
-  )
-  const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
+
+  const { persistLayoutSnapshot } = useTerminalPaneLayoutPersistence({
+    managerRef,
+    getRenameContainerRef: () => renameContainerRef,
+    expandedPaneIdRef,
+    paneTransportsRef,
+    clearedScrollbackLeafIdsRef,
+    removedTitleLeafIdsRef,
+    remotePaneLayoutPusherRef,
+    paneTitlesRef,
+    paneTitles,
+    setPaneTitles,
+    tabId,
+    worktreeId,
+    setTabLayout,
+    savedLayout,
+    terminalTab,
+    paneCount
+  })
 
   const {
     handlePaneProcessDied,
@@ -500,31 +478,6 @@ function TerminalPane(
     setPaneTitles
   })
 
-  useLayoutEffect(() => {
-    if (isVisible && shouldMeasureHiddenStartup) {
-      // Why: hidden startup measurement is first-launch only; keeping it past first visibility would let inactive tabs refit and SIGWINCH.
-      setShouldMeasureHiddenStartup(false)
-    }
-    if (isVisible) {
-      // Why: a hidden 0×0 pane self-heals once shown; clear only the stale zero-dims diagnostic so real errors survive.
-      setTerminalError((prev) => (prev && isTerminalZeroDimensionsDiagnostic(prev) ? null : prev))
-    }
-  }, [isVisible, shouldMeasureHiddenStartup])
-
-  useSessionRestoredBannerDismiss(
-    sessionRestoredBannerPaneIds.size > 0,
-    renameContainerRef,
-    dismissSessionRestoredBanner
-  )
-
-  const openDiskSpaceAnalyzer = useCallback(() => {
-    setSessionStateSaveFailureOpen(false)
-    openSpacePage()
-    void refreshWorkspaceSpace().catch((err: unknown) => {
-      console.warn('Failed to refresh Space Analyzer after terminal session save failure:', err)
-    })
-  }, [openSpacePage, refreshWorkspaceSpace])
-
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
   const quickCommandRepo = useRepoById(quickCommandRepoId)
@@ -565,166 +518,6 @@ function TerminalPane(
     searchStateRef,
     handleSearchSelectedText
   } = useTerminalPaneSearchKeyboard()
-
-  useEffect(() => {
-    if (setupSplit) {
-      consumeTabSetupSplit(tabId)
-    }
-  }, [setupSplit, tabId, consumeTabSetupSplit])
-
-  // Clear the queued issue-command split once this tab has captured it for initial mount.
-  useEffect(() => {
-    if (issueCommandSplit) {
-      consumeTabIssueCommandSplit(tabId)
-    }
-  }, [issueCommandSplit, tabId, consumeTabIssueCommandSplit])
-
-  // Why: 'auto' resolves to true/false by keyboard layout (US → alt); the ref tracks that effective value, not the raw setting.
-  const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
-  const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
-  macOptionAsAltRef.current = effectiveMacOptionAsAlt
-  const onPtyExitRef = useRef(onPtyExit)
-  onPtyExitRef.current = onPtyExit
-
-  const systemPrefersDark = useSystemPrefersDark()
-  const dispatchNotification = useNotificationDispatch(worktreeId)
-  const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
-
-  // Memoized so downstream hooks don't re-register listeners each render; reads only refs/stable values, so deps stay minimal.
-  const persistLayoutSnapshot = useCallback((): void => {
-    const manager = managerRef.current
-    const container = renameContainerRef.current
-    if (!manager || !container) {
-      return
-    }
-    const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
-    const leafIdByPaneId = manager.getLeafIdMap()
-    const layout = serializeTerminalLayout(
-      container,
-      activePaneId,
-      expandedPaneIdRef.current,
-      leafIdByPaneId
-    )
-    const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
-    const currentPanes = manager.getPanes()
-    const currentLeafIds = new Set(currentPanes.map((p) => p.leafId))
-    const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
-    const scrollbackPreserveLeafIds = new Set(
-      [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
-    )
-    // Preserve existing buffersByLeafId so layout-only persists don't clobber captured scrollback; drop dead leaves.
-    const mergedBuffers = mergeCapturedLeafState({
-      prior: existing?.buffersByLeafId,
-      fresh: {},
-      currentLeafIds: scrollbackPreserveLeafIds
-    })
-    if (Object.keys(mergedBuffers).length > 0) {
-      layout.buffersByLeafId = mergedBuffers
-    }
-    const mergedScrollbackRefs = mergeCapturedLeafState({
-      prior: existing?.scrollbackRefsByLeafId,
-      fresh: {},
-      currentLeafIds: scrollbackPreserveLeafIds
-    })
-    if (Object.keys(mergedScrollbackRefs).length > 0) {
-      layout.scrollbackRefsByLeafId = mergedScrollbackRefs
-    }
-    // Why: before PTYs attach (deferred rAF) transports return null; preserve prior leaf→PTY mappings so a fast remount doesn't force fresh spawns.
-    const livePtyEntries = currentPanes
-      .map((p) => [p.leafId, paneTransportsRef.current.get(p.id)?.getPtyId() ?? null] as const)
-      .filter(
-        (entry): entry is readonly [(typeof currentPanes)[number]['leafId'], string] =>
-          entry[1] !== null
-      )
-    const mergedPtyIds = mergeCapturedLeafState({
-      prior: existing?.ptyIdsByLeafId,
-      fresh: Object.fromEntries(livePtyEntries),
-      currentLeafIds
-    })
-    if (Object.keys(mergedPtyIds).length > 0) {
-      layout.ptyIdsByLeafId = mergedPtyIds
-    }
-    layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
-      root: layout.root,
-      activeLeafId: layout.activeLeafId,
-      ptyIdsByLeafId: mergedPtyIds
-    })
-    // Preserve pane titles from live React state (via ref); Zustand is stale for in-flight edits not yet persisted.
-    const titlesByLeafId: Record<string, string> = {}
-    const removedTitleLeafIds = removedTitleLeafIdsRef.current
-    for (const pane of currentPanes) {
-      const existingTitle = existing?.titlesByLeafId?.[pane.leafId]
-      if (existingTitle && !removedTitleLeafIds.has(pane.leafId)) {
-        titlesByLeafId[pane.leafId] = existingTitle
-      }
-    }
-    // Why: agents can persist layout while pane-title React state lags, so keep existing titles unless removed before overlaying live state.
-    const titles = paneTitlesRef.current
-    for (const pane of currentPanes) {
-      const title = titles[pane.id]
-      if (title) {
-        titlesByLeafId[pane.leafId] = title
-        removedTitleLeafIds.delete(pane.leafId)
-      }
-    }
-    if (Object.keys(titlesByLeafId).length > 0) {
-      layout.titlesByLeafId = titlesByLeafId
-    }
-    setTabLayout(tabId, layout)
-    // Why: pane geometry is host-authoritative for remote tabs, so push ratios/expand/titles or they revert on the next snapshot.
-    const hasRemotePane = Object.values(mergedPtyIds).some(
-      (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
-    )
-    if (hasRemotePane) {
-      remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout })
-    }
-    for (const leafId of currentLeafIds) {
-      clearedScrollbackLeafIds.delete(leafId)
-    }
-  }, [tabId, setTabLayout, worktreeId])
-
-
-
-  useEffect(() => {
-    if (!terminalTab) {
-      return
-    }
-    const sanitized = sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab)
-    if (sanitized !== savedLayout) {
-      setTabLayout(tabId, sanitized)
-    }
-  }, [savedLayout, setTabLayout, tabId, terminalTab])
-
-  useEffect(() => {
-    if (!terminalTab) {
-      return
-    }
-    const manager = managerRef.current
-    if (!manager) {
-      return
-    }
-    const panes = manager.getPanes()
-    if (panes.length !== 1) {
-      return
-    }
-    const paneId = panes[0].id
-    const currentTitle = paneTitlesRef.current[paneId]
-    if (!currentTitle || !isSyntheticSinglePaneTitle(currentTitle, terminalTab)) {
-      return
-    }
-    const nextTitles = { ...paneTitlesRef.current }
-    delete nextTitles[paneId]
-    paneTitlesRef.current = nextTitles
-    setPaneTitles((prev) => {
-      if (!prev[paneId] || !isSyntheticSinglePaneTitle(prev[paneId], terminalTab)) {
-        return prev
-      }
-      const next = { ...prev }
-      delete next[paneId]
-      return next
-    })
-    persistLayoutSnapshot()
-  }, [paneCount, paneTitles, persistLayoutSnapshot, terminalTab])
 
   const {
     writePanePtyLayoutBinding,
@@ -860,134 +653,18 @@ function TerminalPane(
     onExternalPaneDrop: handleExternalPaneDrop
   })
 
-  useEffect(() => {
-    const manager = managerRef.current
-    if (!manager || !restoredLayout.root) {
-      return
-    }
-    // Why: host-owned split layouts (web / remote-server) arrive via snapshot, so the reconciler materializes their panes; local tabs split directly.
-    if (
-      !isHostAuthoritativeLayout({
-        isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
-        ptyIdsByLeafId: restoredLayout.ptyIdsByLeafId
-      })
-    ) {
-      return
-    }
-    const insertions = planTerminalLiveLayoutInsertions(
-      restoredLayout.root,
-      manager.getPanes().map((pane) => pane.leafId)
-    )
-    if (insertions.length === 0) {
-      return
-    }
-
-    let appliedInsertion = false
-    for (const insertion of insertions) {
-      const ptyId = restoredLayout.ptyIdsByLeafId?.[insertion.newLeafId]
-      const sourcePaneId = manager.getNumericIdForLeaf(insertion.sourceLeafId)
-      if (!ptyId || sourcePaneId === null || manager.getNumericIdForLeaf(insertion.newLeafId)) {
-        continue
-      }
-      // Why: host split-pane snapshots for paired web terminals arrive after mount, so adopt the host leaf + PTY instead of spawning a local-only web pane.
-      // Before-placement swaps [source, new] after splitPane, so invert the host first-child ratio for the temporary order.
-      const splitRatio =
-        insertion.ratio === undefined
-          ? undefined
-          : insertion.placement === 'before'
-            ? 1 - insertion.ratio
-            : insertion.ratio
-      const createdPane = manager.splitPaneAroundLeafIds(
-        insertion.sourceLeafIds,
-        sourcePaneId,
-        insertion.direction,
-        {
-          ...(splitRatio !== undefined && { ratio: splitRatio }),
-          leafId: insertion.newLeafId,
-          ptyId,
-          placement: insertion.placement
-        }
-      )
-      if (!createdPane) {
-        continue
-      }
-      appliedInsertion = true
-    }
-
-    if (appliedInsertion) {
-      persistLayoutSnapshot()
-    }
-
-    const activePaneId = restoredLayout.activeLeafId
-      ? manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
-      : null
-    const fallbackActivePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
-    const nextActivePaneId = activePaneId ?? fallbackActivePaneId
-    if (nextActivePaneId !== null) {
-      manager.setActivePane(nextActivePaneId, { focus: isActive })
-    }
-  }, [isActive, paneCount, persistLayoutSnapshot, restoredLayout])
-
-  // Activity-only isolation: when portaled into Activity for one agent pane, hide split siblings via a separate snapshot ref (independent of expand state).
-  // useLayoutEffect so style writes land before paint (no flash); paneCount in deps re-applies after splits/closes.
-  useLayoutEffect(() => {
-    const snapshots = activityIsolationSnapshotRef.current
-    // Why: refit on rAF so xterm measures the post-layout DOM; both apply and restore paths must refit or xterm stays sized for the isolated single-pane geometry.
-    const scheduleRefit = (): number =>
-      requestAnimationFrame(() => {
-        const manager = managerRef.current
-        if (!manager) {
-          return
-        }
-        for (const pane of manager.getPanes()) {
-          safeFit(pane)
-        }
-      })
-    if (isolatedPaneKey === null) {
-      restoreExpandedLayoutFrom(snapshots)
-      const frame = scheduleRefit()
-      return () => {
-        cancelAnimationFrame(frame)
-      }
-    }
-    const manager = managerRef.current
-    const resolution = resolvePaneKeyForManager(tabId, isolatedPaneKey, manager)
-    const resolvedPaneId = resolution.status === 'resolved' ? resolution.numericPaneId : null
-    const applied =
-      resolvedPaneId !== null &&
-      ((manager?.getPanes().length ?? 0) <= 1 ||
-        applyExpandedLayoutTo(resolvedPaneId, {
-          managerRef,
-          renameContainerRef,
-          expandedStyleSnapshotRef: activityIsolationSnapshotRef
-        }))
-    if (!applied) {
-      restoreExpandedLayoutFrom(snapshots)
-      const root = renameContainerRef.current?.firstElementChild
-      if (root instanceof HTMLElement) {
-        // Why: Activity requested an exact pane; if it can't be resolved, fail closed rather than show the whole split terminal.
-        snapshots.set(root, { display: root.style.display, flex: root.style.flex })
-        root.style.display = 'none'
-      }
-      const frame = scheduleRefit()
-      return () => {
-        cancelAnimationFrame(frame)
-      }
-    }
-    const frame = scheduleRefit()
-    return () => {
-      cancelAnimationFrame(frame)
-    }
-  }, [isolatedPaneKey, paneCount, tabId])
-
-  // Why: on unmount while isolation is active (e.g. tab closed mid-Activity), restore sibling display/flex so the captured DOM doesn't leak inline styles.
-  useEffect(() => {
-    const snapshots = activityIsolationSnapshotRef.current
-    return () => {
-      restoreExpandedLayoutFrom(snapshots)
-      cancelPendingPaneSizeRefreshFrames({ pendingPaneSizeRefreshFrameIdsRef })
-    }
-  }, [])
+  useTerminalPaneRemoteLayoutSync({
+    managerRef,
+    renameContainerRef,
+    activityIsolationSnapshotRef,
+    pendingPaneSizeRefreshFrameIdsRef,
+    tabId,
+    isActive,
+    paneCount,
+    isolatedPaneKey,
+    restoredLayout,
+    persistLayoutSnapshot
+  })
 
   const handleRestartCodexPane = useCallback(
     (
