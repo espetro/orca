@@ -4,18 +4,16 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
-  useRef,
   useState
 } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
-import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
-import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
-import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
+import {
+  DaemonActionDialog  ,
+  useDaemonActions
+} from '@/components/shared/useDaemonActions'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   isTerminalBackgroundLight,
@@ -23,51 +21,29 @@ import {
   resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import type {
-  ManagedPane,
-  PaneExternalDropTarget,
-  PaneManager
-} from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
-import type { PtyTransport } from './pty-transport'
-import type { PtyTransportRecoveryState } from './pty-transport-types'
-import { fitPanes, isWindowsUserAgent } from './pane-helpers'
-import { getConnectionId } from '@/lib/connection-context'
-import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
-import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
-import { collectLeafIdsInOrder } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
-  applyExpandedLayoutTo,
-  cancelPendingPaneSizeRefreshFrames,
-  restoreExpandedLayoutFrom,
   useExpandCollapseActions
 } from './expand-collapse'
-import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
-import type { MacOptionAsAlt } from './terminal-shortcut-policy'
-import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
+import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
-import TerminalPaneHeaderOverlay, { type PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
+import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import NativeChatView from '../native-chat/NativeChatView'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
-import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
-  pruneSessionRestoredBannerPaneIds,
-  syncSessionRestoredBannerTitleSpace,
-  type SessionRestoredBannerReason
+  pruneSessionRestoredBannerPaneIds
 } from './session-restored-banner-pane-state'
-import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPanePasteEffects } from './use-terminal-pane-paste-effects'
 import { usePaneStateSubscriptions } from './use-terminal-pane-pane-state'
 import { useCloseFlowState } from './use-terminal-pane-close-flow'
@@ -84,62 +60,47 @@ import { useTerminalPaneLifecycleHandlers } from './use-terminal-pane-lifecycle-
 import { useTerminalPaneMenuContext } from './use-terminal-pane-menu-context'
 import { useTerminalPaneExpandLayout } from './use-terminal-pane-expand-layout'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
-import { type TerminalLinkActionRequest } from './terminal-link-action-request'
 import { useTerminalPaneLinkRouting } from './use-terminal-pane-link-routing'
 import { useTerminalPaneErrorEffects } from './use-terminal-pane-error-effects'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useTerminalPaneSearchKeyboard } from './use-terminal-pane-search-keyboard'
-import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
-import { useNotificationDispatch } from './use-notification-dispatch'
 import { useTerminalPaneChatSession } from './use-terminal-pane-chat-session'
 import { useTerminalPanePaneBootstrap } from './use-terminal-pane-pane-bootstrap'
+import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
 import { useTerminalPaneRemoteLayoutSync } from './use-terminal-pane-remote-layout-sync'
 import { connectPanePty } from './pty-connection'
-import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
+import type {
+  PaneProcessExit,
+  PtyConnectionDeps
+} from './pty-connection-types'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import {
-  getMobileFitOverridePtyIds,
   getFitOverrideForPty
 } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
-import { getAllDrivers, getDriverForPty, isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
-import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
-import {
-  armPrimarySelectionNativePasteSuppression,
-  isPrimarySelectionEnabled,
-  readPrimarySelectionText
-} from '@/lib/primary-selection'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
-import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
-import { isTerminalZeroDimensionsDiagnostic } from '../../../../shared/terminal-zero-dimensions-diagnostic'
-import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import {
-  isHostAuthoritativeLayout,
-  planTerminalLiveLayoutInsertions
-} from './terminal-live-layout-reconciliation'
+  WORKSPACE_FILE_PATH_MIME  ,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/workspace-file-drag'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/terminal-quick-command-types'
-import {
-  createRemotePaneLayoutPusher,
-  type RemotePaneLayoutPusher
-} from './remote-pane-layout-push'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
-import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
+import {
+  useProjectHostSetupProjection  ,
+  useRepoById
+} from '@/store/selectors'
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
@@ -149,31 +110,12 @@ import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
-import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
-import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
-import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
-import {
-  updateTerminalRemoteRuntimeRecoveryUiState,
-  type VisiblePtyRecoveryState
-} from './terminal-remote-runtime-recovery-ui-state'
 
 // Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
-import { pasteTerminalText } from './terminal-bracketed-paste'
-import { executeTerminalPastePlan, planTerminalPasteWithYield } from './terminal-paste-coordinator'
-import { appendTerminalErrorMessage } from './terminal-error-accumulation'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
-import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
-import {
-  applyTerminalPaneAttentionToManager,
-  subscribeTerminalPaneAttention
-} from './terminal-pane-attention-subscriptions'
 import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
-import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 
 type TerminalPaneProps = {
@@ -289,7 +231,6 @@ function TerminalPane(
     paneProcessExitsByPaneId,
     setPaneProcessExitsByPaneId,
     ptyRecoveryStatesByPaneId,
-    setPtyRecoveryStatesByPaneId,
     sessionStateSaveFailureOpen,
     setSessionStateSaveFailureOpen,
     paneTitles,
@@ -304,9 +245,18 @@ function TerminalPane(
     onPtyRecoveryStateRef,
     restoredLayout,
     expectedLayoutLeafIds,
-    setTabLayout,
     expectedLayoutLeafIdsAttr,
     initialLayoutRef,
+    startup,
+    shouldMeasureHiddenStartup,
+    sessionRestoredBannerPaneIds,
+    setSessionRestoredBannerPaneIds,
+    setupSplit,
+    issueCommandSplit,
+    onPtyExitRef,
+  } = useTerminalPanePaneBootstrap({ tabId, worktreeId, isActive, isVisible, isWorktreeActive, onPtyExit })
+  const {
+    setTabLayout,
     updateTabTitle,
     setRuntimePaneTitle,
     clearRuntimePaneTitle,
@@ -318,34 +268,22 @@ function TerminalPane(
     clearWorktreeUnread,
     clearTerminalTabUnread,
     clearTerminalPaneUnread,
-    openSpacePage,
-    refreshWorkspaceSpace,
     settings,
     settingsRef,
-    updateSettings,
-    requestLinkRoutingPreference,
     keybindings,
     rightClickToPaste,
-    forceBracketedMultilineTextPaste,
-    startup,
-    shouldMeasureHiddenStartup,
-    setShouldMeasureHiddenStartup,
-    sessionRestoredBannerPaneIds,
-    setSessionRestoredBannerPaneIds,
-    consumeTabStartupCommand,
-    setupSplit,
-    consumeTabSetupSplit,
-    issueCommandSplit,
-    consumeTabIssueCommandSplit,
-    bindSessionRestoredBannerDismiss,
     openDiskSpaceAnalyzer,
     effectiveMacOptionAsAlt,
     macOptionAsAltRef,
-    onPtyExitRef,
-    systemPrefersDark,
     dispatchNotification,
     setCacheTimerStartedAt
-  } = useTerminalPanePaneBootstrap({ tabId, worktreeId, isActive, isVisible, isWorktreeActive, onPtyExit })
+  } = useTerminalPaneStoreActions({
+    tabId,
+    worktreeId,
+    setupSplit,
+    issueCommandSplit,
+    setSessionStateSaveFailureOpen
+  })
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
@@ -430,7 +368,6 @@ function TerminalPane(
     setPaneTitles,
     tabId,
     worktreeId,
-    setTabLayout,
     savedLayout,
     terminalTab,
     paneCount
@@ -440,7 +377,6 @@ function TerminalPane(
     handlePaneProcessDied,
     clearSessionRestoredBannerForPane,
     showRestoredSessionBanner,
-    dismissSessionRestoredBanner,
     clearPaneScrollback,
     removePaneTitle,
     handleClearPaneTitleShortcut
@@ -457,7 +393,7 @@ function TerminalPane(
   })
 
   const {
-    renameContainerRef: renameContainerRef,
+    renameContainerRef,
     setContainerRef,
     renamingPaneId,
     setRenamingPaneId,
@@ -520,7 +456,6 @@ function TerminalPane(
   } = useTerminalPaneSearchKeyboard()
 
   const {
-    writePanePtyLayoutBinding,
     syncPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBinding
   } = useTerminalPaneLayoutBindings({
@@ -551,7 +486,6 @@ function TerminalPane(
     paneTransportsRef,
     onCloseTab,
     tabId,
-    updateSettings,
     clearSessionRestoredBannerForPane,
     syncPanePtyLayoutBinding
   })
@@ -579,7 +513,6 @@ function TerminalPane(
     isActive,
     isRendererVisible,
     paneLayoutRevision,
-    settings,
     setTerminalLinkActionRequest,
     persistLayoutSnapshot
   })
@@ -594,8 +527,6 @@ function TerminalPane(
     isActive,
     isVisible: isRendererVisible,
     systemPrefersDark,
-    settings,
-    settingsRef,
     requestOpenLinksInAppPreference,
     requestTerminalLinkAction,
     effectiveMacOptionAsAlt,
@@ -620,22 +551,9 @@ function TerminalPane(
     onPtyErrorRef,
     onPaneProcessDied: handlePaneProcessDied,
     onPtyRecoveryStateRef,
-    clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     isPtyShutdownPending: useAppStore((store) => store.isPtyShutdownPending),
-    updateTabTitle,
-    setRuntimePaneTitle,
-    clearRuntimePaneTitle,
-    updateTabPtyId,
-    markWorktreeUnread,
-    markTerminalTabUnread,
-    markTerminalPaneUnread,
-    clearWorktreeUnread,
-    clearTerminalTabUnread,
-    clearTerminalPaneUnread,
     onShowSessionRestoredBanner: showRestoredSessionBanner,
-    dispatchNotification,
-    setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBinding,
     onStartupBound: settleTabStartupCommand,
@@ -843,7 +761,6 @@ function TerminalPane(
     searchStateRef,
     macOptionAsAltRef,
     paneKittyKeyboardModesRef,
-    keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
 
@@ -882,8 +799,6 @@ function TerminalPane(
     isActive,
     worktreeId,
     tabId,
-    keybindings,
-    forceBracketedMultilineTextPaste,
     renameContainerRef,
     managerRef,
     paneTransportsRef,
@@ -913,7 +828,7 @@ function TerminalPane(
     }
   }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
 
-  const { clearPaneProcessExit, applyTerminalPaneAttention } = useTerminalPaneExpandLayout({
+  const { clearPaneProcessExit } = useTerminalPaneExpandLayout({
     tabId,
     paneCount,
     paneTitles,
@@ -980,7 +895,6 @@ function TerminalPane(
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
-    forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
   const {
@@ -1041,21 +955,15 @@ function TerminalPane(
   const contextMenuLeafId = getContextMenuLeafId()
 
   const {
-    getMobileOwnedTerminalPtyIds,
-    scheduleRestoredTerminalRefit,
     restorePaneTerminalFit,
     restoreAllTerminalFits,
-    terminalShouldHandleMiddleClick,
-    getPrimarySelectionMiddleClickPane,
     handlePrimarySelectionMiddleMouseDown,
     handlePrimarySelectionAuxClick
   } = useTerminalPaneMobileSelection({
     paneTransportsRef,
     managerRef,
-    settingsRef,
     tabId,
     worktreeId,
-    forceBracketedMultilineTextPaste,
     refreshMobileOverlays,
     setTerminalError
   })

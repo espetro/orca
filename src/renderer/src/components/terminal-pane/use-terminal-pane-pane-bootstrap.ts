@@ -6,7 +6,6 @@ import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { IDisposable } from '@xterm/xterm'
-import { isWindowsUserAgent } from './pane-helpers'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import type { TerminalLinkActionRequest } from './terminal-link-action-request'
@@ -18,24 +17,13 @@ import { isTerminalZeroDimensionsDiagnostic } from '../../../../shared/terminal-
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { collectLeafIdsInOrder, EMPTY_LAYOUT } from './layout-serialization'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
-import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { createRemotePaneLayoutPusher, type RemotePaneLayoutPusher } from './remote-pane-layout-push'
 import type { PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
-import {
-  updateTerminalRemoteRuntimeRecoveryUiState,
-  type VisiblePtyRecoveryState
-} from './terminal-remote-runtime-recovery-ui-state'
+import { updateTerminalRemoteRuntimeRecoveryUiState, type VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
 import type { PaneProcessExit } from './pty-connection-types'
-import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
-import type { SessionRestoredBannerDismissEvent } from './session-restored-banner-pane-state'
-import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
-import type { MacOptionAsAlt } from './terminal-shortcut-policy'
-import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
-import { useSystemPrefersDark } from './use-system-prefers-dark'
+import type { SessionRestoredBannerDismissEvent, SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
-import { useNotificationDispatch } from './use-notification-dispatch'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type UseTerminalPanePaneBootstrapArgs = {
   tabId: string
@@ -166,30 +154,9 @@ export function useTerminalPanePaneBootstrap({
     [restoredLayout.root]
   )
 
-  const setTabLayout = useAppStore((store) => store.setTabLayout)
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
-  const updateTabTitle = useAppStore((store) => store.updateTabTitle)
-  const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
-  const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
-  const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
-  const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
-  const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
-  const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
-  const markTerminalPaneUnread = useAppStore((store) => store.markTerminalPaneUnread)
-  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
-  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
-  const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
-  const openSpacePage = useAppStore((store) => store.openSpacePage)
-  const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
-  const settings = useAppStore((store) => store.settings)
-  const updateSettings = useAppStore((store) => store.updateSettings)
-  const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
-  const keybindings = useAppStore((store) => store.keybindings)
-  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
-  // Why: Windows ConPTY doesn't forward DECSET 2004 from TUIs, so xterm may not know multi-line paste needs bracketed protection.
-  const forceBracketedMultilineTextPaste = isWindowsUserAgent()
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => startup !== undefined && !isVisible
@@ -197,18 +164,10 @@ export function useTerminalPanePaneBootstrap({
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
-  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
-  const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
-  const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
-
-  const settingsRef = useRef<GlobalSettings | null | undefined>(settings)
-  useEffect(() => {
-    settingsRef.current = settings
-  }, [settings])
 
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
@@ -228,9 +187,7 @@ export function useTerminalPanePaneBootstrap({
   const dismissSessionRestoredBannerRef = useRef(
     (_event: SessionRestoredBannerDismissEvent): void => {}
   )
-  const sessionRestoredBannerContainerRef = useMemo<
-    React.RefObject<HTMLElement | null>
-  >(
+  const sessionRestoredBannerContainerRef = useMemo<React.RefObject<HTMLElement | null>>(
     () => ({
       get current(): HTMLElement | null {
         return sessionRestoredBannerContainerSourceRef.current?.current ?? null
@@ -257,37 +214,8 @@ export function useTerminalPanePaneBootstrap({
     (event) => dismissSessionRestoredBannerRef.current(event)
   )
 
-  const openDiskSpaceAnalyzer = useCallback(() => {
-    setSessionStateSaveFailureOpen(false)
-    openSpacePage()
-    void refreshWorkspaceSpace().catch((err: unknown) => {
-      console.warn('Failed to refresh Space Analyzer after terminal session save failure:', err)
-    })
-  }, [openSpacePage, refreshWorkspaceSpace])
-
-  useEffect(() => {
-    if (setupSplit) {
-      consumeTabSetupSplit(tabId)
-    }
-  }, [setupSplit, tabId, consumeTabSetupSplit])
-
-  // Clear the queued issue-command split once this tab has captured it for initial mount.
-  useEffect(() => {
-    if (issueCommandSplit) {
-      consumeTabIssueCommandSplit(tabId)
-    }
-  }, [issueCommandSplit, tabId, consumeTabIssueCommandSplit])
-
-  // Why: 'auto' resolves to true/false by keyboard layout (US → alt); the ref tracks that effective value, not the raw setting.
-  const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
-  const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
-  macOptionAsAltRef.current = effectiveMacOptionAsAlt
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
-
-  const systemPrefersDark = useSystemPrefersDark()
-  const dispatchNotification = useNotificationDispatch(worktreeId)
-  const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
 
   return {
     managerRef,
@@ -353,46 +281,16 @@ export function useTerminalPanePaneBootstrap({
     onPtyRecoveryStateRef,
     restoredLayout,
     expectedLayoutLeafIds,
-    setTabLayout,
     expectedLayoutLeafIdsAttr,
     initialLayoutRef,
-    updateTabTitle,
-    setRuntimePaneTitle,
-    clearRuntimePaneTitle,
-    updateTabPtyId,
-    clearTabPtyId,
-    markWorktreeUnread,
-    markTerminalTabUnread,
-    markTerminalPaneUnread,
-    clearWorktreeUnread,
-    clearTerminalTabUnread,
-    clearTerminalPaneUnread,
-    openSpacePage,
-    refreshWorkspaceSpace,
-    settings,
-    settingsRef,
-    updateSettings,
-    requestLinkRoutingPreference,
-    keybindings,
-    rightClickToPaste,
-    forceBracketedMultilineTextPaste,
     startup,
     shouldMeasureHiddenStartup,
     setShouldMeasureHiddenStartup,
     sessionRestoredBannerPaneIds,
     setSessionRestoredBannerPaneIds,
-    consumeTabStartupCommand,
     setupSplit,
-    consumeTabSetupSplit,
     issueCommandSplit,
-    consumeTabIssueCommandSplit,
     bindSessionRestoredBannerDismiss,
-    openDiskSpaceAnalyzer,
-    effectiveMacOptionAsAlt,
-    macOptionAsAltRef,
-    onPtyExitRef,
-    systemPrefersDark,
-    dispatchNotification,
-    setCacheTimerStartedAt
+    onPtyExitRef
   }
 }
