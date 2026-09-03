@@ -186,6 +186,7 @@ export {
   type PaneKeyAliasEntry,
   type RetiredPaneFence
 } from './pane-authority-transfer'
+import { AgentStatusPersistence } from './agent-status-persistence'
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 
@@ -225,8 +226,6 @@ export class AgentHookServer {
   private currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
   // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
   private lastStatusFilePath: string | null = null
-  // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
-  private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
@@ -234,13 +233,16 @@ export class AgentHookServer {
   private promptSentHashSalt = randomBytes(16).toString('hex')
   private readonly paneAuthority = new PaneAuthorityRegistry(this)
   private connectionTimestampWatermarkById = new Map<string, number>()
-  // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
-  private lastWrittenJson: string | null = null
+  private readonly persistence: AgentStatusPersistence
   // Why: main is the pane authority for local/WSL/SSH panes — hook HTTP, relay, and its own
   // OSC parse all converge on applyNormalizedStatus, so one sequencer covers every ingress here.
   private readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )
+
+  constructor() {
+    this.persistence = new AgentStatusPersistence(this as any)
+  }
   // Pane authority tracking — required by PaneAuthorityRegistry
   closedAgentStatusTabIds = new Set<string>()
   closedAgentStatusPaneKeys = new Set<string>()
@@ -1518,7 +1520,7 @@ export class AgentHookServer {
     this.lastWrittenJson = null
     // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
     if (this.lastStatusFilePath) {
-      this.hydrateLastStatusFromDisk()
+      this.persistence.hydrateLastStatusFromDisk(HYDRATE_MAX_AGE_MS)
     }
     this.captureHydratedAuthorityCommitments()
     // Drain before binding the listener so replay cannot race a live hook during startup.
@@ -1642,8 +1644,8 @@ export class AgentHookServer {
   }
 
   stop(): void {
-    // Why: flush the pending debounced write before clearing the map, else a hook <250ms before quit is lost on relaunch.
     this.flushStatusPersistSync()
+    this.persistence.stop()
     this.server?.close()
     this.server = null
     this.port = 0
@@ -1659,12 +1661,10 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.codexSubagentPollTimers.clear()
-    // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
-    this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
@@ -2383,10 +2383,10 @@ export class AgentHookServer {
     }
   }
 
-  private toAuthorityEvidence(
-    payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
+  toAuthorityEvidence(
+    payload: unknown,
     launchTokenHashOverride?: string
-  ): AgentHookAuthorityEvidence | null {
+  ): unknown {
     const launchToken = payload.launchToken?.trim()
     const launchTokenHash =
       launchTokenHashOverride ??
@@ -2458,67 +2458,11 @@ export class AgentHookServer {
   }
 
   private scheduleStatusPersist(): void {
-    if (!this.lastStatusFilePath) {
-      return
-    }
-    // Why: reset the timer each call so the write fires only after the last event in a burst.
-    if (this.statusPersistTimer) {
-      clearTimeout(this.statusPersistTimer)
-    }
-    this.statusPersistTimer = setTimeout(() => {
-      this.statusPersistTimer = null
-      this.runStatusPersist()
-    }, STATUS_PERSIST_DEBOUNCE_MS)
-    // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
-    if (typeof this.statusPersistTimer.unref === 'function') {
-      this.statusPersistTimer.unref()
-    }
+    this.persistence.scheduleStatusPersist(STATUS_PERSIST_DEBOUNCE_MS)
   }
 
   flushStatusPersistSync(): void {
-    if (this.statusPersistTimer) {
-      clearTimeout(this.statusPersistTimer)
-      this.statusPersistTimer = null
-    }
-    if (!this.lastStatusFilePath) {
-      return
-    }
-    this.runStatusPersist()
-  }
-
-  private runStatusPersist(): void {
-    if (!this.lastStatusFilePath || !this.endpointDir) {
-      return
-    }
-    const json = this.serializeStatusFile()
-    if (json === this.lastWrittenJson) {
-      return
-    }
-    const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
-    let tmpWritten = false
-    try {
-      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
-      if (process.platform !== 'win32') {
-        try {
-          chmodSync(this.endpointDir, 0o700)
-        } catch {
-          // best-effort
-        }
-      }
-      writeFileSync(tmpPath, json, { mode: 0o600 })
-      tmpWritten = true
-      renameSync(tmpPath, this.lastStatusFilePath)
-      this.lastWrittenJson = json
-    } catch (err) {
-      console.warn('[agent-hooks] failed to write last-status file:', err)
-      if (tmpWritten) {
-        try {
-          unlinkSync(tmpPath)
-        } catch {
-          // tmp already gone
-        }
-      }
-    }
+    this.persistence.flushStatusPersistSync()
   }
 
   /** Test-only accessor for the per-instance listener state (narrow getter avoids an `as unknown` cast). */
