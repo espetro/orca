@@ -1,11 +1,17 @@
-import type { MigrationUnsupportedPtyEntry, ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type {
+  MigrationUnsupportedPtyEntry,
+  ParsedAgentStatusPayload
+} from '../../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
-import type { AgentStatusOrchestrationContext, AgentType } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusOrchestrationContext,
+  AgentType
+} from '../../../../shared/agent-status-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '../types'
@@ -28,7 +34,7 @@ export type AgentStatusWorktreeShutdownReason =
   | 'remove-worktree'
   | 'auto-hibernate-completed-agent'
 
-type AllAgentSessionCaptureMode = 'periodic' | 'quit'
+export type AllAgentSessionCaptureMode = 'periodic' | 'quit'
 
 export type DropAgentStatusByWorktreeOptions = {
   shutdownReason?: AgentStatusWorktreeShutdownReason
@@ -36,15 +42,15 @@ export type DropAgentStatusByWorktreeOptions = {
   retainedCompletionEvidence?: readonly RetainedAgentEntry[]
 }
 
-type DropHibernatedAgentPaneOptions = {
+export type DropHibernatedAgentPaneOptions = {
   retainedCompletionEvidence?: readonly RetainedAgentEntry[]
 }
 
-type DropAgentStatusByTabPrefixOptions = {
+export type DropAgentStatusByTabPrefixOptions = {
   worktreeId?: string
 }
 
-type AgentLaunchConfigRegistrationMetadata = {
+export type AgentLaunchConfigRegistrationMetadata = {
   agentType?: AgentType
   launchToken?: string
   tabId?: string
@@ -53,7 +59,7 @@ type AgentLaunchConfigRegistrationMetadata = {
   providerSession?: AgentProviderSessionMetadata
 }
 
-type AgentLaunchConfigStatusMetadata = {
+export type AgentLaunchConfigStatusMetadata = {
   paneKey: string
   agentType?: AgentType
   tabId?: string
@@ -64,7 +70,7 @@ type AgentLaunchConfigStatusMetadata = {
   providerSessionChanged?: boolean
 }
 
-type AgentLaunchConfigRegistryEntry = {
+export type AgentLaunchConfigRegistryEntry = {
   launchConfig: SleepingAgentLaunchConfig
   registeredAt: number
   identity: AgentLaunchConfigRegistrationMetadata

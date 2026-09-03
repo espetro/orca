@@ -25,7 +25,6 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
-import { taskPageGitHubResumeCache } from '@/components/task-page-github-resume-cache'
 import {
   filterLinearIssuesForInOrcaWorkspace,
   readLinkedLinearIssuesWithLimit
@@ -87,6 +86,7 @@ import { useTaskPageSourceNotices } from '@/components/task-page/hooks/use-task-
 import { useTaskPageSourceSync } from '@/components/task-page/hooks/use-task-page-source-sync'
 import { useTaskPageGitLabListState } from '@/components/task-page/hooks/use-task-page-gitlab-list-state'
 import { useTaskPageGitHubListState } from '@/components/task-page/hooks/use-task-page-github-list-state'
+import { useTaskPageGithubListResumeTracking } from '@/components/task-page/hooks/use-task-page-github-list-resume-tracking'
 import { useTaskPageLinearListState } from '@/components/task-page/hooks/use-task-page-linear-list-state'
 import { useTaskPageJiraListState } from '@/components/task-page/hooks/use-task-page-jira-list-state'
 import { useTaskPageGitLabFetch } from '@/components/task-page/hooks/use-task-page-gitlab-fetch'
@@ -438,59 +438,17 @@ export default function TaskPage(): React.JSX.Element {
     getCachedWorkItems
   })
 
-  useEffect(() => {
-    const page = pages[currentPage]
-    if (!taskResumeApplied || taskSource !== 'github' || githubMode !== 'items' || !page) {
-      return
-    }
-    taskPageGitHubResumeCache.write(githubResumeContextKey, currentPage, page)
-  }, [currentPage, githubMode, githubResumeContextKey, pages, taskResumeApplied, taskSource])
-
-  const taskListPositionRef = useRef<{
-    contextKey: string
-    page: number
-    scrollTop: number
-  } | null>(null)
-
-  useLayoutEffect(() => {
-    if (
-      taskSource !== 'github' ||
-      githubMode !== 'items' ||
-      pageData.openGitHubWorkItem ||
-      pendingGithubScrollRestoreRef.current !== null
-    ) {
-      return
-    }
-    taskListPositionRef.current = {
-      contextKey: githubResumeContextKey,
-      page: currentPage,
-      scrollTop: githubListScrollTopRef.current
-    }
-  }, [
+  const taskListPositionRef = useTaskPageGithubListResumeTracking({
+    pages,
     currentPage,
+    taskResumeApplied,
+    taskSource,
     githubMode,
     githubResumeContextKey,
-    pageData.openGitHubWorkItem,
-    taskSource,
     githubListScrollTopRef,
+    openGitHubWorkItem: !!pageData.openGitHubWorkItem,
     pendingGithubScrollRestoreRef
-  ])
-
-  useEffect(
-    () => () => {
-      const position = taskListPositionRef.current
-      const state = useAppStore.getState()
-      if (position && !state.taskPageData.openGitHubWorkItem) {
-        state.setTaskListPosition({
-          contextKey: position.contextKey,
-          page: position.page,
-          scrollTop: position.scrollTop
-        })
-      }
-    },
-    []
-  )
-
+  })
   // Why: keyed on selectedReposKey, not the selectedRepos array — a background
   // repos:changed refresh mid-flight would otherwise bump the generation and
   // silently discard the user's page navigation (#11485). Mirrors every dep of

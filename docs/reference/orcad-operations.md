@@ -94,11 +94,11 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   and exits 1, so the failure stays attributable instead of arriving as an unlogged kill.
 - **Exit codes.**
 
-  | Code | Meaning                                                      | Supervisor should    |
-  | ---- | ------------------------------------------------------------ | -------------------- |
-  | 0    | clean shutdown                                               | restart per policy   |
-  | 1    | startup or shutdown failure                                  | restart with backoff |
-  | 78   | configuration fault (bind address, data root, instance lock, port-binding failure) | **not** restart |
+  | Code | Meaning                                                                            | Supervisor should    |
+  | ---- | ---------------------------------------------------------------------------------- | -------------------- |
+  | 0    | clean shutdown                                                                     | restart per policy   |
+  | 1    | startup or shutdown failure                                                        | restart with backoff |
+  | 78   | configuration fault (bind address, data root, instance lock, port-binding failure) | **not** restart      |
 
   78 is `EX_CONFIG`. Put it in systemd's `RestartPreventExitStatus`: restarting on a data
   root owned by someone else is a restart-spin, not a recovery.
@@ -198,7 +198,7 @@ ExecStartPost=curl -sf http://127.0.0.1:6768/health || exit 1
 ```
 
 `curl -sf` succeeds while the endpoint answers HTTP 200, which is the liveness signal a
-supervisor needs. To gate on the `ok` field as well, pipe through `jq`: 
+supervisor needs. To gate on the `ok` field as well, pipe through `jq`:
 `ExecStartPost=bash -c 'curl -sf http://127.0.0.1:6768/health | jq -e .ok'`. This makes
 systemd itself the watchdog: a failed probe stops the unit without a separate process or
 timer unit.

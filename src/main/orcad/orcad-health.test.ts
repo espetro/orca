@@ -26,8 +26,12 @@ vi.mock('../daemon/daemon-init', () => ({
 
 import type { OrcadHealth } from './orcad-health'
 
-const { collectOrcadHealth, collectTerminalDaemonHealth, computeOrcadBuildHash, toHealthProbePayload } =
-  await import('./orcad-health')
+const {
+  collectOrcadHealth,
+  collectTerminalDaemonHealth,
+  computeOrcadBuildHash,
+  toHealthProbePayload
+} = await import('./orcad-health')
 
 const LIVE_FACTS = {
   runtimeDir: '/data/daemon',
@@ -156,7 +160,12 @@ describe('toHealthProbePayload', () => {
 
   it('derives top-level ok from the terminal-daemon verdict', () => {
     expect(toHealthProbePayload(base).ok).toBe(true)
-    expect(toHealthProbePayload({ ...base, terminalDaemon: { ...base.terminalDaemon, state: 'degraded' } }).ok).toBe(false)
+    expect(
+      toHealthProbePayload({
+        ...base,
+        terminalDaemon: { ...base.terminalDaemon, state: 'degraded' }
+      }).ok
+    ).toBe(false)
   })
 
   it('nulls the daemon entryPath so the unauthenticated surface leaks no host paths', () => {
