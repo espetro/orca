@@ -9,6 +9,10 @@ export type E2EConfig = {
   /** Test-only override (ORCA_E2E_TERMINAL_RETENTION_LIMIT) shrinking the
    *  hidden un-parkable worktree force-park budget. null means production (12). */
   terminalRetentionLimit: number | null
+  /** Bench-only override (ORCA_E2E_RENDERER_PRIVATE_HIGHWATER_MB) lowering the
+   *  first renderer private-footprint census mark from 600MB so the subsystem
+   *  breakdown fires at load-time footprint. null means production ([600,1000]). */
+  rendererPrivateHighwaterMb: number | null
 }
 
 type E2EConfigInput = {
@@ -17,6 +21,7 @@ type E2EConfigInput = {
   userDataDir?: string | null
   terminalParkingDelayMs?: number | null
   terminalRetentionLimit?: number | null
+  rendererPrivateHighwaterMb?: number | null
 }
 
 export function createE2EConfig(input: E2EConfigInput): E2EConfig {
@@ -37,12 +42,21 @@ export function createE2EConfig(input: E2EConfigInput): E2EConfig {
       ? input.terminalRetentionLimit
       : null
 
+  // Why: a footprint in MB — only a positive value is a meaningful mark.
+  const rendererPrivateHighwaterMb =
+    typeof input.rendererPrivateHighwaterMb === 'number' &&
+    Number.isFinite(input.rendererPrivateHighwaterMb) &&
+    input.rendererPrivateHighwaterMb > 0
+      ? input.rendererPrivateHighwaterMb
+      : null
+
   return {
     enabled: headless || exposeStore || userDataDir !== null,
     headless,
     exposeStore,
     userDataDir,
     terminalParkingDelayMs,
-    terminalRetentionLimit
+    terminalRetentionLimit,
+    rendererPrivateHighwaterMb
   }
 }

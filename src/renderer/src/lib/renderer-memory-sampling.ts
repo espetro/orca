@@ -12,6 +12,7 @@ import {
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 import { compactBreadcrumbData, toMegabytes } from './crash-breadcrumb-data'
 import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
+import { e2eConfig } from './e2e-config'
 
 const BYTES_PER_KILOBYTE = 1024
 // Why: one detailed breadcrumb per threshold names what grew before an OOM.
@@ -25,6 +26,20 @@ const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
  * outside every heap counter, so footprint is the only mark that sees them.
  */
 const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
+
+/**
+ * Effective private-footprint marks. A bench/e2e build can prepend a lower mark
+ * (e.g. 120MB) via ORCA_E2E_RENDERER_PRIVATE_HIGHWATER_MB so the subsystem
+ * census fires at the ~135MB load-time footprint instead of never — the default
+ * 600MB mark is 4.4x that and only trips under a real leak.
+ */
+function rendererPrivateHighwaterMarks(): readonly number[] {
+  const override = e2eConfig.rendererPrivateHighwaterMb
+  if (override === null || RENDERER_PRIVATE_HIGHWATER_MB.includes(override as 600 | 1000)) {
+    return RENDERER_PRIVATE_HIGHWATER_MB
+  }
+  return [override, ...RENDERER_PRIVATE_HIGHWATER_MB.filter((mark) => mark > override)]
+}
 
 export type RendererSurface = 'main' | 'dashboard-popout'
 
@@ -159,6 +174,7 @@ function recordRendererMemoryHighwater(
     isFiniteHeapBytes(used) && isFiniteHeapBytes(limit) && limit > 0 ? used / limit : null
   const privateMB =
     footprint === null ? null : (toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE) ?? null)
+  const privateMarks = rendererPrivateHighwaterMarks()
   let crossedThreshold = false
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
@@ -169,7 +185,7 @@ function recordRendererMemoryHighwater(
     }
   }
   if (privateMB !== null) {
-    for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
+    for (const mark of privateMarks) {
       if (privateMB >= mark && !emittedPrivateHighwaterMarks.has(mark)) {
         crossedThreshold = true
         break
@@ -208,7 +224,7 @@ function recordRendererMemoryHighwater(
     }
   }
   if (privateMB !== null) {
-    for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
+    for (const mark of privateMarks) {
       if (privateMB < mark || emittedPrivateHighwaterMarks.has(mark)) {
         continue
       }

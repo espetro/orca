@@ -13,7 +13,9 @@ export const e2eDisableRemoteTerminalStallRecovery =
 const rendererFallbackE2EConfig = createE2EConfig({
   exposeStore: rendererE2EExposeStore,
   terminalParkingDelayMs: Number(rendererE2EQuery?.get('orcaE2ETerminalParkingDelayMs')) || null,
-  terminalRetentionLimit: Number(rendererE2EQuery?.get('orcaE2ETerminalRetentionLimit')) || null
+  terminalRetentionLimit: Number(rendererE2EQuery?.get('orcaE2ETerminalRetentionLimit')) || null,
+  rendererPrivateHighwaterMb:
+    Number(rendererE2EQuery?.get('orcaE2ERendererPrivateHighwaterMB')) || null
 })
 
 // Why: preload owns the Electron startup contract, so renderer code should
