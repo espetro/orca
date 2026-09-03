@@ -15,6 +15,7 @@ import type {
 import { execFileAsync } from '../../shared/child-process/exec-file'
 import {
   parseDarwinThermal,
+  parseFootprintCategories,
   parseFootprintTool,
   parsePsFootprint,
   parseVmStatDeltas
@@ -131,6 +132,7 @@ class ResourceRecorderImpl implements ResourceRecorder {
       rssBytes: 0,
       workingSetKb: metric.memory?.workingSetSize ?? null,
       footprintBytes: null,
+      footprintCategories: null,
       cpuPercent: metric.cpu?.percentCPUUsage ?? 0
     }))
 
@@ -179,8 +181,11 @@ class ResourceRecorderImpl implements ResourceRecorder {
           String(sample.pid)
         ])
         sample.footprintBytes = parseFootprintTool(stdout)
+        // Same stdout, no extra cost: keep the per-VM-category table too.
+        sample.footprintCategories = parseFootprintCategories(stdout)
       } catch {
         sample.footprintBytes = null
+        sample.footprintCategories = null
       }
     }
   }

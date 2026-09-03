@@ -37,6 +37,19 @@ function makeRecorder(module: RecorderModule, overrides: Record<string, unknown>
 const PS_STDOUT = '  111  51200\n  222  25600\n'
 const FOOTPRINT_STDOUT =
   'Footprint: 1361 KB (16384 bytes per page)\n    phys_footprint: 1361 KB\n ...table...'
+const FOOTPRINT_STDOUT_WITH_CATEGORIES = [
+  'Orca [111]: 64-bit    Footprint: 191 MB (16384 bytes per page)',
+  '',
+  '  Dirty      Clean  Reclaimable    Regions    Category',
+  '    ---        ---          ---        ---    ---',
+  ' 134 MB        0 B          0 B      11800    JS/V8',
+  '  82 MB        0 B          0 B       1200    PartitionAlloc',
+  '    ---        ---          ---        ---    ---',
+  ' 216 MB        0 B          0 B      13000    TOTAL',
+  '',
+  'Auxiliary data:',
+  '    phys_footprint: 191 MB'
+].join('\n')
 const THERMAL_STDOUT = 'CPU_Speed_Limit = 100\n'
 const VM_STAT_1 = 'Page ins: 1000.\nPage outs: 500.\n'
 const VM_STAT_2 = 'Page ins: 1030.\nPage outs: 505.\n'
@@ -117,6 +130,51 @@ describe('resource recorder', () => {
       externalBytes: 1
     })
     expect(dump.hostSamples).toEqual(dump.ticks.map((t) => t.host))
+    recorder.stop()
+  })
+
+  it('keeps the /usr/bin/footprint VM-category table on each sample', async () => {
+    execFileMock.mockImplementation((file: string) => {
+      if (file === 'ps') {
+        return Promise.resolve({ stdout: PS_STDOUT, stderr: '' })
+      }
+      if (file === '/usr/bin/footprint') {
+        return Promise.resolve({ stdout: FOOTPRINT_STDOUT_WITH_CATEGORIES, stderr: '' })
+      }
+      return Promise.resolve({ stdout: '', stderr: '' })
+    })
+    const module = await loadRecorder()
+    const recorder = makeRecorder(module)
+
+    recorder.start()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const sample = recorder.dump().ticks[0].samples[0]
+    expect(sample.footprintCategories).toEqual([
+      {
+        category: 'JS/V8',
+        dirtyBytes: 134 * 1048576,
+        cleanBytes: 0,
+        reclaimableBytes: 0,
+        regions: 11800
+      },
+      {
+        category: 'PartitionAlloc',
+        dirtyBytes: 82 * 1048576,
+        cleanBytes: 0,
+        reclaimableBytes: 0,
+        regions: 1200
+      }
+    ])
+    recorder.stop()
+  })
+
+  it('leaves footprintCategories null when the footprint output carries no table', async () => {
+    const module = await loadRecorder()
+    const recorder = makeRecorder(module)
+    recorder.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(recorder.dump().ticks[0].samples[0].footprintCategories).toBeNull()
     recorder.stop()
   })
 

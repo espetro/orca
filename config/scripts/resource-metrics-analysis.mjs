@@ -2,12 +2,24 @@
 // metric (rss/footprint/heap are memory, cpuPercent is load), so an A-side
 // median below B-side median counts as 'improved' across the board.
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import {
+  ROLES,
+  compareMetric,
+  iqrOverlaps,
+  median,
+  numericStats,
+  round6
+} from './resource-metrics-stats.mjs'
+import {
+  compareFootprintCategories,
+  perCategoryDirtyStats
+} from './footprint-category-comparison.mjs'
+
+export { compareFootprintCategories, perCategoryDirtyStats }
 
 const USAGE =
   'Usage: node config/scripts/resource-metrics-analysis.mjs <dumpA.json> <dumpB.json> ' +
   '[--a <glob-or-path>...] [--b <glob-or-path>...] [--out report.md] [--json artifact.json]'
-
-const ROLES = ['main', 'renderer', 'gpu', 'utility', 'zygote', 'other']
 const SAMPLE_METRICS = ['rssBytes', 'footprintBytes', 'cpuPercent', 'workingSetKb']
 const DRIFT_THRESHOLD_BYTES_PER_MIN = 1024 * 1024
 const MARKER_STEP_RATIO = 0.05
@@ -120,41 +132,6 @@ export function mergeDumps(dumps) {
     ticks: mergeBy('ticks'),
     markers: mergeBy('markers'),
     hostSamples: mergeBy('hostSamples')
-  }
-}
-
-// Linear-interpolation percentile (standard method, R-7).
-function percentile(sortedValues, q) {
-  if (sortedValues.length === 0) {
-    return null
-  }
-  const pos = (sortedValues.length - 1) * q
-  const lo = Math.floor(pos)
-  const hi = Math.ceil(pos)
-  if (lo === hi) {
-    return sortedValues[lo]
-  }
-  return sortedValues[lo] + (pos - lo) * (sortedValues[hi] - sortedValues[lo])
-}
-
-function round6(value) {
-  return value === null ? null : Math.round(value * 1e6) / 1e6
-}
-
-function numericStats(values) {
-  const sorted = [...values].sort((a, b) => a - b)
-  const q1 = percentile(sorted, 0.25)
-  const q3 = percentile(sorted, 0.75)
-  return {
-    median: round6(percentile(sorted, 0.5)),
-    q1: round6(q1),
-    q3: round6(q3),
-    iqr: round6(q3 - q1),
-    p10: round6(percentile(sorted, 0.1)),
-    p90: round6(percentile(sorted, 0.9)),
-    min: round6(sorted[0]),
-    max: round6(sorted.at(-1)),
-    n: sorted.length
   }
 }
 
@@ -274,14 +251,6 @@ export function detectMarkerAlignedSteps(ticks, markers, thresholdRatio = MARKER
   return results
 }
 
-function median(values) {
-  if (values.length === 0) {
-    return null
-  }
-  const sorted = [...values].sort((a, b) => a - b)
-  return percentile(sorted, 0.5)
-}
-
 export function devianceReport(dump) {
   const flags = []
   const ticks = dump.ticks ?? []
@@ -382,18 +351,6 @@ const EXTRA_METRICS = [
   { role: 'host', metric: 'availableMemoryBytes' }
 ]
 
-function compareMetric(a, b) {
-  // Lower median wins; lower is better for memory and cpu alike (see header).
-  if (a.median < b.median) {
-    return 'improved'
-  }
-  return 'regressed'
-}
-
-function iqrOverlaps(a, b) {
-  return a.q1 <= b.q3 && b.q1 <= a.q3
-}
-
 function collectMetricEntries(ticks) {
   const roles = new Set()
   for (const tick of ticks) {
@@ -468,6 +425,7 @@ export function compareDumps(dumpA, dumpB) {
   }
   return {
     metrics,
+    footprintCategories: compareFootprintCategories(a, b),
     deviance: { a: devianceReport(a), b: devianceReport(b) }
   }
 }
@@ -490,6 +448,19 @@ export function renderMarkdownReport(comparison) {
     )
   }
   lines.push('')
+  const categories = comparison.footprintCategories ?? []
+  if (categories.length > 0) {
+    lines.push('## Footprint categories (macOS; dirty bytes, lower is better)')
+    lines.push('')
+    lines.push('| role | category | a median | b median | delta (a-b) | verdict |')
+    lines.push('| --- | --- | --- | --- | --- | --- |')
+    for (const row of categories) {
+      lines.push(
+        `| ${row.role} | ${row.category} | ${fmt(row.a.median)} | ${fmt(row.b.median)} | ${fmt(row.deltaMedian)} | ${row.verdict} |`
+      )
+    }
+    lines.push('')
+  }
   for (const side of ['a', 'b']) {
     const report = comparison.deviance[side]
     lines.push(`## Deviance (${side})`)

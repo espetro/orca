@@ -1,5 +1,14 @@
 export type PsFootprintRow = { rssBytes: number; footprintBytes: number | null }
 
+export type FootprintCategoryRow = {
+  /** VM tag / region label, e.g. 'JS/V8', 'PartitionAlloc', 'IOSurface', 'tag 16'. */
+  category: string
+  dirtyBytes: number
+  cleanBytes: number
+  reclaimableBytes: number
+  regions: number
+}
+
 /**
  * Parses `ps -o pid=,rss=,phys_footprint= -p <pids>` stdout.
  * rss is KB, phys_footprint on macOS is bytes. Header/junk lines are skipped.
@@ -46,6 +55,59 @@ export function parseFootprintTool(stdout: string): number | null {
     return Number(summary[1]) * units[summary[2] as keyof typeof units]
   }
   return null
+}
+
+const FOOTPRINT_UNIT_BYTES = { B: 1, KB: 1024, MB: 1048576, GB: 1073741824 } as const
+
+function footprintSizeToBytes(value: string, unit: string): number | null {
+  const scale = FOOTPRINT_UNIT_BYTES[unit as keyof typeof FOOTPRINT_UNIT_BYTES]
+  const magnitude = Number(value)
+  if (scale === undefined || !Number.isFinite(magnitude)) {
+    return null
+  }
+  return Math.round(magnitude * scale)
+}
+
+const FOOTPRINT_CATEGORY_HEADER = /^\s*Dirty\s+Clean\s+Reclaimable\s+Regions\s+Category\s*$/
+const FOOTPRINT_CATEGORY_ROW =
+  /^\s*([\d.]+)\s+(B|KB|MB|GB)\s+([\d.]+)\s+(B|KB|MB|GB)\s+([\d.]+)\s+(B|KB|MB|GB)\s+(\d+)\s+(.+?)\s*$/
+
+/**
+ * Parses the "Dirty / Clean / Reclaimable / Regions / Category" table
+ * `/usr/bin/footprint -p <pid>` prints above its Auxiliary data. One row per VM
+ * category; the `---` separators and the TOTAL row are dropped. null when no
+ * table is present (non-macOS host, or the `footprint` output shape changed) —
+ * same unavailable-not-zero contract as parseFootprintTool.
+ */
+export function parseFootprintCategories(stdout: string): FootprintCategoryRow[] | null {
+  const lines = stdout.split('\n')
+  const headerIndex = lines.findIndex((line) => FOOTPRINT_CATEGORY_HEADER.test(line))
+  if (headerIndex === -1) {
+    return null
+  }
+  const rows: FootprintCategoryRow[] = []
+  for (let index = headerIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (line.trim() === '') {
+      break
+    }
+    const match = line.match(FOOTPRINT_CATEGORY_ROW)
+    if (!match) {
+      continue // `--- --- --- --- ---` separator or any other noise line
+    }
+    const category = match[8].trim()
+    if (category === 'TOTAL') {
+      continue
+    }
+    const dirtyBytes = footprintSizeToBytes(match[1], match[2])
+    const cleanBytes = footprintSizeToBytes(match[3], match[4])
+    const reclaimableBytes = footprintSizeToBytes(match[5], match[6])
+    if (dirtyBytes === null || cleanBytes === null || reclaimableBytes === null) {
+      continue
+    }
+    rows.push({ category, dirtyBytes, cleanBytes, reclaimableBytes, regions: Number(match[7]) })
+  }
+  return rows.length > 0 ? rows : null
 }
 
 /** Parses `pmset -g therm`; null on n/a, unsupported output, or missing line. */

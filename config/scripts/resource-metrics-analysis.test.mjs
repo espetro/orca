@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import {
   buildComparisonArtifact,
   compareDumps,
+  compareFootprintCategories,
   detectMarkerAlignedSteps,
   detectTrend,
   devianceReport,
@@ -11,16 +12,28 @@ import {
   loadDumps,
   mergeDumps,
   parseArgs,
+  perCategoryDirtyStats,
   perMetricStats,
   renderMarkdownReport
 } from './resource-metrics-analysis.mjs'
+// compareFootprintCategories/perCategoryDirtyStats are re-exported above from
+// ./footprint-category-comparison.mjs, exercised here via the analysis surface.
 
 function makeSample(
   type,
   rssBytes,
-  { timestamp = 0, footprintBytes = rssBytes, cpuPercent = 1 } = {}
+  { timestamp = 0, footprintBytes = rssBytes, cpuPercent = 1, footprintCategories = null } = {}
 ) {
-  return { timestamp, pid: 1, type, rssBytes, workingSetKb: null, footprintBytes, cpuPercent }
+  return {
+    timestamp,
+    pid: 1,
+    type,
+    rssBytes,
+    workingSetKb: null,
+    footprintBytes,
+    footprintCategories,
+    cpuPercent
+  }
 }
 
 function makeTick(index, samples, overrides = {}) {
@@ -282,6 +295,69 @@ describe('compareDumps', () => {
     const { deviance } = compareDumps(a, b)
     expect(deviance.a.flags).toHaveLength(0)
     expect(deviance.b.flags.some((f) => f.kind === 'low-sample-count')).toBe(true)
+  })
+})
+
+describe('footprint categories', () => {
+  const cats = (dirtyByCategory) =>
+    Object.entries(dirtyByCategory).map(([category, dirtyBytes]) => ({
+      category,
+      dirtyBytes,
+      cleanBytes: 0,
+      reclaimableBytes: 0,
+      regions: 1
+    }))
+
+  function categoryDump(n, dirtyByCategory, type = 'main') {
+    return makeDump(
+      Array.from({ length: n }, (_, i) =>
+        makeTick(i, [makeSample(type, 100e6, { footprintCategories: cats(dirtyByCategory) })])
+      )
+    )
+  }
+
+  it('perCategoryDirtyStats pools dirty bytes per category', () => {
+    const dump = categoryDump(5, { 'JS/V8': 134e6, PartitionAlloc: 82e6 })
+    const stats = perCategoryDirtyStats(dump.ticks, 'main')
+    expect(stats.get('JS/V8').median).toBe(134e6)
+    expect(stats.get('JS/V8').n).toBe(5)
+    expect(stats.get('PartitionAlloc').median).toBe(82e6)
+  })
+
+  it('verdicts improved when A category dirty bytes are disjointly lower', () => {
+    const a = categoryDump(10, { 'JS/V8': 90e6 })
+    const b = categoryDump(10, { 'JS/V8': 134e6 })
+    const rows = compareFootprintCategories(a, b)
+    const v8 = rows.find((r) => r.category === 'JS/V8')
+    expect(v8.role).toBe('main')
+    expect(v8.verdict).toBe('improved')
+    expect(v8.deltaMedian).toBe(-44e6)
+  })
+
+  it('is inconclusive when a category is present on only one side', () => {
+    const a = categoryDump(10, { 'JS/V8': 90e6, IOSurface: 10e6 })
+    const b = categoryDump(10, { 'JS/V8': 90e6 })
+    const rows = compareFootprintCategories(a, b)
+    expect(rows.find((r) => r.category === 'IOSurface').verdict).toBe('inconclusive')
+  })
+
+  it('compareDumps exposes [] and renders no section when no category table exists', () => {
+    const comparison = compareDumps(
+      makeDump(constantTicks(10, 100e6)),
+      makeDump(constantTicks(10, 200e6))
+    )
+    expect(comparison.footprintCategories).toEqual([])
+    expect(renderMarkdownReport(comparison)).not.toContain('Footprint categories')
+  })
+
+  it('renders a Footprint categories table when data is present', () => {
+    const comparison = compareDumps(
+      categoryDump(10, { 'gpu/IOSurface': 60e6 }, 'gpu'),
+      categoryDump(10, { 'gpu/IOSurface': 185e6 }, 'gpu')
+    )
+    const md = renderMarkdownReport(comparison)
+    expect(md).toContain('## Footprint categories')
+    expect(md).toContain('| gpu | gpu/IOSurface |')
   })
 })
 

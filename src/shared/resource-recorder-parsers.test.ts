@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseDarwinThermal,
+  parseFootprintCategories,
   parseFootprintTool,
   parsePsFootprint,
   parseVmStatDeltas
@@ -58,6 +59,78 @@ describe('parsePsFootprint', () => {
   it('returns empty map for malformed input', () => {
     expect(parsePsFootprint('').size).toBe(0)
     expect(parsePsFootprint('garbage\n\n').size).toBe(0)
+  })
+})
+
+describe('parseFootprintCategories', () => {
+  const realOutput = [
+    '======================================================================',
+    'zsh [75184]: 64-bit    Footprint: 2209 KB (16384 bytes per page)',
+    '======================================================================',
+    '',
+    '  Dirty      Clean  Reclaimable    Regions    Category',
+    '    ---        ---          ---        ---    ---',
+    ' 976 KB        0 B          0 B          5    MALLOC_SMALL',
+    ' 288 KB        0 B          0 B          8    MALLOC metadata',
+    '  64 KB        0 B          0 B          5    untagged (VM_ALLOCATE)',
+    '  16 KB        0 B          0 B          1    tag 22',
+    '  848 B        0 B          0 B         14    __AUTH',
+    '    0 B     512 KB          0 B         50    __TEXT',
+    '    ---        ---          ---        ---    ---',
+    '2209 KB     544 KB          0 B        410    TOTAL',
+    '',
+    'Auxiliary data:',
+    '    phys_footprint: 2225 KB'
+  ].join('\n')
+
+  it('parses each category row, keeping spaces and paren labels, dropping TOTAL and separators', () => {
+    const rows = parseFootprintCategories(realOutput)
+    expect(rows).not.toBeNull()
+    expect(rows?.map((r) => r.category)).toEqual([
+      'MALLOC_SMALL',
+      'MALLOC metadata',
+      'untagged (VM_ALLOCATE)',
+      'tag 22',
+      '__AUTH',
+      '__TEXT'
+    ])
+    expect(rows?.[0]).toEqual({
+      category: 'MALLOC_SMALL',
+      dirtyBytes: 976 * 1024,
+      cleanBytes: 0,
+      reclaimableBytes: 0,
+      regions: 5
+    })
+    expect(rows?.find((r) => r.category === '__AUTH')?.dirtyBytes).toBe(848)
+    expect(rows?.find((r) => r.category === '__TEXT')).toEqual({
+      category: '__TEXT',
+      dirtyBytes: 0,
+      cleanBytes: 512 * 1024,
+      reclaimableBytes: 0,
+      regions: 50
+    })
+  })
+
+  it('handles MB/GB units and decimal magnitudes', () => {
+    const rows = parseFootprintCategories(
+      [
+        '  Dirty      Clean  Reclaimable    Regions    Category',
+        ' 134.5 MB      0 B          0 B      11800    JS/V8',
+        ' 1.5 GB        0 B          0 B          2    IOSurface',
+        ''
+      ].join('\n')
+    )
+    expect(rows?.[0]).toMatchObject({ category: 'JS/V8', dirtyBytes: Math.round(134.5 * 1048576) })
+    expect(rows?.[1]).toMatchObject({
+      category: 'IOSurface',
+      dirtyBytes: Math.round(1.5 * 2 ** 30)
+    })
+  })
+
+  it('returns null when no category table is present (non-macOS host)', () => {
+    expect(parseFootprintCategories('no such process')).toBeNull()
+    expect(parseFootprintCategories('')).toBeNull()
+    expect(parseFootprintCategories('Footprint: 1361 KB (16384 bytes per page)')).toBeNull()
   })
 })
 

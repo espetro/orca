@@ -1,5 +1,6 @@
 import type { AppProcessMetric } from './app-environment'
 import type { HostMemory } from './process-stats-types'
+import type { FootprintCategoryRow } from './resource-recorder-parsers'
 
 export type ResourceProcessType = 'main' | 'renderer' | 'gpu' | 'utility' | 'zygote' | 'other'
 
@@ -13,6 +14,12 @@ export type ResourceSample = {
   workingSetKb: number | null
   /** macOS phys_footprint; null = unavailable (never 0). */
   footprintBytes: number | null
+  /**
+   * macOS `/usr/bin/footprint` per-VM-category dirty/clean/reclaimable table
+   * (V8, PartitionAlloc, IOSurface, ...). null off darwin or when unparsed —
+   * same unavailable-not-zero contract as footprintBytes.
+   */
+  footprintCategories: FootprintCategoryRow[] | null
   cpuPercent: number
 }
 
