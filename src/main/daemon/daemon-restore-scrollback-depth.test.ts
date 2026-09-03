@@ -279,6 +279,8 @@ describe('STA-4091 previously recoverable restore depth', () => {
     let lastSubprocess: ReturnType<typeof createMockSubprocess>
 
     beforeEach(async () => {
+      // Why: pin the flat window — low-RAM hosts derive 500 rows and the 1000-row assertions below would fail.
+      vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', String(DAEMON_SESSION_SCROLLBACK_ROWS))
       dir = mkdtempSync(join(tmpdir(), 'orca-restore-depth-adapter-'))
       historyDir = join(dir, 'history')
       const log: DaemonFileLog = { log: () => {}, close: () => {} }
@@ -300,6 +302,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
     })
 
     afterEach(async () => {
+      vi.unstubAllEnvs()
       adapter?.dispose()
       await server?.shutdown()
       rmSync(dir, { recursive: true, force: true })
