@@ -85,6 +85,7 @@ import {
 } from './session-restored-banner-pane-state'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPanePasteEffects } from './use-terminal-pane-paste-effects'
+import { usePaneStateSubscriptions } from './use-terminal-pane-pane-state'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
@@ -179,7 +180,6 @@ import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './ter
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
-import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
@@ -192,10 +192,7 @@ import {
 import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { pasteTerminalText } from './terminal-bracketed-paste'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield
-} from './terminal-paste-coordinator'
+import { executeTerminalPastePlan, planTerminalPasteWithYield } from './terminal-paste-coordinator'
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
@@ -205,11 +202,7 @@ import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
-import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
-import {
-  getCachedTerminalGroupIdForWorktree,
-  getCachedUnifiedTerminalTabForWorktree
-} from './terminal-unified-tab-lookup'
+import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import {
@@ -357,6 +350,7 @@ function TerminalPane(
   const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const [chatLeafId, setChatLeafId] = useState<string | null>(null)
+  const paneStateSubscriptions = usePaneStateSubscriptions({ tabId, worktreeId, chatLeafId })
   const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
@@ -474,61 +468,27 @@ function TerminalPane(
     }
   )
 
-  const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
-  const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
-  const suppressPtyExit = useAppStore((store) => store.suppressPtyExit)
-  const pendingCodexPaneRestartIds = useAppStore((store) => store.pendingCodexPaneRestartIds)
-  const consumePendingCodexPaneRestart = useAppStore(
-    (store) => store.consumePendingCodexPaneRestart
-  )
-  const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
-  // Why: in chat view the chat surface sits above the mounted terminal, so its mobile-driver overlay must not render over it (U9/R8).
-  const unifiedTabId = useAppStore(
-    (store) =>
-      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.id
-  )
-  const structuredSessionAgent = useAppStore(
-    (store) =>
-      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
-        ?.agentSessionAgent
-  )
-  const isChatViewMode = useAppStore(
-    (store) =>
-      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
-        ?.viewMode === 'chat'
-  )
-  const structuredSessionId = useAppStore(
-    (store) =>
-      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
-        ?.structuredSessionId ?? null
-  )
-  const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
-  const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
-  const chatPaneDispatchStatus = useAppStore((store) =>
-    chatLeafId
-      ? store.agentStatusByPaneKey[makePaneKey(tabId, chatLeafId)]?.orchestration?.dispatchStatus
-      : undefined
-  )
-  const unifiedTabLabel = useAppStore(
-    (store) =>
-      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
-  )
-  const runtimePaneTitlesByPaneId = useAppStore(
-    useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
-  )
-  // Carry each leaf's agent identity, not just "an agent exists", so the gate can reject unsupported agents; scoped to this tab's panes.
-  const tabAgentTypeByLeaf = useAppStore((store) =>
-    selectTerminalTabAgentTypesByLeaf(
-      store.agentStatusByPaneKey,
-      tabId,
-      store.paneForegroundAgentByPaneKey
-    )
-  )
-  const setTabViewMode = useAppStore((store) => store.setTabViewMode)
-  const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
-  const terminalTab = useAppStore((store) =>
-    getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
-  )
+  const {
+    setTabPaneExpanded,
+    setTabCanExpandPane,
+    suppressPtyExit,
+    pendingCodexPaneRestartIds,
+    consumePendingCodexPaneRestart,
+    clearCodexRestartNotice,
+    unifiedTabId,
+    structuredSessionAgent,
+    isChatViewMode,
+    structuredSessionId,
+    nativeChatEnabled,
+    effectiveChatViewMode,
+    chatPaneDispatchStatus,
+    unifiedTabLabel,
+    setTabViewMode,
+    runtimePaneTitlesByPaneId,
+    tabAgentTypeByLeaf,
+    savedLayout,
+    terminalTab
+  } = paneStateSubscriptions
   const restoredLayout = useMemo(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
     [savedLayout, terminalTab]
