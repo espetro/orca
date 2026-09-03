@@ -89,6 +89,7 @@ import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneFocus } from './use-terminal-pane-focus'
 import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
+import { useTerminalPaneFitSync } from './use-terminal-pane-fit-sync'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import {
   closeTerminalLinkActionRequest,
@@ -1429,65 +1430,12 @@ function TerminalPane(
     toggleExpandPane
   })
 
-  useEffect(() => {
-    if (
-      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
-      !isVisible ||
-      !isActive
-    ) {
-      return
-    }
-
-    const cleanupCallbacks: (() => void)[] = []
-    const fitAndForward = (): void => {
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      for (const pane of manager.getPanes()) {
-        safeFitAndThen(pane, 'web-client-pty-resize', () => {
-          const transport = paneTransportsRef.current.get(pane.id)
-          if (!transport?.isConnected()) {
-            return
-          }
-          const ptyId = transport.getPtyId()
-          if (!ptyId) {
-            return
-          }
-          // Why: match pty-connection resize guards so web refits don't forward SIGWINCH during mobile-lock or phone-fit overrides.
-          if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
-            return
-          }
-          // Why: skip forwarding a stale near-zero fit to the host PTY while the overlay is still settling after a worktree switch.
-          if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
-            return
-          }
-          transport.resize(pane.terminal.cols, pane.terminal.rows)
-        })
-      }
-    }
-    const scheduleFrame = (): void => {
-      const frameId = requestAnimationFrame(fitAndForward)
-      cleanupCallbacks.push(() => cancelAnimationFrame(frameId))
-    }
-    const scheduleTimer = (delayMs: number): void => {
-      const timerId = window.setTimeout(fitAndForward, delayMs)
-      cleanupCallbacks.push(() => window.clearTimeout(timerId))
-    }
-
-    // Why: web-restored terminals can fit before the remote PTY transport is ready (xterm no-op), so forward the settled cols explicitly.
-    scheduleFrame()
-    scheduleTimer(50)
-    scheduleTimer(150)
-    scheduleTimer(400)
-    scheduleTimer(900)
-
-    return () => {
-      for (const cleanup of cleanupCallbacks) {
-        cleanup()
-      }
-    }
-  }, [isActive, isVisible])
+  useTerminalPaneFitSync({
+    isActive,
+    isVisible,
+    managerRef,
+    paneTransportsRef
+  })
 
   useTerminalPaneFocus({
     containerRef
