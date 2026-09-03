@@ -147,7 +147,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         uses: pnpm/action-setup@v6
         with:
-          version: 11.25.0
+          version: 12.3.1
           run_install: false
 
       - name: Setup Node.js
