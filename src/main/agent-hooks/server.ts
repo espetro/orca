@@ -179,6 +179,9 @@ import {
   type PaneKeyAliasEntry,
   type RetiredPaneFence
 } from './pane-authority-transfer'
+import {
+  AgentStatusIngestRegistry
+} from './agent-status-ingest'
 
 export {
   PANE_KEY_ALIASES_MAX,
@@ -239,9 +242,11 @@ export class AgentHookServer {
   private readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )
+  private readonly ingest: AgentStatusIngestRegistry
 
   constructor() {
     this.persistence = new AgentStatusPersistence(this as any)
+    this.ingest = new AgentStatusIngestRegistry(this as any, this.observations)
   }
   // Pane authority tracking — required by PaneAuthorityRegistry
   closedAgentStatusTabIds = new Set<string>()
@@ -1751,6 +1756,45 @@ export class AgentHookServer {
     listener: ((entries: LegacyPaneKeyAliasEntry[]) => void) | null
   ): void {
     this.paneAuthority.setPaneKeyAliasPersistenceListener(listener)
+  }
+
+  // Status ingestion delegation — public methods for external callers
+  applyNormalizedStatus(
+    payload: AgentHookEventPayload,
+    onAccepted?: () => void,
+    origin?: AgentStatusObservationOrigin
+  ): EnrichedAgentHookEventPayload {
+    return this.ingest.applyNormalizedStatus(payload, onAccepted, origin)
+  }
+
+  clearAssistantMessageRetry(paneKey: string): void {
+    this.ingest.clearAssistantMessageRetry(paneKey)
+  }
+
+  clearCodexSubagentPoll(paneKey: string): void {
+    this.ingest.clearCodexSubagentPoll(paneKey)
+  }
+
+  scheduleCodexSubagentPoll(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload
+  ): void {
+    this.ingest.scheduleCodexSubagentPoll(source, body, original)
+  }
+
+  scheduleAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload,
+    attempt?: number,
+    discoveryReady?: boolean
+  ): void {
+    this.ingest.scheduleAssistantMessageRetry(source, body, original, attempt, discoveryReady)
+  }
+
+  normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
+    return this.ingest.normalizeLocalHookPayload(source, body)
   }
 
   // Support methods required by PaneAuthorityRegistry
