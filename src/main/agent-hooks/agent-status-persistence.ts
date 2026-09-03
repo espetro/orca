@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSy
 import { join } from 'node:path'
 
 import type { HookListenerState } from '../../shared/agent-hook-listener/listener-state'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import {
   authorityCommitmentsMatch,
   dropHydratedIdleClaudeSubagents,
@@ -12,6 +13,7 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment,
   LAST_STATUS_FILE_VERSION,
+  type AgentHookAuthorityEvidence,
   type EnrichedAgentHookEventPayload,
   type LastStatusFile,
   type PersistedAgentHookAuthorityCommitment,
@@ -30,8 +32,10 @@ type AgentHookServerDeps = {
   hydratedLaunchTokenHashByPaneKey: Map<string, string>
   persistedAuthorityCommitmentsByPaneKey: Map<string, unknown>
   connectionTimestampWatermarkById: Map<string, number>
+  currentAuthorityObservations: Map<string, AgentHookAuthorityEvidence>
+  hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[]
+  revokedHydratedAuthorityCommitments: WeakSet<AgentHookAuthorityEvidence>
   resolvePaneKeyAlias(paneKey: string): string
-  toAuthorityEvidence(payload: unknown, launchTokenHash: string | undefined): unknown
 }
 
 export class AgentStatusPersistence {
@@ -97,7 +101,7 @@ export class AgentStatusPersistence {
         ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
-      const commitment = this.server.toAuthorityEvidence(payload, launchTokenHash as string | undefined)
+      const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {
         const existing = authorityCommitments[paneKey]
         if (existing && !authorityCommitmentsMatch(existing as PersistedAgentHookAuthorityCommitment, commitment as PersistedAgentHookAuthorityCommitment)) {
@@ -208,7 +212,7 @@ export class AgentStatusPersistence {
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
           this.server.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)
-          const evidence = this.server.toAuthorityEvidence(entry, launchTokenHash)
+          const evidence = this.toAuthorityEvidence(entry, launchTokenHash)
           if (evidence) {
             this.server.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, evidence)
           }
@@ -283,6 +287,52 @@ export class AgentStatusPersistence {
     } else if (hydrated > 0) {
       this.lastWrittenJson = raw
     }
+  }
+
+  captureHydratedAuthorityCommitments(): void {
+    this.server.revokedHydratedAuthorityCommitments = new WeakSet()
+    for (const entry of this.server.state.lastStatusByPaneKey.values()) {
+      const evidence = this.toAuthorityEvidence(
+        entry as EnrichedAgentHookEventPayload,
+        this.server.hydratedLaunchTokenHashByPaneKey.get(entry.paneKey)
+      )
+      if (evidence && !this.server.persistedAuthorityCommitmentsByPaneKey.has(entry.paneKey)) {
+        this.server.persistedAuthorityCommitmentsByPaneKey.set(entry.paneKey, evidence)
+      }
+    }
+    this.server.hydratedAuthorityCommitments = Object.freeze(
+      Array.from(this.server.persistedAuthorityCommitmentsByPaneKey.values())
+    )
+  }
+
+  recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void {
+    const evidence = this.toAuthorityEvidence(payload)
+    if (evidence) {
+      this.server.currentAuthorityObservations.set(evidence.paneKey, evidence)
+      this.server.persistedAuthorityCommitmentsByPaneKey.set(evidence.paneKey, evidence)
+      this.server.hydratedLaunchTokenHashByPaneKey.set(evidence.paneKey, evidence.launchTokenHash)
+    }
+  }
+
+  toAuthorityEvidence(
+    payload: unknown,
+    launchTokenHashOverride?: string
+  ): unknown {
+    const launchToken = payload.launchToken?.trim()
+    const launchTokenHash =
+      launchTokenHashOverride ??
+      (launchToken ? createHash('sha256').update(launchToken).digest('hex') : null)
+    if (!launchTokenHash) {
+      return null
+    }
+    return Object.freeze({
+      paneKey: payload.paneKey,
+      launchTokenHash,
+      connectionId: payload.connectionId,
+      ...(payload.tabId ? { tabId: payload.tabId } : {}),
+      ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
+      observedAt: 'receivedAt' in payload ? payload.receivedAt : Date.now()
+    })
   }
 
   stop(): void {
