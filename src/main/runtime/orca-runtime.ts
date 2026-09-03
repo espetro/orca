@@ -22,6 +22,54 @@ import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { RuntimeLinearCommands } from './runtime-linear-commands'
+import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
+import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
+import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
+import type {
+  AgentSkillShareOperation,
+  AgentSkillShareRequest
+} from '../../shared/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../shared/skills'
+import type {
+  SkillCloudDownloadGrant,
+  SkillCloudOperation,
+  SkillCloudOptions,
+  SkillCloudPackageDetails,
+  SkillCloudPublishRequest,
+  SkillCloudPublishResult,
+  SkillCloudVersion
+} from '../../shared/skill-cloud-contract'
+import type {
+  SkillInstallPreview,
+  SkillInstallPreviewRequest,
+  SkillInstallRequest,
+  SkillInstallResult,
+  ManagedSkillInstall,
+  SkillRemoveRequest
+} from '../../shared/skill-install-contract'
+import type {
+  SkillBundleInstallPreview,
+  SkillBundleInstallPreviewRequest,
+  SkillBundleInstallProgress,
+  SkillBundleInstallRequest,
+  SkillBundleInstallResult
+} from '../../shared/skill-bundle-install-contract'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import type {
+  SkillUploadBeginRequest,
+  SkillUploadChunkRequest
+} from '../../shared/skill-upload-session-contract'
+import type {
+  ArtifactCloudOperation,
+  ArtifactCloudOptions,
+  ArtifactListOptions,
+  ArtifactListPage,
+  ArtifactListItem,
+  ArtifactPublishedLink,
+  ArtifactPublishResult,
+  ArtifactWriteRequest
+} from '../../shared/artifacts'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -177,7 +225,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir, hostname } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
@@ -200,87 +248,6 @@ import {
   createSetupCompletionScanner
 } from './orchestration/setup-completion-signal'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
-import type {
-  ArtifactCloudOperation,
-  ArtifactCloudOptions,
-  ArtifactListOptions,
-  ArtifactListPage,
-  ArtifactListItem,
-  ArtifactPublishedLink,
-  ArtifactPublishResult,
-  ArtifactWriteRequest
-} from '../../shared/artifacts'
-import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
-import type {
-  SkillCloudDownloadGrant,
-  SkillCloudOperation,
-  SkillCloudOptions,
-  SkillCloudPackageDetails,
-  SkillCloudPublishRequest,
-  SkillCloudPublishResult,
-  SkillCloudVersion
-} from '../../shared/skill-cloud-contract'
-import type { SkillCloudService } from '../skills/skill-cloud-service'
-import {
-  AGENT_SKILL_NOT_SHAREABLE_CODE,
-  AGENT_SKILL_SHARING_BUSY_CODE,
-  AgentSkillSharingError,
-  type AgentSkillShareOperation,
-  type AgentSkillShareRequest
-} from '../../shared/agent-skill-sharing-contract'
-import type { DiscoveredSkill } from '../../shared/skills'
-import { selectDiscoveredSkills } from '../skills/agent-skill-selection'
-import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
-import type {
-  SkillInstallPreview,
-  SkillInstallPreviewRequest,
-  SkillInstallRequest,
-  SkillInstallResult,
-  ManagedSkillInstall,
-  SkillRemoveRequest
-} from '../../shared/skill-install-contract'
-import type {
-  SkillBundleInstallPreview,
-  SkillBundleInstallPreviewRequest,
-  SkillBundleInstallProgress,
-  SkillBundleInstallRequest,
-  SkillBundleInstallResult
-} from '../../shared/skill-bundle-install-contract'
-import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
-import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
-import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
-import {
-  previewSharedSkillBundleInstall,
-  previewSharedSkillInstall,
-  removeSharedSkillInstall
-} from '../skills/skill-install-management-service'
-import { listManagedSkillInstalls } from '../skills/skill-install-provenance'
-import { getWslHome, toLinuxPath } from '../wsl'
-import { WslSkillInstallFilesystem } from '../skills/skill-wsl-install-filesystem'
-import { nativeSkillInstallFilesystem } from '../skills/skill-install-filesystem'
-import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
-import {
-  resolveEnvironmentSkillProviderRoots,
-  resolveWslGrokSkillProviderRoot,
-  withClaudeSkillProviderRoot
-} from '../skills/skill-provider-runtime-roots'
-import type {
-  SkillUploadBeginRequest,
-  SkillUploadChunkRequest
-} from '../../shared/skill-upload-session-contract'
-import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
-import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../skills/skill-upload-staging-ownership'
-import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
-import {
-  installSkillBundleOnSshHost,
-  previewSkillBundleInstallOnSshHost
-} from '../skills/skill-bundle-ssh-relay-service'
-import {
-  installSkillOnSshHost,
-  listSkillInstallsOnSshHost,
-  previewSkillInstallOnSshHost,
-  removeSkillInstallOnSshHost
-} from '../skills/skill-ssh-relay-service'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
@@ -3033,6 +3000,8 @@ export class OrcaRuntimeService {
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
   private readonly linearCommands: RuntimeLinearCommands
+  private readonly skillArtifactCommands: RuntimeSkillArtifactCommands
+  private readonly skillInstallCommands: RuntimeSkillInstallCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3721,14 +3690,7 @@ export class OrcaRuntimeService {
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
-  private artifactService: ArtifactCloudService | null = null
-  private skillCloudService: SkillCloudService | null = null
-  private agentSkillShareInProgress = false
-  private skillUploadSessions: SkillUploadSessionService | null = null
-  private skillUploadSessionsDisposed = false
   private readonly skillTransactionRecovery: Promise<unknown>
-  private readonly skillInstallOperations = new Map<string, AbortController>()
-  private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
   private readonly claudeAgentTeams = new ClaudeAgentTeamsService()
   private mobileDictation: {
     id: string
@@ -3799,6 +3761,26 @@ export class OrcaRuntimeService {
       resolveWorktreeForContainedPath: (cwd) => this.resolveWorktreeForContainedPath(cwd),
       listResolvedWorktrees: () => this.listResolvedWorktrees(),
       emitClientEvent: (event) => this.emitClientEvent(event)
+    })
+    const skillArtifactCommandsDeps = {
+      getStatus: () => this.getStatus(),
+      skillTransactionRecovery: deps?.skillTransactionRecovery ?? Promise.resolve(),
+      listRepos: () => this.listRepos(),
+      listFolderWorkspaces: () => this.listFolderWorkspaces(),
+      assertAgentSkillSharingAllowed: () => this.assertAgentSkillSharingAllowed(),
+      listResolvedWorktrees: () => this.listResolvedWorktrees(),
+      showManagedWorktree: (selector: string) => this.showManagedWorktree(selector),
+      resolveProjectRuntimeForWorktree: (worktreeId: string | null | undefined) =>
+        this.resolveProjectRuntimeForWorktree(worktreeId),
+      getSshProviderFn: this.getSshProviderFn
+    }
+    this.skillArtifactCommands = new RuntimeSkillArtifactCommands({
+      ...skillArtifactCommandsDeps,
+      accountServices: () => this.accountServices
+    })
+    this.skillInstallCommands = new RuntimeSkillInstallCommands({
+      ...skillArtifactCommandsDeps,
+      accountServices: () => this.accountServices
     })
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
@@ -5233,11 +5215,11 @@ export class OrcaRuntimeService {
   }
 
   setArtifactService(service: ArtifactCloudService): void {
-    this.artifactService = service
+    this.skillArtifactCommands.setArtifactService(service)
   }
 
   setSkillCloudService(service: SkillCloudService): void {
-    this.skillCloudService = service
+    this.skillArtifactCommands.setSkillCloudService(service)
   }
 
   assertAgentSkillSharingAllowed(): void {
@@ -5249,122 +5231,24 @@ export class OrcaRuntimeService {
     return resolveNestedWorkerMaxDepth(this.store?.getSettings())
   }
 
-  async publishDiscoveredSkillsFromAgent(
+  publishDiscoveredSkillsFromAgent(
     request: AgentSkillShareRequest,
     discoveredSkills: readonly DiscoveredSkill[],
     signal?: AbortSignal
   ): Promise<AgentSkillShareOperation> {
-    this.assertAgentSkillSharingAllowed()
-    if (this.agentSkillShareInProgress) {
-      throw new AgentSkillSharingError(
-        AGENT_SKILL_SHARING_BUSY_CODE,
-        'Another agent skill bundle is being published. Wait for it to finish and try again.'
-      )
-    }
-    this.agentSkillShareInProgress = true
-    try {
-      return await this.executeAgentSkillShare(request, discoveredSkills, signal)
-    } finally {
-      this.agentSkillShareInProgress = false
-    }
-  }
-
-  private async executeAgentSkillShare(
-    request: AgentSkillShareRequest,
-    discoveredSkills: readonly DiscoveredSkill[],
-    signal?: AbortSignal
-  ): Promise<AgentSkillShareOperation> {
-    const selectedSkills = selectDiscoveredSkills(discoveredSkills, request.skillSelectors)
-    const operationRoot = join(
-      getAppEnvironment().getPath('userData'),
-      'agent-skill-share-operations'
-    )
-    const cloud = this.requireSkillCloudService()
-    const preparations = new SkillSharePreparationService(
-      operationRoot,
-      {
-        publishVersion: (input) => cloud.publishVersion(input),
-        createShare: (packageId, input) => cloud.createShare(packageId, input)
-      },
-      {
-        installStateDirectory: join(getAppEnvironment().getPath('userData'), 'skill-installs')
-      }
-    )
-    let preparationId: string | null = null
-    const cancel = (): void => {
-      if (preparationId) {
-        preparations.cancel(preparationId)
-      }
-    }
-    signal?.addEventListener('abort', cancel, { once: true })
-    try {
-      if (signal?.aborted) {
-        throw signal.reason ?? new Error('skill-share-cancelled')
-      }
-      const preview = await preparations
-        .prepare({
-          sources: selectedSkills.map((skill) => ({
-            id: skill.name,
-            sourceDirectory: skill.directoryPath
-          })),
-          bundleName: request.bundleName,
-          description:
-            selectedSkills.length === 1
-              ? (selectedSkills[0].description ?? '')
-              : `${selectedSkills.length} shared skills`
-        })
-        .catch((error: unknown) => {
-          if (
-            error instanceof Error &&
-            ['skill-package-skill-name-required', 'skill-package-skill-name-invalid'].includes(
-              error.message
-            )
-          ) {
-            throw new AgentSkillSharingError(
-              AGENT_SKILL_NOT_SHAREABLE_CODE,
-              'A selected skill cannot be shared. Its SKILL.md must declare a lowercase name containing only letters, numbers, and hyphens.'
-            )
-          }
-          throw error
-        })
-      preparationId = preview.preparationId
-      if (signal?.aborted) {
-        throw signal.reason ?? new Error('skill-share-cancelled')
-      }
-      this.assertAgentSkillSharingAllowed()
-      const published = await preparations.publish({
-        preparationId,
-        releaseNotes: request.releaseNotes
-      })
-      return published.status === 'ok'
-        ? {
-            status: 'ok',
-            value: {
-              ...published.value,
-              selectedSkills: selectedSkills.map(({ id, name, description }) => ({
-                id,
-                name,
-                description
-              }))
-            }
-          }
-        : published
-    } finally {
-      signal?.removeEventListener('abort', cancel)
-      await preparations.dispose()
-    }
+    return this.skillArtifactCommands.publishDiscoveredSkillsFromAgent(request, discoveredSkills, signal)
   }
 
   publishSkillPackage(
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudPublishResult>> {
-    return this.requireSkillCloudService().publish(request)
+    return this.skillArtifactCommands.publishSkillPackage(request)
   }
 
   publishSkillPackageVersion(
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudVersion>> {
-    return this.requireSkillCloudService().publishVersion(request)
+    return this.skillArtifactCommands.publishSkillPackageVersion(request)
   }
 
   createSkillPackageShare(
@@ -5374,14 +5258,14 @@ export class OrcaRuntimeService {
       idempotencyKey?: string
     }
   ) {
-    return this.requireSkillCloudService().createShare(packageId, request)
+    return this.skillArtifactCommands.createSkillPackageShare(packageId, request)
   }
 
   resolveSkillShare(
     shareId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<{ id: string; version: SkillCloudVersion }>> {
-    return this.requireSkillCloudService().resolveShare(shareId, options)
+    return this.skillArtifactCommands.resolveSkillShare(shareId, options)
   }
 
   createSkillDownloadGrant(
@@ -5391,7 +5275,7 @@ export class OrcaRuntimeService {
       installTarget?: 'local' | 'remote'
     }
   ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
-    return this.requireSkillCloudService().createDownloadGrant(shareId, options)
+    return this.skillArtifactCommands.createSkillDownloadGrant(shareId, options)
   }
 
   createSkillPackageVersionDownloadGrant(
@@ -5399,7 +5283,7 @@ export class OrcaRuntimeService {
     versionId: string,
     options: SkillCloudOptions & { installTarget?: 'local' | 'remote' }
   ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
-    return this.requireSkillCloudService().createPackageVersionDownloadGrant(
+    return this.skillArtifactCommands.createSkillPackageVersionDownloadGrant(
       packageId,
       versionId,
       options
@@ -5410,18 +5294,18 @@ export class OrcaRuntimeService {
     packageId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<SkillCloudPackageDetails>> {
-    return this.requireSkillCloudService().getPackage(packageId, options)
+    return this.skillArtifactCommands.getSkillPackage(packageId, options)
   }
 
   listOwnedSkillShares(options: SkillCloudOptions) {
-    return this.requireSkillCloudService().listOwnedShares(options)
+    return this.skillArtifactCommands.listOwnedSkillShares(options)
   }
 
   revokeSkillShare(
     shareId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<void>> {
-    return this.requireSkillCloudService().revokeShare(shareId, options)
+    return this.skillArtifactCommands.revokeSkillShare(shareId, options)
   }
 
   deleteSkillPackageVersion(
@@ -5429,484 +5313,70 @@ export class OrcaRuntimeService {
     versionId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<void>> {
-    return this.requireSkillCloudService().deleteVersion(packageId, versionId, options)
+    return this.skillArtifactCommands.deleteSkillPackageVersion(packageId, versionId, options)
   }
 
   deleteSkillPackage(
     packageId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<void>> {
-    return this.requireSkillCloudService().deletePackage(packageId, options)
+    return this.skillArtifactCommands.deleteSkillPackage(packageId, options)
   }
 
-  async installSharedSkillRequest(
+  installSharedSkillRequest(
     request: SkillInstallRequest,
     signal?: AbortSignal
   ): Promise<SkillInstallResult> {
-    if (this.skillInstallOperations.has(request.operationId)) {
-      throw new Error('skill-install-operation-in-progress')
-    }
-    const controller = new AbortController()
-    const abort = (): void => controller.abort()
-    if (signal?.aborted) {
-      abort()
-    } else {
-      signal?.addEventListener('abort', abort, { once: true })
-    }
-    this.skillInstallOperations.set(request.operationId, controller)
-    try {
-      return await this.executeSharedSkillInstall(request, controller.signal)
-    } finally {
-      signal?.removeEventListener('abort', abort)
-      if (this.skillInstallOperations.get(request.operationId) === controller) {
-        this.skillInstallOperations.delete(request.operationId)
-      }
-    }
+    return this.skillInstallCommands.installSharedSkillRequest(request, signal)
   }
 
-  async installSharedSkillBundleRequest(
+  installSharedSkillBundleRequest(
     request: SkillBundleInstallRequest,
     signal?: AbortSignal,
     onProgress?: (progress: SkillBundleInstallProgress) => void
   ): Promise<SkillBundleInstallResult> {
-    if (this.skillInstallOperations.has(request.operationId)) {
-      throw new Error('skill-install-operation-in-progress')
-    }
-    const controller = new AbortController()
-    const abort = (): void => controller.abort()
-    if (signal?.aborted) {
-      abort()
-    } else {
-      signal?.addEventListener('abort', abort, { once: true })
-    }
-    this.skillInstallOperations.set(request.operationId, controller)
-    const reportProgress = (progress: SkillBundleInstallProgress): void => {
-      this.skillInstallProgress.set(request.operationId, progress)
-      try {
-        onProgress?.(progress)
-      } catch {
-        // Why: renderer teardown must not change the host-owned install outcome.
-      }
-    }
-    try {
-      const runtimeId = this.getStatus().runtimeId
-      const sshTarget = await this.resolveSkillSshTarget(request.destination)
-      if (sshTarget) {
-        return installSkillBundleOnSshHost({
-          provider: sshTarget.provider,
-          userDataPath: getAppEnvironment().getPath('userData'),
-          request: {
-            ...request,
-            destination:
-              request.destination.scope === 'global'
-                ? { scope: 'global', executionTarget: { kind: 'host' } }
-                : request.destination
-          },
-          workspace: sshTarget.workspace,
-          requireHttps: getAppEnvironment().isPackaged(),
-          signal: controller.signal,
-          onProgress: reportProgress
-        })
-      }
-      await this.skillTransactionRecovery
-      const allowedDownloadOrigins = ['https://storage.googleapis.com']
-      if (!getAppEnvironment().isPackaged() && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-        allowedDownloadOrigins.push(
-          ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-            .map((origin) => origin.trim())
-            .filter(Boolean)
-        )
-      }
-      return await executeSkillBundleInstallRequest(request, {
-        authority: this.skillInstallDestinationAuthority(runtimeId),
-        stateDirectory: getAppEnvironment().getPath('userData'),
-        allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
-        requireHttps: getAppEnvironment().isPackaged(),
-        resolveStagedUpload: (uploadId, identity) =>
-          this.requireSkillUploadSessions().take(uploadId, identity),
-        detectProviders: detectInstalledAgentsWithShellPathHydration,
-        resolveProviderRootOverrides: (destination) =>
-          this.resolveSkillProviderRootOverrides(destination),
-        signal: controller.signal,
-        onProgress: reportProgress
-      })
-    } finally {
-      signal?.removeEventListener('abort', abort)
-      if (this.skillInstallOperations.get(request.operationId) === controller) {
-        this.skillInstallOperations.delete(request.operationId)
-      }
-      this.skillInstallProgress.delete(request.operationId)
-    }
+    return this.skillInstallCommands.installSharedSkillBundleRequest(request, signal, onProgress)
   }
 
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null {
-    return this.skillInstallProgress.get(operationId) ?? null
+    return this.skillInstallCommands.getSharedSkillInstallProgress(operationId)
   }
 
   cancelSharedSkillInstall(operationId: string): boolean {
-    const operation = this.skillInstallOperations.get(operationId)
-    operation?.abort()
-    return Boolean(operation)
+    return this.skillInstallCommands.cancelSharedSkillInstall(operationId)
   }
 
-  private async executeSharedSkillInstall(
-    request: SkillInstallRequest,
-    signal: AbortSignal
-  ): Promise<SkillInstallResult> {
-    const runtimeId = this.getStatus().runtimeId
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return installSkillOnSshHost({
-        provider: sshTarget.provider,
-        userDataPath: getAppEnvironment().getPath('userData'),
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace,
-        requireHttps: getAppEnvironment().isPackaged(),
-        signal
-      })
-    }
-    await this.skillTransactionRecovery
-    const allowedDownloadOrigins = ['https://storage.googleapis.com']
-    if (!getAppEnvironment().isPackaged() && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-      allowedDownloadOrigins.push(
-        ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-          .map((origin) => origin.trim())
-          .filter(Boolean)
-      )
-    }
-    return executeSkillInstallRequest(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
-      requireHttps: getAppEnvironment().isPackaged(),
-      resolveStagedUpload: (uploadId, identity) =>
-        this.requireSkillUploadSessions().take(uploadId, identity),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination),
-      signal
-    })
-  }
-
-  async previewSharedSkillInstallRequest(
+  previewSharedSkillInstallRequest(
     request: SkillInstallPreviewRequest
   ): Promise<SkillInstallPreview> {
-    const runtimeId = this.getStatus().runtimeId
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return previewSkillInstallOnSshHost({
-        provider: sshTarget.provider,
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace
-      })
-    }
-    await this.skillTransactionRecovery
-    return previewSharedSkillInstall(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination)
-    })
+    return this.skillArtifactCommands.previewSharedSkillInstallRequest(request)
   }
 
-  async previewSharedSkillBundleInstallRequest(
+  previewSharedSkillBundleInstallRequest(
     request: SkillBundleInstallPreviewRequest
   ): Promise<SkillBundleInstallPreview> {
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return previewSkillBundleInstallOnSshHost({
-        provider: sshTarget.provider,
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace
-      })
-    }
-    await this.skillTransactionRecovery
-    const runtimeId = this.getStatus().runtimeId
-    return previewSharedSkillBundleInstall(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination)
-    })
+    return this.skillArtifactCommands.previewSharedSkillBundleInstallRequest(request)
   }
 
-  async removeSharedSkillInstallRequest(request: SkillRemoveRequest): Promise<SkillInstallResult> {
-    const runtimeId = this.getStatus().runtimeId
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return removeSkillInstallOnSshHost({
-        provider: sshTarget.provider,
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace
-      })
-    }
-    await this.skillTransactionRecovery
-    return removeSharedSkillInstall(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination)
-    })
+  removeSharedSkillInstallRequest(request: SkillRemoveRequest): Promise<SkillInstallResult> {
+    return this.skillArtifactCommands.removeSharedSkillInstallRequest(request)
   }
 
-  async listManagedSkillInstalls(connectionId?: string): Promise<ManagedSkillInstall[]> {
-    if (connectionId) {
-      const provider = this.requireSkillSshProvider(connectionId)
-      return listSkillInstallsOnSshHost({
-        provider,
-        connectionId,
-        workspaces: await this.listSkillSshWorkspaces(connectionId)
-      })
-    }
-    await this.skillTransactionRecovery
-    const runtimeId = this.getStatus().runtimeId
-    const [installs, worktrees] = await Promise.all([
-      listManagedSkillInstalls(join(getAppEnvironment().getPath('userData'), 'skill-installs'), {
-        observeReceipt: async (receipt) => {
-          if (!receipt.wslDistro) {
-            return nativeSkillInstallFilesystem.observeSkill(
-              receipt.canonicalPath,
-              receipt.fileModes
-            )
-          }
-          const filesystem = new WslSkillInstallFilesystem(receipt.wslDistro, [
-            dirname(receipt.canonicalPath)
-          ])
-          return filesystem.observeSkill(receipt.canonicalPath, receipt.fileModes)
-        }
-      }),
-      this.listResolvedWorktrees()
-    ])
-    const folderWorkspaces = this.listFolderWorkspaces()
-    return installs.flatMap((install): ManagedSkillInstall[] => {
-      if (install.scope === 'global') {
-        const wslPrefix = `global:${runtimeId}:wsl:`
-        return [
-          {
-            ...install,
-            destination: install.destinationIdentity.startsWith(wslPrefix)
-              ? {
-                  scope: 'global',
-                  executionTarget: {
-                    kind: 'wsl',
-                    distro: install.destinationIdentity.slice(wslPrefix.length)
-                  }
-                }
-              : { scope: 'global' }
-          }
-        ]
-      }
-      const worktree = worktrees.find(
-        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
-      )
-      if (worktree) {
-        return [{ ...install, destination: { scope: 'workspace', worktreeId: worktree.id } }]
-      }
-      const folder = folderWorkspaces.find(
-        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
-      )
-      return folder
-        ? [{ ...install, destination: { scope: 'workspace', folderWorkspaceId: folder.id } }]
-        : []
-    })
+  listManagedSkillInstalls(connectionId?: string): Promise<ManagedSkillInstall[]> {
+    return this.skillArtifactCommands.listManagedSkillInstalls(connectionId)
   }
 
-  async skillInstallDestinationUsesSsh(
+  skillInstallDestinationUsesSsh(
     destination: SkillInstallRequest['destination']
   ): Promise<boolean> {
-    return Boolean(await this.resolveSkillSshTarget(destination))
+    return this.skillInstallCommands.skillInstallDestinationUsesSsh(destination)
   }
 
-  async resolveSkillDiscoveryProviderRoots(target: {
+  resolveSkillDiscoveryProviderRoots(target: {
     kind: 'native-host' | 'wsl'
     distro?: string
   }): Promise<SkillProviderRootOverrides> {
-    const roots = await this.resolveSkillProviderRootOverrides({
-      scope: 'global',
-      homeDirectory: homedir(),
-      ...(target.kind === 'wsl' && target.distro ? { wslDistro: target.distro } : {})
-    })
-    if (target.kind !== 'wsl') {
-      return roots
-    }
-    return Object.fromEntries(
-      Object.entries(roots).map(([provider, root]) => [provider, toLinuxPath(root)])
-    )
-  }
-
-  private async resolveSkillProviderRootOverrides(destination: {
-    scope: 'global' | 'workspace'
-    homeDirectory: string
-    workspaceDirectory?: string
-    wslDistro?: string
-  }): Promise<SkillProviderRootOverrides> {
-    if (destination.scope !== 'global') {
-      return {}
-    }
-    const wslGrokRoot = destination.wslDistro
-      ? await resolveWslGrokSkillProviderRoot(destination.wslDistro)
-      : null
-    const roots: SkillProviderRootOverrides = destination.wslDistro
-      ? wslGrokRoot
-        ? { grok: wslGrokRoot }
-        : {}
-      : resolveEnvironmentSkillProviderRoots()
-    const claudeConfigDirectory = this.accountServices?.claudeAccounts.getRuntimeConfigDir(
-      destination.wslDistro
-        ? { runtime: 'wsl', wslDistro: destination.wslDistro }
-        : { runtime: 'host' }
-    )
-    return withClaudeSkillProviderRoot(roots, claudeConfigDirectory)
-  }
-
-  private skillInstallDestinationAuthority(runtimeId: string): SkillInstallDestinationAuthority {
-    return {
-      environmentId: runtimeId,
-      homeDirectory: homedir(),
-      resolveWorktree: async (id) => {
-        const repo = this.listRepos().find(
-          (candidate) => candidate.id === getRepoIdFromWorktreeId(id)
-        )
-        if (repo?.connectionId) {
-          throw new Error('skill-install-ssh-dispatch-required')
-        }
-        const projectRuntime = this.resolveProjectRuntimeForWorktree(id)
-        const worktree = await this.showManagedWorktree(`id:${id}`)
-        if (worktree.id !== id) {
-          return null
-        }
-        return {
-          id,
-          path: worktree.path,
-          ...(projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
-            ? { wslDistro: projectRuntime.runtime.distro }
-            : {})
-        }
-      },
-      resolveFolderWorkspace: async (id) => {
-        const workspace = this.listFolderWorkspaces().find((candidate) => candidate.id === id)
-        if (!workspace || workspace.connectionId) {
-          return null
-        }
-        return {
-          id,
-          path: workspace.folderPath,
-          ...(parseWslUncPath(workspace.folderPath)?.distro
-            ? { wslDistro: parseWslUncPath(workspace.folderPath)!.distro }
-            : {})
-        }
-      },
-      resolveWsl: async (distro) => {
-        if (process.platform !== 'win32') {
-          return null
-        }
-        const homeDirectory = getWslHome(distro)
-        return homeDirectory ? { homeDirectory } : null
-      }
-    }
-  }
-
-  private async resolveSkillSshTarget(destination: SkillInstallRequest['destination']): Promise<{
-    provider: () => IPtyProvider
-    workspace?: SkillSshWorkspaceAuthority
-  } | null> {
-    if (destination.scope === 'global') {
-      if (destination.executionTarget?.kind !== 'ssh') {
-        return null
-      }
-      const connectionId = destination.executionTarget.connectionId
-      return { provider: () => this.requireSkillSshProvider(connectionId) }
-    }
-    if (destination.worktreeId) {
-      const repo = this.listRepos().find(
-        (candidate) => candidate.id === getRepoIdFromWorktreeId(destination.worktreeId!)
-      )
-      if (!repo?.connectionId) {
-        return null
-      }
-      const worktree = await this.showManagedWorktree(`id:${destination.worktreeId}`)
-      if (worktree.id !== destination.worktreeId) {
-        throw new Error('skill-install-workspace-not-found')
-      }
-      return {
-        provider: () => this.requireSkillSshProvider(repo.connectionId!),
-        workspace: { kind: 'worktree', id: worktree.id, path: worktree.path }
-      }
-    }
-    const folder = this.listFolderWorkspaces().find(
-      (candidate) => candidate.id === destination.folderWorkspaceId
-    )
-    if (!folder?.connectionId) {
-      return null
-    }
-    return {
-      provider: () => this.requireSkillSshProvider(folder.connectionId!),
-      workspace: { kind: 'folder', id: folder.id, path: folder.folderPath }
-    }
-  }
-
-  private requireSkillSshProvider(connectionId: string): IPtyProvider {
-    const provider = this.getSshProviderFn?.(connectionId)
-    if (!provider?.requestHostRpc) {
-      throw new Error('skill-install-ssh-relay-unavailable')
-    }
-    return provider
-  }
-
-  private async listSkillSshWorkspaces(
-    connectionId: string
-  ): Promise<SkillSshWorkspaceAuthority[]> {
-    const repos = new Map(
-      this.listRepos()
-        .filter((repo) => repo.connectionId === connectionId)
-        .map((repo) => [repo.id, repo])
-    )
-    const worktrees = (await this.listResolvedWorktrees())
-      .filter((worktree) => repos.has(getRepoIdFromWorktreeId(worktree.id)))
-      .map(
-        (worktree): SkillSshWorkspaceAuthority => ({
-          kind: 'worktree',
-          id: worktree.id,
-          path: worktree.path
-        })
-      )
-    const folders = this.listFolderWorkspaces()
-      .filter((folder) => folder.connectionId === connectionId)
-      .map(
-        (folder): SkillSshWorkspaceAuthority => ({
-          kind: 'folder',
-          id: folder.id,
-          path: folder.folderPath
-        })
-      )
-    return [...worktrees, ...folders]
+    return this.skillInstallCommands.resolveSkillDiscoveryProviderRoots(target)
   }
 
   beginSkillUpload(request: SkillUploadBeginRequest): Promise<{
@@ -5914,91 +5384,61 @@ export class OrcaRuntimeService {
     chunkBytes: number
     acknowledgedOffset: number
   }> {
-    return this.requireSkillUploadSessions().begin(request)
+    return this.skillArtifactCommands.beginSkillUpload(request)
   }
 
   appendSkillUploadChunk(
     request: SkillUploadChunkRequest
   ): Promise<{ acknowledgedOffset: number }> {
-    return this.requireSkillUploadSessions().append(request)
+    return this.skillArtifactCommands.appendSkillUploadChunk(request)
   }
 
   commitSkillUpload(uploadId: string): Promise<{ uploadId: string }> {
-    return this.requireSkillUploadSessions().commit(uploadId)
+    return this.skillArtifactCommands.commitSkillUpload(uploadId)
   }
 
   cancelSkillUpload(uploadId: string): Promise<void> {
-    return this.requireSkillUploadSessions().cancel(uploadId)
+    return this.skillArtifactCommands.cancelSkillUpload(uploadId)
   }
 
   listArtifacts(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
-    return this.requireArtifactService().list(options)
+    return this.skillArtifactCommands.listArtifacts(options)
   }
 
   getPublishedArtifactLink(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
-    return this.requireArtifactService().getPublishedLink(request)
+    return this.skillArtifactCommands.getPublishedArtifactLink(request)
   }
 
   shareArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    return this.requireArtifactService().share(request)
+    return this.skillArtifactCommands.shareArtifact(request)
   }
 
   publishArtifact(
     request: ArtifactWriteRequest
   ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
-    return this.requireArtifactService().publish(request)
+    return this.skillArtifactCommands.publishArtifact(request)
   }
 
   updateArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    return this.requireArtifactService().update(request)
+    return this.skillArtifactCommands.updateArtifact(request)
   }
 
   unshareArtifact(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<void>> {
-    return this.requireArtifactService().unshare(request)
+    return this.skillArtifactCommands.unshareArtifact(request)
   }
 
   deleteArtifact(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
-    return this.requireArtifactService().delete(id, options)
-  }
-
-  private requireArtifactService(): ArtifactCloudService {
-    if (!this.artifactService) {
-      throw new Error('Artifact service is unavailable.')
-    }
-    return this.artifactService
-  }
-
-  private requireSkillCloudService(): SkillCloudService {
-    if (!this.skillCloudService) {
-      throw new Error('Skill Cloud service is unavailable.')
-    }
-    return this.skillCloudService
-  }
-
-  private requireSkillUploadSessions(): SkillUploadSessionService {
-    if (this.skillUploadSessionsDisposed) {
-      throw new Error('skill-upload-service-disposed')
-    }
-    this.skillUploadSessions ??= new SkillUploadSessionService(
-      join(
-        getAppEnvironment().getPath('userData'),
-        'skill-installs',
-        SKILL_UPLOAD_STAGING_ROOT_NAME
-      )
-    )
-    return this.skillUploadSessions
+    return this.skillArtifactCommands.deleteArtifact(id, options)
   }
 
   async disposeSkillUploadSessions(): Promise<void> {
-    this.skillUploadSessionsDisposed = true
-    const sessions = this.skillUploadSessions
-    this.skillUploadSessions = null
-    await sessions?.dispose()
+    await this.skillArtifactCommands.disposeSkillUploadSessions()
   }
+
 
   getRuntimeId(): string {
     return this.runtimeId
