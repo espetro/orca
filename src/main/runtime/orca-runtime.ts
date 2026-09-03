@@ -24,8 +24,12 @@ import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-comma
 import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
+import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
+import type { RuntimeMobileSnapshotValueComparisonDeps } from './runtime-mobile-snapshot-value-comparison-commands-deps'
 import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
+import { RuntimeHeadlessSessionTabPersistenceCommands } from './runtime-headless-session-tab-persistence-commands'
+import type { RuntimeHeadlessSessionTabPersistenceDeps } from './runtime-headless-session-tab-persistence-commands-deps'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
 import type {
@@ -2705,6 +2709,7 @@ export class OrcaRuntimeService {
   private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
   private readonly repoGitCommands: RuntimeRepoGitCommandsFacade
   private readonly orchestrationCommands: RuntimeOrchestrationCommands
+  private readonly headlessSessionTabPersistenceCommands: RuntimeHeadlessSessionTabPersistenceCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3540,6 +3545,17 @@ export class OrcaRuntimeService {
       handleByLeafKey: this.handleByLeafKey
     }
     this.orchestrationCommands = new RuntimeOrchestrationCommands(orchestrationDeps)
+    const headlessSessionTabPersistenceDeps: RuntimeHeadlessSessionTabPersistenceDeps = {
+      getWorkspaceSessionForWorktree: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
+      setWorkspaceSessionForWorktree: (worktreeId, session) => this.setWorkspaceSessionForWorktree(worktreeId, session),
+      getMobileSessionTabsByWorktree: (worktreeId) => this.mobileSessionTabsByWorktree.get(worktreeId),
+      setMobileSessionTabsByWorktree: (worktreeId, snapshot) => this.mobileSessionTabsByWorktree.set(worktreeId, snapshot),
+      emitMobileSessionTabsSnapshot: (snapshot) => this.emitMobileSessionTabsSnapshot(snapshot),
+      setTerminalLayoutsByTabId: (tabId, layout) => { this.terminalLayoutsByTabId.set(tabId, layout) },
+      setExpandedLeafIdByTabId: (tabId, leafId) => { this.expandedLeafIdByTabId.set(tabId, leafId) },
+      store
+    }
+    this.headlessSessionTabPersistenceCommands = new RuntimeHeadlessSessionTabPersistenceCommands(headlessSessionTabPersistenceDeps)
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -9521,11 +9537,12 @@ export class OrcaRuntimeService {
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
-    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
+    this.headlessSessionTabPersistenceCommands.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
+    this.headlessSessionTabPersistenceCommands.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
     return { updated: true }
   }
 
+  // Delegation methods
   private persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
