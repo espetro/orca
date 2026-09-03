@@ -27,6 +27,7 @@ import {
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -34,7 +35,7 @@ import {
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
-import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
+import { retireAgentPaneAuthorityAliasesByOwnerTab, resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   retireAgentPaneAuthorityReducer,
   restoreAgentPaneAuthorityReducer,
@@ -525,17 +526,20 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
-      let transferResult: ReturnType<typeof transferAgentPaneAuthorityReducer> = null
+      type TransferHit = { from: string; to: string; ptyId?: string | null }
+      const captured: { value: TransferHit | null } = { value: null }
       set((s) => {
-        transferResult = transferAgentPaneAuthorityReducer(s, { fromPaneKey, toPaneKey, ptyId })
-        return transferResult ? transferResult.patch : s
+        const result = transferAgentPaneAuthorityReducer(s, { fromPaneKey, toPaneKey, ptyId })
+        if (!result) return s
+        captured.value = { from: result.from, to: result.to, ptyId: result.ptyId }
+        return result.patch
       })
+      const transferResult = captured.value
       if (typeof window !== 'undefined' && transferResult) {
-        const res = transferResult as NonNullable<typeof transferResult>
         window.api?.agentStatus?.transferPaneAuthority?.({
-          fromPaneKey: res.from,
-          toPaneKey: res.to,
-          ...(res.ptyId ? { ptyId: res.ptyId } : {})
+          fromPaneKey: transferResult.from,
+          toPaneKey: transferResult.to,
+          ...(transferResult.ptyId ? { ptyId: transferResult.ptyId } : {})
         })
       }
     },

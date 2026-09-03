@@ -87,6 +87,7 @@ import { useNativeChatHandlers } from './use-terminal-pane-native-chat'
 import { useCloseFlowState } from './use-terminal-pane-close-flow'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
+import { useTerminalPaneFocus } from './use-terminal-pane-focus'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import {
   closeTerminalLinkActionRequest,
@@ -192,15 +193,7 @@ import {
 import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
-import {
-  isXtermHelperTextarea,
-  releaseTerminalFocusForOutsidePointerDown,
-  releaseTerminalFocusForWindowBlur,
-  resyncTerminalFocusForWindowFocus,
-  setRegularTerminalInputFocusAttribute
-} from './regular-terminal-focus-ownership'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
-import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
 
 type TerminalPaneProps = {
   tabId: string
@@ -1566,103 +1559,9 @@ function TerminalPane(
     }
   }, [isActive, isVisible])
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    let ownsRegularTerminalFocus = false
-    let releasedHelperOnWindowBlur: HTMLElement | null = null
-    // Why: the IME refresh's blur emits a focusout that would clear terminalInputFocused mid-handoff; latch it so Terminal-first shortcut routing survives until refocus.
-    let refreshingImeInputContext = false
-    const syncFocused = (focused: boolean): void => {
-      ownsRegularTerminalFocus = focused
-      if (focused) {
-        releasedHelperOnWindowBlur = null
-      }
-      setRegularTerminalInputFocusAttribute(focused)
-      window.api.ui.setTerminalInputFocused?.(focused)
-    }
-    const onFocusIn = (event: FocusEvent): void => {
-      if (!isXtermHelperTextarea(event.target)) {
-        return
-      }
-      syncFocused(true)
-      // Why: helper→helper handoffs skip window blur and can leave a stale macOS NSTextInputContext; the refocus's non-helper relatedTarget prevents recursion.
-      if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
-        refreshingImeInputContext = true
-        try {
-          refreshTerminalImeInputContext(event.target, {})
-        } finally {
-          refreshingImeInputContext = false
-        }
-      }
-    }
-    const onFocusOut = (event: FocusEvent): void => {
-      if (!isXtermHelperTextarea(event.target)) {
-        return
-      }
-      if (isXtermHelperTextarea(event.relatedTarget)) {
-        return
-      }
-      if (refreshingImeInputContext) {
-        return
-      }
-      syncFocused(false)
-    }
-    const onPointerDown = (event: PointerEvent): void => {
-      releaseTerminalFocusForOutsidePointerDown({
-        container,
-        activeElement: document.activeElement,
-        pointerTarget: event.target,
-        syncFocused
-      })
-    }
-    const onWindowBlur = (): void => {
-      // Why: webview/browser handoff keeps the helper textarea focused, so clear only the main-process mirror and let guest focus proceed.
-      releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
-        container,
-        activeElement: document.activeElement,
-        syncFocused
-      })
-    }
-    const onWindowFocus = (): void => {
-      // Why: app reactivation may keep DOM focus on xterm after blur cleared the shortcut mirror, or move focus to body/null.
-      if (
-        resyncTerminalFocusForWindowFocus({
-          container,
-          activeElement: document.activeElement,
-          syncFocused,
-          releasedHelper: releasedHelperOnWindowBlur
-        })
-      ) {
-        releasedHelperOnWindowBlur = null
-      }
-    }
-
-    if (
-      isXtermHelperTextarea(document.activeElement) &&
-      container.contains(document.activeElement)
-    ) {
-      syncFocused(true)
-    }
-    container.addEventListener('focusin', onFocusIn)
-    container.addEventListener('focusout', onFocusOut)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    window.addEventListener('blur', onWindowBlur)
-    window.addEventListener('focus', onWindowFocus)
-    return () => {
-      container.removeEventListener('focusin', onFocusIn)
-      container.removeEventListener('focusout', onFocusOut)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      window.removeEventListener('blur', onWindowBlur)
-      window.removeEventListener('focus', onWindowFocus)
-      // Why: the helper textarea may be gone before cleanup reads document.activeElement, so clear by this pane's mirrored ownership.
-      if (ownsRegularTerminalFocus) {
-        syncFocused(false)
-      }
-    }
-  }, [])
+  useTerminalPaneFocus({
+    containerRef
+  })
 
   useTerminalPanePasteEffects({
     isActive,
