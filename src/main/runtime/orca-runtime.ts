@@ -24,8 +24,6 @@ import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-comma
 import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
-import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
-import type { RuntimeMobileSnapshotValueComparisonDeps } from './runtime-mobile-snapshot-value-comparison-commands-deps'
 import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
 import { RuntimeHeadlessSessionTabPersistenceCommands } from './runtime-headless-session-tab-persistence-commands'
@@ -3546,16 +3544,26 @@ export class OrcaRuntimeService {
     }
     this.orchestrationCommands = new RuntimeOrchestrationCommands(orchestrationDeps)
     const headlessSessionTabPersistenceDeps: RuntimeHeadlessSessionTabPersistenceDeps = {
-      getWorkspaceSessionForWorktree: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
-      setWorkspaceSessionForWorktree: (worktreeId, session) => this.setWorkspaceSessionForWorktree(worktreeId, session),
-      getMobileSessionTabsByWorktree: (worktreeId) => this.mobileSessionTabsByWorktree.get(worktreeId),
-      setMobileSessionTabsByWorktree: (worktreeId, snapshot) => this.mobileSessionTabsByWorktree.set(worktreeId, snapshot),
+      getWorkspaceSessionForWorktree: (worktreeId) =>
+        this.getWorkspaceSessionForWorktree(worktreeId),
+      setWorkspaceSessionForWorktree: (worktreeId, session) =>
+        this.setWorkspaceSessionForWorktree(worktreeId, session),
+      getMobileSessionTabsByWorktree: (worktreeId) =>
+        this.mobileSessionTabsByWorktree.get(worktreeId),
+      setMobileSessionTabsByWorktree: (worktreeId, snapshot) =>
+        this.mobileSessionTabsByWorktree.set(worktreeId, snapshot),
       emitMobileSessionTabsSnapshot: (snapshot) => this.emitMobileSessionTabsSnapshot(snapshot),
-      setTerminalLayoutsByTabId: (tabId, layout) => { this.terminalLayoutsByTabId.set(tabId, layout) },
-      setExpandedLeafIdByTabId: (tabId, leafId) => { this.expandedLeafIdByTabId.set(tabId, leafId) },
+      setTerminalLayoutsByTabId: (tabId, layout) => {
+        this.terminalLayoutsByTabId.set(tabId, layout)
+      },
+      setExpandedLeafIdByTabId: (tabId, leafId) => {
+        this.expandedLeafIdByTabId.set(tabId, leafId)
+      },
       store
     }
-    this.headlessSessionTabPersistenceCommands = new RuntimeHeadlessSessionTabPersistenceCommands(headlessSessionTabPersistenceDeps)
+    this.headlessSessionTabPersistenceCommands = new RuntimeHeadlessSessionTabPersistenceCommands(
+      headlessSessionTabPersistenceDeps
+    )
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -9537,144 +9545,46 @@ export class OrcaRuntimeService {
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    this.headlessSessionTabPersistenceCommands.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
-    this.headlessSessionTabPersistenceCommands.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
+    this.headlessSessionTabPersistenceCommands.persistHeadlessSessionTabProps(
+      worktreeId,
+      hostTabId,
+      args
+    )
+    this.headlessSessionTabPersistenceCommands.applyHeadlessSessionTabPropsToSnapshot(
+      worktreeId,
+      hostTabId,
+      args
+    )
     return { updated: true }
   }
 
   // Delegation methods
-  private persistHeadlessSessionTabProps(
+  private persistHeadlessSessionTabProps = (
     worktreeId: string,
     tabId: string,
     props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
-  ): void {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return
-    }
-    const tabs = session.tabsByWorktree[worktreeId]
-    const nextSession: WorkspaceSessionState = { ...session }
-    let changed = false
-    if (tabs?.some((tab) => tab.id === tabId)) {
-      changed = true
-      nextSession.tabsByWorktree = {
-        ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-                ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-              }
-            : tab
-        )
-      }
-    }
-
-    const unifiedTabs = session.unifiedTabs?.[worktreeId]
-    if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
-      changed = true
-      nextSession.unifiedTabs = {
-        ...session.unifiedTabs,
-        [worktreeId]: unifiedTabs.map((tab) =>
-          tab.id === tabId || tab.entityId === tabId
-            ? {
-                ...tab,
-                ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
-              }
-            : tab
-        )
-      }
-    }
-
-    if (!changed) {
-      return
-    }
-    this.setWorkspaceSessionForWorktree(worktreeId, nextSession)
-  }
-
-  private applyHeadlessSessionTabPropsToSnapshot(
-    worktreeId: string,
-    tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
-  ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      return
-    }
-    let changed = false
-    const tabs = snapshot.tabs.map((tab) => {
-      if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
-        return tab
-      }
-      changed = true
-      return {
-        ...tab,
-        ...(props.color !== undefined ? { color: props.color } : {}),
-        ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-        ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-      }
-    })
-    if (!changed) {
-      return
-    }
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      tabs
-    }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
-  }
-
-  private getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
-    return tab.type === 'terminal' ? tab.parentTabId : tab.id
-  }
-
-  // Merge the client's pane structure into the persisted tab layout. PTY
-  // bindings and active leaf stay host-owned; only ratios/expand/titles change.
-  // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
-  private persistHeadlessTerminalPaneLayout(
-    worktreeId: string,
-    args: {
-      tabId: string
-      root: TerminalPaneLayoutNode | null
-      expandedLeafId: string | null
-      titlesByLeafId?: Record<string, string>
-    }
-  ): TerminalLayoutSnapshot | undefined {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return undefined
-    }
-    const existing = session.terminalLayoutsByTabId?.[args.tabId]
-    if (!existing) {
-      return undefined
-    }
-    const candidate = {
-      ...session,
-      terminalLayoutsByTabId: {
-        ...session.terminalLayoutsByTabId,
-        [args.tabId]: {
-          ...this.cloneTerminalLayoutSnapshot(existing),
-          root: args.root ?? existing.root,
-          expandedLeafId: args.expandedLeafId,
-          ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
-        }
-      }
-    }
-    this.setWorkspaceSessionForWorktree(worktreeId, candidate)
-    // Why: persistence may reject stale membership while accepting its metadata; publish only that rebased layout.
-    return (
-      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId[args.tabId] ??
-      candidate.terminalLayoutsByTabId[args.tabId]
+  ) =>
+    this.headlessSessionTabPersistenceCommands.persistHeadlessSessionTabProps(
+      worktreeId,
+      tabId,
+      props
     )
-  }
 
-  private applyHeadlessTerminalPaneLayoutToSnapshot(
+  private applyHeadlessSessionTabPropsToSnapshot = (
+    worktreeId: string,
+    tabId: string,
+    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+  ) =>
+    this.headlessSessionTabPersistenceCommands.applyHeadlessSessionTabPropsToSnapshot(
+      worktreeId,
+      tabId,
+      props
+    )
+
+  private getMobileSessionTopLevelTabId = (tab: RuntimeMobileSessionSnapshotTab) =>
+    this.headlessSessionTabPersistenceCommands.getMobileSessionTopLevelTabId(tab)
+
+  private persistHeadlessTerminalPaneLayout = (
     worktreeId: string,
     args: {
       tabId: string
@@ -9682,39 +9592,25 @@ export class OrcaRuntimeService {
       expandedLeafId: string | null
       titlesByLeafId?: Record<string, string>
     }
-  ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      return
-    }
-    let changed = false
-    const tabs = snapshot.tabs.map((tab) => {
-      if (tab.type !== 'terminal' || tab.parentTabId !== args.tabId || !tab.parentLayout) {
-        return tab
-      }
-      changed = true
-      return {
-        ...tab,
-        parentLayout: {
-          ...tab.parentLayout,
-          root: args.root ?? tab.parentLayout.root,
-          expandedLeafId: args.expandedLeafId,
-          ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
-        }
-      }
-    })
-    if (!changed) {
-      return
-    }
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      tabs
-    }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  ) => {
+    this.headlessSessionTabPersistenceCommands.persistHeadlessTerminalPaneLayout(worktreeId, args)
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    return session?.terminalLayoutsByTabId?.[args.tabId]
   }
+
+  private applyHeadlessTerminalPaneLayoutToSnapshot = (
+    worktreeId: string,
+    args: {
+      tabId: string
+      root: TerminalPaneLayoutNode | null
+      expandedLeafId: string | null
+      titlesByLeafId?: Record<string, string>
+    }
+  ) =>
+    this.headlessSessionTabPersistenceCommands.applyHeadlessTerminalPaneLayoutToSnapshot(
+      worktreeId,
+      args
+    )
 
   private moveHeadlessMobileSessionTab(
     worktreeId: string,
