@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: this file owns the loopback HTTP adapter, the on-disk last-status persistence layer (hydrate, sanitize, TTL, atomic write, drop), and the relay ingest path in one place so the cache lifecycle (set → schedule → drain) lives next to the surfaces that mutate it. Splitting would force mutual `private` accessor scaffolding for a single class. */
 // Why: this main-process adapter keeps listener internals in shared/ (`src/shared/agent-hook-listener.ts`) so the relay can host the same pipeline without Electron; parsing that drifts back into this file stops applying to SSH panes.
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
 import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
@@ -18,9 +17,7 @@ import {
 } from '../../shared/agent-hook-listener/listener-state'
 import {
   clearClaudeAnsweredQuestionWait,
-  markClaudeLeadTurnInterrupted,
-  seedClaudeLeadTurnFromPersistedStatus,
-  seedClaudeSubagentRosterFromSnapshots
+  markClaudeLeadTurnInterrupted
 } from '../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   getEndpointFileName,
@@ -29,8 +26,7 @@ import {
 import {
   hasCodexTranscriptSubagents,
   markCodexLeadTurnInterrupted,
-  reconcileRemoteCodexState,
-  seedCodexStateFromSnapshot
+  reconcileRemoteCodexState
 } from '../../shared/agent-hook-listener/providers/codex-state'
 import {
   hasPendingAgentResultText,
@@ -106,9 +102,7 @@ import {
   ASSISTANT_MESSAGE_RETRY_MS,
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
-  authorityCommitmentsMatch,
   CODEX_SUBAGENT_POLL_MS,
-  dropHydratedIdleClaudeSubagents,
   equivalentInterruptAgentType,
   agentTypeToPromptSentAgentKind,
   HYDRATE_MAX_AGE_MS,
@@ -117,11 +111,7 @@ import {
   isValidPiProviderSessionOnly,
   invalidateClaudeChildOnlyBoundary,
   isToolProgressWorkingAfterInterrupt,
-  LAST_STATUS_FILE_VERSION,
   LAST_STATUS_FILE_NAME,
-  readPersistedLaunchTokenHash,
-  sanitizeHydratedEntry,
-  sanitizePersistedAuthorityCommitment,
   shouldKeepClaudePermissionVisible,
   STATUS_PERSIST_DEBOUNCE_MS,
   toAgentStatusIpcPayload,
@@ -131,11 +121,8 @@ import {
   type AgentHookStatusChangeEntry,
   type AgentPromptSentDedupeEntry,
   type EnrichedAgentHookEventPayload,
-  type LastStatusFile,
   type NormalizedLocalHook,
   type PaneStatusClearListener,
-  type PersistedAgentHookAuthorityCommitment,
-  type PersistedAgentHookEventPayload,
   type ProviderSessionChangeListener,
   type StatusChangeListener
 } from './agent-hook-payload-sanitize'
@@ -1013,7 +1000,6 @@ export class AgentHookServer {
     }
     this.token = randomUUID()
     this.endpointFileWritten = false
-    this.lastWrittenJson = null
     // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
     if (this.lastStatusFilePath) {
       this.persistence.hydrateLastStatusFromDisk(HYDRATE_MAX_AGE_MS)
@@ -1290,245 +1276,19 @@ export class AgentHookServer {
     this.endpointFileWritten = ok
   }
 
-  private hydrateLastStatusFromDisk(): void {
-    if (!this.lastStatusFilePath) {
-      return
-    }
-    // Why: keep hydrate idempotent so a future re-start path can't merge prior-session state.
-    this.state.lastStatusByPaneKey.clear()
-    this.hydratedLaunchTokenHashByPaneKey.clear()
-    this.persistedAuthorityCommitmentsByPaneKey.clear()
-    let raw: string
-    try {
-      raw = readFileSync(this.lastStatusFilePath, 'utf8')
-    } catch (err) {
-      // Why: missing file is normal (first launch); other errors degrade to empty hydration + one warn.
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.warn('[agent-hooks] failed to read last-status file:', err)
-      }
-      return
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
-      return
-    }
-    if (typeof parsed !== 'object' || parsed === null) {
-      console.warn('[agent-hooks] last-status file is not an object; ignoring')
-      return
-    }
-    const file = parsed as Partial<LastStatusFile>
-    if (file.version !== LAST_STATUS_FILE_VERSION) {
-      console.warn(
-        `[agent-hooks] last-status file version mismatch (${String(
-          file.version
-        )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
-      )
-      return
-    }
-    const entries = file.entries
-    if (typeof entries !== 'object' || entries === null) {
-      console.warn('[agent-hooks] last-status file entries missing or wrong shape; ignoring')
-      return
-    }
-    let hydrated = 0
-    let dropped = 0
-    let prunedLegacyClaudeSubagents = 0
-    let scrubbedLegacyLaunchTokens = 0
-    // Why: drop entries older than HYDRATE_MAX_AGE_MS to bound disk growth (one Date.now() for a consistent cutoff).
-    const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
-    for (const [paneKey, rawEntry] of Object.entries(entries)) {
-      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      const rawResolvedEntry =
-        resolvedPaneKey === paneKey || typeof rawEntry !== 'object' || rawEntry === null
-          ? rawEntry
-          : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
-      const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
-      if (entry && entry.receivedAt >= ttlCutoff) {
-        const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
-        if (launchTokenHash) {
-          this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)
-          const evidence = this.toAuthorityEvidence(entry, launchTokenHash)
-          if (evidence) {
-            this.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, evidence)
-          }
-        }
-        if (
-          typeof rawResolvedEntry === 'object' &&
-          rawResolvedEntry !== null &&
-          typeof (rawResolvedEntry as Record<string, unknown>).launchToken === 'string'
-        ) {
-          scrubbedLegacyLaunchTokens += 1
-        }
-        const hydratedPayload = dropHydratedIdleClaudeSubagents(entry.payload)
-        if (hydratedPayload !== entry.payload) {
-          prunedLegacyClaudeSubagents +=
-            (entry.payload.subagents?.length ?? 0) - (hydratedPayload.subagents?.length ?? 0)
-          entry.payload = hydratedPayload
-        }
-        if (entry.payload.state !== 'done') {
-          // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
-          entry.restoredUnconfirmed = true
-        }
-        this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
-        if (entry.connectionId) {
-          // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
-          const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
-          this.connectionTimestampWatermarkById.set(
-            entry.connectionId,
-            Math.max(previousWatermark ?? -1, entry.receivedAt)
-          )
-        }
-        // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
-        if (entry.payload.agentType === 'codex') {
-          seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
-        } else if (entry.payload.agentType === 'claude') {
-          seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry, {
-            childOnlyBoundary: entry.claudeLeadBoundaryChildOnly === true
-          })
-          if (entry.payload.subagents) {
-            seedClaudeSubagentRosterFromSnapshots(
-              this.state,
-              resolvedPaneKey,
-              entry.payload.subagents
-            )
-          }
-        }
-        hydrated += 1
-      } else {
-        dropped += 1
-      }
-    }
-    for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
-      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      const commitment = sanitizePersistedAuthorityCommitment(resolvedPaneKey, rawCommitment)
-      if (!commitment || commitment.observedAt < ttlCutoff) {
-        dropped += 1
-        continue
-      }
-      const existing = this.persistedAuthorityCommitmentsByPaneKey.get(resolvedPaneKey)
-      if (existing && !authorityCommitmentsMatch(existing, commitment)) {
-        this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
-        this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
-        dropped += 1
-        continue
-      }
-      this.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, commitment)
-      this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, commitment.launchTokenHash)
-    }
-    if (dropped > 0) {
-      console.warn(
-        `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
-      )
-    }
-    if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
-      // Why: persist load-time pruning and bearer scrubbing once.
-      this.runStatusPersist()
-    } else if (hydrated > 0) {
-      // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
-      this.lastWrittenJson = raw
-    }
-  }
-
   private captureHydratedAuthorityCommitments(): void {
-    this.revokedHydratedAuthorityCommitments = new WeakSet()
-    for (const entry of this.state.lastStatusByPaneKey.values()) {
-      const evidence = this.toAuthorityEvidence(
-        entry as EnrichedAgentHookEventPayload,
-        this.hydratedLaunchTokenHashByPaneKey.get(entry.paneKey)
-      )
-      if (evidence && !this.persistedAuthorityCommitmentsByPaneKey.has(entry.paneKey)) {
-        this.persistedAuthorityCommitmentsByPaneKey.set(entry.paneKey, evidence)
-      }
-    }
-    this.hydratedAuthorityCommitments = Object.freeze(
-      Array.from(this.persistedAuthorityCommitmentsByPaneKey.values())
-    )
+    this.persistence.captureHydratedAuthorityCommitments()
   }
 
   private recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void {
-    const evidence = this.toAuthorityEvidence(payload)
-    if (evidence) {
-      this.currentAuthorityObservations.set(evidence.paneKey, evidence)
-      this.persistedAuthorityCommitmentsByPaneKey.set(evidence.paneKey, evidence)
-      this.hydratedLaunchTokenHashByPaneKey.set(evidence.paneKey, evidence.launchTokenHash)
-    }
+    this.persistence.recordCurrentAuthorityObservation(payload)
   }
 
   toAuthorityEvidence(
     payload: unknown,
     launchTokenHashOverride?: string
   ): unknown {
-    const launchToken = payload.launchToken?.trim()
-    const launchTokenHash =
-      launchTokenHashOverride ??
-      (launchToken ? createHash('sha256').update(launchToken).digest('hex') : null)
-    if (!launchTokenHash) {
-      return null
-    }
-    return Object.freeze({
-      paneKey: payload.paneKey,
-      launchTokenHash,
-      connectionId: payload.connectionId,
-      ...(payload.tabId ? { tabId: payload.tabId } : {}),
-      ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
-      observedAt: 'receivedAt' in payload ? payload.receivedAt : Date.now()
-    })
-  }
-
-  private serializeStatusFile(): string {
-    const entries: Record<string, PersistedAgentHookEventPayload> = {}
-    const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
-    const conflictedCommitments = new Set<string>()
-    for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
-      authorityCommitments[paneKey] = { ...commitment }
-    }
-    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
-      // Why: never persist invalid keys (matches the hydrate-path invariant).
-      if (!isValidPaneKey(paneKey)) {
-        continue
-      }
-      const enrichedPayload = payload as EnrichedAgentHookEventPayload
-      const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
-      const {
-        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
-        promptInteractionKey: _promptInteractionKey,
-        // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
-        restoredUnconfirmed: _restoredUnconfirmed,
-        // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
-        observation: _observation,
-        // Replay provenance is runtime-only and must not survive another restart.
-        isReplay: _isReplay,
-        launchToken,
-        ...persistedPayload
-      } = enrichedPayload
-      const launchTokenHash = launchToken?.trim()
-        ? createHash('sha256').update(launchToken.trim()).digest('hex')
-        : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
-      entries[paneKey] = {
-        ...persistedPayload,
-        ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
-        ...(launchTokenHash ? { launchTokenHash } : {})
-      }
-      const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
-      if (commitment && !conflictedCommitments.has(paneKey)) {
-        const existing = authorityCommitments[paneKey]
-        if (existing && !authorityCommitmentsMatch(existing, commitment)) {
-          delete authorityCommitments[paneKey]
-          conflictedCommitments.add(paneKey)
-        } else {
-          authorityCommitments[paneKey] = { ...commitment }
-        }
-      }
-    }
-    const file: LastStatusFile = {
-      version: LAST_STATUS_FILE_VERSION,
-      entries,
-      authorityCommitments
-    }
-    return JSON.stringify(file)
+    return this.persistence.toAuthorityEvidence(payload, launchTokenHashOverride)
   }
 
   private scheduleStatusPersist(): void {
