@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { availableParallelism } from 'node:os'
+import { availableParallelism, totalmem } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 // The projects overlap heavily in src/shared but have no build dependency on
@@ -15,6 +15,11 @@ const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', impor
 
 // Why serialize on a single-core runner: three tsc processes there thrash rather than overlap.
 const concurrent = availableParallelism() > 1
+// Why cap workers: each tsc peaks near 4 GB; on small-RAM machines concurrent
+// checks swap instead of speeding anything up. Budget ~2 GB per worker.
+const memGb = totalmem() / 2 ** 30
+const maxWorkers = Math.max(1, Math.min(projects.length, Math.floor(memGb / 4)))
+const workerLimit = Math.min(concurrent ? maxWorkers : 1, projects.length)
 
 function checkProject(project) {
   return new Promise<void>((resolve, reject) => {
@@ -36,10 +41,29 @@ function checkProject(project) {
   })
 }
 
+async function runWithWorkerLimit() {
+  const pending = new Set<Promise<void>>()
+  let failures: unknown[] = []
+  const queue = [...projects]
+  await Promise.all(
+    Array.from({ length: workerLimit }, async () => {
+      for (let project = queue.shift(); project; project = queue.shift()) {
+        const run = checkProject(project)
+        pending.add(run)
+        try {
+          await run
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+    })
+  )
+  return failures
+}
+
 let failures: unknown[] = []
-if (concurrent) {
-  const results = await Promise.allSettled(projects.map(checkProject))
-  failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+if (workerLimit > 1) {
+  failures = await runWithWorkerLimit()
 } else {
   for (const project of projects) {
     try {
