@@ -17,7 +17,7 @@ import {
   launchConfigsEqual
 } from './agent-launch-config-registry'
 
-function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
+export function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
   for (const prefix of tabPrefixes) {
     if (paneKey.startsWith(prefix)) {
       return true

@@ -74,7 +74,6 @@ import {
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPanePasteEffects } from './use-terminal-pane-paste-effects'
 import { usePaneStateSubscriptions } from './use-terminal-pane-pane-state'
-import { useNativeChatHandlers } from './use-terminal-pane-native-chat'
 import { useCloseFlowState } from './use-terminal-pane-close-flow'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
@@ -87,14 +86,17 @@ import { useTerminalPaneRenameTitle } from './use-terminal-pane-rename-title'
 import { useTerminalPaneMobileSelection } from './use-terminal-pane-mobile-selection'
 import { useTerminalPaneLifecycleHandlers } from './use-terminal-pane-lifecycle-handlers'
 import { useTerminalPaneMenuContext } from './use-terminal-pane-menu-context'
+import { useTerminalPaneExpandLayout } from './use-terminal-pane-expand-layout'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import { type TerminalLinkActionRequest } from './terminal-link-action-request'
 import { useTerminalPaneLinkRouting } from './use-terminal-pane-link-routing'
 import { useTerminalPaneErrorEffects } from './use-terminal-pane-error-effects'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+import { useTerminalPaneSearchKeyboard } from './use-terminal-pane-search-keyboard'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
+import { useTerminalPaneChatSession } from './use-terminal-pane-chat-session'
 import { connectPanePty } from './pty-connection'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
@@ -159,7 +161,6 @@ import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
-import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
   updateTerminalRemoteRuntimeRecoveryUiState,
   type VisiblePtyRecoveryState
@@ -179,7 +180,6 @@ import {
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
 import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
-import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 
@@ -299,24 +299,19 @@ function TerminalPane(
   const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
   const [terminalLinkActionRequest, setTerminalLinkActionRequest] =
     useState<TerminalLinkActionRequest | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const searchOpenRef = useRef(false)
-  searchOpenRef.current = searchOpen
-  const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
   const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const [chatLeafId, setChatLeafId] = useState<string | null>(null)
-  const paneStateSubscriptions = usePaneStateSubscriptions({ tabId, worktreeId, chatLeafId })
-  const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
   )
-  // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
-  const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [agentSessionContinuation, setAgentSessionContinuation] =
     useState<AgentSessionContinuationRequest | null>(null)
+  const paneStateSubscriptions = usePaneStateSubscriptions({ tabId, worktreeId, chatLeafId })
+  // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
+  const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [paneProcessExitsByPaneId, setPaneProcessExitsByPaneId] = useState<
     Record<number, PaneProcessExit>
@@ -347,13 +342,6 @@ function TerminalPane(
     }
     setTerminalError((prev) => appendTerminalErrorMessage(prev, message))
   })
-  /** Dismissal is the only signal that the user has seen the surface, so it must also release the transports' repeat-suppression memory. */
-  const dismissTerminalError = useCallback(() => {
-    setTerminalError(null)
-    for (const transport of paneTransportsRef.current.values()) {
-      transport.notifyErrorSurfaceDismissed?.()
-    }
-  }, [])
   const onPtyRecoveryStateRef = useRef(
     (paneId: number, state: PtyTransportRecoveryState | null) => {
       setPtyRecoveryStatesByPaneId((previous) =>
@@ -391,58 +379,18 @@ function TerminalPane(
     () => collectLeafIdsInOrder(restoredLayout.root),
     [restoredLayout.root]
   )
-  const getNativeChatLeafIds = useCallback((): string[] => {
-    const mountedLeafIds = managerRef.current?.getPanes().map((pane) => pane.leafId) ?? []
-    // Why: a partially hydrated manager can expose one pane of a restored split; union both sources so tab-wide evidence stays disabled.
-    return [...new Set([...expectedLayoutLeafIds, ...mountedLeafIds])]
-  }, [expectedLayoutLeafIds])
-  const getTabWideAgentHintLeafId = useCallback((): string | null => {
-    if (tabWideAgentHintLeafId !== undefined) {
-      return tabWideAgentHintLeafId
-    }
-    const leafIds = getNativeChatLeafIds()
-    return leafIds.length === 1 ? leafIds[0] : null
-  }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
-  const getTabWideAgentHintLeafIdRef = useRef(getTabWideAgentHintLeafId)
-  useEffect(() => {
-    getTabWideAgentHintLeafIdRef.current = getTabWideAgentHintLeafId
-  }, [getTabWideAgentHintLeafId])
-  useEffect(() => {
-    if (tabWideAgentHintLeafId !== undefined) {
-      return
-    }
-    const leafIds = getNativeChatLeafIds()
-    if (leafIds.length === 0) {
-      return
-    }
-    // Why: tab-wide launch/title metadata predates leaf ownership; bind it only when the first topology proves the sole leaf it describes.
-    setTabWideAgentHintLeafId(leafIds.length === 1 ? leafIds[0] : null)
-  }, [getNativeChatLeafIds, paneCount, tabWideAgentHintLeafId])
-  const resolveTitleAgentForLeaf = useCallback(
-    (leafId: string | null) => {
-      const hasSingleKnownLeaf =
-        getNativeChatLeafIds().length === 1 && getTabWideAgentHintLeafId() === leafId
-      return resolveNativeChatLeafTitleAgent({
-        leafId,
-        panes: managerRef.current?.getPanes() ?? [],
-        runtimePaneTitlesByPaneId,
-        tabLabel: hasSingleKnownLeaf ? unifiedTabLabel : null,
-        terminalTitle: hasSingleKnownLeaf ? terminalTab?.title : null
-      })
-    },
-    [
-      getNativeChatLeafIds,
-      getTabWideAgentHintLeafId,
-      runtimePaneTitlesByPaneId,
-      terminalTab?.title,
-      unifiedTabLabel
-    ]
-  )
-  const nativeChatHandlers = useNativeChatHandlers({
+
+  const chatSessionHandlers = useTerminalPaneChatSession({
     chatLeafId,
     setChatLeafId,
+    tabWideAgentHintLeafId,
+    setTabWideAgentHintLeafId,
+    agentSessionFork,
+    setAgentSessionFork,
+    agentSessionContinuation,
+    setAgentSessionContinuation,
+    paneCount,
     managerRef,
-    onAgentExitedRef,
     nativeChatEnabled,
     nativeChatTranscriptIsLocalReadable,
     structuredSessionAgent,
@@ -452,16 +400,25 @@ function TerminalPane(
     setTabViewMode,
     tabAgentTypeByLeaf,
     terminalTab,
+    runtimePaneTitlesByPaneId,
+    unifiedTabLabel,
+    expectedLayoutLeafIds
+  })
+
+  const {
+    onAgentExitedRef,
     getNativeChatLeafIds,
     getTabWideAgentHintLeafId,
-    resolveTitleAgentForLeaf
-  })
-  const {
+    getTabWideAgentHintLeafIdRef,
+    resolveTitleAgentForLeaf,
     isChatEligibleForLeaf,
     applyNativeChatLeafRoute,
     switchNativeChatToTerminal,
-    readNativeChatTerminalScreen
-  } = nativeChatHandlers
+    readNativeChatTerminalScreen,
+    resolveAgentForLeaf,
+    activePaneCanContinueInNewSession,
+    getContextMenuCanContinueInNewSession
+  } = chatSessionHandlers
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
@@ -600,6 +557,14 @@ function TerminalPane(
     },
     [quickCommandEditorHostId]
   )
+
+  const {
+    searchOpen,
+    setSearchOpen,
+    searchOpenRef,
+    searchStateRef,
+    handleSearchSelectedText
+  } = useTerminalPaneSearchKeyboard()
 
   useEffect(() => {
     if (setupSplit) {
@@ -806,11 +771,6 @@ function TerminalPane(
     }),
     [closeActivePane]
   )
-
-  const handleSearchSelectedText = useCallback((selectedText: string): void => {
-    const state = useAppStore.getState()
-    state.showRightSidebarSearch({ query: selectedText })
-  }, [])
 
   const {
     requestTerminalLinkAction,
@@ -1127,16 +1087,6 @@ function TerminalPane(
     ]
   )
 
-  const clearPaneProcessExit = useCallback((paneId: number) => {
-    setPaneProcessExitsByPaneId((current) => {
-      if (current[paneId] === undefined) {
-        return current
-      }
-      const next = { ...current }
-      delete next[paneId]
-      return next
-    })
-  }, [])
 
   const handleRestartExitedPane = useCallback(
     (processExit: PaneProcessExit) => {
@@ -1286,45 +1236,18 @@ function TerminalPane(
     }
   }, [tabId, worktreeId, clearTerminalTabUnread, clearTerminalPaneUnread, clearWorktreeUnread])
 
-  const applyTerminalPaneAttention = useCallback(() => {
-    const manager = managerRef.current
-    if (!manager) {
-      return
-    }
-    applyTerminalPaneAttentionToManager(manager, tabId)
-  }, [tabId])
-
-  useLayoutEffect(() => {
-    applyTerminalPaneAttention()
-    return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
-  }, [tabId, paneCount, applyTerminalPaneAttention])
-
-  // Sync title reservation before paint so xterm fits below out-of-DOM banner chrome and never hides the first row.
-  useLayoutEffect(() => {
-    const manager = managerRef.current
-    if (!manager) {
-      return
-    }
-    // Reserve title space only for text/status chrome; chromeless controls float over xterm so untitled panes keep their first row.
-    const needsFit = syncSessionRestoredBannerTitleSpace({
-      panes: manager.getPanes(),
-      paneTitles,
-      renamingPaneId,
-      sessionRestoredBannerPaneIds
-    })
-    if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
-      // Why: fitting hidden geometry changes PTY rows and wakes TUIs via SIGWINCH; the visible resume path owns real layout correction.
-      fitPanes(manager)
-    }
-  }, [
+  const { clearPaneProcessExit, applyTerminalPaneAttention } = useTerminalPaneExpandLayout({
+    tabId,
     paneCount,
-    paneLayoutRevision,
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
     isVisible,
-    shouldMeasureHiddenStartup
-  ])
+    shouldMeasureHiddenStartup,
+    paneLayoutRevision,
+    managerRef,
+    setPaneProcessExitsByPaneId
+  })
 
   useTerminalPaneTitleOverlay({
     managerRef,
@@ -1524,27 +1447,7 @@ function TerminalPane(
   })
   const structuredChatAgent = structuredSessionAgent ?? chatPaneResolvedAgent ?? chatPaneLaunchAgent
   const structuredChatTarget = useMemo(() => ({ kind: 'local' as const }), [])
-  // A split can host different agents, so continuation resolves the specific leaf before using tab-wide hints.
-  const resolveAgentForLeaf = (leafId: string | null): string | null => {
-    const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
-    if (detectedAgent) {
-      return detectedAgent
-    }
-    return (
-      nativeChatLaunchAgentForLeaf({
-        launchAgent: terminalTab?.launchAgent,
-        launchAgentLeafId: getTabWideAgentHintLeafId(),
-        leafId,
-        leafIds: getNativeChatLeafIds()
-      }) ?? resolveTitleAgentForLeaf(leafId)
-    )
-  }
-  const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
-    resolveAgentForLeaf(activePane?.leafId ?? null)
-  )
-  const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
-    resolveAgentForLeaf(contextMenuLeafId)
-  )
+  const contextMenuCanContinueInNewSession = getContextMenuCanContinueInNewSession(contextMenuLeafId)
 
   const { dismissTerminalError } = useTerminalPaneErrorEffects({
     terminalError,
