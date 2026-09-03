@@ -61,10 +61,6 @@ import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay, { type PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
-import {
-  arePaneTitleOverlayRectsEqual,
-  clearPaneTitleOverlayRects
-} from './pane-title-overlay-rects'
 import NativeChatView from '../native-chat/NativeChatView'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
@@ -90,6 +86,7 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneFocus } from './use-terminal-pane-focus'
 import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
 import { useTerminalPaneFitSync } from './use-terminal-pane-fit-sync'
+import { useTerminalPaneTitleOverlay } from './use-terminal-pane-title-overlay'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import {
   closeTerminalLinkActionRequest,
@@ -1516,64 +1513,9 @@ function TerminalPane(
     shouldMeasureHiddenStartup
   ])
 
-  const syncPaneTitleOverlayRects = useCallback((): void => {
-    const manager = managerRef.current
-    const container = containerRef.current
-    if (!manager || !container) {
-      setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
-      return
-    }
-    const containerRect = container.getBoundingClientRect()
-    const nextRects: Record<number, PaneTitleOverlayRect> = {}
-    for (const pane of manager.getPanes()) {
-      const paneRect = pane.container.getBoundingClientRect()
-      if (paneRect.width <= 0 || paneRect.height <= 0) {
-        continue
-      }
-      nextRects[pane.id] = {
-        left: paneRect.left - containerRect.left,
-        top: paneRect.top - containerRect.top,
-        width: paneRect.width
-      }
-    }
-    setPaneTitleOverlayRects((prev) =>
-      arePaneTitleOverlayRectsEqual(prev, nextRects) ? prev : nextRects
-    )
-  }, [])
-
-  useLayoutEffect(() => {
-    const manager = managerRef.current
-    const container = containerRef.current
-    if (!manager || !container) {
-      setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
-      return
-    }
-
-    let frame: number | null = null
-    const scheduleSync = (): void => {
-      if (frame !== null) {
-        cancelAnimationFrame(frame)
-      }
-      frame = requestAnimationFrame(() => {
-        frame = null
-        syncPaneTitleOverlayRects()
-      })
-    }
-
-    // Why: the title UI is React-owned (outside the xterm DOM), so track pane geometry to keep it attached without xterm/Radix focus fights.
-    syncPaneTitleOverlayRects()
-    const resizeObserver = new ResizeObserver(scheduleSync)
-    resizeObserver.observe(container)
-    for (const pane of manager.getPanes()) {
-      resizeObserver.observe(pane.container)
-    }
-    return () => {
-      resizeObserver.disconnect()
-      if (frame !== null) {
-        cancelAnimationFrame(frame)
-      }
-    }
-  }, [
+  useTerminalPaneTitleOverlay({
+    managerRef,
+    containerRef,
     expandedPaneId,
     isolatedPaneKey,
     isVisible,
@@ -1582,8 +1524,8 @@ function TerminalPane(
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
-    syncPaneTitleOverlayRects
-  ])
+    setPaneTitleOverlayRects
+  })
 
   useEffect(() => {
     const manager = managerRef.current
