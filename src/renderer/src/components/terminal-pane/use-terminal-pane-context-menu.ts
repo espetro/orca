@@ -44,7 +44,7 @@ type UseTerminalPaneContextMenuDeps = {
   rightClickToPaste: boolean
 }
 
-type TerminalMenuState = {
+export type TerminalMenuState = {
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
   point: { x: number; y: number }

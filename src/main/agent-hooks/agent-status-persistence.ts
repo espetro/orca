@@ -12,6 +12,7 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment,
   LAST_STATUS_FILE_VERSION,
+  type AgentHookAuthorityAttestation,
   type AgentHookAuthorityEvidence,
   type EnrichedAgentHookEventPayload,
   type LastStatusFile,
@@ -340,5 +341,71 @@ export class AgentStatusPersistence {
       this.statusPersistTimer = null
     }
     this.lastWrittenJson = null
+  }
+
+  getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
+    return this.server.hydratedAuthorityCommitments
+  }
+
+  getCurrentAuthorityObservations(): readonly AgentHookAuthorityEvidence[] {
+    return Object.freeze(
+      Array.from(this.server.currentAuthorityObservations.values(), (entry) =>
+        Object.freeze({ ...entry })
+      )
+    )
+  }
+
+  attestCompatibilityAuthority(candidate: {
+    paneKey: string
+    launchTokenHash: string
+    connectionId: string | null
+    terminalProvenance: 'current_runtime' | 'restored'
+  }): AgentHookAuthorityAttestation | null {
+    const paneKey = this.server.resolvePaneKeyAlias(candidate.paneKey)
+    const matchesCandidate = (entry: AgentHookAuthorityEvidence): boolean =>
+      entry.launchTokenHash === candidate.launchTokenHash &&
+      entry.connectionId === candidate.connectionId
+    const commitments = this.server.hydratedAuthorityCommitments.filter(
+      (entry) =>
+        matchesCandidate(entry) && !this.server.revokedHydratedAuthorityCommitments.has(entry)
+    )
+    const current = Array.from(this.server.currentAuthorityObservations.values())
+    const observations = current.filter(matchesCandidate)
+    const paneObservations = current.filter(
+      (entry) => this.server.resolvePaneKeyAlias(entry.paneKey) === paneKey
+    )
+    const hasUniqueCurrentObservation =
+      observations.length === 1 &&
+      paneObservations.length === 1 &&
+      this.server.resolvePaneKeyAlias(observations[0]!.paneKey) === paneKey
+    if (candidate.terminalProvenance === 'current_runtime') {
+      return hasUniqueCurrentObservation ? Object.freeze({ paneKey, source: 'current_hook' }) : null
+    }
+    if (
+      commitments.length !== 1 ||
+      this.server.resolvePaneKeyAlias(commitments[0]!.paneKey) !== paneKey
+    ) {
+      return null
+    }
+    if (observations.length === 0 && paneObservations.length === 0) {
+      return Object.freeze({ paneKey, source: 'hydrated_commitment' })
+    }
+    if (!hasUniqueCurrentObservation) {
+      return null
+    }
+    return Object.freeze({ paneKey, source: 'current_hook' })
+  }
+
+  revokeHydratedAuthorityForPaneKeys(paneKeys: Set<string>): boolean {
+    let changed = false
+    for (const paneKey of paneKeys) {
+      for (const commitment of this.server.hydratedAuthorityCommitments) {
+        if (commitment.paneKey === paneKey) {
+          this.server.revokedHydratedAuthorityCommitments.add(commitment)
+          changed = true
+        }
+      }
+    }
+    return changed
   }
 }

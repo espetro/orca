@@ -1,6 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { join } from 'node:path'
 
+import {
+  getEndpointFileName,
+  writeEndpointFile
+} from '../../shared/agent-hook-listener/endpoint-publication'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../shared/agent-hook-listener/listener-limits'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../../shared/agent-hook-types'
 import { mergeAgentHookRequestHeaders } from '../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../shared/agent-hook-listener/source-routing'
@@ -26,6 +35,10 @@ import type { AgentStatusDisposition } from './pane-authority-transfer'
 export type AgentHookHttpServerDeps = {
   token: string
   onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null
+  endpointDir: string | null
+  endpointFilePathCache: string | null
+  endpointFileWritten: boolean
+  env: string
   transportInterference: HookTransportInterferenceTracker
   observations: Pick<AgentStatusObservationSequencer, 'rebind'>
   normalizeHookBodyPaneKeyAlias(body: unknown): unknown
@@ -60,6 +73,13 @@ export type AgentHookHttpServerDeps = {
   maybeWriteEndpointFile(): void
 }
 
+export type AgentHookEndpointState = {
+  endpointDir: string | null
+  endpointFilePathCache: string | null
+  endpointFileWritten: boolean
+  env: string
+}
+
 // Why: owns the loopback HTTP adapter — request handling, slowloris cap, and listen handshake —
 // so server.ts keeps pipeline state next to the surfaces that mutate it.
 export class AgentHookHttpServer {
@@ -67,6 +87,78 @@ export class AgentHookHttpServer {
   private boundPort = 0
 
   constructor(private readonly deps: AgentHookHttpServerDeps) {}
+
+  /** Why: token rotates on start(); held here so auth check and buildPtyEnv agree after restart. */
+  setToken(token: string): void {
+    this.deps.token = token
+  }
+
+  configureEndpoint(options: { userDataPath: string; endpointNamespace?: string }): void {
+    this.deps.endpointDir = options.endpointNamespace
+      ? join(options.userDataPath, 'agent-hooks', options.endpointNamespace)
+      : join(options.userDataPath, 'agent-hooks')
+    this.deps.endpointFilePathCache = join(this.deps.endpointDir, getEndpointFileName())
+  }
+
+  clearEndpointState(): void {
+    this.deps.endpointDir = null
+    this.deps.endpointFilePathCache = null
+    this.deps.endpointFileWritten = false
+  }
+
+  get endpointFilePath(): string | null {
+    return this.deps.endpointFilePathCache
+  }
+
+  get endpointDir(): string | null {
+    return this.deps.endpointDir
+  }
+
+  get env(): string {
+    return this.deps.env
+  }
+
+  set env(value: string) {
+    this.deps.env = value
+  }
+
+  get token(): string {
+    return this.deps.token
+  }
+
+  writeEndpointFile(): void {
+    if (!this.deps.endpointDir || !this.deps.endpointFilePathCache) {
+      return
+    }
+    this.deps.endpointFileWritten = false
+    const ok = writeEndpointFile(this.deps.endpointDir, this.deps.endpointFilePathCache, {
+      port: this.boundPort,
+      token: this.deps.token,
+      env: this.deps.env,
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
+    })
+    this.deps.endpointFileWritten = ok
+  }
+
+  buildPtyEnv(): Record<string, string> {
+    if (this.boundPort <= 0 || !this.deps.token) {
+      return {}
+    }
+
+    const env: Record<string, string> = {
+      ORCA_AGENT_HOOK_PORT: String(this.boundPort),
+      ORCA_AGENT_HOOK_TOKEN: this.deps.token,
+      ORCA_AGENT_HOOK_ENV: this.deps.env,
+      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+      ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
+    }
+    // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
+    if (this.deps.endpointFileWritten && this.deps.endpointFilePathCache) {
+      env.ORCA_AGENT_HOOK_ENDPOINT = this.deps.endpointFilePathCache
+    }
+    return env
+  }
 
   get running(): boolean {
     return this.server !== null

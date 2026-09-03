@@ -4,29 +4,25 @@ import {
   useImperativeHandle,
   useState
 } from 'react'
-import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
 import {
   DaemonActionDialog  ,
   useDaemonActions
 } from '@/components/shared/useDaemonActions'
-import TerminalSearch from '@/components/TerminalSearch'
-import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  terminalContainerDragOverHandler,
+  terminalContainerDropHandler
+} from './terminal-container-drop-handlers'
 import {
   useExpandCollapseActions
 } from './expand-collapse'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
-import CodexRestartChip from '../CodexRestartChip'
-import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
-import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import NativeChatView from '../native-chat/NativeChatView'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
@@ -57,23 +53,20 @@ import { useTerminalPanePaneBootstrap } from './use-terminal-pane-pane-bootstrap
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
 import { useTerminalPaneRemoteLayoutSync } from './use-terminal-pane-remote-layout-sync'
-import {
-  getFitOverrideForPty
-} from '@/lib/pane-manager/mobile-fit-overrides'
-import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
-import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
-import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
-import {
-  WORKSPACE_FILE_PATH_MIME  ,
-  WORKSPACE_FILE_PATHS_MIME
-} from '@/lib/workspace-file-drag'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { useTerminalPaneQuickCommands } from './use-terminal-pane-quick-commands'
 import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
-import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
-import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
+import {
+  TerminalPaneProcessExitOverlays,
+  TerminalPaneSshReconnectOverlays
+} from './terminal-pane-process-exit-overlays'
+import { TerminalPaneMobileDriverOverlays } from './terminal-pane-mobile-driver-overlays'
+import { TerminalPaneNativeChatPortal } from './terminal-pane-native-chat-portal'
+import { TerminalPaneCodexRestartChips } from './terminal-pane-codex-restart-chips'
+import { TerminalPaneRecoveryBannerOverlays } from './terminal-pane-recovery-banner-overlays'
+import { TerminalPaneSearchPortal } from './terminal-pane-search-portal'
 
 // Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
 
@@ -785,57 +778,23 @@ function TerminalPane(
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
-        onDragOver={(e) => {
-          if (
-            e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-            e.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-          ) {
-            e.preventDefault()
-            e.dataTransfer.dropEffect = 'copy'
-          }
-        }}
-        onDrop={(e) => {
-          if (
-            !e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-            !e.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-          ) {
-            return
-          }
-          e.preventDefault()
-          e.stopPropagation()
-          const manager = managerRef.current
-          if (!manager) {
-            return
-          }
-          void handleInternalTerminalFileDrop({
-            manager,
-            paneTransports: paneTransportsRef.current,
-            worktreeId,
-            tabId,
-            cwd,
-            dataTransfer: e.dataTransfer,
-            dropTarget: e.target
-          })
-        }}
+        onDragOver={terminalContainerDragOverHandler}
+        onDrop={terminalContainerDropHandler({
+          managerRef,
+          paneTransportsRef,
+          worktreeId,
+          tabId,
+          cwd
+        })}
       />
-      {managedPanes.map((pane) => {
-        const ptyId =
-          paneTransportsRef.current.get(pane.id)?.getPtyId() ??
-          savedLayout.ptyIdsByLeafId?.[pane.leafId]
-        if (!ptyId) {
-          return null
-        }
-        return createPortal(
-          <CodexRestartChip
-            key={`codex-restart-${pane.id}-${ptyId}`}
-            isVisible={isVisible}
-            ptyId={ptyId}
-            shouldFocus={isActive && isVisible && activePane?.id === pane.id}
-          />,
-          pane.container,
-          `codex-restart-${pane.id}`
-        )
-      })}
+      <TerminalPaneCodexRestartChips
+        panes={managedPanes}
+        paneTransportsRef={paneTransportsRef}
+        savedLayoutPtyIdsByLeafId={savedLayout.ptyIdsByLeafId}
+        isActive={isActive}
+        isVisible={isVisible}
+        activePaneId={activePane?.id}
+      />
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
       {terminalError && isActive && !showSshReconnectOverlay ? (
@@ -845,40 +804,27 @@ function TerminalPane(
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       ) : null}
-      {isActive
-        ? managedPanes.map((pane) => {
-            const processExit = paneProcessExitsByPaneId[pane.id]
-            return processExit
-              ? createPortal(
-                  <TerminalProcessExitOverlay
-                    processExit={processExit}
-                    onRestart={() => handleRestartExitedPane(processExit)}
-                    onClose={() => handleCloseExitedPane(pane.id)}
-                  />,
-                  pane.container,
-                  `process-exit-${pane.id}`
-                )
-              : null
-          })
-        : null}
+      {isActive ? (
+        <TerminalPaneProcessExitOverlays
+          panes={managedPanes}
+          paneProcessExitsByPaneId={paneProcessExitsByPaneId}
+          onRestartExitedPane={handleRestartExitedPane}
+          onCloseExitedPane={handleCloseExitedPane}
+        />
+      ) : null}
       {/* Why: portal into the pane so the banner stacks above the xterm canvas (sibling mount painted under WebGL). */}
-      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus
-        ? managedPanes.map((pane) =>
-            createPortal(
-              <TerminalSshReconnectOverlay
-                targetId={sshReconnectTargetId}
-                targetLabel={sshReconnectTargetLabel}
-                status={sshReconnectStatus}
-                error={sshReconnectError}
-                targetRemoved={sshReconnectTargetRemoved}
-                worktreeId={worktreeId}
-                sshOwnerEnvironmentId={sshReconnectEnvironmentId}
-              />,
-              pane.container,
-              `ssh-reconnect-${pane.id}`
-            )
-          )
-        : null}
+      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus ? (
+        <TerminalPaneSshReconnectOverlays
+          panes={managedPanes}
+          targetId={sshReconnectTargetId}
+          targetLabel={sshReconnectTargetLabel}
+          status={sshReconnectStatus}
+          error={sshReconnectError}
+          targetRemoved={sshReconnectTargetRemoved}
+          worktreeId={worktreeId}
+          sshOwnerEnvironmentId={sshReconnectEnvironmentId}
+        />
+      ) : null}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
@@ -887,81 +833,39 @@ function TerminalPane(
           onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
         />
       )}
-      {activePane?.container &&
-        createPortal(
-          <TerminalSearch
-            isOpen={searchOpen}
-            onClose={() => setSearchOpen(false)}
-            searchAddon={activePane.searchAddon ?? null}
-            searchStateRef={searchStateRef}
-          />,
-          activePane.container
-        )}
+      {activePane?.container ? (
+        <TerminalPaneSearchPortal
+          activePane={activePane}
+          searchOpen={searchOpen}
+          setSearchOpen={setSearchOpen}
+          searchStateRef={searchStateRef}
+        />
+      ) : null}
       <SessionRestoredBannerPortals
         panes={managerRef.current?.getPanes() ?? []}
         paneIds={sessionRestoredBannerPaneIds}
       />
-      {effectiveChatViewMode && chatPane?.container
-        ? createPortal(
-            <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-              {structuredSessionId && structuredChatAgent ? (
-                <NativeChatView
-                  mode="structured"
-                  tabId={unifiedTabId ?? tabId}
-                  sessionId={structuredSessionId}
-                  agent={structuredChatAgent}
-                  isVisible={isRendererVisible}
-                  target={structuredChatTarget}
-                  allowFileUriLinks
-                  orchestrationDispatchStatus={chatPaneDispatchStatus}
-                />
-              ) : (
-                <NativeChatView
-                  terminalTabId={tabId}
-                  isVisible={isRendererVisible}
-                  paneKey={makePaneKey(tabId, chatPane.leafId)}
-                  targetPtyId={chatPanePtyId}
-                  launchAgent={chatPaneLaunchAgent}
-                  resolvedAgent={chatPaneResolvedAgent}
-                  onSwitchToTerminal={switchNativeChatToTerminal}
-                  readTerminalScreen={readNativeChatTerminalScreen}
-                  contextMenuActions={{
-                    onSplitRight: () =>
-                      contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
-                    onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
-                    canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
-                    onEqualizePaneSizes: () =>
-                      contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
-                    canExpandPane: managedPanes.length > 1,
-                    isPaneExpanded: expandedPaneId === chatPane.id,
-                    onToggleExpand: () =>
-                      contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
-                    canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
-                      resolveAgentForLeaf(chatPane.leafId)
-                    ),
-                    onContinueAgentSessionInNewSession: () =>
-                      contextMenu.runForPane(
-                        chatPane.id,
-                        contextMenu.onContinueAgentSessionInNewSession
-                      ),
-                    onForkAgentSession: () =>
-                      void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
-                    onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
-                    onCopyTerminalId: () =>
-                      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
-                    onCopyPaneId: () =>
-                      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
-                    canClosePane: managedPanes.length > 1,
-                    onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
-                  }}
-                  orchestrationDispatchStatus={chatPaneDispatchStatus}
-                />
-              )}
-            </div>,
-            chatPane.container,
-            `native-chat-${tabId}-${chatPane.leafId}`
-          )
-        : null}
+      {effectiveChatViewMode && chatPane ? (
+        <TerminalPaneNativeChatPortal
+          chatPane={chatPane}
+          tabId={tabId}
+          isRendererVisible={isRendererVisible}
+          structuredSessionId={structuredSessionId}
+          structuredChatAgent={structuredChatAgent}
+          structuredChatTarget={structuredChatTarget}
+          chatPanePtyId={chatPanePtyId}
+          chatPaneLaunchAgent={chatPaneLaunchAgent}
+          chatPaneResolvedAgent={chatPaneResolvedAgent}
+          chatPaneDispatchStatus={chatPaneDispatchStatus}
+          unifiedTabId={unifiedTabId}
+          expandedPaneId={expandedPaneId}
+          managedPanesCount={managedPanes.length}
+          contextMenu={contextMenu}
+          switchNativeChatToTerminal={switchNativeChatToTerminal}
+          readNativeChatTerminalScreen={readNativeChatTerminalScreen}
+          resolveAgentForLeaf={resolveAgentForLeaf}
+        />
+      ) : null}
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}
@@ -1072,57 +976,21 @@ function TerminalPane(
         onRenameCancel={handleRenameCancel}
         onRenameBlur={handleRenameBlur}
       />
-      {!showSshReconnectOverlay
-        ? managedPanes.map((pane) => {
-            const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
-            if (!recoveryState) {
-              return null
-            }
-            return createPortal(
-              <TerminalRemoteRuntimeReconnectBanner
-                key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
-                phase={recoveryState.phase}
-                onReconnect={() => {
-                  paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
-                }}
-              />,
-              pane.container,
-              `remote-runtime-reconnect-${pane.id}`
-            )
-          })
-        : null}
-      {managedPanes.map((pane) => {
-        // Why: pane IDs collide across tabs, so key overlays by the transport's actual ptyId to avoid wrong-pane banners.
-        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-        if (!ptyId) {
-          return null
-        }
-        // Why: two-state lock — mobile driver → presence-lock (docs/mobile-presence-lock.md); phone-fit override → indefinite hold (docs/mobile-fit-hold.md).
-        const driver = getDriverForPty(ptyId)
-        const fitMode = getFitOverrideForPty(ptyId)?.mode ?? null
-        const hasFitOverride = fitMode === 'mobile-fit'
-        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
-          return null
-        }
-        // Why: only the chat-replaced pane hides presence-lock/phone-fit chrome; sibling splits stay normal terminals.
-        const paneSurface =
-          effectiveChatViewMode && pane.leafId === chatLeafId ? 'chat' : 'terminal'
-        if (shouldChatTakeOverMobileSurface(paneSurface)) {
-          return null
-        }
-        return createPortal(
-          <MobileDriverOverlay
-            key={`mobile-driver-${pane.id}-${ptyId}`}
-            driver={driver}
-            hasFitOverride={hasFitOverride}
-            rootClassName="mobile-driver-banner"
-            onAction={() => restorePaneTerminalFit(pane, ptyId)}
-            onAllAction={() => restoreAllTerminalFits(pane)}
-          />,
-          pane.container,
-          `mobile-driver-banner-${pane.id}`
-        )
-      })}
+      {!showSshReconnectOverlay ? (
+        <TerminalPaneRecoveryBannerOverlays
+          panes={managedPanes}
+          paneTransportsRef={paneTransportsRef}
+          ptyRecoveryStatesByPaneId={ptyRecoveryStatesByPaneId}
+        />
+      ) : null}
+      <TerminalPaneMobileDriverOverlays
+        panes={managedPanes}
+        paneTransportsRef={paneTransportsRef}
+        isChatViewMode={effectiveChatViewMode}
+        chatLeafId={chatLeafId}
+        onRestorePaneTerminalFit={restorePaneTerminalFit}
+        onRestoreAllTerminalFits={restoreAllTerminalFits}
+      />
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}
         copyKind={pendingCloseConfirmation?.copyKind}

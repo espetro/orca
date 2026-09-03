@@ -6,18 +6,10 @@ import { join } from 'node:path'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
 import { track } from '../telemetry/client'
 import {
-  ORCA_HOOK_PROTOCOL_VERSION,
-  ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../../shared/agent-hook-types'
-import {
   clearAllListenerCaches,
   createHookListenerState,
   type HookListenerState
 } from '../../shared/agent-hook-listener/listener-state'
-import {
-  getEndpointFileName,
-  writeEndpointFile
-} from '../../shared/agent-hook-listener/endpoint-publication'
 import {
   MAX_PANE_KEY_LEN,
   normalizeClaudePromptId,
@@ -125,9 +117,6 @@ import { AgentHookHttpServer, type AgentHookHttpServerDeps } from './agent-hook-
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 
 export class AgentHookServer {
-  private token = ''
-  // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
-  private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
@@ -139,9 +128,6 @@ export class AgentHookServer {
   // that also works in headless serve, where no window listener exists.
   private enrichedStatusListeners = new Set<(payload: EnrichedAgentHookEventPayload) => void>()
   // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
-  private endpointDir: string | null = null
-  private endpointFilePathCache: string | null = null
-  private endpointFileWritten = false
   // Why: per-instance (not module-level) so tests can spin up multiple servers without state cross-contamination.
   private state: HookListenerState = createHookListenerState()
   private onTransportInterference: ((report: HookTransportInterferenceReport) => void) | null = null
@@ -332,13 +318,11 @@ export class AgentHookServer {
   }
 
   getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
-    return this.hydratedAuthorityCommitments
+    return this.persistence.getHydratedAuthorityCommitments()
   }
 
   getCurrentAuthorityObservations(): readonly AgentHookAuthorityEvidence[] {
-    return Object.freeze(
-      Array.from(this.currentAuthorityObservations.values(), (entry) => Object.freeze({ ...entry }))
-    )
+    return this.persistence.getCurrentAuthorityObservations()
   }
 
   attestCompatibilityAuthority(candidate: {
@@ -347,35 +331,7 @@ export class AgentHookServer {
     connectionId: string | null
     terminalProvenance: 'current_runtime' | 'restored'
   }): AgentHookAuthorityAttestation | null {
-    const paneKey = this.resolvePaneKeyAlias(candidate.paneKey)
-    const matchesCandidate = (entry: AgentHookAuthorityEvidence): boolean =>
-      entry.launchTokenHash === candidate.launchTokenHash &&
-      entry.connectionId === candidate.connectionId
-    const commitments = this.hydratedAuthorityCommitments.filter(
-      (entry) => matchesCandidate(entry) && !this.revokedHydratedAuthorityCommitments.has(entry)
-    )
-    const current = Array.from(this.currentAuthorityObservations.values())
-    const observations = current.filter(matchesCandidate)
-    const paneObservations = current.filter(
-      (entry) => this.resolvePaneKeyAlias(entry.paneKey) === paneKey
-    )
-    const hasUniqueCurrentObservation =
-      observations.length === 1 &&
-      paneObservations.length === 1 &&
-      this.resolvePaneKeyAlias(observations[0]!.paneKey) === paneKey
-    if (candidate.terminalProvenance === 'current_runtime') {
-      return hasUniqueCurrentObservation ? Object.freeze({ paneKey, source: 'current_hook' }) : null
-    }
-    if (commitments.length !== 1 || this.resolvePaneKeyAlias(commitments[0]!.paneKey) !== paneKey) {
-      return null
-    }
-    if (observations.length === 0 && paneObservations.length === 0) {
-      return Object.freeze({ paneKey, source: 'hydrated_commitment' })
-    }
-    if (!hasUniqueCurrentObservation) {
-      return null
-    }
-    return Object.freeze({ paneKey, source: 'current_hook' })
+    return this.persistence.attestCompatibilityAuthority(candidate)
   }
 
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
@@ -707,7 +663,7 @@ export class AgentHookServer {
     warnOnHookEnvOrVersionMismatch(this.state, {
       version: envelope.version,
       env: envelope.env,
-      expectedEnv: this.env
+      expectedEnv: this.http.env
     })
     const event: AgentHookEventPayload = {
       paneKey,
@@ -759,27 +715,23 @@ export class AgentHookServer {
     }
 
     if (options?.env) {
-      this.env = options.env
+      this.http.env = options.env
     }
     if (options?.userDataPath) {
       // Why: dev builds share one userData path; namespace per instance while packaged keeps the stable path for PTY reconnect.
-      this.endpointDir = options.endpointNamespace
-        ? join(options.userDataPath, 'agent-hooks', options.endpointNamespace)
-        : join(options.userDataPath, 'agent-hooks')
-      this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
-      this.lastStatusFilePath = join(this.endpointDir, LAST_STATUS_FILE_NAME)
+      this.http.configureEndpoint(options)
+      this.lastStatusFilePath = join(this.http.endpointDir!, LAST_STATUS_FILE_NAME)
     }
-    this.token = randomUUID()
-    this.endpointFileWritten = false
+    this.http.setToken(randomUUID())
     // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
     if (this.lastStatusFilePath) {
       this.persistence.hydrateLastStatusFromDisk(HYDRATE_MAX_AGE_MS)
     }
     this.captureHydratedAuthorityCommitments()
     // Drain before binding the listener so replay cannot race a live hook during startup.
-    if (this.endpointDir) {
+    if (this.http.endpointDir) {
       drainAgentHookSpool({
-        endpointDir: this.endpointDir,
+        endpointDir: this.http.endpointDir,
         getPersistedLaunchTokenHash: (paneKey) =>
           this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
         ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
@@ -792,8 +744,8 @@ export class AgentHookServer {
     this.flushStatusPersistSync()
     this.persistence.stop()
     this.http.close()
-    this.token = ''
-    this.env = 'production'
+    this.http.setToken('')
+    this.http.env = 'production'
     this.onAgentStatus = null
     this.onPaneStatusCleared = null
     for (const timer of this.assistantMessageRetryTimers.values()) {
@@ -804,9 +756,7 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.codexSubagentPollTimers.clear()
-    this.endpointDir = null
-    this.endpointFilePathCache = null
-    this.endpointFileWritten = false
+    this.http.clearEndpointState()
     this.lastStatusFilePath = null
     this.runtimeObservedStatusPaneKeys.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])
@@ -950,16 +900,7 @@ export class AgentHookServer {
   }
 
   revokeHydratedAuthorityForPaneKeys(paneKeys: Set<string>): boolean {
-    let changed = false
-    for (const paneKey of paneKeys) {
-      for (const commitment of this.hydratedAuthorityCommitments) {
-        if (commitment.paneKey === paneKey) {
-          this.revokedHydratedAuthorityCommitments.add(commitment)
-          changed = true
-        }
-      }
-    }
-    return changed
+    return this.persistence.revokeHydratedAuthorityForPaneKeys(paneKeys)
   }
 
   // Status cleanup delegation — public methods for external callers
@@ -1005,26 +946,11 @@ export class AgentHookServer {
   }
 
   buildPtyEnv(): Record<string, string> {
-    if (this.http.port <= 0 || !this.token) {
-      return {}
-    }
-
-    const env: Record<string, string> = {
-      ORCA_AGENT_HOOK_PORT: String(this.http.port),
-      ORCA_AGENT_HOOK_TOKEN: this.token,
-      ORCA_AGENT_HOOK_ENV: this.env,
-      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
-      ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
-    }
-    // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
-    if (this.endpointFileWritten && this.endpointFilePathCache) {
-      env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
-    }
-    return env
+    return this.http.buildPtyEnv()
   }
 
   get endpointFilePath(): string | null {
-    return this.endpointFilePathCache
+    return this.http.endpointFilePath
   }
 
   /** Test/diagnostic accessor for the on-disk last-status file path. */
@@ -1033,18 +959,7 @@ export class AgentHookServer {
   }
 
   private maybeWriteEndpointFile(): void {
-    if (!this.endpointDir || !this.endpointFilePathCache) {
-      return
-    }
-    this.endpointFileWritten = false
-    const ok = writeEndpointFile(this.endpointDir, this.endpointFilePathCache, {
-      port: this.http.port,
-      token: this.token,
-      env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION,
-      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
-    })
-    this.endpointFileWritten = ok
+    this.http.writeEndpointFile()
   }
 
   private captureHydratedAuthorityCommitments(): void {
