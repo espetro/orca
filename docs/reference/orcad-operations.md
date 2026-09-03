@@ -6,6 +6,9 @@ readiness payload actually proves.
 
 Design background: `docs/design/shipping-orcad.html` §00c and §04.
 
+For launching serve mode from the packaged macOS desktop app (browser-tab client, CLI shim
+pitfalls, profile isolation), see [`macos-app-browser-serve.md`](./macos-app-browser-serve.md).
+
 ## Two long-lived processes, not one
 
 A deployment is **orcad** plus **the terminal daemon**.
