@@ -19,8 +19,58 @@ import {
   isAgentSkillSharingEnabled
 } from '../../shared/agent-skill-sharing-gate'
 import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
-import { sortDirEntries } from '../../shared/file-name-sort'
-import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
+import { RuntimeLinearCommands } from './runtime-linear-commands'
+import {
+  RuntimeProjectWorktreeCommands
+} from './runtime-project-worktree-commands'
+import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
+import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
+import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
+import type {
+  AgentSkillShareOperation,
+  AgentSkillShareRequest
+} from '../../shared/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../shared/skills'
+import type {
+  SkillCloudDownloadGrant,
+  SkillCloudOperation,
+  SkillCloudOptions,
+  SkillCloudPackageDetails,
+  SkillCloudPublishRequest,
+  SkillCloudPublishResult,
+  SkillCloudVersion
+} from '../../shared/skill-cloud-contract'
+import type {
+  SkillInstallPreview,
+  SkillInstallPreviewRequest,
+  SkillInstallRequest,
+  SkillInstallResult,
+  ManagedSkillInstall,
+  SkillRemoveRequest
+} from '../../shared/skill-install-contract'
+import type {
+  SkillBundleInstallPreview,
+  SkillBundleInstallPreviewRequest,
+  SkillBundleInstallProgress,
+  SkillBundleInstallRequest,
+  SkillBundleInstallResult
+} from '../../shared/skill-bundle-install-contract'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import type {
+  SkillUploadBeginRequest,
+  SkillUploadChunkRequest
+} from '../../shared/skill-upload-session-contract'
+import type {
+  ArtifactCloudOperation,
+  ArtifactCloudOptions,
+  ArtifactListOptions,
+  ArtifactListPage,
+  ArtifactListItem,
+  ArtifactPublishedLink,
+  ArtifactPublishResult,
+  ArtifactWriteRequest
+} from '../../shared/artifacts'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -158,26 +208,13 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
-import {
-  awaitWindowsHostGitEnvironmentReady,
-  gitExecFileAsync,
-  gitSpawnAfterWindowsEnvironmentReady,
-  nonInteractiveGitEnv
-} from '../git/runner'
-import { runWithGitReadCacheInvalidation } from '../git/status'
+import { gitExecFileAsync } from '../git/runner'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
-import {
-  cleanupClaimedCloneTarget,
-  claimCloneTarget,
-  deriveValidatedClonePath,
-  getClonePathComparisonKey
-} from '../git/repo-clone-path'
-import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir, hostname } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import { readFile, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
@@ -199,87 +236,6 @@ import {
   createSetupCompletionScanner
 } from './orchestration/setup-completion-signal'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
-import type {
-  ArtifactCloudOperation,
-  ArtifactCloudOptions,
-  ArtifactListOptions,
-  ArtifactListPage,
-  ArtifactListItem,
-  ArtifactPublishedLink,
-  ArtifactPublishResult,
-  ArtifactWriteRequest
-} from '../../shared/artifacts'
-import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
-import type {
-  SkillCloudDownloadGrant,
-  SkillCloudOperation,
-  SkillCloudOptions,
-  SkillCloudPackageDetails,
-  SkillCloudPublishRequest,
-  SkillCloudPublishResult,
-  SkillCloudVersion
-} from '../../shared/skill-cloud-contract'
-import type { SkillCloudService } from '../skills/skill-cloud-service'
-import {
-  AGENT_SKILL_NOT_SHAREABLE_CODE,
-  AGENT_SKILL_SHARING_BUSY_CODE,
-  AgentSkillSharingError,
-  type AgentSkillShareOperation,
-  type AgentSkillShareRequest
-} from '../../shared/agent-skill-sharing-contract'
-import type { DiscoveredSkill } from '../../shared/skills'
-import { selectDiscoveredSkills } from '../skills/agent-skill-selection'
-import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
-import type {
-  SkillInstallPreview,
-  SkillInstallPreviewRequest,
-  SkillInstallRequest,
-  SkillInstallResult,
-  ManagedSkillInstall,
-  SkillRemoveRequest
-} from '../../shared/skill-install-contract'
-import type {
-  SkillBundleInstallPreview,
-  SkillBundleInstallPreviewRequest,
-  SkillBundleInstallProgress,
-  SkillBundleInstallRequest,
-  SkillBundleInstallResult
-} from '../../shared/skill-bundle-install-contract'
-import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
-import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
-import type { SkillInstallDestinationAuthority } from '../skills/skill-install-destinations'
-import {
-  previewSharedSkillBundleInstall,
-  previewSharedSkillInstall,
-  removeSharedSkillInstall
-} from '../skills/skill-install-management-service'
-import { listManagedSkillInstalls } from '../skills/skill-install-provenance'
-import { getWslHome, toLinuxPath } from '../wsl'
-import { WslSkillInstallFilesystem } from '../skills/skill-wsl-install-filesystem'
-import { nativeSkillInstallFilesystem } from '../skills/skill-install-filesystem'
-import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
-import {
-  resolveEnvironmentSkillProviderRoots,
-  resolveWslGrokSkillProviderRoot,
-  withClaudeSkillProviderRoot
-} from '../skills/skill-provider-runtime-roots'
-import type {
-  SkillUploadBeginRequest,
-  SkillUploadChunkRequest
-} from '../../shared/skill-upload-session-contract'
-import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
-import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../skills/skill-upload-staging-ownership'
-import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
-import {
-  installSkillBundleOnSshHost,
-  previewSkillBundleInstallOnSshHost
-} from '../skills/skill-bundle-ssh-relay-service'
-import {
-  installSkillOnSshHost,
-  listSkillInstallsOnSshHost,
-  previewSkillInstallOnSshHost,
-  removeSkillInstallOnSshHost
-} from '../skills/skill-ssh-relay-service'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
@@ -351,17 +307,7 @@ import type {
   GitHubCreateIssueFields,
   GitHubIssueUpdate,
   GitHubPullRequestStateUpdate,
-  LinearIssueUpdate
 } from '../../shared/issue-mutation-types'
-import type {
-  JiraConnectArgs,
-  JiraCreateIssueArgs,
-  JiraIssueFilter,
-  JiraIssueUpdate,
-  JiraSiteSelection
-} from '../../shared/jira-types'
-import type { LinearCustomViewModel, LinearProjectSummary } from '../../shared/linear/project-types'
-import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -476,31 +422,6 @@ import {
   resolveUnreportedExitCause,
   type TerminalExitCause
 } from '../../shared/terminal-exit-cause'
-import type {
-  LinearCurrentIssueContextHints,
-  LinearAttachResult,
-  LinearCommentAddResult,
-  LinearCreateResult,
-  LinearErrorCode,
-  LinearIssueListFilter,
-  LinearIssueListResult,
-  LinearProjectListResult,
-  LinearIssueSummary,
-  LinearIssueRequest,
-  LinearIssueTaskUpdateRequest,
-  LinearIssueTaskUpdateResult,
-  LinearMcpIssueListRequest,
-  LinearMcpIssueListResult,
-  LinearIssueRelationWriteRequest,
-  LinearIssueRelationWriteResult,
-  LinearSaveIssueRequest,
-  LinearSaveIssueResult,
-  LinearTeamLabelsResult,
-  LinearTeamListResult,
-  LinearTeamMembersResult,
-  LinearTeamStatesResult,
-  LinearStatusSetResult
-} from '../../shared/linear/agent-access'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
 import {
   BROWSER_UNAVAILABLE_ERROR_CODE,
@@ -574,12 +495,6 @@ import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
 } from './runtime-graph-reload-lifecycle'
-import {
-  LINEAR_SEARCH_MAX_LIMIT,
-  LINEAR_WRITE_BODY_CAP,
-  clampLinearSearchLimit
-} from '../../shared/linear/agent-access'
-import { isLinearUuid } from '../../shared/linear/uuid'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import {
@@ -590,12 +505,7 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdComparisonKey
 } from '../../shared/worktree/id'
-import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup-projection'
-import {
-  getProjectHostSetupForRepo,
-  getProjectHostSetupWorktreeMeta
-} from '../../shared/project-host-setup-lookup'
-import { clampLinearIssueListLimit } from '../../shared/linear/issue-read-limits'
+import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import {
@@ -666,9 +576,7 @@ import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import {
-  isWindowsAbsolutePathLike,
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison
+  isWindowsAbsolutePathLike, isPathInsideOrEqual
 } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
@@ -981,105 +889,6 @@ import {
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
 import {
-  connect as connectLinear,
-  disconnect as disconnectLinear,
-  getStatus as getLinearStatus,
-  isAuthError as isLinearAuthError,
-  selectWorkspace as selectLinearWorkspace,
-  testConnection as testLinearConnection
-} from '../linear/client'
-import {
-  getAttachmentByUuidForAgent as getLinearAttachmentByUuidForAgent,
-  getCommentByUuidForAgent as getLinearCommentByUuidForAgent,
-  getIssue as getLinearIssue,
-  getIssueByUuidForAgent as getLinearIssueByUuidForAgent,
-  getIssueCommentThreadRoot as getLinearIssueCommentThreadRoot,
-  searchIssues as searchLinearIssues
-} from '../linear/linear-issue-lookups'
-import {
-  listIssues as listLinearIssues,
-  type LinearListFilter
-} from '../linear/linear-issue-listing'
-import {
-  createIssueForAgent as createLinearIssueForAgent,
-  createIssue as createLinearIssue,
-  updateIssueForAgent as updateLinearIssueForAgent,
-  updateIssue as updateLinearIssue
-} from '../linear/linear-issue-mutations'
-import {
-  addIssueComment as addLinearIssueComment,
-  addIssueCommentForAgent as addLinearIssueCommentForAgent,
-  createIssueAttachment as createLinearIssueAttachment,
-  getIssueComments as getLinearIssueComments
-} from '../linear/linear-issue-comments'
-import { LinearWriteFailure } from '../linear/linear-issue-write-support'
-import type { LinearIssueListOptions } from '../linear/linear-issue-query-documents'
-import {
-  LinearAgentAccessError,
-  getLinearCurrentIssueFromWorktree,
-  readLinearIssueContext,
-  resolveLegacyLinearLinkWorkspace,
-  searchLinearIssuesForAgents
-} from '../linear/issue-context'
-import {
-  classifyLinearError,
-  linearError,
-  linearMessage,
-  sanitizeLinearErrorMessage
-} from '../linear/issue-context-errors'
-import { listMcpIssues } from '../linear/mcp-issue-list'
-import { linearPriorityLabel } from '../../shared/linear/priority-label'
-import { writeIssueRelation } from '../linear/issue-relation-write'
-import {
-  createProject as createLinearProject,
-  getCustomView as getLinearCustomView,
-  getProject as getLinearProject,
-  listCustomViewIssues as listLinearCustomViewIssues,
-  listCustomViewProjects as listLinearCustomViewProjects,
-  listCustomViews as listLinearCustomViews,
-  listProjectsByExactName as listLinearProjectsByExactName,
-  listProjectIssues as listLinearProjectIssues,
-  listProjectTeams as listLinearProjectTeams,
-  listProjects as listLinearProjects,
-  type LinearProjectCreateInput
-} from '../linear/projects'
-import {
-  getTeamLabels as getLinearTeamLabels,
-  getTeamLabelsOrThrow as getLinearTeamLabelsOrThrow,
-  getTeamMembers as getLinearTeamMembers,
-  getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
-  getTeamStates as getLinearTeamStates,
-  getTeamStatesOrThrow as getLinearTeamStatesOrThrow,
-  getViewerForWorkspaceOrThrow as getLinearViewerForWorkspaceOrThrow,
-  listTeamsForAgent as listLinearTeamsForAgent,
-  listTeams as listLinearTeams,
-  listTeamsOrThrow as listLinearTeamsOrThrow
-} from '../linear/teams'
-import {
-  connect as connectJira,
-  disconnect as disconnectJira,
-  getStatus as getJiraStatus,
-  selectSite as selectJiraSite,
-  testConnection as testJiraConnection
-} from '../jira/client'
-import {
-  addIssueComment as addJiraIssueComment,
-  createIssue as createJiraIssue,
-  getIssue as getJiraIssue,
-  getIssueSummary as getJiraIssueSummary,
-  getIssueComments as getJiraIssueComments,
-  getProjectStatusOrder as getJiraProjectStatusOrder,
-  listAssignableUsers as listJiraAssignableUsers,
-  listCreateFields as listJiraCreateFields,
-  listIssueTypes as listJiraIssueTypes,
-  listIssues as listJiraIssues,
-  listPriorities as listJiraPriorities,
-  listProjects as listJiraProjects,
-  listTransitions as listJiraTransitions,
-  searchIssues as searchJiraIssues,
-  updateIssue as updateJiraIssue
-} from '../jira/issues'
-import {
   clearProjectItemFieldValue,
   getProjectViewTable,
   getWorkItemDetailsBySlug,
@@ -1116,23 +925,7 @@ import type {
   UpdatePullRequestBySlugArgs
 } from '../../shared/github/project-request-types'
 import {
-  getBaseRefDefault,
-  getDefaultRemote,
-  getBranchConflictKind,
-  isGitRepo,
-  getRepoName,
-  searchBaseRefDetails,
-  getRemoteCount,
-  normalizeRefSearchQuery,
-  parseAndFilterSearchRefDetails,
-  parseRemoteCount,
-  resolveDefaultBaseRefViaExec,
-  resolveDefaultBaseRefWithLocalGit,
-  buildSearchBaseRefsArgv,
-  isForEachRefExcludeUnsupportedError,
-  mergeBaseRefSearchResultGroups,
-  getRemoteDrift,
-  getRecentDriftSubjects
+  getBaseRefDefault, getDefaultRemote, getBranchConflictKind, searchBaseRefDetails, getRemoteCount, normalizeRefSearchQuery, parseAndFilterSearchRefDetails, parseRemoteCount, resolveDefaultBaseRefViaExec, resolveDefaultBaseRefWithLocalGit, buildSearchBaseRefsArgv, isForEachRefExcludeUnsupportedError, mergeBaseRefSearchResultGroups, getRemoteDrift, getRecentDriftSubjects
 } from '../git/repo'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
@@ -1167,9 +960,7 @@ import {
 } from '../effective-hook-config'
 import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import {
-  DEFAULT_REPO_BADGE_COLOR,
-  FLOATING_TERMINAL_WORKTREE_ID,
-  getDefaultVoiceSettings
+  FLOATING_TERMINAL_WORKTREE_ID, getDefaultVoiceSettings
 } from '../../shared/constants'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import {
@@ -1306,18 +1097,14 @@ import {
 } from './runtime-folder-workspace'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
-  assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus,
-  getFolderWorkspacePathStatusForPath,
-  inferFolderWorkspacePathConnection
+  assertFolderWorkspacePathUsable, getFolderWorkspacePathStatus, inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
 import {
   getSshGitProvider,
   getSshGitProviderGeneration,
   requireSshGitProvider
 } from '../providers/ssh-git-dispatch'
-import { detectGitHubAvatarIcon, detectRepoIconAndUpstream } from '../repo-icon-autodetect'
-import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
+import { detectGitHubAvatarIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -1336,17 +1123,6 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../speech/speech-model-deletion'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
-import {
-  createNestedProjectGroupResolver,
-  resolveNestedRepoSelection
-} from '../project-groups/nested-repo-import'
-import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
-
-function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
-  console.warn(`[project-groups] ${context}`, error)
-  return 'Repository could not be imported'
-}
 
 function isPathWithinDirectory(directory: string, candidate: string): boolean {
   const relativePath = relative(resolve(directory), resolve(candidate))
@@ -1529,36 +1305,6 @@ function assertAutomationRunContextMatchesRepo(
   if (runContext.repoId !== repo.id || runContext.path !== repo.path) {
     throw new Error('Automation project does not match its run context.')
   }
-}
-
-function normalizeSparsePresetName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) {
-    throw new Error('Preset name is required.')
-  }
-  if (trimmed.length > 80) {
-    throw new Error('Preset name is too long.')
-  }
-  return trimmed
-}
-
-function normalizeSparsePresetDirectoriesForSave(directories: string[]): string[] {
-  let normalized: string[]
-  try {
-    normalized = normalizeSparseDirectories(directories)
-  } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message === 'Sparse checkout directories must be repo-relative paths.'
-    ) {
-      throw new Error('Preset directories must be repo-relative paths.')
-    }
-    throw err
-  }
-  if (normalized.length === 0) {
-    throw new Error('Preset must have at least one directory.')
-  }
-  return normalized
 }
 
 function hasRuntimeAutomationUpdateValue<K extends keyof RuntimeAutomationUpdateInput>(
@@ -2634,31 +2380,11 @@ function getRuntimeWorktreeRemovalOptionsKey(
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
 // host can adopt a legacy (unstamped) repo. But an unstamped repo with a connectionId is an SSH repo
 // (resolves to ssh:<id>), so it must not be adopted/matched by a runtime host at the same path.
-function runtimeRepoMatchesExecutionHost(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
-  executionHostId?: ExecutionHostId | null
-): boolean {
-  if (executionHostId == null) {
-    return true
-  }
-  if (repo.executionHostId != null) {
-    return repo.executionHostId === executionHostId
-  }
-  return repo.connectionId == null
-}
 
 // Why: this runtime only has local git and local fs, so an ssh: host here would clone and
 // probe the wrong machine and then register the result as remote. SSH setup is owned by the
 // desktop IPC path (addRemoteRepoFromPath / cloneRemoteRepo), which the renderer routes to;
 // only `local` and `runtime:` legitimately reach these RPCs.
-function assertProjectHostSetupHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
-  if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
-    return
-  }
-  throw new Error(
-    'SSH hosts are not supported by this operation. Set the project up from the Orca desktop app, which owns the SSH connection.'
-  )
-}
 
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
   const prefix = `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
@@ -2873,45 +2599,11 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
-function resolveServerBrowsePath(pathValue: string): string {
-  const trimmed = pathValue.trim() || '~'
-  if (trimmed.includes('\0')) {
-    throw new Error('Path cannot contain null bytes')
-  }
-  if (trimmed === '~') {
-    return homedir()
-  }
-  if (/^~[\\/]/.test(trimmed)) {
-    return resolve(homedir(), trimmed.slice(2))
-  }
-  if (isAbsolute(trimmed)) {
-    return resolve(trimmed)
-  }
-  // Why: remote clients do not share the server process cwd; relative browse
-  // inputs are anchored to the server user's home to match the `~` picker root.
-  return resolve(homedir(), trimmed)
-}
-
 type ResolvedWorktree = Worktree & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   git: GitWorktreeInfo
-}
-
-type LinearAgentWriteTarget = {
-  issue: LinearIssueSummary
-  workspaceId: string
-}
-
-type LinearCreateFieldIntent = {
-  stateId?: string
-  assigneeId?: string | null
-  priority?: number
-  estimate?: number | null
-  dueDate?: string | null
-  labelIds?: string[]
-  projectId?: string
 }
 
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
@@ -2922,28 +2614,6 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_TRANSPORT',
   'ORCA_AGENT_HOOK_ENDPOINT'
 ] as const
-
-function sameStringSet(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  const rightSet = new Set(right)
-  return left.every((value) => rightSet.has(value))
-}
-
-function labelsForIds(
-  ids: string[],
-  labels: { id?: string | null; name?: string | null; color?: string | null }[]
-): { id: string; name: string; color?: string | null }[] {
-  return ids.map((id) => {
-    const label = labels.find((candidate) => candidate.id === id)
-    return {
-      id,
-      name: label?.name ?? id,
-      ...(label?.color ? { color: label.color } : {})
-    }
-  })
-}
 
 type TerminalWorkspaceLaunchScope = {
   id: string
@@ -3209,6 +2879,10 @@ export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
+  private readonly linearCommands: RuntimeLinearCommands
+  private readonly skillArtifactCommands: RuntimeSkillArtifactCommands
+  private readonly skillInstallCommands: RuntimeSkillInstallCommands
+  private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3897,14 +3571,7 @@ export class OrcaRuntimeService {
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
-  private artifactService: ArtifactCloudService | null = null
-  private skillCloudService: SkillCloudService | null = null
-  private agentSkillShareInProgress = false
-  private skillUploadSessions: SkillUploadSessionService | null = null
-  private skillUploadSessionsDisposed = false
   private readonly skillTransactionRecovery: Promise<unknown>
-  private readonly skillInstallOperations = new Map<string, AbortController>()
-  private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
   private readonly claudeAgentTeams = new ClaudeAgentTeamsService()
   private mobileDictation: {
     id: string
@@ -3968,6 +3635,43 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.linearCommands = new RuntimeLinearCommands({
+      store: this.store,
+      showTerminal: (handle) => this.showTerminal(handle),
+      resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktreeForContainedPath: (cwd) => this.resolveWorktreeForContainedPath(cwd),
+      listResolvedWorktrees: () => this.listResolvedWorktrees(),
+      emitClientEvent: (event) => this.emitClientEvent(event)
+    })
+    const skillArtifactCommandsDeps = {
+      getStatus: () => this.getStatus(),
+      skillTransactionRecovery: deps?.skillTransactionRecovery ?? Promise.resolve(),
+      listRepos: () => this.listRepos(),
+      listFolderWorkspaces: () => this.listFolderWorkspaces(),
+      assertAgentSkillSharingAllowed: () => this.assertAgentSkillSharingAllowed(),
+      listResolvedWorktrees: () => this.listResolvedWorktrees(),
+      showManagedWorktree: (selector: string) => this.showManagedWorktree(selector),
+      resolveProjectRuntimeForWorktree: (worktreeId: string | null | undefined) =>
+        this.resolveProjectRuntimeForWorktree(worktreeId),
+      getSshProviderFn: this.getSshProviderFn
+    }
+    this.skillArtifactCommands = new RuntimeSkillArtifactCommands({
+      ...skillArtifactCommandsDeps,
+      accountServices: () => this.accountServices
+    })
+    this.skillInstallCommands = new RuntimeSkillInstallCommands({
+      ...skillArtifactCommandsDeps,
+      accountServices: () => this.accountServices
+    })
+    this.projectWorktreeCommands = new RuntimeProjectWorktreeCommands({
+      store: this.store,
+      notifyReposChanged: () => this.notifyReposChanged(),
+      invalidateResolvedWorktreeCache: () => this.invalidateResolvedWorktreeCache(),
+      invalidateWorktreeScanCacheForRepo: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+      listProjectHostSetups: () => this.listProjectHostSetups(),
+      resolveRepoSelector: (selector) => this.resolveRepoSelector(selector),
+      cloneInFlightByPath: this.cloneInFlightByPath
+    })
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -5401,11 +5105,11 @@ export class OrcaRuntimeService {
   }
 
   setArtifactService(service: ArtifactCloudService): void {
-    this.artifactService = service
+    this.skillArtifactCommands.setArtifactService(service)
   }
 
   setSkillCloudService(service: SkillCloudService): void {
-    this.skillCloudService = service
+    this.skillArtifactCommands.setSkillCloudService(service)
   }
 
   assertAgentSkillSharingAllowed(): void {
@@ -5417,122 +5121,24 @@ export class OrcaRuntimeService {
     return resolveNestedWorkerMaxDepth(this.store?.getSettings())
   }
 
-  async publishDiscoveredSkillsFromAgent(
+  publishDiscoveredSkillsFromAgent(
     request: AgentSkillShareRequest,
     discoveredSkills: readonly DiscoveredSkill[],
     signal?: AbortSignal
   ): Promise<AgentSkillShareOperation> {
-    this.assertAgentSkillSharingAllowed()
-    if (this.agentSkillShareInProgress) {
-      throw new AgentSkillSharingError(
-        AGENT_SKILL_SHARING_BUSY_CODE,
-        'Another agent skill bundle is being published. Wait for it to finish and try again.'
-      )
-    }
-    this.agentSkillShareInProgress = true
-    try {
-      return await this.executeAgentSkillShare(request, discoveredSkills, signal)
-    } finally {
-      this.agentSkillShareInProgress = false
-    }
-  }
-
-  private async executeAgentSkillShare(
-    request: AgentSkillShareRequest,
-    discoveredSkills: readonly DiscoveredSkill[],
-    signal?: AbortSignal
-  ): Promise<AgentSkillShareOperation> {
-    const selectedSkills = selectDiscoveredSkills(discoveredSkills, request.skillSelectors)
-    const operationRoot = join(
-      getAppEnvironment().getPath('userData'),
-      'agent-skill-share-operations'
-    )
-    const cloud = this.requireSkillCloudService()
-    const preparations = new SkillSharePreparationService(
-      operationRoot,
-      {
-        publishVersion: (input) => cloud.publishVersion(input),
-        createShare: (packageId, input) => cloud.createShare(packageId, input)
-      },
-      {
-        installStateDirectory: join(getAppEnvironment().getPath('userData'), 'skill-installs')
-      }
-    )
-    let preparationId: string | null = null
-    const cancel = (): void => {
-      if (preparationId) {
-        preparations.cancel(preparationId)
-      }
-    }
-    signal?.addEventListener('abort', cancel, { once: true })
-    try {
-      if (signal?.aborted) {
-        throw signal.reason ?? new Error('skill-share-cancelled')
-      }
-      const preview = await preparations
-        .prepare({
-          sources: selectedSkills.map((skill) => ({
-            id: skill.name,
-            sourceDirectory: skill.directoryPath
-          })),
-          bundleName: request.bundleName,
-          description:
-            selectedSkills.length === 1
-              ? (selectedSkills[0].description ?? '')
-              : `${selectedSkills.length} shared skills`
-        })
-        .catch((error: unknown) => {
-          if (
-            error instanceof Error &&
-            ['skill-package-skill-name-required', 'skill-package-skill-name-invalid'].includes(
-              error.message
-            )
-          ) {
-            throw new AgentSkillSharingError(
-              AGENT_SKILL_NOT_SHAREABLE_CODE,
-              'A selected skill cannot be shared. Its SKILL.md must declare a lowercase name containing only letters, numbers, and hyphens.'
-            )
-          }
-          throw error
-        })
-      preparationId = preview.preparationId
-      if (signal?.aborted) {
-        throw signal.reason ?? new Error('skill-share-cancelled')
-      }
-      this.assertAgentSkillSharingAllowed()
-      const published = await preparations.publish({
-        preparationId,
-        releaseNotes: request.releaseNotes
-      })
-      return published.status === 'ok'
-        ? {
-            status: 'ok',
-            value: {
-              ...published.value,
-              selectedSkills: selectedSkills.map(({ id, name, description }) => ({
-                id,
-                name,
-                description
-              }))
-            }
-          }
-        : published
-    } finally {
-      signal?.removeEventListener('abort', cancel)
-      await preparations.dispose()
-    }
+    return this.skillArtifactCommands.publishDiscoveredSkillsFromAgent(request, discoveredSkills, signal)
   }
 
   publishSkillPackage(
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudPublishResult>> {
-    return this.requireSkillCloudService().publish(request)
+    return this.skillArtifactCommands.publishSkillPackage(request)
   }
 
   publishSkillPackageVersion(
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudVersion>> {
-    return this.requireSkillCloudService().publishVersion(request)
+    return this.skillArtifactCommands.publishSkillPackageVersion(request)
   }
 
   createSkillPackageShare(
@@ -5542,14 +5148,14 @@ export class OrcaRuntimeService {
       idempotencyKey?: string
     }
   ) {
-    return this.requireSkillCloudService().createShare(packageId, request)
+    return this.skillArtifactCommands.createSkillPackageShare(packageId, request)
   }
 
   resolveSkillShare(
     shareId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<{ id: string; version: SkillCloudVersion }>> {
-    return this.requireSkillCloudService().resolveShare(shareId, options)
+    return this.skillArtifactCommands.resolveSkillShare(shareId, options)
   }
 
   createSkillDownloadGrant(
@@ -5559,7 +5165,7 @@ export class OrcaRuntimeService {
       installTarget?: 'local' | 'remote'
     }
   ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
-    return this.requireSkillCloudService().createDownloadGrant(shareId, options)
+    return this.skillArtifactCommands.createSkillDownloadGrant(shareId, options)
   }
 
   createSkillPackageVersionDownloadGrant(
@@ -5567,7 +5173,7 @@ export class OrcaRuntimeService {
     versionId: string,
     options: SkillCloudOptions & { installTarget?: 'local' | 'remote' }
   ): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> {
-    return this.requireSkillCloudService().createPackageVersionDownloadGrant(
+    return this.skillArtifactCommands.createSkillPackageVersionDownloadGrant(
       packageId,
       versionId,
       options
@@ -5578,18 +5184,18 @@ export class OrcaRuntimeService {
     packageId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<SkillCloudPackageDetails>> {
-    return this.requireSkillCloudService().getPackage(packageId, options)
+    return this.skillArtifactCommands.getSkillPackage(packageId, options)
   }
 
   listOwnedSkillShares(options: SkillCloudOptions) {
-    return this.requireSkillCloudService().listOwnedShares(options)
+    return this.skillArtifactCommands.listOwnedSkillShares(options)
   }
 
   revokeSkillShare(
     shareId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<void>> {
-    return this.requireSkillCloudService().revokeShare(shareId, options)
+    return this.skillArtifactCommands.revokeSkillShare(shareId, options)
   }
 
   deleteSkillPackageVersion(
@@ -5597,484 +5203,70 @@ export class OrcaRuntimeService {
     versionId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<void>> {
-    return this.requireSkillCloudService().deleteVersion(packageId, versionId, options)
+    return this.skillArtifactCommands.deleteSkillPackageVersion(packageId, versionId, options)
   }
 
   deleteSkillPackage(
     packageId: string,
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<void>> {
-    return this.requireSkillCloudService().deletePackage(packageId, options)
+    return this.skillArtifactCommands.deleteSkillPackage(packageId, options)
   }
 
-  async installSharedSkillRequest(
+  installSharedSkillRequest(
     request: SkillInstallRequest,
     signal?: AbortSignal
   ): Promise<SkillInstallResult> {
-    if (this.skillInstallOperations.has(request.operationId)) {
-      throw new Error('skill-install-operation-in-progress')
-    }
-    const controller = new AbortController()
-    const abort = (): void => controller.abort()
-    if (signal?.aborted) {
-      abort()
-    } else {
-      signal?.addEventListener('abort', abort, { once: true })
-    }
-    this.skillInstallOperations.set(request.operationId, controller)
-    try {
-      return await this.executeSharedSkillInstall(request, controller.signal)
-    } finally {
-      signal?.removeEventListener('abort', abort)
-      if (this.skillInstallOperations.get(request.operationId) === controller) {
-        this.skillInstallOperations.delete(request.operationId)
-      }
-    }
+    return this.skillInstallCommands.installSharedSkillRequest(request, signal)
   }
 
-  async installSharedSkillBundleRequest(
+  installSharedSkillBundleRequest(
     request: SkillBundleInstallRequest,
     signal?: AbortSignal,
     onProgress?: (progress: SkillBundleInstallProgress) => void
   ): Promise<SkillBundleInstallResult> {
-    if (this.skillInstallOperations.has(request.operationId)) {
-      throw new Error('skill-install-operation-in-progress')
-    }
-    const controller = new AbortController()
-    const abort = (): void => controller.abort()
-    if (signal?.aborted) {
-      abort()
-    } else {
-      signal?.addEventListener('abort', abort, { once: true })
-    }
-    this.skillInstallOperations.set(request.operationId, controller)
-    const reportProgress = (progress: SkillBundleInstallProgress): void => {
-      this.skillInstallProgress.set(request.operationId, progress)
-      try {
-        onProgress?.(progress)
-      } catch {
-        // Why: renderer teardown must not change the host-owned install outcome.
-      }
-    }
-    try {
-      const runtimeId = this.getStatus().runtimeId
-      const sshTarget = await this.resolveSkillSshTarget(request.destination)
-      if (sshTarget) {
-        return installSkillBundleOnSshHost({
-          provider: sshTarget.provider,
-          userDataPath: getAppEnvironment().getPath('userData'),
-          request: {
-            ...request,
-            destination:
-              request.destination.scope === 'global'
-                ? { scope: 'global', executionTarget: { kind: 'host' } }
-                : request.destination
-          },
-          workspace: sshTarget.workspace,
-          requireHttps: getAppEnvironment().isPackaged(),
-          signal: controller.signal,
-          onProgress: reportProgress
-        })
-      }
-      await this.skillTransactionRecovery
-      const allowedDownloadOrigins = ['https://storage.googleapis.com']
-      if (!getAppEnvironment().isPackaged() && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-        allowedDownloadOrigins.push(
-          ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-            .map((origin) => origin.trim())
-            .filter(Boolean)
-        )
-      }
-      return await executeSkillBundleInstallRequest(request, {
-        authority: this.skillInstallDestinationAuthority(runtimeId),
-        stateDirectory: getAppEnvironment().getPath('userData'),
-        allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
-        requireHttps: getAppEnvironment().isPackaged(),
-        resolveStagedUpload: (uploadId, identity) =>
-          this.requireSkillUploadSessions().take(uploadId, identity),
-        detectProviders: detectInstalledAgentsWithShellPathHydration,
-        resolveProviderRootOverrides: (destination) =>
-          this.resolveSkillProviderRootOverrides(destination),
-        signal: controller.signal,
-        onProgress: reportProgress
-      })
-    } finally {
-      signal?.removeEventListener('abort', abort)
-      if (this.skillInstallOperations.get(request.operationId) === controller) {
-        this.skillInstallOperations.delete(request.operationId)
-      }
-      this.skillInstallProgress.delete(request.operationId)
-    }
+    return this.skillInstallCommands.installSharedSkillBundleRequest(request, signal, onProgress)
   }
 
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null {
-    return this.skillInstallProgress.get(operationId) ?? null
+    return this.skillInstallCommands.getSharedSkillInstallProgress(operationId)
   }
 
   cancelSharedSkillInstall(operationId: string): boolean {
-    const operation = this.skillInstallOperations.get(operationId)
-    operation?.abort()
-    return Boolean(operation)
+    return this.skillInstallCommands.cancelSharedSkillInstall(operationId)
   }
 
-  private async executeSharedSkillInstall(
-    request: SkillInstallRequest,
-    signal: AbortSignal
-  ): Promise<SkillInstallResult> {
-    const runtimeId = this.getStatus().runtimeId
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return installSkillOnSshHost({
-        provider: sshTarget.provider,
-        userDataPath: getAppEnvironment().getPath('userData'),
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace,
-        requireHttps: getAppEnvironment().isPackaged(),
-        signal
-      })
-    }
-    await this.skillTransactionRecovery
-    const allowedDownloadOrigins = ['https://storage.googleapis.com']
-    if (!getAppEnvironment().isPackaged() && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
-      allowedDownloadOrigins.push(
-        ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
-          .map((origin) => origin.trim())
-          .filter(Boolean)
-      )
-    }
-    return executeSkillInstallRequest(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      allowedDownloadOrigins: [...new Set(allowedDownloadOrigins)],
-      requireHttps: getAppEnvironment().isPackaged(),
-      resolveStagedUpload: (uploadId, identity) =>
-        this.requireSkillUploadSessions().take(uploadId, identity),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination),
-      signal
-    })
-  }
-
-  async previewSharedSkillInstallRequest(
+  previewSharedSkillInstallRequest(
     request: SkillInstallPreviewRequest
   ): Promise<SkillInstallPreview> {
-    const runtimeId = this.getStatus().runtimeId
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return previewSkillInstallOnSshHost({
-        provider: sshTarget.provider,
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace
-      })
-    }
-    await this.skillTransactionRecovery
-    return previewSharedSkillInstall(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination)
-    })
+    return this.skillArtifactCommands.previewSharedSkillInstallRequest(request)
   }
 
-  async previewSharedSkillBundleInstallRequest(
+  previewSharedSkillBundleInstallRequest(
     request: SkillBundleInstallPreviewRequest
   ): Promise<SkillBundleInstallPreview> {
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return previewSkillBundleInstallOnSshHost({
-        provider: sshTarget.provider,
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace
-      })
-    }
-    await this.skillTransactionRecovery
-    const runtimeId = this.getStatus().runtimeId
-    return previewSharedSkillBundleInstall(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination)
-    })
+    return this.skillArtifactCommands.previewSharedSkillBundleInstallRequest(request)
   }
 
-  async removeSharedSkillInstallRequest(request: SkillRemoveRequest): Promise<SkillInstallResult> {
-    const runtimeId = this.getStatus().runtimeId
-    const sshTarget = await this.resolveSkillSshTarget(request.destination)
-    if (sshTarget) {
-      return removeSkillInstallOnSshHost({
-        provider: sshTarget.provider,
-        request: {
-          ...request,
-          destination:
-            request.destination.scope === 'global'
-              ? { scope: 'global', executionTarget: { kind: 'host' } }
-              : request.destination
-        },
-        workspace: sshTarget.workspace
-      })
-    }
-    await this.skillTransactionRecovery
-    return removeSharedSkillInstall(request, {
-      authority: this.skillInstallDestinationAuthority(runtimeId),
-      stateDirectory: getAppEnvironment().getPath('userData'),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) =>
-        this.resolveSkillProviderRootOverrides(destination)
-    })
+  removeSharedSkillInstallRequest(request: SkillRemoveRequest): Promise<SkillInstallResult> {
+    return this.skillArtifactCommands.removeSharedSkillInstallRequest(request)
   }
 
-  async listManagedSkillInstalls(connectionId?: string): Promise<ManagedSkillInstall[]> {
-    if (connectionId) {
-      const provider = this.requireSkillSshProvider(connectionId)
-      return listSkillInstallsOnSshHost({
-        provider,
-        connectionId,
-        workspaces: await this.listSkillSshWorkspaces(connectionId)
-      })
-    }
-    await this.skillTransactionRecovery
-    const runtimeId = this.getStatus().runtimeId
-    const [installs, worktrees] = await Promise.all([
-      listManagedSkillInstalls(join(getAppEnvironment().getPath('userData'), 'skill-installs'), {
-        observeReceipt: async (receipt) => {
-          if (!receipt.wslDistro) {
-            return nativeSkillInstallFilesystem.observeSkill(
-              receipt.canonicalPath,
-              receipt.fileModes
-            )
-          }
-          const filesystem = new WslSkillInstallFilesystem(receipt.wslDistro, [
-            dirname(receipt.canonicalPath)
-          ])
-          return filesystem.observeSkill(receipt.canonicalPath, receipt.fileModes)
-        }
-      }),
-      this.listResolvedWorktrees()
-    ])
-    const folderWorkspaces = this.listFolderWorkspaces()
-    return installs.flatMap((install): ManagedSkillInstall[] => {
-      if (install.scope === 'global') {
-        const wslPrefix = `global:${runtimeId}:wsl:`
-        return [
-          {
-            ...install,
-            destination: install.destinationIdentity.startsWith(wslPrefix)
-              ? {
-                  scope: 'global',
-                  executionTarget: {
-                    kind: 'wsl',
-                    distro: install.destinationIdentity.slice(wslPrefix.length)
-                  }
-                }
-              : { scope: 'global' }
-          }
-        ]
-      }
-      const worktree = worktrees.find(
-        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
-      )
-      if (worktree) {
-        return [{ ...install, destination: { scope: 'workspace', worktreeId: worktree.id } }]
-      }
-      const folder = folderWorkspaces.find(
-        (candidate) => install.destinationIdentity === `workspace:${runtimeId}:${candidate.id}`
-      )
-      return folder
-        ? [{ ...install, destination: { scope: 'workspace', folderWorkspaceId: folder.id } }]
-        : []
-    })
+  listManagedSkillInstalls(connectionId?: string): Promise<ManagedSkillInstall[]> {
+    return this.skillArtifactCommands.listManagedSkillInstalls(connectionId)
   }
 
-  async skillInstallDestinationUsesSsh(
+  skillInstallDestinationUsesSsh(
     destination: SkillInstallRequest['destination']
   ): Promise<boolean> {
-    return Boolean(await this.resolveSkillSshTarget(destination))
+    return this.skillInstallCommands.skillInstallDestinationUsesSsh(destination)
   }
 
-  async resolveSkillDiscoveryProviderRoots(target: {
+  resolveSkillDiscoveryProviderRoots(target: {
     kind: 'native-host' | 'wsl'
     distro?: string
   }): Promise<SkillProviderRootOverrides> {
-    const roots = await this.resolveSkillProviderRootOverrides({
-      scope: 'global',
-      homeDirectory: homedir(),
-      ...(target.kind === 'wsl' && target.distro ? { wslDistro: target.distro } : {})
-    })
-    if (target.kind !== 'wsl') {
-      return roots
-    }
-    return Object.fromEntries(
-      Object.entries(roots).map(([provider, root]) => [provider, toLinuxPath(root)])
-    )
-  }
-
-  private async resolveSkillProviderRootOverrides(destination: {
-    scope: 'global' | 'workspace'
-    homeDirectory: string
-    workspaceDirectory?: string
-    wslDistro?: string
-  }): Promise<SkillProviderRootOverrides> {
-    if (destination.scope !== 'global') {
-      return {}
-    }
-    const wslGrokRoot = destination.wslDistro
-      ? await resolveWslGrokSkillProviderRoot(destination.wslDistro)
-      : null
-    const roots: SkillProviderRootOverrides = destination.wslDistro
-      ? wslGrokRoot
-        ? { grok: wslGrokRoot }
-        : {}
-      : resolveEnvironmentSkillProviderRoots()
-    const claudeConfigDirectory = this.accountServices?.claudeAccounts.getRuntimeConfigDir(
-      destination.wslDistro
-        ? { runtime: 'wsl', wslDistro: destination.wslDistro }
-        : { runtime: 'host' }
-    )
-    return withClaudeSkillProviderRoot(roots, claudeConfigDirectory)
-  }
-
-  private skillInstallDestinationAuthority(runtimeId: string): SkillInstallDestinationAuthority {
-    return {
-      environmentId: runtimeId,
-      homeDirectory: homedir(),
-      resolveWorktree: async (id) => {
-        const repo = this.listRepos().find(
-          (candidate) => candidate.id === getRepoIdFromWorktreeId(id)
-        )
-        if (repo?.connectionId) {
-          throw new Error('skill-install-ssh-dispatch-required')
-        }
-        const projectRuntime = this.resolveProjectRuntimeForWorktree(id)
-        const worktree = await this.showManagedWorktree(`id:${id}`)
-        if (worktree.id !== id) {
-          return null
-        }
-        return {
-          id,
-          path: worktree.path,
-          ...(projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
-            ? { wslDistro: projectRuntime.runtime.distro }
-            : {})
-        }
-      },
-      resolveFolderWorkspace: async (id) => {
-        const workspace = this.listFolderWorkspaces().find((candidate) => candidate.id === id)
-        if (!workspace || workspace.connectionId) {
-          return null
-        }
-        return {
-          id,
-          path: workspace.folderPath,
-          ...(parseWslUncPath(workspace.folderPath)?.distro
-            ? { wslDistro: parseWslUncPath(workspace.folderPath)!.distro }
-            : {})
-        }
-      },
-      resolveWsl: async (distro) => {
-        if (process.platform !== 'win32') {
-          return null
-        }
-        const homeDirectory = getWslHome(distro)
-        return homeDirectory ? { homeDirectory } : null
-      }
-    }
-  }
-
-  private async resolveSkillSshTarget(destination: SkillInstallRequest['destination']): Promise<{
-    provider: () => IPtyProvider
-    workspace?: SkillSshWorkspaceAuthority
-  } | null> {
-    if (destination.scope === 'global') {
-      if (destination.executionTarget?.kind !== 'ssh') {
-        return null
-      }
-      const connectionId = destination.executionTarget.connectionId
-      return { provider: () => this.requireSkillSshProvider(connectionId) }
-    }
-    if (destination.worktreeId) {
-      const repo = this.listRepos().find(
-        (candidate) => candidate.id === getRepoIdFromWorktreeId(destination.worktreeId!)
-      )
-      if (!repo?.connectionId) {
-        return null
-      }
-      const worktree = await this.showManagedWorktree(`id:${destination.worktreeId}`)
-      if (worktree.id !== destination.worktreeId) {
-        throw new Error('skill-install-workspace-not-found')
-      }
-      return {
-        provider: () => this.requireSkillSshProvider(repo.connectionId!),
-        workspace: { kind: 'worktree', id: worktree.id, path: worktree.path }
-      }
-    }
-    const folder = this.listFolderWorkspaces().find(
-      (candidate) => candidate.id === destination.folderWorkspaceId
-    )
-    if (!folder?.connectionId) {
-      return null
-    }
-    return {
-      provider: () => this.requireSkillSshProvider(folder.connectionId!),
-      workspace: { kind: 'folder', id: folder.id, path: folder.folderPath }
-    }
-  }
-
-  private requireSkillSshProvider(connectionId: string): IPtyProvider {
-    const provider = this.getSshProviderFn?.(connectionId)
-    if (!provider?.requestHostRpc) {
-      throw new Error('skill-install-ssh-relay-unavailable')
-    }
-    return provider
-  }
-
-  private async listSkillSshWorkspaces(
-    connectionId: string
-  ): Promise<SkillSshWorkspaceAuthority[]> {
-    const repos = new Map(
-      this.listRepos()
-        .filter((repo) => repo.connectionId === connectionId)
-        .map((repo) => [repo.id, repo])
-    )
-    const worktrees = (await this.listResolvedWorktrees())
-      .filter((worktree) => repos.has(getRepoIdFromWorktreeId(worktree.id)))
-      .map(
-        (worktree): SkillSshWorkspaceAuthority => ({
-          kind: 'worktree',
-          id: worktree.id,
-          path: worktree.path
-        })
-      )
-    const folders = this.listFolderWorkspaces()
-      .filter((folder) => folder.connectionId === connectionId)
-      .map(
-        (folder): SkillSshWorkspaceAuthority => ({
-          kind: 'folder',
-          id: folder.id,
-          path: folder.folderPath
-        })
-      )
-    return [...worktrees, ...folders]
+    return this.skillInstallCommands.resolveSkillDiscoveryProviderRoots(target)
   }
 
   beginSkillUpload(request: SkillUploadBeginRequest): Promise<{
@@ -6082,91 +5274,61 @@ export class OrcaRuntimeService {
     chunkBytes: number
     acknowledgedOffset: number
   }> {
-    return this.requireSkillUploadSessions().begin(request)
+    return this.skillArtifactCommands.beginSkillUpload(request)
   }
 
   appendSkillUploadChunk(
     request: SkillUploadChunkRequest
   ): Promise<{ acknowledgedOffset: number }> {
-    return this.requireSkillUploadSessions().append(request)
+    return this.skillArtifactCommands.appendSkillUploadChunk(request)
   }
 
   commitSkillUpload(uploadId: string): Promise<{ uploadId: string }> {
-    return this.requireSkillUploadSessions().commit(uploadId)
+    return this.skillArtifactCommands.commitSkillUpload(uploadId)
   }
 
   cancelSkillUpload(uploadId: string): Promise<void> {
-    return this.requireSkillUploadSessions().cancel(uploadId)
+    return this.skillArtifactCommands.cancelSkillUpload(uploadId)
   }
 
   listArtifacts(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
-    return this.requireArtifactService().list(options)
+    return this.skillArtifactCommands.listArtifacts(options)
   }
 
   getPublishedArtifactLink(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
-    return this.requireArtifactService().getPublishedLink(request)
+    return this.skillArtifactCommands.getPublishedArtifactLink(request)
   }
 
   shareArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    return this.requireArtifactService().share(request)
+    return this.skillArtifactCommands.shareArtifact(request)
   }
 
   publishArtifact(
     request: ArtifactWriteRequest
   ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
-    return this.requireArtifactService().publish(request)
+    return this.skillArtifactCommands.publishArtifact(request)
   }
 
   updateArtifact(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    return this.requireArtifactService().update(request)
+    return this.skillArtifactCommands.updateArtifact(request)
   }
 
   unshareArtifact(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<void>> {
-    return this.requireArtifactService().unshare(request)
+    return this.skillArtifactCommands.unshareArtifact(request)
   }
 
   deleteArtifact(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
-    return this.requireArtifactService().delete(id, options)
-  }
-
-  private requireArtifactService(): ArtifactCloudService {
-    if (!this.artifactService) {
-      throw new Error('Artifact service is unavailable.')
-    }
-    return this.artifactService
-  }
-
-  private requireSkillCloudService(): SkillCloudService {
-    if (!this.skillCloudService) {
-      throw new Error('Skill Cloud service is unavailable.')
-    }
-    return this.skillCloudService
-  }
-
-  private requireSkillUploadSessions(): SkillUploadSessionService {
-    if (this.skillUploadSessionsDisposed) {
-      throw new Error('skill-upload-service-disposed')
-    }
-    this.skillUploadSessions ??= new SkillUploadSessionService(
-      join(
-        getAppEnvironment().getPath('userData'),
-        'skill-installs',
-        SKILL_UPLOAD_STAGING_ROOT_NAME
-      )
-    )
-    return this.skillUploadSessions
+    return this.skillArtifactCommands.deleteArtifact(id, options)
   }
 
   async disposeSkillUploadSessions(): Promise<void> {
-    this.skillUploadSessionsDisposed = true
-    const sessions = this.skillUploadSessions
-    this.skillUploadSessions = null
-    await sessions?.dispose()
+    await this.skillArtifactCommands.disposeSkillUploadSessions()
   }
+
 
   getRuntimeId(): string {
     return this.runtimeId
@@ -22758,182 +21920,53 @@ export class OrcaRuntimeService {
   }
 
   listRepos(): Repo[] {
-    return this.store?.getRepos() ?? []
-  }
-
-  // Why a stable field and not a per-call closure: enrichment dedupes coalesced callers by callback
-  // identity, so a fresh closure per call would stack up for the length of a slow sweep.
-  private readonly onRepoGitRemoteIdentitiesChanged = (): void => {
-    this.invalidateResolvedWorktreeCache()
-    this.notifyReposChanged()
+    return this.projectWorktreeCommands.listRepos()
   }
 
   enrichMissingRepoGitRemoteIdentities(): void {
-    if (!this.store) {
-      return
-    }
-    enrichMissingRepoGitRemoteIdentities(this.store, {
-      onChanged: this.onRepoGitRemoteIdentitiesChanged
-    })
+    this.projectWorktreeCommands.enrichMissingRepoGitRemoteIdentities()
   }
 
   listProjects(): Project[] {
-    return this.store?.getProjects?.() ?? []
+    return this.projectWorktreeCommands.listProjects()
   }
 
   updateProject(projectId: string, updates: ProjectUpdateArgs['updates']): Project {
-    if (!this.store?.updateProject) {
-      throw new Error('runtime_unavailable')
-    }
-    const project = this.store.updateProject(projectId, updates)
-    if (!project) {
-      throw new Error(`Project not found: ${projectId}`)
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyReposChanged()
-    return project
+    return this.projectWorktreeCommands.updateProject(projectId, updates)
   }
 
   listProjectHostSetups(): ProjectHostSetup[] {
-    return this.store?.getProjectHostSetups?.() ?? []
+    return this.projectWorktreeCommands.listProjectHostSetups()
   }
 
   createProjectHostSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult {
-    if (!this.store?.createProjectHostSetup) {
-      throw new Error('runtime_unavailable')
-    }
-    const result = this.store.createProjectHostSetup(args)
-    if (!result) {
-      throw new Error(`Project not found: ${args.projectId}`)
-    }
-    return result
+    return this.projectWorktreeCommands.createProjectHostSetup(args)
   }
 
   async setupProjectExistingFolder(
     args: ProjectHostSetupExistingFolderArgs
   ): Promise<ProjectHostSetupResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    assertProjectHostSetupHostIsSupported(args.hostId)
-    const knownRepoIds = new Set(this.listRepos().map((repo) => repo.id))
-    const repo = await this.addRepo(
-      args.path,
-      args.kind === 'folder' ? 'folder' : 'git',
-      args.hostId
-    )
-    return this.completeProjectHostSetup(args, repo, !knownRepoIds.has(repo.id))
+    return this.projectWorktreeCommands.setupProjectExistingFolder(args)
   }
 
   async setupProjectClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
-    // Why: guard before cloneRepo, which would otherwise clone to the local disk.
-    assertProjectHostSetupHostIsSupported(args.hostId)
-    const knownRepoIds = new Set(this.listRepos().map((repo) => repo.id))
-    const repo = await this.cloneRepo(args.url, args.destination, args.hostId)
-    return this.completeProjectHostSetup(
-      { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
-      repo,
-      !knownRepoIds.has(repo.id)
-    )
-  }
-
-  private completeProjectHostSetup(
-    args: ProjectHostSetupExistingFolderArgs,
-    initialRepo: Repo,
-    repoWasCreated: boolean
-  ): ProjectHostSetupResult {
-    try {
-      return this.linkRepoToProjectHostSetup(args, initialRepo)
-    } catch (err) {
-      if (repoWasCreated) {
-        // Why: a failed link must not leave a new repo registration or stale host caches behind.
-        this.store?.removeProject?.(initialRepo.id)
-        this.invalidateResolvedWorktreeCache()
-        this.invalidateWorktreeScanCacheForRepo(initialRepo.id)
-        invalidateAuthorizedRootsCache()
-        this.notifyReposChanged()
-      }
-      throw err
-    }
-  }
-
-  private linkRepoToProjectHostSetup(
-    args: ProjectHostSetupExistingFolderArgs,
-    initialRepo: Repo
-  ): ProjectHostSetupResult {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    let repo = initialRepo
-    let setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
-    if (setup.projectId !== args.projectId) {
-      const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-      // Why: the selected project can exist only on the source host, so its structured identity travels with the request.
-      const identity = existingProject?.providerIdentity ?? args.projectProviderIdentity
-      if (!identity || getProjectIdForProviderIdentity(identity) !== args.projectId) {
-        throw new Error('Imported folder does not match the selected project identity.')
-      }
-      const updated = this.store.updateRepo(repo.id, {
-        upstream: {
-          owner: identity.owner,
-          repo: identity.repo,
-          ...(identity.host ? { host: identity.host } : {})
-        }
-      })
-      if (!updated) {
-        throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
-      }
-      repo = updated
-      setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
-    }
-    const setupMethod = args.setupMethod ?? 'imported-existing-folder'
-    const updated = this.store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
-    if (!updated) {
-      throw new Error(
-        `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-      )
-    }
-    repo = updated
-    setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
-    const project = this.listProjects().find((entry) => entry.id === setup.projectId)
-    if (!project) {
-      throw new Error(`Project setup was created without a project record: ${setup.projectId}`)
-    }
-    return { project, setup, repo }
+    return this.projectWorktreeCommands.setupProjectClone(args)
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult {
-    if (!this.store?.updateProjectHostSetup) {
-      throw new Error('runtime_unavailable')
-    }
-    const result = this.store.updateProjectHostSetup(args)
-    if (!result) {
-      throw new Error(`Project host setup not found: ${args.setupId}`)
-    }
-    if ('worktreeBasePath' in args.updates && result.repo) {
-      void prepareLocalWorktreeRootForRepo(this.store, result.repo)
-      invalidateAuthorizedRootsCache()
-    }
-    return result
+    return this.projectWorktreeCommands.updateProjectHostSetup(args)
   }
 
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult {
-    if (!this.store?.deleteProjectHostSetup) {
-      throw new Error('runtime_unavailable')
-    }
-    const result = this.store.deleteProjectHostSetup(args)
-    if (!result) {
-      throw new Error(`Project host setup not found: ${args.setupId}`)
-    }
-    return result
+    return this.projectWorktreeCommands.deleteProjectHostSetup(args)
   }
 
   listProjectGroups(): ProjectGroup[] {
-    return this.store?.getProjectGroups?.() ?? []
+    return this.projectWorktreeCommands.listProjectGroups()
   }
 
   listFolderWorkspaces(): FolderWorkspace[] {
-    return this.store?.getFolderWorkspaces?.() ?? []
+    return this.projectWorktreeCommands.listFolderWorkspaces()
   }
 
   async createProjectGroup(input: {
@@ -22943,43 +21976,18 @@ export class OrcaRuntimeService {
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
   }): Promise<ProjectGroup> {
-    if (!this.store?.createProjectGroup) {
-      throw new Error('runtime_unavailable')
-    }
-    const group = this.store.createProjectGroup({
-      name: input.name,
-      parentPath: input.parentPath ?? null,
-      connectionId: input.connectionId ?? null,
-      parentGroupId: input.parentGroupId ?? null,
-      createdFrom: input.createdFrom ?? 'manual'
-    })
-    this.notifyReposChanged()
-    return group
+    return this.projectWorktreeCommands.createProjectGroup(input)
   }
 
   async updateProjectGroup(
     groupId: string,
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
   ): Promise<ProjectGroup | null> {
-    if (!this.store?.updateProjectGroup) {
-      throw new Error('runtime_unavailable')
-    }
-    const updated = this.store.updateProjectGroup(groupId, updates)
-    if (updated) {
-      this.notifyReposChanged()
-    }
-    return updated
+    return this.projectWorktreeCommands.updateProjectGroup(groupId, updates)
   }
 
   async deleteProjectGroup(groupId: string): Promise<{ deleted: boolean }> {
-    if (!this.store?.deleteProjectGroup) {
-      throw new Error('runtime_unavailable')
-    }
-    const deleted = this.store.deleteProjectGroup(groupId)
-    if (deleted) {
-      this.notifyReposChanged()
-    }
-    return { deleted }
+    return this.projectWorktreeCommands.deleteProjectGroup(groupId)
   }
 
   async moveProjectToGroup(
@@ -22987,16 +21995,7 @@ export class OrcaRuntimeService {
     groupId: string | null,
     order?: number
   ): Promise<Repo> {
-    if (!this.store?.moveProjectToGroup) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const moved = this.store.moveProjectToGroup(repo.id, groupId, order)
-    if (!moved) {
-      throw new Error('repo_not_found')
-    }
-    this.notifyReposChanged()
-    return moved
+    return this.projectWorktreeCommands.moveProjectToGroup(repoSelector, groupId, order)
   }
 
   async createFolderWorkspace(input: {
@@ -23010,44 +22009,13 @@ export class OrcaRuntimeService {
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): Promise<FolderWorkspace> {
-    if (!this.store?.createFolderWorkspace) {
-      throw new Error('runtime_unavailable')
-    }
-    const projectGroups = this.store.getProjectGroups?.() ?? []
-    const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
-    const folderPath =
-      typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
-        ? input.folderPath
-        : group?.parentPath
-    if (!group || !folderPath) {
-      throw new Error('folder_workspace_project_group_not_found')
-    }
-    const status = await getFolderWorkspacePathStatusForPath(
-      {
-        folderPath,
-        projectGroupId: group.id,
-        connectionId: input.connectionId ?? group.connectionId ?? null,
-        projectGroups,
-        repos: this.store.getRepos()
-      },
-      { getSshFilesystemProvider }
-    )
-    assertFolderWorkspacePathUsable(status)
-    const workspace = this.store.createFolderWorkspace({
-      ...input,
-      creatorProvenance: input.creatorProvenance ?? { kind: 'host' }
-    })
-    this.notifyReposChanged()
-    return workspace
+    return this.projectWorktreeCommands.createFolderWorkspace(input)
   }
 
   async getFolderWorkspacePathStatus(
     request: FolderWorkspacePathStatusRequest
   ): Promise<FolderWorkspacePathStatus> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    return getFolderWorkspacePathStatus(this.store, request, { getSshFilesystemProvider })
+    return this.projectWorktreeCommands.getFolderWorkspacePathStatus(request)
   }
 
   async updateFolderWorkspace(
@@ -23074,56 +22042,15 @@ export class OrcaRuntimeService {
       >
     >
   ): Promise<FolderWorkspace | null> {
-    if (!this.store?.updateFolderWorkspace) {
-      throw new Error('runtime_unavailable')
-    }
-    if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
-      const workspace = this.store
-        .getFolderWorkspaces?.()
-        .find((entry) => entry.id === folderWorkspaceId)
-      if (!workspace) {
-        return null
-      }
-      const projectGroups = this.store.getProjectGroups?.() ?? []
-      const status = await getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: updates.folderPath,
-          projectGroupId: workspace.projectGroupId,
-          connectionId:
-            workspace.connectionId ??
-            projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-            null,
-          projectGroups,
-          repos: this.store.getRepos()
-        },
-        { getSshFilesystemProvider }
-      )
-      assertFolderWorkspacePathUsable(status)
-    }
-    const updated = this.store.updateFolderWorkspace(folderWorkspaceId, updates)
-    if (updated) {
-      this.notifyReposChanged()
-    }
-    return updated
+    return this.projectWorktreeCommands.updateFolderWorkspace(folderWorkspaceId, updates)
   }
 
   async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
-    if (!this.store?.removeFolderWorkspace) {
-      throw new Error('runtime_unavailable')
-    }
-    const deleted = this.store.removeFolderWorkspace(folderWorkspaceId)
-    if (deleted) {
-      this.notifyReposChanged()
-    }
-    return { deleted }
+    return this.projectWorktreeCommands.deleteFolderWorkspace(folderWorkspaceId)
   }
 
   async scanNestedRepos(path: string): Promise<NestedRepoScanResult> {
-    if (!isAbsolute(path)) {
-      throw new Error('Project path must be an absolute path')
-    }
-    await awaitWindowsHostGitEnvironmentReady({ cwd: path })
-    return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+    return this.projectWorktreeCommands.scanNestedRepos(path)
   }
 
   async browseServerDir(pathValue: string): Promise<{
@@ -23131,38 +22058,11 @@ export class OrcaRuntimeService {
     entries: DirEntry[]
     pathFlavor: FilesystemPathFlavor
   }> {
-    // Windows resolves `/` to the current drive, so expose drive roots instead.
-    if (isServerDriveListRequest(pathValue)) {
-      return listWindowsDrives()
-    }
-    const dirPath = resolveServerBrowsePath(pathValue)
-    const dirStat = await stat(dirPath)
-    if (!dirStat.isDirectory()) {
-      throw new Error(`${dirPath} is not a directory`)
-    }
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries
-      .filter((entry) => entry.name !== '.' && entry.name !== '..')
-      .map((entry) => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-        isSymlink: entry.isSymbolicLink()
-      }))
-    sortDirEntries(mapped)
-    return {
-      resolvedPath: dirPath,
-      entries: mapped,
-      pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
-    }
+    return this.projectWorktreeCommands.browseServerDir(pathValue)
   }
 
   async isGitAvailable(): Promise<boolean> {
-    try {
-      await gitExecFileAsync(['--version'], { cwd: process.cwd(), timeout: 3000 })
-      return true
-    } catch {
-      return false
-    }
+    return this.projectWorktreeCommands.isGitAvailable()
   }
 
   async importNestedRepos(args: {
@@ -23171,146 +22071,18 @@ export class OrcaRuntimeService {
     projectPaths: string[]
     mode: ProjectGroupImportMode
   }): Promise<ProjectGroupImportResult> {
-    await awaitWindowsHostGitEnvironmentReady({ cwd: args.parentPath })
-    if (!this.store?.createProjectGroup || !this.store?.moveProjectToGroup) {
-      throw new Error('runtime_unavailable')
-    }
-    if (!isAbsolute(args.parentPath)) {
-      throw new Error('Project path must be an absolute path')
-    }
-    const scan = await scanNestedRepos({ path: args.parentPath, options: { timeoutMs: 15_000 } })
-    const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
-    const groupResolver = createNestedProjectGroupResolver({
-      parentPath: args.parentPath,
-      groupName: args.groupName,
-      mode: args.mode,
-      connectionId: null,
-      repoPaths: selection.selectedPaths,
-      createGroup: (input) => this.store!.createProjectGroup!(input)
-    })
-    const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
-      (repoPath) => ({
-        path: repoPath,
-        status: 'failed',
-        error: 'Repository was not found in the nested repo scan result'
-      })
-    )
-    const importedProjectIdsByRepoPath = new Map<string, string>()
-    const importTargetResolver = createNestedRepoImportTargetResolver()
-    for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
-      try {
-        await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-        if (!isGitRepo(repoPath)) {
-          results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
-          continue
-        }
-        const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
-        const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
-        const alreadyImportedProjectId = importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
-        if (alreadyImportedProjectId) {
-          results.push({
-            path: repoPath,
-            projectId: alreadyImportedProjectId,
-            status: 'already-known'
-          })
-          continue
-        }
-        const existing = this.store
-          .getRepos()
-          .find((repo) => normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath)
-        const group = groupResolver.getGroupForRepo(repoPath)
-        if (existing) {
-          if (group) {
-            this.store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
-          }
-          importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
-          results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
-          continue
-        }
-        const repo: Repo = {
-          id: randomUUID(),
-          path: importRepoPath,
-          displayName: getRepoName(importRepoPath),
-          badgeColor: DEFAULT_REPO_BADGE_COLOR,
-          addedAt: Date.now(),
-          kind: 'git',
-          externalWorktreeVisibilityLegacy: false,
-          ...(group
-            ? {
-                projectGroupId: group.id,
-                projectGroupOrder
-              }
-            : {})
-        }
-        this.store.addRepo(repo)
-        importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
-        results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
-      } catch (error) {
-        results.push({
-          path: repoPath,
-          status: 'failed',
-          error: sanitizeNestedRepoRuntimeImportError(
-            'Failed to import nested repository in runtime',
-            error
-          )
-        })
-      }
-    }
-    const importedCount = results.filter((entry) => entry.status === 'imported').length
-    const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
-    const failedCount = results.filter((entry) => entry.status === 'failed').length
-    if (importedCount + alreadyKnownCount === 0) {
-      for (const group of groupResolver.getCreatedGroups().toReversed()) {
-        this.store.deleteProjectGroup?.(group.id)
-      }
-    }
-    this.invalidateResolvedWorktreeCache()
-    for (const project of results) {
-      if (project.projectId) {
-        this.invalidateWorktreeScanCacheForRepo(project.projectId)
-      }
-    }
-    this.notifyReposChanged()
-    const rootGroup = groupResolver.getRootGroup()
-    return {
-      ...(rootGroup && importedCount + alreadyKnownCount > 0 ? { group: rootGroup } : {}),
-      projects: results,
-      importedCount,
-      alreadyKnownCount,
-      failedCount
-    }
+    return this.projectWorktreeCommands.importNestedRepos(args)
   }
 
   async listSparsePresets(repoSelector: string) {
-    if (!this.store?.getSparsePresets) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return this.store.getSparsePresets(repo.id)
+    return this.projectWorktreeCommands.listSparsePresets(repoSelector)
   }
 
   async saveSparsePreset(
     repoSelector: string,
     args: { id?: string; name: string; directories: string[] }
   ) {
-    if (!this.store?.getSparsePresets || !this.store.saveSparsePreset) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const name = normalizeSparsePresetName(args.name)
-    const directories = normalizeSparsePresetDirectoriesForSave(args.directories)
-    const now = Date.now()
-    const existing = args.id
-      ? this.store.getSparsePresets(repo.id).find((preset) => preset.id === args.id)
-      : undefined
-    return this.store.saveSparsePreset({
-      id: existing?.id ?? randomUUID(),
-      repoId: repo.id,
-      name,
-      directories,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now
-    })
+    return this.projectWorktreeCommands.saveSparsePreset(repoSelector, args)
   }
 
   async addRepo(
@@ -23318,66 +22090,7 @@ export class OrcaRuntimeService {
     kind: 'git' | 'folder' = 'git',
     executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    if (!isAbsolute(path)) {
-      // Why: remote clients may run in a different cwd than the server. Require
-      // server-side repo paths to be explicit so `orca serve` cwd is irrelevant.
-      throw new Error('Project path must be an absolute path')
-    }
-    if (kind === 'git') {
-      await awaitWindowsHostGitEnvironmentReady({ cwd: path })
-    }
-    if (kind === 'git' && !isGitRepo(path)) {
-      throw new Error(`Not a valid git repository: ${path}`)
-    }
-
-    const existing = this.store.getRepos().find((repo) => {
-      if (!runtimePathsEqual(repo.path, path)) {
-        return false
-      }
-      return runtimeRepoMatchesExecutionHost(repo, executionHostId)
-    })
-    if (existing) {
-      // Only a runtime host backfills a legacy unstamped repo. An unstamped repo is
-      // indistinguishable from a genuine local repo (both have null executionHostId and
-      // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
-      // real local project to the wrong host. Runtime is the only host that lost its
-      // identity to the pre-#7018 path-only import and needs the backfill.
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
-        const adopted =
-          this.store.updateRepo(existing.id, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
-        this.invalidateResolvedWorktreeCache()
-        this.invalidateWorktreeScanCacheForRepo(existing.id)
-        this.notifyReposChanged()
-        return adopted
-      }
-      return existing
-    }
-
-    const detected = await detectRepoIconAndUpstream({ repoPath: path, kind })
-    const repo: Repo = {
-      id: randomUUID(),
-      path,
-      displayName: getRepoName(path),
-      badgeColor: DEFAULT_REPO_BADGE_COLOR,
-      ...(executionHostId != null ? { executionHostId } : {}),
-      ...detected,
-      addedAt: Date.now(),
-      kind,
-      ...(kind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
-    }
-    this.store.addRepo(repo)
-    await prepareLocalWorktreeRootForRepo(this.store, repo)
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    this.notifyReposChanged()
-    return this.store.getRepo(repo.id) ?? repo
+    return this.projectWorktreeCommands.addRepo(path, kind, executionHostId)
   }
 
   async createRepo(
@@ -23385,116 +22098,7 @@ export class OrcaRuntimeService {
     name: string,
     kind: 'git' | 'folder' = 'git'
   ): Promise<{ repo: Repo } | { error: string }> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const trimmedName = name.trim()
-    const trimmedParentPath = parentPath.trim()
-    const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
-    if (!trimmedName) {
-      return { error: 'Name cannot be empty' }
-    }
-    if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
-      return { error: 'Name cannot contain slashes or be "." / ".."' }
-    }
-    if (!trimmedParentPath) {
-      return { error: 'Parent directory is required' }
-    }
-    if (!isAbsolute(trimmedParentPath)) {
-      return { error: 'Parent directory must be an absolute path' }
-    }
-
-    const targetPath = join(trimmedParentPath, trimmedName)
-    const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
-    if (existing) {
-      return { repo: existing }
-    }
-
-    let createdDir = false
-    try {
-      // Why: default create-project parents are host-home based and may not exist
-      // before the first project is created on a fresh runtime.
-      await mkdir(trimmedParentPath, { recursive: true })
-      const existingStat = await stat(targetPath).catch((error: unknown) => {
-        if (isENOENT(error)) {
-          return null
-        }
-        throw error
-      })
-      if (existingStat) {
-        if (!existingStat.isDirectory()) {
-          return { error: `"${trimmedName}" already exists at this location and is not a folder.` }
-        }
-        const entries = await readdir(targetPath)
-        if (entries.length > 0) {
-          return { error: `"${trimmedName}" already exists at this location and is not empty.` }
-        }
-      } else {
-        await mkdir(targetPath, { recursive: false })
-        createdDir = true
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { error: `Failed to prepare directory: ${message}` }
-    }
-
-    if (repoKind === 'git') {
-      let step: 'init' | 'commit' = 'init'
-      try {
-        await gitExecFileAsync(['init'], { cwd: targetPath })
-        step = 'commit'
-        await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-          cwd: targetPath
-        })
-      } catch (error) {
-        if (createdDir) {
-          await rm(targetPath, { recursive: true, force: true }).catch(() => {})
-        } else if (step === 'commit') {
-          await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
-        }
-        const message = error instanceof Error ? error.message : String(error)
-        if (
-          step === 'commit' &&
-          /Please tell me who you are|user\.name|user\.email/i.test(message)
-        ) {
-          return {
-            error:
-              'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
-          }
-        }
-        const stepLabel =
-          step === 'init'
-            ? 'Failed to initialize git repository'
-            : 'Failed to create initial commit'
-        return { error: `${stepLabel}: ${message}` }
-      }
-    }
-
-    const raceWinner = this.store
-      .getRepos()
-      .find((repo) => runtimePathsEqual(repo.path, targetPath))
-    if (raceWinner) {
-      return { repo: raceWinner }
-    }
-
-    const detected = await detectRepoIconAndUpstream({ repoPath: targetPath, kind: repoKind })
-    const repo: Repo = {
-      id: randomUUID(),
-      path: targetPath,
-      displayName: trimmedName,
-      badgeColor: DEFAULT_REPO_BADGE_COLOR,
-      ...detected,
-      addedAt: Date.now(),
-      kind: repoKind,
-      ...(repoKind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
-    }
-    this.store.addRepo(repo)
-    await prepareLocalWorktreeRootForRepo(this.store, repo)
-    invalidateAuthorizedRootsCache()
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    this.notifyReposChanged()
-    return { repo: this.store.getRepo(repo.id) ?? repo }
+    return this.projectWorktreeCommands.createRepo(parentPath, name, kind)
   }
 
   async cloneRepo(
@@ -23502,168 +22106,7 @@ export class OrcaRuntimeService {
     destination: string,
     executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const trimmedUrl = url.trim()
-    const trimmedDestination = destination.trim()
-    if (!trimmedDestination) {
-      throw new Error('Clone destination is required')
-    }
-    const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
-    const clonePathKey = getClonePathComparisonKey(clonePath)
-    const previous = this.cloneInFlightByPath.get(clonePathKey) ?? Promise.resolve()
-    let release!: () => void
-    const current = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const tail = previous.then(
-      () => current,
-      () => current
-    )
-    this.cloneInFlightByPath.set(clonePathKey, tail)
-
-    try {
-      await previous
-      return await runWithGitReadCacheInvalidation(() =>
-        this.cloneRepoAfterPathLock(
-          trimmedUrl,
-          trimmedDestination,
-          clonePath,
-          clonePathKey,
-          executionHostId
-        )
-      )
-    } finally {
-      release()
-      if (this.cloneInFlightByPath.get(clonePathKey) === tail) {
-        this.cloneInFlightByPath.delete(clonePathKey)
-      }
-    }
-  }
-
-  private async cloneRepoAfterPathLock(
-    trimmedUrl: string,
-    trimmedDestination: string,
-    clonePath: string,
-    clonePathKey: string,
-    executionHostId?: ExecutionHostId | null
-  ): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const existingBeforeClone = this.store
-      .getRepos()
-      .find(
-        (repo) =>
-          getClonePathComparisonKey(repo.path) === clonePathKey &&
-          runtimeRepoMatchesExecutionHost(repo, executionHostId)
-      )
-    if (existingBeforeClone && !isFolderRepo(existingBeforeClone)) {
-      return existingBeforeClone
-    }
-
-    await mkdir(trimmedDestination, { recursive: true })
-    const claimedTarget = await claimCloneTarget(clonePath)
-    let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
-    try {
-      proc = await gitSpawnAfterWindowsEnvironmentReady(
-        ['clone', '--progress', '--', trimmedUrl, clonePath],
-        {
-          cwd: trimmedDestination,
-          // Why: without the non-interactive guard, a clone that needs GitHub
-          // auth makes Git Credential Manager pop its "Connect to GitHub" OAuth
-          // window on Windows; in a network-restricted env the browser/device
-          // flow can never complete and git's credential retry re-pops it
-          // (issue #7652). Fail fast with a clear error instead.
-          env: nonInteractiveGitEnv(),
-          stdio: ['ignore', 'ignore', 'pipe']
-        }
-      )
-    } catch (err) {
-      await cleanupClaimedCloneTarget(clonePath, claimedTarget)
-      const message = err instanceof Error ? err.message : String(err)
-      throw new Error(`Clone failed: ${message}`)
-    }
-    await new Promise<void>((resolve, reject) => {
-      let stderrTail = ''
-      let settled = false
-      proc.stderr?.on('data', (chunk: Buffer) => {
-        stderrTail = (stderrTail + chunk.toString()).slice(-4096)
-      })
-      const finishClone = async (
-        code: number | null,
-        signal: NodeJS.Signals | null,
-        error?: Error
-      ) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        const cloneSucceeded = !error && code === 0 && !signal
-        if (!cloneSucceeded) {
-          await cleanupClaimedCloneTarget(clonePath, claimedTarget)
-        }
-
-        if (error) {
-          reject(new Error(`Clone failed: ${error.message}`))
-        } else if (signal === 'SIGTERM') {
-          reject(new Error('Clone aborted'))
-        } else if (code === 0) {
-          resolve()
-        } else {
-          reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderrTail, { clonePath })}`))
-        }
-      }
-      proc.on('error', (error) => {
-        void finishClone(null, null, error)
-      })
-      proc.on('close', (code, signal) => {
-        void finishClone(code, signal)
-      })
-    })
-
-    const existing = this.store
-      .getRepos()
-      .find(
-        (repo) =>
-          getClonePathComparisonKey(repo.path) === clonePathKey &&
-          runtimeRepoMatchesExecutionHost(repo, executionHostId)
-      )
-    if (existing) {
-      if (isFolderRepo(existing)) {
-        const updated = this.store.updateRepo(existing.id, { kind: 'git' })
-        if (updated) {
-          await prepareLocalWorktreeRootForRepo(this.store, updated)
-          invalidateAuthorizedRootsCache()
-          this.invalidateResolvedWorktreeCache()
-          this.invalidateWorktreeScanCacheForRepo(updated.id)
-          this.notifyReposChanged()
-          return updated
-        }
-      }
-      return existing
-    }
-
-    const detected = await detectRepoIconAndUpstream({ repoPath: clonePath, kind: 'git' })
-    const repo: Repo = {
-      id: randomUUID(),
-      path: clonePath,
-      displayName: getRepoName(clonePath),
-      badgeColor: DEFAULT_REPO_BADGE_COLOR,
-      ...(executionHostId != null ? { executionHostId } : {}),
-      ...detected,
-      addedAt: Date.now(),
-      kind: 'git',
-      externalWorktreeVisibilityLegacy: false
-    }
-    this.store.addRepo(repo)
-    await prepareLocalWorktreeRootForRepo(this.store, repo)
-    invalidateAuthorizedRootsCache()
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    this.notifyReposChanged()
-    return this.store.getRepo(repo.id) ?? repo
+    return this.projectWorktreeCommands.cloneRepo(url, destination, executionHostId)
   }
 
   async showRepo(repoSelector: string): Promise<Repo> {
@@ -38373,2402 +36816,69 @@ export class OrcaRuntimeService {
   }
 
   // ── Linear integration ──
+  linearConnect: RuntimeLinearCommands['linearConnect'] = this.linearCommands.linearConnect.bind(this.linearCommands)
+  linearDisconnect: RuntimeLinearCommands['linearDisconnect'] = this.linearCommands.linearDisconnect.bind(this.linearCommands)
+  linearSelectWorkspace: RuntimeLinearCommands['linearSelectWorkspace'] = this.linearCommands.linearSelectWorkspace.bind(this.linearCommands)
+  linearStatus: RuntimeLinearCommands['linearStatus'] = this.linearCommands.linearStatus.bind(this.linearCommands)
+  linearTestConnection: RuntimeLinearCommands['linearTestConnection'] = this.linearCommands.linearTestConnection.bind(this.linearCommands)
+  linearSearchIssues: RuntimeLinearCommands['linearSearchIssues'] = this.linearCommands.linearSearchIssues.bind(this.linearCommands)
+  linearSearchForAgents: RuntimeLinearCommands['linearSearchForAgents'] = this.linearCommands.linearSearchForAgents.bind(this.linearCommands)
+  linearIssueContext: RuntimeLinearCommands['linearIssueContext'] = this.linearCommands.linearIssueContext.bind(this.linearCommands)
+  linearTeamListForAgents: RuntimeLinearCommands['linearTeamListForAgents'] = this.linearCommands.linearTeamListForAgents.bind(this.linearCommands)
+  linearTeamMembersForAgents: RuntimeLinearCommands['linearTeamMembersForAgents'] = this.linearCommands.linearTeamMembersForAgents.bind(this.linearCommands)
+  linearTeamStatesForAgents: RuntimeLinearCommands['linearTeamStatesForAgents'] = this.linearCommands.linearTeamStatesForAgents.bind(this.linearCommands)
+  linearTeamLabelsForAgents: RuntimeLinearCommands['linearTeamLabelsForAgents'] = this.linearCommands.linearTeamLabelsForAgents.bind(this.linearCommands)
+  linearProjectListForAgents: RuntimeLinearCommands['linearProjectListForAgents'] = this.linearCommands.linearProjectListForAgents.bind(this.linearCommands)
+  linearIssueListForAgents: RuntimeLinearCommands['linearIssueListForAgents'] = this.linearCommands.linearIssueListForAgents.bind(this.linearCommands)
+  linearMcpIssueList: RuntimeLinearCommands['linearMcpIssueList'] = this.linearCommands.linearMcpIssueList.bind(this.linearCommands)
+  linearResolveCurrentIssue: RuntimeLinearCommands['linearResolveCurrentIssue'] = this.linearCommands.linearResolveCurrentIssue.bind(this.linearCommands)
+  linearListIssues: RuntimeLinearCommands['linearListIssues'] = this.linearCommands.linearListIssues.bind(this.linearCommands)
+  linearCreateIssue: RuntimeLinearCommands['linearCreateIssue'] = this.linearCommands.linearCreateIssue.bind(this.linearCommands)
+  linearGetIssue: RuntimeLinearCommands['linearGetIssue'] = this.linearCommands.linearGetIssue.bind(this.linearCommands)
+  linearUpdateIssue: RuntimeLinearCommands['linearUpdateIssue'] = this.linearCommands.linearUpdateIssue.bind(this.linearCommands)
+  linearAddIssueComment: RuntimeLinearCommands['linearAddIssueComment'] = this.linearCommands.linearAddIssueComment.bind(this.linearCommands)
+  linearIssueSetState: RuntimeLinearCommands['linearIssueSetState'] = this.linearCommands.linearIssueSetState.bind(this.linearCommands)
+  linearIssueRelationWrite: RuntimeLinearCommands['linearIssueRelationWrite'] = this.linearCommands.linearIssueRelationWrite.bind(this.linearCommands)
+  linearSaveIssue: RuntimeLinearCommands['linearSaveIssue'] = this.linearCommands.linearSaveIssue.bind(this.linearCommands)
+  linearIssueUpdateTask: RuntimeLinearCommands['linearIssueUpdateTask'] = this.linearCommands.linearIssueUpdateTask.bind(this.linearCommands)
+  linearIssueAddComment: RuntimeLinearCommands['linearIssueAddComment'] = this.linearCommands.linearIssueAddComment.bind(this.linearCommands)
+  linearIssueAttachLink: RuntimeLinearCommands['linearIssueAttachLink'] = this.linearCommands.linearIssueAttachLink.bind(this.linearCommands)
+  linearIssueCreate: RuntimeLinearCommands['linearIssueCreate'] = this.linearCommands.linearIssueCreate.bind(this.linearCommands)
+  linearIssueComments: RuntimeLinearCommands['linearIssueComments'] = this.linearCommands.linearIssueComments.bind(this.linearCommands)
+  linearListTeams: RuntimeLinearCommands['linearListTeams'] = this.linearCommands.linearListTeams.bind(this.linearCommands)
+  linearListProjects: RuntimeLinearCommands['linearListProjects'] = this.linearCommands.linearListProjects.bind(this.linearCommands)
+  linearCreateProject: RuntimeLinearCommands['linearCreateProject'] = this.linearCommands.linearCreateProject.bind(this.linearCommands)
+  linearGetProject: RuntimeLinearCommands['linearGetProject'] = this.linearCommands.linearGetProject.bind(this.linearCommands)
+  linearListProjectIssues: RuntimeLinearCommands['linearListProjectIssues'] = this.linearCommands.linearListProjectIssues.bind(this.linearCommands)
+  linearListCustomViews: RuntimeLinearCommands['linearListCustomViews'] = this.linearCommands.linearListCustomViews.bind(this.linearCommands)
+  linearGetCustomView: RuntimeLinearCommands['linearGetCustomView'] = this.linearCommands.linearGetCustomView.bind(this.linearCommands)
+  linearListCustomViewIssues: RuntimeLinearCommands['linearListCustomViewIssues'] = this.linearCommands.linearListCustomViewIssues.bind(this.linearCommands)
+  linearListCustomViewProjects: RuntimeLinearCommands['linearListCustomViewProjects'] = this.linearCommands.linearListCustomViewProjects.bind(this.linearCommands)
+  linearTeamStates: RuntimeLinearCommands['linearTeamStates'] = this.linearCommands.linearTeamStates.bind(this.linearCommands)
+  linearTeamLabels: RuntimeLinearCommands['linearTeamLabels'] = this.linearCommands.linearTeamLabels.bind(this.linearCommands)
+  linearTeamMembers: RuntimeLinearCommands['linearTeamMembers'] = this.linearCommands.linearTeamMembers.bind(this.linearCommands)
+  jiraConnect: RuntimeLinearCommands['jiraConnect'] = this.linearCommands.jiraConnect.bind(this.linearCommands)
+  jiraDisconnect: RuntimeLinearCommands['jiraDisconnect'] = this.linearCommands.jiraDisconnect.bind(this.linearCommands)
+  jiraSelectSite: RuntimeLinearCommands['jiraSelectSite'] = this.linearCommands.jiraSelectSite.bind(this.linearCommands)
+  jiraStatus: RuntimeLinearCommands['jiraStatus'] = this.linearCommands.jiraStatus.bind(this.linearCommands)
+  jiraReadStatus: RuntimeLinearCommands['jiraReadStatus'] = this.linearCommands.jiraReadStatus.bind(this.linearCommands)
+  jiraTestConnection: RuntimeLinearCommands['jiraTestConnection'] = this.linearCommands.jiraTestConnection.bind(this.linearCommands)
+  jiraSearchIssues: RuntimeLinearCommands['jiraSearchIssues'] = this.linearCommands.jiraSearchIssues.bind(this.linearCommands)
+  jiraListIssues: RuntimeLinearCommands['jiraListIssues'] = this.linearCommands.jiraListIssues.bind(this.linearCommands)
+  jiraCreateIssue: RuntimeLinearCommands['jiraCreateIssue'] = this.linearCommands.jiraCreateIssue.bind(this.linearCommands)
+  jiraGetIssue: RuntimeLinearCommands['jiraGetIssue'] = this.linearCommands.jiraGetIssue.bind(this.linearCommands)
+  jiraLookupIssueSummary: RuntimeLinearCommands['jiraLookupIssueSummary'] = this.linearCommands.jiraLookupIssueSummary.bind(this.linearCommands)
+  jiraUpdateIssue: RuntimeLinearCommands['jiraUpdateIssue'] = this.linearCommands.jiraUpdateIssue.bind(this.linearCommands)
+  jiraAddIssueComment: RuntimeLinearCommands['jiraAddIssueComment'] = this.linearCommands.jiraAddIssueComment.bind(this.linearCommands)
+  jiraIssueComments: RuntimeLinearCommands['jiraIssueComments'] = this.linearCommands.jiraIssueComments.bind(this.linearCommands)
+  jiraListProjects: RuntimeLinearCommands['jiraListProjects'] = this.linearCommands.jiraListProjects.bind(this.linearCommands)
+  jiraListIssueTypes: RuntimeLinearCommands['jiraListIssueTypes'] = this.linearCommands.jiraListIssueTypes.bind(this.linearCommands)
+  jiraListCreateFields: RuntimeLinearCommands['jiraListCreateFields'] = this.linearCommands.jiraListCreateFields.bind(this.linearCommands)
+  jiraListPriorities: RuntimeLinearCommands['jiraListPriorities'] = this.linearCommands.jiraListPriorities.bind(this.linearCommands)
+  jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers'] = this.linearCommands.jiraListAssignableUsers.bind(this.linearCommands)
+  jiraListTransitions: RuntimeLinearCommands['jiraListTransitions'] = this.linearCommands.jiraListTransitions.bind(this.linearCommands)
+  jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder'] = this.linearCommands.jiraGetProjectStatusOrder.bind(this.linearCommands)
 
-  linearConnect(apiKey: string): ReturnType<typeof connectLinear> {
-    return connectLinear(apiKey)
-  }
-
-  linearDisconnect(workspaceId?: string): { ok: true } {
-    disconnectLinear(workspaceId)
-    return { ok: true }
-  }
-
-  linearSelectWorkspace(workspaceId: LinearWorkspaceSelection): ReturnType<typeof getLinearStatus> {
-    return selectLinearWorkspace(workspaceId)
-  }
-
-  linearStatus(): ReturnType<typeof getLinearStatus> {
-    return getLinearStatus()
-  }
-
-  linearTestConnection(workspaceId?: string): ReturnType<typeof testLinearConnection> {
-    return testLinearConnection(workspaceId)
-  }
-
-  linearSearchIssues(
-    query: string,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection
-  ): ReturnType<typeof searchLinearIssues> {
-    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50), workspaceId)
-  }
-
-  linearSearchForAgents(args: {
-    query: string
-    limit?: number
-    workspaceId?: (string & {}) | 'all'
-  }): ReturnType<typeof searchLinearIssuesForAgents> {
-    return searchLinearIssuesForAgents(args)
-  }
-
-  linearIssueContext(request: LinearIssueRequest): ReturnType<typeof readLinearIssueContext> {
-    return readLinearIssueContext(request, (context) => this.linearResolveCurrentIssue(context))
-  }
-
-  async linearTeamListForAgents(params: {
-    workspaceId?: (string & {}) | 'all'
-  }): Promise<LinearTeamListResult> {
-    try {
-      const result = await listLinearTeamsForAgent(params.workspaceId)
-      const workspaceErrors = result.errors.map((error) => ({
-        workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
-        code: this.linearWorkspaceErrorCode(error.type),
-        message: sanitizeLinearErrorMessage(error.message)
-      }))
-      return {
-        teams: result.teams.map((team) => this.linearTeamSummary(team)),
-        meta: {
-          workspaceId: params.workspaceId,
-          returned: result.teams.length,
-          partial: workspaceErrors.length > 0,
-          workspaceErrors
-        }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearTeamMembersForAgents(params: {
-    teamInput: string
-    workspaceId?: string
-  }): Promise<LinearTeamMembersResult> {
-    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-    try {
-      const members = await getLinearTeamMembersOrThrow(team.id, team.workspaceId)
-      return {
-        team: this.linearTeamSummary(team),
-        members: members.map((member) => ({
-          id: member.id,
-          displayName: member.displayName,
-          avatarUrl: member.avatarUrl
-        })),
-        meta: { workspaceId: team.workspaceId, returned: members.length }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearTeamStatesForAgents(params: {
-    teamInput: string
-    workspaceId?: string
-  }): Promise<LinearTeamStatesResult> {
-    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-    const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
-    return {
-      team: this.linearTeamSummary(team),
-      states: states.map((state) => ({
-        id: state.id,
-        name: state.name,
-        type: state.type,
-        color: state.color,
-        position: state.position
-      })),
-      meta: { workspaceId: team.workspaceId, returned: states.length }
-    }
-  }
-
-  async linearTeamLabelsForAgents(params: {
-    teamInput: string
-    workspaceId?: string
-  }): Promise<LinearTeamLabelsResult> {
-    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-    const labels = await this.getLinearTeamLabelsForWrite(team.id, team.workspaceId)
-    return {
-      team: this.linearTeamSummary(team),
-      labels: labels.map((label) => ({ id: label.id, name: label.name, color: label.color })),
-      meta: { workspaceId: team.workspaceId, returned: labels.length }
-    }
-  }
-
-  async linearProjectListForAgents(params: {
-    query?: string
-    limit?: number
-    workspaceId?: (string & {}) | 'all'
-  }): Promise<LinearProjectListResult> {
-    const limit = clampLinearSearchLimit(params.limit)
-    try {
-      const result = await this.linearListProjects(params.query, limit, params.workspaceId, true)
-      const projects = result.items.slice(0, limit).map((project) => ({
-        id: project.id,
-        name: project.name,
-        ...(project.url ? { url: project.url } : {}),
-        ...(project.workspaceId ? { workspaceId: project.workspaceId } : {}),
-        ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
-        ...(project.teams ? { teams: project.teams } : {})
-      }))
-      const workspaceErrors = (result.errors ?? []).map((error) => ({
-        workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
-        code: this.linearWorkspaceErrorCode(error.type),
-        message: sanitizeLinearErrorMessage(error.message)
-      }))
-      const hasMore = result.hasMore === true || result.items.length > limit
-      return {
-        projects,
-        truncated: hasMore,
-        meta: {
-          query: params.query,
-          workspaceId: params.workspaceId,
-          limit,
-          returned: projects.length,
-          hasMore,
-          partial: workspaceErrors.length > 0,
-          workspaceErrors
-        }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearIssueListForAgents(params: {
-    filter?: LinearIssueListFilter
-    teamInput?: string
-    limit?: number
-    workspaceId?: (string & {}) | 'all'
-  }): Promise<LinearIssueListResult> {
-    const filter = params.filter ?? 'assigned'
-    const limit = clampLinearIssueListLimit(params.limit)
-    const team = params.teamInput
-      ? await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-      : null
-    const workspaceId = team?.workspaceId ?? params.workspaceId
-    try {
-      const result = await listLinearIssues(filter, limit, workspaceId, {
-        teamId: team?.id
-      })
-      return {
-        issues: result.items.map((issue) => ({
-          id: issue.id,
-          identifier: issue.identifier,
-          title: issue.title,
-          url: issue.url,
-          state: issue.state,
-          team: issue.team,
-          project: issue.project ?? null,
-          assignee: issue.assignee ?? null,
-          priority: issue.priority,
-          estimate: issue.estimate,
-          dueDate: issue.dueDate,
-          updatedAt: issue.updatedAt,
-          priorityLabel: linearPriorityLabel(issue.priority),
-          workspace: {
-            id: issue.workspaceId ?? workspaceId ?? '',
-            name: issue.workspaceName ?? issue.workspaceId ?? workspaceId ?? ''
-          }
-        })),
-        truncated: result.hasMore === true,
-        meta: {
-          filter,
-          workspaceId,
-          ...(team ? { team: this.linearTeamSummary(team) } : {}),
-          limit,
-          returned: result.items.length,
-          hasMore: result.hasMore === true,
-          partial: (result.errors?.length ?? 0) > 0,
-          workspaceErrors: (result.errors ?? []).map((error) => ({
-            workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
-            code: this.linearWorkspaceErrorCode(error.type),
-            message: sanitizeLinearErrorMessage(error.message)
-          }))
-        }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearMcpIssueList(params: LinearMcpIssueListRequest): Promise<LinearMcpIssueListResult> {
-    try {
-      return await listMcpIssues(params)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearResolveCurrentIssue(
-    context?: LinearCurrentIssueContextHints
-  ): Promise<ReturnType<typeof getLinearCurrentIssueFromWorktree>> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-
-    let worktree: ResolvedWorktree | null = null
-    if (context?.terminalHandle) {
-      try {
-        const terminal = await this.showTerminal(context.terminalHandle)
-        if (context.worktreeId && context.worktreeId !== terminal.worktreeId) {
-          throw new LinearAgentAccessError(
-            'linear_permission_denied',
-            'The provided Linear worktree context does not match the caller terminal.'
-          )
-        }
-        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
-      } catch (error) {
-        if (error instanceof LinearAgentAccessError) {
-          throw error
-        }
-        if (context.remote === true || context.worktreeId) {
-          throw new LinearAgentAccessError(
-            'linear_issue_required',
-            'Could not verify the current Linear-linked worktree.'
-          )
-        }
-      }
-    }
-
-    if (!worktree && context?.remote !== true && context?.cwd) {
-      worktree = await this.resolveWorktreeForContainedPath(context.cwd)
-      if (!worktree) {
-        throw new LinearAgentAccessError(
-          'linear_issue_required',
-          'Run --current from inside an Orca-managed worktree or pass an issue id.'
-        )
-      }
-    }
-
-    if (!worktree) {
-      throw new LinearAgentAccessError(
-        'linear_issue_required',
-        'Run --current from inside an Orca-managed worktree or pass an issue id.'
-      )
-    }
-
-    const link = getLinearCurrentIssueFromWorktree(worktree)
-    if (!link.workspaceId) {
-      const backfill = resolveLegacyLinearLinkWorkspace(
-        worktree.linkedLinearIssue ?? '',
-        worktree.linkedLinearIssueOrganizationUrlKey
-      )
-      if (backfill?.workspaceId) {
-        this.store.setWorktreeMeta(worktree.id, {
-          linkedLinearIssueWorkspaceId: backfill.workspaceId,
-          linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null
-        })
-        return {
-          ...link,
-          workspaceId: backfill.workspaceId,
-          organizationUrlKey: backfill.organizationUrlKey ?? link.organizationUrlKey,
-          backfill
-        }
-      }
-    }
-    return link
-  }
-
-  private async resolveWorktreeForContainedPath(cwd: string): Promise<ResolvedWorktree | null> {
-    const currentPath = resolve(cwd)
-    let best: ResolvedWorktree | null = null
-    for (const candidate of await this.listResolvedWorktrees()) {
-      if (!isPathInsideOrEqual(candidate.path, currentPath)) {
-        continue
-      }
-      if (!best || candidate.path.length > best.path.length) {
-        best = candidate
-      }
-    }
-    return best
-  }
-
-  linearListIssues(
-    filter?: LinearListFilter,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection,
-    options?: LinearIssueListOptions
-  ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, options)
-  }
-
-  linearCreateIssue(
-    teamId: string,
-    title: string,
-    description?: string,
-    workspaceId?: string,
-    parentIssueId?: string,
-    projectId?: string | null,
-    options?: {
-      stateId?: string
-      priority?: number
-      estimate?: number | null
-      dueDate?: string | null
-      assigneeId?: string | null
-      labelIds?: string[]
-    }
-  ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description, workspaceId, {
-      parentId: parentIssueId,
-      projectId,
-      ...options
-    })
-  }
-
-  linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
-    return getLinearIssue(id, workspaceId)
-  }
-
-  linearUpdateIssue(
-    id: string,
-    updates: LinearIssueUpdate,
-    workspaceId?: string
-  ): ReturnType<typeof updateLinearIssue> {
-    return updateLinearIssue(id, updates, workspaceId)
-  }
-
-  linearAddIssueComment(
-    issueId: string,
-    body: string,
-    workspaceId?: string
-  ): ReturnType<typeof addLinearIssueComment> {
-    return addLinearIssueComment(issueId, body, workspaceId)
-  }
-
-  async linearIssueSetState(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    to: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearStatusSetResult> {
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const teamId = target.issue.team?.id
-    if (!teamId) {
-      throw linearError('linear_invalid_state', 'The Linear issue does not have a team.')
-    }
-    const states = await this.getLinearTeamStatesForWrite(teamId, target.workspaceId)
-    const state = this.resolveLinearAgentState(params.to, states)
-    if (!state) {
-      throw linearError(
-        'linear_invalid_state',
-        `No workflow state exactly matched "${params.to}".`,
-        {
-          states: states.map(({ id, name, type }) => ({ id, name, type })),
-          nextSteps: [`Retry with one of the exact state names for ${target.issue.identifier}.`]
-        }
-      )
-    }
-
-    const previousState =
-      target.issue.state?.id && target.issue.state.name
-        ? { id: target.issue.state.id, name: target.issue.state.name }
-        : null
-    const alreadyInState = target.issue.state?.id === state.id
-    if (!alreadyInState) {
-      await this.runLinearAgentWrite(
-        async (signal) => {
-          const updated = await updateLinearIssueForAgent(
-            target.issue.id,
-            { stateId: state.id },
-            target.workspaceId,
-            {
-              signal
-            }
-          )
-          if (updated.state?.id !== state.id) {
-            throw new LinearWriteFailure(
-              'unconfirmed',
-              'Linear state update could not be confirmed.'
-            )
-          }
-          return updated
-        },
-        (cause) =>
-          linearError(
-            'linear_write_unconfirmed',
-            'Linear may have applied the state change, but Orca could not confirm it.',
-            {
-              nextSteps: [
-                `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` and check the current state before retrying.`
-              ],
-              ...(cause ? { cause } : {})
-            }
-          )
-      )
-    }
-    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-    return {
-      issue: this.linearWriteIssueRef(target.issue),
-      state: { id: state.id, name: state.name, type: state.type },
-      previousState,
-      meta: { workspaceId: target.workspaceId, alreadyInState }
-    }
-  }
-
-  async linearIssueRelationWrite(
-    params: LinearIssueRelationWriteRequest
-  ): Promise<LinearIssueRelationWriteResult> {
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const related = await this.resolveLinearAgentWriteTarget({
-      input: params.relatedInput,
-      workspaceId: target.workspaceId,
-      context: params.context
-    })
-    if (target.issue.id === related.issue.id) {
-      throw linearError('linear_write_failed', 'An issue cannot be related to itself.')
-    }
-    try {
-      const result = await this.runLinearAgentWrite(
-        (signal) =>
-          writeIssueRelation({
-            issue: { ...this.linearWriteIssueRef(target.issue), title: target.issue.title },
-            relatedIssue: {
-              ...this.linearWriteIssueRef(related.issue),
-              title: related.issue.title
-            },
-            relationship: params.relationship,
-            operation: params.operation,
-            workspaceId: target.workspaceId,
-            signal
-          }),
-        (cause) =>
-          linearError(
-            'linear_write_unconfirmed',
-            'Linear may have applied the relation change, but Orca could not confirm it.',
-            {
-              nextSteps: [
-                `Run \`orca linear issue ${target.issue.identifier} --relations --workspace ${target.workspaceId} --json\` before retrying.`
-              ],
-              ...(cause ? { cause } : {})
-            }
-          )
-      )
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, [
-        target.issue.identifier,
-        related.issue.identifier
-      ])
-      return result
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearSaveIssue(params: LinearSaveIssueRequest): Promise<LinearSaveIssueResult> {
-    if ((params.description?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
-      throw linearError('linear_body_too_large', 'Linear issue body is too large.')
-    }
-    if (!params.input && !params.current) {
-      if (!params.title || !params.team) {
-        throw linearError(
-          'linear_write_failed',
-          'Creating with save-issue requires both team and title.'
-        )
-      }
-      const created = await this.linearIssueCreate({
-        title: params.title,
-        body: params.description,
-        teamInput: params.team,
-        state: params.state,
-        assignee: params.assignee ?? undefined,
-        priority: params.priority,
-        estimate: params.estimate ?? undefined,
-        dueDate: params.dueDate ?? undefined,
-        labels: params.labels,
-        projectInput: params.project ?? undefined,
-        parentInput: params.parentId ?? undefined,
-        workspaceId: params.workspaceId,
-        writeId: params.writeId,
-        context: params.context
-      })
-      return { ...created, meta: { ...created.meta, created: true } }
-    }
-    if (params.team !== undefined) {
-      throw linearError('linear_write_failed', 'Team can only be set when creating an issue.')
-    }
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
-    const fields = await this.buildLinearSaveUpdate(params, current, target.workspaceId)
-    if (Object.keys(fields).length === 0) {
-      throw linearError('linear_write_failed', 'No issue fields were provided to save.')
-    }
-    const alreadySet = this.linearSavedIssueMatchesIntent(current, fields)
-    const updated = alreadySet
-      ? current
-      : await this.runLinearAgentWrite(
-          async (signal) => {
-            const saved = await updateLinearIssueForAgent(
-              target.issue.id,
-              fields,
-              target.workspaceId,
-              { signal }
-            )
-            if (!this.linearSavedIssueMatchesIntent(saved, fields)) {
-              throw new LinearWriteFailure(
-                'unconfirmed',
-                'Linear issue save could not be confirmed.'
-              )
-            }
-            return saved
-          },
-          (cause) =>
-            linearError(
-              'linear_write_unconfirmed',
-              'Linear may have applied the issue save, but Orca could not confirm it.',
-              {
-                nextSteps: [
-                  `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` before retrying.`
-                ],
-                ...(cause ? { cause } : {})
-              }
-            )
-        )
-    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-    return {
-      issue: updated,
-      meta: {
-        workspaceId: target.workspaceId,
-        created: false
-      }
-    }
-  }
-
-  async linearIssueUpdateTask(
-    params: LinearIssueTaskUpdateRequest
-  ): Promise<LinearIssueTaskUpdateResult> {
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
-    const update = await this.buildLinearTaskUpdate(params, current, target.workspaceId)
-    if (!update) {
-      throw linearError('linear_write_failed', 'No Linear task field update was requested.')
-    }
-    const alreadySet = this.linearTaskFieldAlreadySet(params.operation, current, update)
-    if (!alreadySet) {
-      await this.runLinearAgentWrite(
-        async (signal) => {
-          const updated = await updateLinearIssueForAgent(
-            target.issue.id,
-            update.fields,
-            target.workspaceId,
-            { signal }
-          )
-          if (!this.linearTaskFieldAlreadySet(params.operation, updated, update)) {
-            throw new LinearWriteFailure(
-              'unconfirmed',
-              'Linear task field update could not be confirmed.'
-            )
-          }
-          return updated
-        },
-        (cause) =>
-          linearError(
-            'linear_write_unconfirmed',
-            'Linear may have applied the task update, but Orca could not confirm it.',
-            {
-              nextSteps: [
-                `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` and check the updated field before retrying.`
-              ],
-              ...(cause ? { cause } : {})
-            }
-          )
-      )
-    }
-    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-    const finalRecord = alreadySet
-      ? current
-      : await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
-    return this.linearTaskUpdateResult(
-      params.operation,
-      target.issue,
-      target.workspaceId,
-      current,
-      finalRecord,
-      alreadySet
-    )
-  }
-
-  async linearIssueAddComment(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    body: string
-    replyTo?: string
-    writeId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearCommentAddResult> {
-    if (params.body.length > LINEAR_WRITE_BODY_CAP) {
-      throw linearError('linear_body_too_large', 'Linear comment body is too large.')
-    }
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const parentId = params.replyTo
-      ? await this.resolveLinearCommentParentId(target.issue.id, params.replyTo, target.workspaceId)
-      : null
-    const writeId = params.writeId ?? randomUUID()
-    const existing =
-      params.writeId !== undefined
-        ? await this.getMatchingLinearCommentWrite(
-            writeId,
-            target.issue.id,
-            parentId,
-            target.workspaceId,
-            true
-          )
-        : null
-    if (existing) {
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearCommentResult(existing, target, params.body.length, writeId, true)
-    }
-
-    try {
-      const comment = await this.runLinearAgentWrite(
-        (signal) =>
-          addLinearIssueCommentForAgent(target.issue.id, params.body, target.workspaceId, {
-            id: writeId,
-            parentId,
-            signal
-          }),
-        (cause) =>
-          this.linearCreateStyleUnconfirmed('comment', writeId, target, {
-            parentId,
-            bodyRequired: true,
-            cause
-          })
-      )
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearCommentResult(comment, target, params.body.length, writeId, false)
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        const comment = await this.refetchLinearCommentAfterDuplicate(
-          writeId,
-          target.issue.id,
-          parentId,
-          target.workspaceId,
-          () =>
-            this.linearCreateStyleUnconfirmed('comment', writeId, target, {
-              parentId,
-              bodyRequired: true
-            })
-        )
-        await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-        return this.linearCommentResult(comment, target, params.body.length, writeId, true)
-      }
-      throw error
-    }
-  }
-
-  async linearIssueAttachLink(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    url: string
-    title?: string
-    writeId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearAttachResult> {
-    const url = this.parseLinearAttachmentUrl(params.url)
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const writeId = params.writeId ?? randomUUID()
-    const title = params.title?.trim() || this.defaultLinearAttachmentTitle(url)
-    const existing =
-      params.writeId !== undefined
-        ? await this.getMatchingLinearAttachmentWrite(
-            writeId,
-            target.issue.id,
-            target.workspaceId,
-            true
-          )
-        : null
-    if (existing) {
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearAttachResult(existing, target, writeId, true)
-    }
-    try {
-      const attachment = await this.runLinearAgentWrite(
-        (signal) =>
-          createLinearIssueAttachment(
-            target.issue.id,
-            { id: writeId, title, url: url.toString() },
-            target.workspaceId,
-            { signal }
-          ),
-        (cause) =>
-          this.linearCreateStyleUnconfirmed('attach', writeId, target, {
-            title,
-            url: url.toString(),
-            cause
-          })
-      )
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearAttachResult(attachment, target, writeId, false)
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        const attachment = await this.refetchLinearAttachmentAfterDuplicate(
-          writeId,
-          target.issue.id,
-          target.workspaceId,
-          () =>
-            this.linearCreateStyleUnconfirmed('attach', writeId, target, {
-              title,
-              url: url.toString()
-            })
-        )
-        await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-        return this.linearAttachResult(attachment, target, writeId, true)
-      }
-      throw error
-    }
-  }
-
-  async linearIssueCreate(params: {
-    title: string
-    body?: string
-    teamInput?: string
-    teamKey?: string
-    state?: string
-    assignee?: string
-    priority?: number
-    estimate?: number
-    dueDate?: string
-    labels?: string[]
-    projectInput?: string
-    parentInput?: string
-    parentCurrent?: boolean
-    workspaceId?: string
-    writeId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearCreateResult> {
-    if ((params.body?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
-      throw linearError('linear_body_too_large', 'Linear issue body is too large.')
-    }
-    const parent =
-      params.parentInput || params.parentCurrent
-        ? await this.resolveLinearAgentWriteTarget({
-            input: params.parentInput,
-            current: params.parentCurrent,
-            workspaceId: params.workspaceId,
-            context: params.context
-          })
-        : null
-    if (parent && params.workspaceId && params.workspaceId !== parent.workspaceId) {
-      throw linearError(
-        'linear_invalid_workspace',
-        'The parent issue belongs to a different workspace.'
-      )
-    }
-    const team = await this.resolveLinearCreateTeam(
-      params.teamInput ?? params.teamKey,
-      params.workspaceId,
-      parent
-    )
-    const createFields = await this.resolveLinearCreateFields(params, team)
-    const parentId = parent?.issue.id ?? null
-    const writeId = params.writeId ?? randomUUID()
-    const existing =
-      params.writeId !== undefined
-        ? await this.getMatchingLinearCreatedIssue(
-            writeId,
-            team.id,
-            parentId,
-            team.workspaceId,
-            true,
-            createFields
-          )
-        : null
-    if (existing) {
-      if (parent) {
-        await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
-      }
-      return this.linearCreateResult(existing, team.workspaceId, writeId, true)
-    }
-
-    try {
-      const issue = await this.runLinearAgentWrite(
-        async (signal) => {
-          const created = await createLinearIssueForAgent(
-            team.id,
-            params.title,
-            params.body,
-            team.workspaceId,
-            {
-              id: writeId,
-              parentId,
-              ...createFields,
-              signal
-            }
-          )
-          if (!this.linearCreatedIssueMatchesIntent(created, createFields)) {
-            throw new LinearWriteFailure(
-              'unconfirmed',
-              'Linear issue create could not be confirmed with the requested task fields.'
-            )
-          }
-          return created
-        },
-        (cause) =>
-          this.linearCreateStyleUnconfirmed('create', writeId, null, {
-            team,
-            parent,
-            title: params.title,
-            bodyRequired: params.body !== undefined,
-            createFields,
-            cause
-          })
-      )
-      if (parent) {
-        await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
-      }
-      return this.linearCreateResult(issue, team.workspaceId, writeId, false)
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        const issue = await this.refetchLinearIssueAfterDuplicate(
-          writeId,
-          team.id,
-          parentId,
-          team.workspaceId,
-          createFields,
-          () =>
-            this.linearCreateStyleUnconfirmed('create', writeId, null, {
-              team,
-              parent,
-              title: params.title,
-              bodyRequired: params.body !== undefined,
-              createFields
-            })
-        )
-        if (parent) {
-          await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
-        }
-        return this.linearCreateResult(issue, team.workspaceId, writeId, true)
-      }
-      throw error
-    }
-  }
-
-  private async resolveLinearAgentWriteTarget(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearAgentWriteTarget> {
-    const result = await readLinearIssueContext(
-      {
-        input: params.input,
-        current: params.current,
-        workspaceId: params.workspaceId,
-        include: {
-          comments: false,
-          children: false,
-          attachments: false,
-          relations: false,
-          activity: false
-        },
-        depth: 0,
-        context: params.context
-      },
-      (context) => this.linearResolveCurrentIssue(context)
-    )
-    return { issue: result.issue, workspaceId: result.meta.resolved.workspaceId }
-  }
-
-  private async getLinearTeamStatesForWrite(
-    teamId: string,
-    workspaceId: string
-  ): Promise<Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>> {
-    try {
-      return await getLinearTeamStatesOrThrow(teamId, workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private resolveLinearAgentState(
-    input: string,
-    states: Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>
-  ): Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>[number] | null {
-    const normalized = input.toLocaleLowerCase()
-    const exact = states.find(
-      (state) =>
-        state.id.toLocaleLowerCase() === normalized || state.name.toLocaleLowerCase() === normalized
-    )
-    // Why: Linear MCP accepts lifecycle types; keep explicit IDs/names authoritative when they collide.
-    return exact ?? states.find((state) => state.type.toLocaleLowerCase() === normalized) ?? null
-  }
-
-  private async getLinearTeamLabelsForWrite(
-    teamId: string,
-    workspaceId: string
-  ): Promise<Awaited<ReturnType<typeof getLinearTeamLabelsOrThrow>>> {
-    try {
-      return await getLinearTeamLabelsOrThrow(teamId, workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearAgentIssueWriteRecord(
-    issueId: string,
-    workspaceId: string
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
-    const issue = await this.readLinearWriteLookup(() =>
-      getLinearIssueByUuidForAgent(issueId, workspaceId)
-    )
-    if (!issue) {
-      throw linearError('linear_issue_not_found', 'Linear issue was not found.')
-    }
-    return issue
-  }
-
-  private async buildLinearTaskUpdate(
-    params: LinearIssueTaskUpdateRequest,
-    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string
-  ): Promise<{
-    fields: {
-      assigneeId?: string | null
-      priority?: number
-      estimate?: number | null
-      dueDate?: string | null
-      labelIds?: string[]
-    }
-    labels?: { id: string; name: string }[]
-  } | null> {
-    if (params.operation === 'assignee') {
-      const assigneeId = params.assigneeMe
-        ? (await this.getLinearViewerForWrite(workspaceId)).id
-        : params.assigneeId
-      if (assigneeId === undefined) {
-        throw linearError('linear_invalid_assignee', 'Pass --me, --to-id, or clear assignee.')
-      }
-      return { fields: { assigneeId } }
-    }
-    if (params.operation === 'priority') {
-      if (params.priority === undefined) {
-        throw linearError('linear_write_failed', 'Missing priority value.')
-      }
-      return { fields: { priority: params.priority } }
-    }
-    if (params.operation === 'estimate') {
-      if (params.estimate === undefined) {
-        throw linearError('linear_write_failed', 'Missing estimate value.')
-      }
-      return { fields: { estimate: params.estimate } }
-    }
-    if (params.operation === 'dueDate') {
-      if (params.dueDate === undefined) {
-        throw linearError('linear_write_failed', 'Missing due date value.')
-      }
-      return { fields: { dueDate: params.dueDate } }
-    }
-    if (params.operation === 'labels') {
-      const mode = params.labelMode
-      const inputs = params.labels ?? []
-      if (!mode || inputs.length === 0) {
-        throw linearError('linear_invalid_label', 'Pass at least one --label.')
-      }
-      const labels = await this.resolveLinearLabelsForIssue(current, inputs, workspaceId)
-      const requestedIds = labels.map((label) => label.id)
-      const existingIds = current.labelIds ?? current.labels?.map((label) => label.id) ?? []
-      const nextIds =
-        mode === 'set'
-          ? requestedIds
-          : mode === 'add'
-            ? Array.from(new Set([...existingIds, ...requestedIds]))
-            : existingIds.filter((id) => !requestedIds.includes(id))
-      return {
-        fields: { labelIds: nextIds },
-        labels: labelsForIds(nextIds, [...(current.labels ?? []), ...labels])
-      }
-    }
-    return null
-  }
-
-  private async buildLinearSaveUpdate(
-    params: LinearSaveIssueRequest,
-    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string
-  ): Promise<LinearIssueUpdate> {
-    const fields: LinearIssueUpdate = {}
-    if (params.title !== undefined) {
-      fields.title = params.title
-    }
-    if (params.description !== undefined) {
-      fields.description = params.description
-    }
-    if (params.priority !== undefined) {
-      fields.priority = params.priority
-    }
-    if (params.estimate !== undefined) {
-      fields.estimate = params.estimate
-    }
-    if (params.dueDate !== undefined) {
-      fields.dueDate = params.dueDate
-    }
-    if (params.state !== undefined) {
-      const states = await this.getLinearTeamStatesForWrite(current.team.id, workspaceId)
-      const state = this.resolveLinearAgentState(params.state, states)
-      if (!state) {
-        throw linearError(
-          'linear_invalid_state',
-          `No workflow state exactly matched "${params.state}".`
-        )
-      }
-      fields.stateId = state.id
-    }
-    if (params.assignee !== undefined) {
-      fields.assigneeId =
-        params.assignee === null
-          ? null
-          : await this.resolveLinearAssignee(params.assignee, current.team.id, workspaceId)
-    }
-    if (params.labels !== undefined) {
-      if (params.labels.length === 0) {
-        fields.labelIds = []
-      } else {
-        const labels = await this.resolveLinearLabelsForIssue(current, params.labels, workspaceId)
-        fields.labelIds = labels.map((label) => label.id)
-      }
-    }
-    if (params.project !== undefined) {
-      fields.projectId =
-        params.project === null
-          ? null
-          : (
-              await this.resolveLinearCreateProject(params.project, {
-                id: current.team.id,
-                workspaceId
-              })
-            ).id
-    }
-    if (params.parentId !== undefined) {
-      fields.parentId =
-        params.parentId === null
-          ? null
-          : (
-              await this.resolveLinearAgentWriteTarget({
-                input: params.parentId,
-                workspaceId,
-                context: params.context
-              })
-            ).issue.id
-      if (fields.parentId === current.id) {
-        throw linearError('linear_invalid_parent', 'An issue cannot be its own parent.')
-      }
-    }
-    return fields
-  }
-
-  private async resolveLinearAssignee(
-    input: string,
-    teamId: string,
-    workspaceId: string
-  ): Promise<string> {
-    if (input.toLocaleLowerCase() === 'me') {
-      return (await this.getLinearViewerForWrite(workspaceId)).id
-    }
-    // Why: caller-supplied IDs were accepted directly before save-issue; avoid a paginated member scan on that existing fast path.
-    if (isLinearUuid(input)) {
-      return input
-    }
-    let members: Awaited<ReturnType<typeof getLinearTeamMembersOrThrow>>
-    try {
-      members = await getLinearTeamMembersOrThrow(teamId, workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    const normalized = input.toLocaleLowerCase()
-    const matches = members.filter(
-      (member) =>
-        member.id.toLocaleLowerCase() === normalized ||
-        member.displayName.toLocaleLowerCase() === normalized ||
-        member.name?.toLocaleLowerCase() === normalized ||
-        member.email?.toLocaleLowerCase() === normalized
-    )
-    if (matches.length === 1) {
-      return matches[0].id
-    }
-    throw linearError(
-      'linear_invalid_assignee',
-      matches.length === 0
-        ? `No team member exactly matched "${input}".`
-        : `Multiple team members exactly matched "${input}".`
-    )
-  }
-
-  private linearSavedIssueMatchesIntent(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    fields: LinearIssueUpdate
-  ): boolean {
-    if (fields.title !== undefined && issue.title !== fields.title) {
-      return false
-    }
-    if (fields.description !== undefined && (issue.description ?? '') !== fields.description) {
-      return false
-    }
-    if (fields.parentId !== undefined && (issue.parent?.id ?? null) !== fields.parentId) {
-      return false
-    }
-    if (fields.stateId !== undefined && issue.state?.id !== fields.stateId) {
-      return false
-    }
-    if (fields.assigneeId !== undefined && (issue.assignee?.id ?? null) !== fields.assigneeId) {
-      return false
-    }
-    if (fields.priority !== undefined && issue.priority !== fields.priority) {
-      return false
-    }
-    if (fields.estimate !== undefined && (issue.estimate ?? null) !== fields.estimate) {
-      return false
-    }
-    if (fields.dueDate !== undefined && (issue.dueDate ?? null) !== fields.dueDate) {
-      return false
-    }
-    if (fields.projectId !== undefined && (issue.project?.id ?? null) !== fields.projectId) {
-      return false
-    }
-    const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
-    return fields.labelIds === undefined || sameStringSet(issueLabelIds, fields.labelIds)
-  }
-
-  private async resolveLinearCreateFields(
-    params: {
-      state?: string
-      assignee?: string
-      priority?: number
-      estimate?: number
-      dueDate?: string
-      labels?: string[]
-      projectInput?: string
-    },
-    team: { id: string; workspaceId: string }
-  ): Promise<LinearCreateFieldIntent> {
-    const fields: LinearCreateFieldIntent = {}
-    if (params.state) {
-      const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
-      const state = this.resolveLinearAgentState(params.state, states)
-      if (!state) {
-        throw linearError(
-          'linear_invalid_state',
-          `No workflow state exactly matched "${params.state}".`,
-          { states: states.map(({ id, name, type }) => ({ id, name, type })) }
-        )
-      }
-      fields.stateId = state.id
-    }
-    if (params.assignee) {
-      fields.assigneeId = await this.resolveLinearAssignee(
-        params.assignee,
-        team.id,
-        team.workspaceId
-      )
-    }
-    if (params.priority !== undefined) {
-      fields.priority = params.priority
-    }
-    if (params.estimate !== undefined) {
-      fields.estimate = params.estimate
-    }
-    if (params.dueDate !== undefined) {
-      fields.dueDate = params.dueDate
-    }
-    if (params.labels && params.labels.length > 0) {
-      const labels = await this.resolveLinearLabelsForTeam(team.id, params.labels, team.workspaceId)
-      fields.labelIds = labels.map((label) => label.id)
-    }
-    if (params.projectInput) {
-      const project = await this.resolveLinearCreateProject(params.projectInput, team)
-      fields.projectId = project.id
-    }
-    return fields
-  }
-
-  private async resolveLinearCreateProject(
-    input: string,
-    team: { id: string; workspaceId: string }
-  ): Promise<LinearProjectSummary> {
-    const trimmed = input.trim()
-    if (!trimmed) {
-      throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
-    }
-    const byId = isLinearUuid(trimmed)
-      ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
-      : null
-    if (byId) {
-      await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
-      return byId
-    }
-    const searchCandidates = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
-    const normalized = trimmed.toLowerCase()
-    const idMatch = searchCandidates.find((project) => project.id.toLowerCase() === normalized)
-    if (idMatch) {
-      await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
-      return idMatch
-    }
-    const slugMatch = searchCandidates.find(
-      (project) => project.slugId?.toLowerCase() === normalized
-    )
-    if (slugMatch) {
-      await this.assertLinearProjectIncludesTeam(slugMatch, team.id, team.workspaceId, trimmed)
-      return slugMatch
-    }
-    const nameMatches = await this.readLinearProjectsByExactNameForCreate(trimmed, team.workspaceId)
-    const compatibleNameMatches = await this.filterLinearProjectsForTeam(
-      nameMatches,
-      team.id,
-      team.workspaceId
-    )
-    if (compatibleNameMatches.length === 1) {
-      return compatibleNameMatches[0]
-    }
-    if (compatibleNameMatches.length > 1) {
-      throw linearError(
-        'linear_invalid_project',
-        `Multiple Linear projects exactly matched "${trimmed}".`,
-        {
-          projects: compatibleNameMatches.map((project) => ({
-            id: project.id,
-            name: project.name,
-            teams: project.teams
-          })),
-          nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
-        }
-      )
-    }
-    if (nameMatches.length > 0) {
-      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
-    }
-    throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
-      projects: searchCandidates.map((project) => ({
-        id: project.id,
-        name: project.name,
-        teams: project.teams
-      })),
-      nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
-    })
-  }
-
-  private async readLinearProjectByIdForCreate(
-    id: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary | null> {
-    try {
-      return await getLinearProject(id, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearProjectsForCreate(
-    query: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    try {
-      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true)).items
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearProjectsByExactNameForCreate(
-    name: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    try {
-      return await listLinearProjectsByExactName(name, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async assertLinearProjectIncludesTeam(
-    project: LinearProjectSummary,
-    teamId: string,
-    workspaceId: string,
-    input: string
-  ): Promise<void> {
-    if (this.linearProjectIncludesTeam(project, teamId)) {
-      return
-    }
-    let teams: NonNullable<LinearProjectSummary['teams']> = []
-    try {
-      // Why: summary reads cap project teams, so large cross-team projects need a paged membership check before rejecting a valid create.
-      teams = await listLinearProjectTeams(project.id, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    if (teams.some((team) => team.id === teamId)) {
-      return
-    }
-    throw linearError(
-      'linear_invalid_project',
-      `Linear project "${input}" is not available to the target team.`,
-      {
-        project: { id: project.id, name: project.name, teams },
-        nextSteps: ['Choose a project that includes the create target team, then retry by id.']
-      }
-    )
-  }
-
-  private async filterLinearProjectsForTeam(
-    projects: LinearProjectSummary[],
-    teamId: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    const compatible: LinearProjectSummary[] = []
-    for (const project of projects) {
-      if (this.linearProjectIncludesTeam(project, teamId)) {
-        compatible.push(project)
-        continue
-      }
-      try {
-        const teams = await listLinearProjectTeams(project.id, workspaceId, true)
-        if (teams.some((team) => team.id === teamId)) {
-          compatible.push({ ...project, teams })
-        }
-      } catch (error) {
-        throw this.mapLinearReadFailure(error)
-      }
-    }
-    return compatible
-  }
-
-  private linearProjectIncludesTeam(project: LinearProjectSummary, teamId: string): boolean {
-    return project.teams?.some((team) => team.id === teamId) === true
-  }
-
-  private async getLinearViewerForWrite(
-    workspaceId: string
-  ): Promise<{ id: string; displayName?: string | null; avatarUrl?: string | null }> {
-    try {
-      return await getLinearViewerForWorkspaceOrThrow(workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async resolveLinearLabelsForIssue(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    inputs: string[],
-    workspaceId: string
-  ): Promise<{ id: string; name: string }[]> {
-    const labels = await this.getLinearTeamLabelsForWrite(issue.team.id, workspaceId)
-    const resolved = inputs.map((input) => {
-      const normalized = input.toLocaleLowerCase()
-      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
-      if (idMatch) {
-        return { id: idMatch.id, name: idMatch.name }
-      }
-      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
-      if (nameMatches.length === 1) {
-        return { id: nameMatches[0].id, name: nameMatches[0].name }
-      }
-      throw linearError(
-        'linear_invalid_label',
-        nameMatches.length === 0
-          ? `No label exactly matched "${input}".`
-          : `Multiple labels exactly matched "${input}".`,
-        {
-          labels: labels.map((label) => ({ id: label.id, name: label.name })),
-          nextSteps: ['Run `orca linear team labels --team <key-or-id> --json` and retry by id.']
-        }
-      )
-    })
-    return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
-  }
-
-  private async resolveLinearLabelsForTeam(
-    teamId: string,
-    inputs: string[],
-    workspaceId: string
-  ): Promise<{ id: string; name: string }[]> {
-    const labels = await this.getLinearTeamLabelsForWrite(teamId, workspaceId)
-    const resolved = inputs.map((input) => {
-      const normalized = input.toLocaleLowerCase()
-      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
-      if (idMatch) {
-        return { id: idMatch.id, name: idMatch.name }
-      }
-      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
-      if (nameMatches.length === 1) {
-        return { id: nameMatches[0].id, name: nameMatches[0].name }
-      }
-      throw linearError(
-        'linear_invalid_label',
-        nameMatches.length === 0
-          ? `No label exactly matched "${input}".`
-          : `Multiple labels exactly matched "${input}".`,
-        { labels: labels.map((label) => ({ id: label.id, name: label.name })) }
-      )
-    })
-    return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
-  }
-
-  private linearCreatedIssueMatchesIntent(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    intent: LinearCreateFieldIntent
-  ): boolean {
-    if (intent.stateId !== undefined && issue.state?.id !== intent.stateId) {
-      return false
-    }
-    if (intent.assigneeId !== undefined && (issue.assignee?.id ?? null) !== intent.assigneeId) {
-      return false
-    }
-    if (intent.priority !== undefined && issue.priority !== intent.priority) {
-      return false
-    }
-    if (intent.estimate !== undefined && (issue.estimate ?? null) !== intent.estimate) {
-      return false
-    }
-    if (intent.dueDate !== undefined && (issue.dueDate ?? null) !== intent.dueDate) {
-      return false
-    }
-    if (intent.projectId !== undefined && (issue.project?.id ?? null) !== intent.projectId) {
-      return false
-    }
-    const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
-    if (intent.labelIds !== undefined && !sameStringSet(issueLabelIds, intent.labelIds)) {
-      return false
-    }
-    return true
-  }
-
-  private linearTaskFieldAlreadySet(
-    operation: LinearIssueTaskUpdateRequest['operation'],
-    record: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    update: {
-      fields: {
-        assigneeId?: string | null
-        priority?: number
-        estimate?: number | null
-        dueDate?: string | null
-        labelIds?: string[]
-      }
-    }
-  ): boolean {
-    if (operation === 'assignee') {
-      return (record.assignee?.id ?? null) === update.fields.assigneeId
-    }
-    if (operation === 'priority') {
-      return record.priority === update.fields.priority
-    }
-    if (operation === 'estimate') {
-      return (record.estimate ?? null) === update.fields.estimate
-    }
-    if (operation === 'dueDate') {
-      return (record.dueDate ?? null) === update.fields.dueDate
-    }
-    if (operation === 'labels') {
-      const recordLabelIds = record.labelIds ?? record.labels?.map((label) => label.id) ?? []
-      return sameStringSet(recordLabelIds, update.fields.labelIds ?? [])
-    }
-    return false
-  }
-
-  private linearTaskUpdateResult(
-    operation: LinearIssueTaskUpdateRequest['operation'],
-    issue: LinearIssueSummary,
-    workspaceId: string,
-    previous: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    alreadySet: boolean
-  ): LinearIssueTaskUpdateResult {
-    return {
-      issue: this.linearWriteIssueRef(issue),
-      operation,
-      previous: this.linearTaskResultFields(previous),
-      current: this.linearTaskResultFields(current),
-      meta: { workspaceId, alreadySet }
-    }
-  }
-
-  private linearTaskResultFields(
-    record: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>
-  ): LinearIssueTaskUpdateResult['current'] {
-    return {
-      assignee: record.assignee ?? null,
-      priority: record.priority ?? null,
-      estimate: record.estimate ?? null,
-      dueDate: record.dueDate ?? null,
-      labels: record.labels ?? []
-    }
-  }
-
-  private async resolveLinearCommentParentId(
-    issueId: string,
-    commentId: string,
-    workspaceId: string
-  ): Promise<string> {
-    try {
-      const root = await getLinearIssueCommentThreadRoot(issueId, commentId, workspaceId)
-      if (!root) {
-        throw linearError(
-          'linear_invalid_parent',
-          'The reply target is not a comment on this issue.',
-          {
-            nextSteps: ['Run `orca linear issue <id> --comments --json` to list valid comment ids.']
-          }
-        )
-      }
-      return root.id
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError) {
-        throw error
-      }
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async runLinearAgentWrite<T>(
-    write: (signal: AbortSignal) => Promise<T>,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<T> {
-    const controller = new AbortController()
-    const writePromise = write(controller.signal)
-    writePromise.catch(() => undefined)
-    let timer: ReturnType<typeof setTimeout> | null = null
-    try {
-      return await Promise.race([
-        writePromise,
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => {
-            controller.abort()
-            reject(
-              new LinearWriteFailure(
-                'unconfirmed',
-                'Linear write deadline elapsed before confirmation.'
-              )
-            )
-          }, 25_000)
-        })
-      ])
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        throw error
-      }
-      if (error instanceof LinearWriteFailure && error.kind === 'unconfirmed') {
-        throw unconfirmed(this.linearWriteFailureCauseMessage(error))
-      }
-      if (error instanceof LinearWriteFailure && error.kind === 'network') {
-        throw linearError('linear_network_error', sanitizeLinearErrorMessage(error.message))
-      }
-      if (error instanceof LinearWriteFailure) {
-        throw linearError('linear_write_failed', sanitizeLinearErrorMessage(error.message))
-      }
-      throw this.mapLinearReadFailure(error)
-    } finally {
-      if (timer) {
-        clearTimeout(timer)
-      }
-    }
-  }
-
-  private linearWriteFailureCauseMessage(error: LinearWriteFailure): string {
-    if (error.cause instanceof Error) {
-      return sanitizeLinearErrorMessage(error.cause.message)
-    }
-    if (error.cause !== undefined) {
-      return sanitizeLinearErrorMessage(String(error.cause))
-    }
-    return sanitizeLinearErrorMessage(error.message)
-  }
-
-  private mapLinearReadFailure(error: unknown): LinearAgentAccessError {
-    if (error instanceof LinearAgentAccessError) {
-      return error
-    }
-    if (isLinearAuthError(error)) {
-      return linearError('linear_auth_expired', 'Linear authentication expired.', {
-        nextSteps: ['Reconnect Linear from Orca settings.']
-      })
-    }
-    return linearError(classifyLinearError(error), linearMessage(error))
-  }
-
-  private async getMatchingLinearCommentWrite(
-    writeId: string,
-    issueId: string,
-    parentId: string | null,
-    workspaceId: string,
-    required: boolean
-  ): Promise<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>> | null> {
-    const comment = await this.readLinearWriteLookup(() =>
-      getLinearCommentByUuidForAgent(writeId, workspaceId)
-    )
-    if (!comment) {
-      return null
-    }
-    if (comment.issue.id === issueId && comment.parentId === parentId) {
-      return comment
-    }
-    if (required) {
-      throw linearError(
-        'linear_invalid_write_id',
-        'The write id belongs to a different comment target.'
-      )
-    }
-    return null
-  }
-
-  private async getMatchingLinearAttachmentWrite(
-    writeId: string,
-    issueId: string,
-    workspaceId: string,
-    required: boolean
-  ): Promise<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>> | null> {
-    const attachment = await this.readLinearWriteLookup(() =>
-      getLinearAttachmentByUuidForAgent(writeId, workspaceId)
-    )
-    if (!attachment) {
-      return null
-    }
-    if (attachment.issue.id === issueId) {
-      return attachment
-    }
-    if (required) {
-      throw linearError(
-        'linear_invalid_write_id',
-        'The write id belongs to a different attachment target.'
-      )
-    }
-    return null
-  }
-
-  private async getMatchingLinearCreatedIssue(
-    writeId: string,
-    teamId: string,
-    parentId: string | null,
-    workspaceId: string,
-    required: boolean,
-    intent: LinearCreateFieldIntent = {}
-  ): Promise<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>> | null> {
-    const issue = await this.readLinearWriteLookup(() =>
-      getLinearIssueByUuidForAgent(writeId, workspaceId)
-    )
-    if (!issue) {
-      return null
-    }
-    if (
-      issue.team.id === teamId &&
-      (issue.parent?.id ?? null) === parentId &&
-      this.linearCreatedIssueMatchesIntent(issue, intent)
-    ) {
-      return issue
-    }
-    if (required) {
-      throw linearError(
-        'linear_invalid_write_id',
-        'The write id belongs to a different issue target.'
-      )
-    }
-    return null
-  }
-
-  private async refetchLinearCommentAfterDuplicate(
-    writeId: string,
-    issueId: string,
-    parentId: string | null,
-    workspaceId: string,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>> {
-    try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
-      const comment = await this.getMatchingLinearCommentWrite(
-        writeId,
-        issueId,
-        parentId,
-        workspaceId,
-        true
-      )
-      if (comment) {
-        return comment
-      }
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
-        throw error
-      }
-      throw unconfirmed(
-        error instanceof Error
-          ? sanitizeLinearErrorMessage(error.message)
-          : sanitizeLinearErrorMessage(String(error))
-      )
-    }
-    throw unconfirmed()
-  }
-
-  private async refetchLinearAttachmentAfterDuplicate(
-    writeId: string,
-    issueId: string,
-    workspaceId: string,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>> {
-    try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
-      const attachment = await this.getMatchingLinearAttachmentWrite(
-        writeId,
-        issueId,
-        workspaceId,
-        true
-      )
-      if (attachment) {
-        return attachment
-      }
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
-        throw error
-      }
-      throw unconfirmed(
-        error instanceof Error
-          ? sanitizeLinearErrorMessage(error.message)
-          : sanitizeLinearErrorMessage(String(error))
-      )
-    }
-    throw unconfirmed()
-  }
-
-  private async refetchLinearIssueAfterDuplicate(
-    writeId: string,
-    teamId: string,
-    parentId: string | null,
-    workspaceId: string,
-    intent: LinearCreateFieldIntent,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
-    try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
-      const issue = await this.getMatchingLinearCreatedIssue(
-        writeId,
-        teamId,
-        parentId,
-        workspaceId,
-        true,
-        intent
-      )
-      if (issue) {
-        return issue
-      }
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
-        throw error
-      }
-      throw unconfirmed(
-        error instanceof Error
-          ? sanitizeLinearErrorMessage(error.message)
-          : sanitizeLinearErrorMessage(String(error))
-      )
-    }
-    throw unconfirmed()
-  }
-
-  private async readLinearWriteLookup<T>(lookup: () => Promise<T>): Promise<T> {
-    try {
-      return await lookup()
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private parseLinearAttachmentUrl(value: string): URL {
-    try {
-      const url = new URL(value)
-      if (url.protocol === 'http:' || url.protocol === 'https:') {
-        return url
-      }
-    } catch {
-      // Fall through to the stable agent-facing error below.
-    }
-    throw linearError('linear_invalid_url', 'Attachment URL must be an absolute http(s) URL.')
-  }
-
-  private defaultLinearAttachmentTitle(url: URL): string {
-    const tail = url.pathname.split('/').findLast(Boolean)
-    return tail ? `${url.host}/${tail}` : url.host
-  }
-
-  private linearWorkspaceErrorCode(type: string): LinearErrorCode {
-    if (type === 'auth') {
-      return 'linear_auth_expired'
-    }
-    if (type === 'network') {
-      return 'linear_network_error'
-    }
-    if (type === 'rate_limited') {
-      return 'linear_rate_limited'
-    }
-    return 'linear_write_failed'
-  }
-
-  private linearTeamSummary(team: {
-    id: string
-    name: string
-    key: string
-    url?: string
-    workspaceId?: string
-    workspaceName?: string
-  }): {
-    id: string
-    name: string
-    key: string
-    url?: string
-    workspace?: { id: string; name: string }
-  } {
-    return {
-      id: team.id,
-      name: team.name,
-      key: team.key,
-      ...(team.url ? { url: team.url } : {}),
-      ...(team.workspaceId
-        ? { workspace: { id: team.workspaceId, name: team.workspaceName ?? team.workspaceId } }
-        : {})
-    }
-  }
-
-  private async resolveLinearTeamInput(
-    teamInput: string,
-    workspaceId?: (string & {}) | 'all'
-  ): Promise<{
-    id: string
-    key: string
-    name: string
-    workspaceId: string
-    workspaceName?: string
-  }> {
-    this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
-    let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
-    try {
-      teams = await listLinearTeamsOrThrow(workspaceId ?? 'all')
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    const normalized = teamInput.toLocaleLowerCase()
-    const idMatches = teams.filter((team) => team.id.toLocaleLowerCase() === normalized)
-    const matches =
-      idMatches.length > 0
-        ? idMatches
-        : teams.filter((team) => team.key.toLocaleLowerCase() === normalized)
-    if (matches.length === 1 && matches[0].workspaceId) {
-      return {
-        id: matches[0].id,
-        key: matches[0].key,
-        name: matches[0].name,
-        workspaceId: matches[0].workspaceId,
-        workspaceName: matches[0].workspaceName
-      }
-    }
-    if (matches.length > 1) {
-      throw linearError(
-        'linear_workspace_ambiguous',
-        `Team ${teamInput} exists in multiple workspaces.`,
-        {
-          candidates: matches.map((team) => ({
-            workspaceId: team.workspaceId,
-            workspaceName: team.workspaceName,
-            teamId: team.id,
-            teamKey: team.key
-          }))
-        }
-      )
-    }
-    throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
-  }
-
-  private async resolveLinearCreateTeam(
-    teamInput: string | undefined,
-    workspaceId: string | undefined,
-    parent: LinearAgentWriteTarget | null
-  ): Promise<{ id: string; key: string; name: string; workspaceId: string }> {
-    if (!teamInput && parent?.issue.team?.id && parent.issue.team.key && parent.issue.team.name) {
-      return {
-        id: parent.issue.team.id,
-        key: parent.issue.team.key,
-        name: parent.issue.team.name,
-        workspaceId: parent.workspaceId
-      }
-    }
-    if (!teamInput) {
-      throw linearError('linear_team_required', 'Pass --team or create under a parent issue.', {
-        nextSteps: ['Run `orca linear create --team <key> ...` or use --parent-current.']
-      })
-    }
-
-    const scope = parent?.workspaceId ?? workspaceId
-    this.validateLinearCreateWorkspaceScope(scope)
-    let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
-    try {
-      teams = await listLinearTeamsOrThrow(scope ?? 'all')
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    if (teams.length === 0 && (getLinearStatus().workspaces?.length ?? 0) === 0) {
-      throw linearError('linear_not_connected', 'Linear is not connected.', {
-        nextSteps: ['Connect Linear from Orca settings, then retry the issue create.']
-      })
-    }
-    const matches = teams.filter(
-      (team) =>
-        team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-        team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
-    )
-    if (matches.length === 1 && matches[0].workspaceId) {
-      return {
-        id: matches[0].id,
-        key: matches[0].key,
-        name: matches[0].name,
-        workspaceId: matches[0].workspaceId
-      }
-    }
-    if (matches.length > 1) {
-      throw linearError(
-        'linear_workspace_ambiguous',
-        `Team ${teamInput} exists in multiple workspaces.`,
-        {
-          candidates: matches.map((team) => ({
-            workspaceId: team.workspaceId,
-            workspaceName: team.workspaceName,
-            teamKey: team.key
-          }))
-        }
-      )
-    }
-    if (parent) {
-      let globalTeams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
-      try {
-        globalTeams = await listLinearTeamsOrThrow('all')
-      } catch (error) {
-        throw this.mapLinearReadFailure(error)
-      }
-      const globalMatch = globalTeams.find(
-        (team) =>
-          team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-          team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
-      )
-      if (globalMatch) {
-        throw linearError(
-          'linear_invalid_workspace',
-          `Team ${teamInput} is not in the parent issue workspace.`
-        )
-      }
-    }
-    throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
-  }
-
-  private validateLinearCreateWorkspaceScope(workspaceId: string | undefined): void {
-    if (!workspaceId) {
-      return
-    }
-    const workspaces = getLinearStatus().workspaces ?? []
-    if (workspaces.length > 0 && !workspaces.some((workspace) => workspace.id === workspaceId)) {
-      throw linearError(
-        'linear_invalid_workspace',
-        `No connected Linear workspace matched ${workspaceId}.`
-      )
-    }
-  }
-
-  private linearWriteIssueRef(issue: { id: string; identifier: string; url: string }): {
-    id: string
-    identifier: string
-    url: string
-  } {
-    return { id: issue.id, identifier: issue.identifier, url: issue.url }
-  }
-
-  private linearCommentResult(
-    comment: NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>,
-    target: LinearAgentWriteTarget,
-    bodyChars: number,
-    writeId: string,
-    deduplicated: boolean
-  ): LinearCommentAddResult {
-    return {
-      comment: { id: comment.id, url: comment.url, parentId: comment.parentId },
-      issue: this.linearWriteIssueRef(target.issue),
-      meta: { workspaceId: target.workspaceId, bodyChars, writeId, deduplicated }
-    }
-  }
-
-  private linearAttachResult(
-    attachment: NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>,
-    target: LinearAgentWriteTarget,
-    writeId: string,
-    deduplicated: boolean
-  ): LinearAttachResult {
-    return {
-      attachment: { id: attachment.id, title: attachment.title, url: attachment.url },
-      issue: this.linearWriteIssueRef(target.issue),
-      meta: { workspaceId: target.workspaceId, writeId, deduplicated }
-    }
-  }
-
-  private linearCreateResult(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string,
-    writeId: string,
-    deduplicated: boolean
-  ): LinearCreateResult {
-    return {
-      issue,
-      meta: { workspaceId, writeId, deduplicated }
-    }
-  }
-
-  private linearCreateFieldRetryTokens(fields: LinearCreateFieldIntent | undefined): string[] {
-    if (!fields) {
-      return []
-    }
-    return [
-      ...(fields.stateId ? [`--state=${this.commandToken(fields.stateId, 'STATE_ID')}`] : []),
-      ...(fields.assigneeId
-        ? [`--assignee=${this.commandToken(fields.assigneeId, 'ASSIGNEE_ID')}`]
-        : []),
-      ...(fields.priority !== undefined
-        ? [`--priority=${this.linearPriorityRetryToken(fields.priority)}`]
-        : []),
-      ...(fields.estimate !== undefined && fields.estimate !== null
-        ? [`--estimate=${fields.estimate}`]
-        : []),
-      ...(fields.dueDate ? [`--due-date=${fields.dueDate}`] : []),
-      ...(fields.projectId
-        ? [`--project=${this.commandToken(fields.projectId, 'PROJECT_ID')}`]
-        : []),
-      ...(fields.labelIds ?? []).map(
-        (labelId) => `--label=${this.commandToken(labelId, 'LABEL_ID')}`
-      )
-    ]
-  }
-
-  private linearPriorityRetryToken(priority: number): string {
-    if (priority === 1) {
-      return 'urgent'
-    }
-    if (priority === 2) {
-      return 'high'
-    }
-    if (priority === 3) {
-      return 'medium'
-    }
-    if (priority === 4) {
-      return 'low'
-    }
-    return 'none'
-  }
-
-  private linearCreateStyleUnconfirmed(
-    verb: 'comment' | 'attach' | 'create',
-    writeId: string,
-    target: LinearAgentWriteTarget | null,
-    extra: {
-      parentId?: string | null
-      team?: { id: string; key: string; name: string; workspaceId: string }
-      parent?: LinearAgentWriteTarget | null
-      title?: string
-      url?: string
-      bodyRequired?: boolean
-      createFields?: LinearCreateFieldIntent
-      cause?: string
-    } = {}
-  ): LinearAgentAccessError {
-    const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
-    // Why: the retry preserves id and target so duplicate recovery can prove intent without matching mutable content.
-    const pinned =
-      verb === 'create'
-        ? [
-            'orca linear create',
-            `--workspace=${this.commandToken(workspaceId, 'WORKSPACE_ID')}`,
-            `--write-id=${this.commandToken(writeId, 'WRITE_ID')}`,
-            '--title TITLE_HERE',
-            ...(extra.bodyRequired ? ['--body-file -'] : []),
-            ...(extra.parent
-              ? [`--parent=${this.commandToken(extra.parent.issue.identifier, 'PARENT_ISSUE')}`]
-              : []),
-            ...(extra.team
-              ? [`--team=${this.commandToken(extra.team.key, 'TEAM_KEY')}`]
-              : []
-            ).concat(this.linearCreateFieldRetryTokens(extra.createFields))
-          ].join(' ')
-        : [
-            `orca linear ${verb === 'attach' ? 'attach' : 'comment add'}`,
-            this.commandToken(target?.issue.identifier ?? '', 'ISSUE_ID'),
-            `--workspace=${this.commandToken(workspaceId, 'WORKSPACE_ID')}`,
-            `--write-id=${this.commandToken(writeId, 'WRITE_ID')}`,
-            ...(verb === 'comment' ? ['--body-file -'] : []),
-            ...(verb === 'comment' && extra.parentId
-              ? [`--reply-to=${this.commandToken(extra.parentId, 'COMMENT_ID')}`]
-              : []),
-            ...(verb === 'attach' ? ['--url URL_HERE', '--title TITLE_HERE'] : [])
-          ].join(' ')
-    const retryPrefix = extra.bodyRequired || verb === 'comment' ? 'Pipe the same body and r' : 'R'
-    const payloadNote =
-      verb === 'attach'
-        ? ' Replace TITLE_HERE/URL_HERE with the exact original payload values before running.'
-        : verb === 'create'
-          ? ' Replace TITLE_HERE with the exact original title before running.'
-          : ''
-    return linearError(
-      'linear_write_unconfirmed',
-      'Linear may have applied the write, but Orca could not confirm it.',
-      {
-        writeId,
-        workspaceId,
-        issueIdentifier: target?.issue.identifier,
-        parentId: extra.parentId,
-        team: extra.team ? { id: extra.team.id, key: extra.team.key } : undefined,
-        parentIdentifier: extra.parent?.issue.identifier,
-        createFields: extra.createFields,
-        nextSteps: [
-          `${retryPrefix}etry once with the pinned command: \`${pinned}\`.${payloadNote}`
-        ],
-        ...(extra.cause ? { cause: sanitizeLinearErrorMessage(extra.cause) } : {})
-      }
-    )
-  }
-
-  private commandToken(value: string, placeholder: string): string {
-    return /^[A-Za-z0-9._:@%+=,/-]+$/.test(value) ? value : placeholder
-  }
-
-  private async notifyLinearLinkedIssueUpdated(
-    workspaceId: string,
-    identifier: string | readonly string[]
-  ): Promise<void> {
-    const identifiers = typeof identifier === 'string' ? [identifier] : identifier
-    const normalized = new Map(
-      identifiers.map((value) => [value.toLocaleUpperCase(), value] as const)
-    )
-    for (const worktree of await this.listResolvedWorktrees()) {
-      const linkedIdentifier = normalized.get(
-        (worktree.linkedLinearIssue ?? '').toLocaleUpperCase()
-      )
-      if (!linkedIdentifier) {
-        continue
-      }
-      const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? workspaceId
-      if (linkedWorkspaceId !== workspaceId) {
-        continue
-      }
-      this.emitClientEvent({
-        type: 'linearLinkedIssueUpdated',
-        worktreeId: worktree.id,
-        identifier: linkedIdentifier,
-        workspaceId
-      })
-    }
-  }
-
-  linearIssueComments(
-    issueId: string,
-    workspaceId?: string
-  ): ReturnType<typeof getLinearIssueComments> {
-    return getLinearIssueComments(issueId, workspaceId)
-  }
-
-  linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
-    return listLinearTeams(workspaceId)
-  }
-
-  linearListProjects(
-    query?: string,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection,
-    force?: boolean
-  ): ReturnType<typeof listLinearProjects> {
-    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
-  }
-
-  linearCreateProject(
-    input: LinearProjectCreateInput,
-    workspaceId?: string
-  ): ReturnType<typeof createLinearProject> {
-    return createLinearProject(input, workspaceId)
-  }
-
-  linearGetProject(
-    id: string,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof getLinearProject> {
-    return getLinearProject(id, workspaceId, force)
-  }
-
-  linearListProjectIssues(
-    projectId: string,
-    limit = 20,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof listLinearProjectIssues> {
-    return listLinearProjectIssues(projectId, clampLinearIssueListLimit(limit), workspaceId, force)
-  }
-
-  linearListCustomViews(
-    model: LinearCustomViewModel,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection,
-    force?: boolean
-  ): ReturnType<typeof listLinearCustomViews> {
-    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId, force)
-  }
-
-  linearGetCustomView(
-    viewId: string,
-    model: LinearCustomViewModel,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof getLinearCustomView> {
-    return getLinearCustomView(viewId, model, workspaceId, force)
-  }
-
-  linearListCustomViewIssues(
-    viewId: string,
-    limit = 20,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof listLinearCustomViewIssues> {
-    return listLinearCustomViewIssues(viewId, clampLinearIssueListLimit(limit), workspaceId, force)
-  }
-
-  linearListCustomViewProjects(
-    viewId: string,
-    limit = 20,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof listLinearCustomViewProjects> {
-    return listLinearCustomViewProjects(
-      viewId,
-      Math.min(Math.max(1, limit), 50),
-      workspaceId,
-      force
-    )
-  }
-
-  linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {
-    return getLinearTeamStates(teamId, workspaceId)
-  }
-
-  linearTeamLabels(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamLabels> {
-    return getLinearTeamLabels(teamId, workspaceId)
-  }
-
-  linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
-    return getLinearTeamMembers(teamId, workspaceId)
-  }
-
-  // ── Jira integration ──
-
-  jiraConnect(args: JiraConnectArgs): ReturnType<typeof connectJira> {
-    return connectJira(args)
-  }
-
-  jiraDisconnect(siteId?: string): { ok: true } {
-    disconnectJira(siteId)
-    return { ok: true }
-  }
-
-  jiraSelectSite(siteId: JiraSiteSelection): ReturnType<typeof getJiraStatus> {
-    return selectJiraSite(siteId)
-  }
-
-  jiraStatus(): ReturnType<typeof getJiraStatus> {
-    return getJiraStatus()
-  }
-
-  jiraReadStatus(): ReturnType<typeof getJiraStatus> {
-    return getJiraStatus()
-  }
-
-  jiraTestConnection(siteId?: string): ReturnType<typeof testJiraConnection> {
-    return testJiraConnection(siteId)
-  }
-
-  jiraSearchIssues(
-    jql: string,
-    limit = 30,
-    siteId?: JiraSiteSelection,
-    signal?: AbortSignal
-  ): ReturnType<typeof searchJiraIssues> {
-    return searchJiraIssues(jql, Math.min(Math.max(1, limit), 100), siteId, signal)
-  }
-
-  jiraListIssues(
-    filter?: JiraIssueFilter,
-    limit = 30,
-    siteId?: JiraSiteSelection
-  ): ReturnType<typeof listJiraIssues> {
-    return listJiraIssues(filter, Math.min(Math.max(1, limit), 100), siteId)
-  }
-
-  jiraCreateIssue(args: JiraCreateIssueArgs): ReturnType<typeof createJiraIssue> {
-    return createJiraIssue(args)
-  }
-
-  jiraGetIssue(key: string, siteId?: string): ReturnType<typeof getJiraIssue> {
-    return getJiraIssue(key, siteId)
-  }
-
-  jiraLookupIssueSummary(
-    key: string,
-    siteId: string,
-    signal?: AbortSignal
-  ): ReturnType<typeof getJiraIssueSummary> {
-    return getJiraIssueSummary(key, siteId, signal)
-  }
-
-  jiraUpdateIssue(
-    key: string,
-    updates: JiraIssueUpdate,
-    siteId?: string
-  ): ReturnType<typeof updateJiraIssue> {
-    return updateJiraIssue(key, updates, siteId)
-  }
-
-  jiraAddIssueComment(
-    key: string,
-    body: string,
-    siteId?: string
-  ): ReturnType<typeof addJiraIssueComment> {
-    return addJiraIssueComment(key, body, siteId)
-  }
-
-  jiraIssueComments(key: string, siteId?: string): ReturnType<typeof getJiraIssueComments> {
-    return getJiraIssueComments(key, siteId)
-  }
-
-  jiraListProjects(siteId?: JiraSiteSelection): ReturnType<typeof listJiraProjects> {
-    return listJiraProjects(siteId)
-  }
-
-  jiraListIssueTypes(
-    projectIdOrKey: string,
-    siteId?: string
-  ): ReturnType<typeof listJiraIssueTypes> {
-    return listJiraIssueTypes(projectIdOrKey, siteId)
-  }
-
-  jiraListCreateFields(
-    projectIdOrKey: string,
-    issueTypeId: string,
-    siteId?: string
-  ): ReturnType<typeof listJiraCreateFields> {
-    return listJiraCreateFields(projectIdOrKey, issueTypeId, siteId)
-  }
-
-  jiraListPriorities(siteId?: string): ReturnType<typeof listJiraPriorities> {
-    return listJiraPriorities(siteId)
-  }
-
-  jiraListAssignableUsers(
-    key: string,
-    query?: string,
-    siteId?: string
-  ): ReturnType<typeof listJiraAssignableUsers> {
-    return listJiraAssignableUsers(key, query, siteId)
-  }
-
-  jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
-    return listJiraTransitions(key, siteId)
-  }
-
-  jiraGetProjectStatusOrder(
-    projectKey: string,
-    siteId?: string
-  ): ReturnType<typeof getJiraProjectStatusOrder> {
-    return getJiraProjectStatusOrder(projectKey, siteId)
-  }
 
   // ── Browser automation ──
 

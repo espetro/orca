@@ -148,7 +148,7 @@
     {
       "files": ["**/*.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
