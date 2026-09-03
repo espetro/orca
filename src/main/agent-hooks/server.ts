@@ -5,6 +5,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import {
@@ -16,7 +17,6 @@ import {
   clearPaneCacheState,
   paneHasStateClaims,
   createHookListenerState,
-  movePaneCacheState,
   type HookListenerState
 } from '../../shared/agent-hook-listener/listener-state'
 import {
@@ -109,8 +109,7 @@ import {
   isAskUserQuestionTool,
   type AgentQuestionAnsweredInferenceRequest
 } from '../../shared/agent-question-answered-intent'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 import {
@@ -123,14 +122,19 @@ import {
 export type { AgentHookSource }
 
 import {
+  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
+  ASSISTANT_MESSAGE_RETRY_MS,
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
   authorityCommitmentsMatch,
+  CODEX_SUBAGENT_POLL_MS,
   dropHydratedIdleClaudeSubagents,
   equivalentInterruptAgentType,
   agentTypeToPromptSentAgentKind,
   HYDRATE_MAX_AGE_MS,
+  INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS,
   isValidPaneKey,
+  isValidPiProviderSessionOnly,
   invalidateClaudeChildOnlyBoundary,
   isToolProgressWorkingAfterInterrupt,
   LAST_STATUS_FILE_VERSION,
@@ -147,45 +151,41 @@ import {
   type AgentHookAuthorityEvidence,
   type AgentHookProviderSessionIdentity,
   type AgentHookStatusChangeEntry,
+  type AgentPromptSentDedupeEntry,
   type EnrichedAgentHookEventPayload,
   type LastStatusFile,
   type NormalizedLocalHook,
-  type PaneKeyAliasEntry,
   type PaneStatusClearListener,
   type PersistedAgentHookAuthorityCommitment,
   type PersistedAgentHookEventPayload,
   type ProviderSessionChangeListener,
-  type RetiredPaneAlias,
-  type RetiredPaneFence,
   type StatusChangeListener
-} from './agent-hook-payload-sanitize'
-
-import {
-  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
-  ASSISTANT_MESSAGE_RETRY_MS,
-  CLOSED_AGENT_STATUS_PANE_KEYS_MAX,
-  CLOSED_AGENT_STATUS_TAB_IDS_MAX,
-  CODEX_SUBAGENT_POLL_MS,
-  INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS,
-  isValidPiProviderSessionOnly,
-  PANE_KEY_ALIASES_MAX,
-  RETIRED_PANE_FENCES_MAX,
-  type AgentPromptSentDedupeEntry,
-  type PaneKeyAliasPersistenceListener
 } from './agent-hook-payload-sanitize'
 
 export {
   CLOSED_AGENT_STATUS_PANE_KEYS_MAX,
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   isValidPaneKey,
-  PANE_KEY_ALIASES_MAX,
-  RETIRED_PANE_FENCES_MAX,
   type AgentHookAuthorityAttestation,
   type AgentHookAuthorityEvidence,
   type AgentHookProviderSessionIdentity,
   type AgentHookStatusChangeEntry,
   type EnrichedAgentHookEventPayload
 } from './agent-hook-payload-sanitize'
+
+import {
+  PaneAuthorityRegistry,
+  type AgentStatusDisposition,
+  type PaneKeyAliasEntry,
+  type RetiredPaneFence
+} from './pane-authority-transfer'
+
+export {
+  PANE_KEY_ALIASES_MAX,
+  RETIRED_PANE_FENCES_MAX,
+  type PaneKeyAliasEntry,
+  type RetiredPaneFence
+} from './pane-authority-transfer'
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 
@@ -241,6 +241,12 @@ export class AgentHookServer {
   private readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )
+  // Pane authority tracking — required by PaneAuthorityRegistry
+  closedAgentStatusTabIds = new Set<string>()
+  closedAgentStatusPaneKeys = new Set<string>()
+  restartedStatusLaunchTokenHashByPaneKey = new Map<string, string>()
+  retiredPaneFencesByKey = new Map<string, RetiredPaneFence>()
+  legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
 
   /**
    * Notified once per process when repeated hook POSTs are cut off mid-body (#11217).
@@ -1674,6 +1680,104 @@ export class AgentHookServer {
     this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
+  }
+
+  // Pane authority delegation methods
+  normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
+    return this.paneAuthority.normalizeHookBodyPaneKeyAlias(body)
+  }
+
+  getAgentStatusDisposition(
+    paneKey: string,
+    options?: {
+      hookEventName?: string
+      isReplay?: boolean
+      source?: AgentHookSource
+      hasExplicitPrompt?: boolean
+      launchToken?: string
+    }
+  ): AgentStatusDisposition {
+    return this.paneAuthority.getAgentStatusDisposition(paneKey, options)
+  }
+
+  resolvePaneKeyAlias(paneKey: string): string {
+    return this.paneAuthority.resolvePaneKeyAlias(paneKey)
+  }
+
+  registerPaneKeyAlias(
+    legacyPaneKey: string,
+    stablePaneKey: string,
+    ptyId: string | null,
+    updatedAt?: number,
+    options?: { authorityVerified: boolean }
+  ): void {
+    this.paneAuthority.registerPaneKeyAlias(legacyPaneKey, stablePaneKey, ptyId, updatedAt, options)
+  }
+
+  clearPaneKeyAliasesForPty(
+    ptyId: string,
+    options?: { shouldClearStablePaneKey?: (stablePaneKey: string) => boolean }
+  ): void {
+    this.paneAuthority.clearPaneKeyAliasesForPty(ptyId, options)
+  }
+
+  retirePaneAuthority(paneKey: string): void {
+    this.paneAuthority.retirePaneAuthority(paneKey)
+  }
+
+  restorePaneAuthority(paneKey: string): boolean {
+    return this.paneAuthority.restorePaneAuthority(paneKey)
+  }
+
+  transferPaneAuthority(
+    fromPaneKey: string,
+    toPaneKey: string,
+    ptyId: string | null,
+    updatedAt?: number,
+    options?: { authorityVerified: boolean }
+  ): void {
+    this.paneAuthority.transferPaneAuthority(fromPaneKey, toPaneKey, ptyId, updatedAt, options)
+  }
+
+  canTransferPaneAuthority(
+    paneKey: string,
+    ptyId: string | undefined,
+    ownsPty: (paneKey: string, ptyId: string) => boolean
+  ): boolean {
+    return this.paneAuthority.canTransferPaneAuthority(paneKey, ptyId, ownsPty)
+  }
+
+  setPaneKeyAliasPersistenceListener(
+    listener: ((entries: LegacyPaneKeyAliasEntry[]) => void) | null
+  ): void {
+    this.paneAuthority.setPaneKeyAliasPersistenceListener(listener)
+  }
+
+  // Support methods required by PaneAuthorityRegistry
+  markPaneClosedForAgentStatus(paneKey: string): void {
+    this.closedAgentStatusPaneKeys.add(paneKey)
+  }
+
+  markTabClosedForAgentStatus(tabId: string): void {
+    this.closedAgentStatusTabIds.add(tabId)
+  }
+
+  notifyPaneKeyAliasPersistenceListener(): void {
+    // This is called by PaneAuthorityRegistry when aliases change
+    // The actual listener is set via setPaneKeyAliasPersistenceListener
+  }
+
+  revokeHydratedAuthorityForPaneKeys(paneKeys: Set<string>): boolean {
+    let changed = false
+    for (const paneKey of paneKeys) {
+      for (const commitment of this.hydratedAuthorityCommitments) {
+        if (commitment.paneKey === paneKey) {
+          this.revokedHydratedAuthorityCommitments.add(commitment)
+          changed = true
+        }
+      }
+    }
+    return changed
   }
 
   /** The resume-identity remnant of a dropped row: a `providerSessionOnly` entry carries no state
