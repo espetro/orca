@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: repo selector, task-source controls, and task list stay co-located so their wiring reads in one place. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
@@ -87,6 +87,7 @@ import { useTaskPageSourceSync } from '@/components/task-page/hooks/use-task-pag
 import { useTaskPageGitLabListState } from '@/components/task-page/hooks/use-task-page-gitlab-list-state'
 import { useTaskPageGitHubListState } from '@/components/task-page/hooks/use-task-page-github-list-state'
 import { useTaskPageGithubListResumeTracking } from '@/components/task-page/hooks/use-task-page-github-list-resume-tracking'
+import { useTaskPageRetryRefresh } from '@/components/task-page/hooks/use-task-page-retry-refresh'
 import { useTaskPageLinearListState } from '@/components/task-page/hooks/use-task-page-linear-list-state'
 import { useTaskPageJiraListState } from '@/components/task-page/hooks/use-task-page-jira-list-state'
 import { useTaskPageGitLabFetch } from '@/components/task-page/hooks/use-task-page-gitlab-fetch'
@@ -570,7 +571,8 @@ export default function TaskPage(): React.JSX.Element {
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
     githubListScrollRef.current?.scrollTop,
-    githubListScrollRef
+    githubListScrollRef,
+    taskListPositionRef
   ])
 
   const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
@@ -663,7 +665,8 @@ export default function TaskPage(): React.JSX.Element {
       githubListScrollTopRef,
       pendingGithubScrollRestoreRef,
       currentPageRef,
-      githubListScrollRef.current?.scrollTop
+      githubListScrollRef.current?.scrollTop,
+      taskListPositionRef
     ]
   )
 
@@ -734,56 +737,15 @@ export default function TaskPage(): React.JSX.Element {
   }, [githubMode, selectedWorkItemsCacheEntries, taskSource, setPages])
 
   // Why: one-time toast per repo when the 'upstream' preference fell back to origin (ref-gated); deliberately don't auto-reset the preference so re-adding upstream later still applies.
-  const fellBackToastedRef = useRef<Set<string>>(new Set())
-  useEffect(() => {
-    if (taskSource !== 'github') {
-      return
-    }
-    for (const [index, r] of selectedRepos.entries()) {
-      const entry = selectedWorkItemsCacheEntries[index]
-      if (!entry?.issueSourceFellBack) {
-        continue
-      }
-      if (fellBackToastedRef.current.has(r.id)) {
-        continue
-      }
-      const prSlug = entry.sources?.prs
-        ? `${entry.sources.prs.owner}/${entry.sources.prs.repo}`
-        : r.displayName
-      toast.message(
-        translate(
-          'auto.components.TaskPage.f4374519ae',
-          'Your preferred issue source (upstream) is no longer configured for {{value0}}. Using origin.',
-          { value0: prSlug }
-        )
-      )
-      fellBackToastedRef.current.add(r.id)
-    }
-  }, [selectedRepos, selectedWorkItemsCacheEntries, taskSource])
-
-  // Why: partial-failure retry leaves the cache populated so tasksLoading never flips, giving no feedback; track retry-in-flight per source so only the clicked banner shows "Retrying…".
-  const [retryingSourceKeys, setRetryingSourceKeys] = useState<ReadonlySet<string>>(() => new Set())
-
-  const handleRetryIssuesFetch = useCallback(
-    (sourceKey: string) => {
-      const source = perRepoSourceState.find((s) => s.sourceKey === sourceKey)
-      if (!source) {
-        return
-      }
-      // Why: nonce bump reuses the fetch path as force=true so retry doesn't dedupe onto a still-failing in-flight request (refreshes all repos; Retrying… stays scoped to the clicked source).
-      setRetryingSourceKeys((prev) => {
-        const next = new Set(prev)
-        next.add(source.sourceKey)
-        return next
-      })
-      setTaskRefreshNonce((n) => n + 1)
-    },
-    [perRepoSourceState, setTaskRefreshNonce]
-  )
-  const handleRefreshGithubTasks = useCallback((): void => {
-    setTasksRefreshing(true)
-    setTaskRefreshNonce((current) => current + 1)
-  }, [setTasksRefreshing, setTaskRefreshNonce])
+  const { retryingSourceKeys, handleRetryIssuesFetch, handleRefreshGithubTasks } =
+    useTaskPageRetryRefresh({
+      taskSource,
+      selectedRepos,
+      selectedWorkItemsCacheEntries,
+      perRepoSourceState,
+      setTaskRefreshNonce,
+      setTasksRefreshing
+    })
   const {
     newIssueOpen,
     setNewIssueOpen,
