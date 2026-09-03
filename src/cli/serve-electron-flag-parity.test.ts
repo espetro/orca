@@ -55,8 +55,12 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
   it('emits the same --serve-* names the CLI spawns with and the main process reads', () => {
     // Why source text: serveOrcaApp spawns a real process and getServeOptions is not exported, so
     // both ends of the contract are only readable statically. Without this leg the rewrite could
-    // emit a name nothing reads and every behavioural assertion above would still pass.
-    const launchSource = readFileSync(join(process.cwd(), 'src/cli/runtime/launch.ts'), 'utf8')
+    // emit a name nothing reads and every behavioural assertion above would still pass. The
+    // spawn-side flags live in serve-launch.ts since the serve path was split out of launch.ts.
+    const launchSource = [
+      readFileSync(join(process.cwd(), 'src/cli/runtime/launch.ts'), 'utf8'),
+      readFileSync(join(process.cwd(), 'src/cli/runtime/serve-launch.ts'), 'utf8')
+    ].join('\n')
     const mainSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const start = mainSource.indexOf('function getServeOptions(')
     // Why bound the anchor: an unresolved indexOf slices to EOF and passes vacuously.

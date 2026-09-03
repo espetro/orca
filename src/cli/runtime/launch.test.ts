@@ -17,7 +17,7 @@ const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
+vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
@@ -87,6 +87,10 @@ describe('serveOrcaApp', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
+    // Why: these specs pin the Electron foreground-serve path; a local build's
+    // out/orcad/orcad.js would otherwise win resolveOrcadEntry and route serve
+    // through the headless orcad branch instead.
+    process.env.ORCA_SERVE_PREFER_ELECTRON = '1'
   })
 
   afterEach(() => {
@@ -95,6 +99,7 @@ describe('serveOrcaApp', () => {
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
     delete process.env.ORCA_APPIMAGE_NO_SANDBOX
     delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ORCA_SERVE_PREFER_ELECTRON
     return Promise.all(
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
