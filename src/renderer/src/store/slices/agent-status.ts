@@ -11,7 +11,6 @@ import {
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
-import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
   agentProviderSessionsEqual,
   getAgentResumeArgv,
@@ -27,10 +26,6 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import {
-  getRepoExecutionHostId,
-  getWorktreeExecutionHostId
-} from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import {
   getAgentRowGeneratedTitleText,
@@ -39,17 +34,14 @@ import {
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
-import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
+import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
 import {
-  resolveAgentPaneAuthorityKey,
-  retireAgentPaneAuthorityAliases,
-  retireAgentPaneAuthorityAliasesByOwnerTab,
-  transferAgentPaneAuthorityAlias
-} from './agent-pane-authority'
+  retireAgentPaneAuthorityReducer,
+  restoreAgentPaneAuthorityReducer,
+  transferAgentPaneAuthorityReducer
+} from './agent-pane-authority-actions'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 import {
-  boundRecentlyClosedAgentStatusTabIds,
-  boundRecentlyRetiredAgentStatusPaneKeys,
   capLiveAgentStatusesInPlace,
   capRetainedAgents,
   classifyPaneKeyLiveness,
@@ -58,10 +50,16 @@ import {
   shouldReplaceRetainedWithLive
 } from './agent-status-retention'
 import {
-  findAgentPaneWorktreeId,
-  getLeafIdFromPaneKey,
-  getTabIdFromPaneKey
-} from './agent-status-pane-key'
+  collectWorktreeIdsForConnection,
+  pruneMigrationUnsupportedEntries,
+  removePaneKeys
+} from './agent-status-record-pruning'
+import {
+  mergeCurrentOrchestrationContext,
+  orchestrationMapsEqual
+} from './agent-status-orchestration'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status-tab-prefix'
+import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key'
 import {
   copyLaunchConfig,
   getLaunchConfigForEntry,
@@ -297,164 +295,6 @@ function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   return false
 }
 
-function findCompletedOrphanPaneKeysForTabClose(
-  state: AgentStatusTabPrefixDropState,
-  worktreeId: string | undefined,
-  prefix: string
-): string[] {
-  if (!worktreeId) {
-    return []
-  }
-  const openTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-  const paneKeys: string[] = []
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    if (paneKey.startsWith(prefix) || entry.state !== 'done' || entry.worktreeId !== worktreeId) {
-      continue
-    }
-    const tabId = getTabIdFromPaneKey(paneKey)
-    if (!tabId || openTabIds.has(tabId)) {
-      continue
-    }
-    paneKeys.push(paneKey)
-  }
-  return paneKeys
-}
-
-function movePaneKeyedRecord<T>(
-  record: Record<string, T>,
-  fromPaneKey: string,
-  toPaneKey: string,
-  transform: (value: T) => T = (value) => value
-): Record<string, T> {
-  const value = record[fromPaneKey]
-  if (value === undefined || fromPaneKey === toPaneKey) {
-    return record
-  }
-  const next = { ...record }
-  delete next[fromPaneKey]
-  next[toPaneKey] = transform(value)
-  return next
-}
-
-function removePaneKeys<T>(
-  record: Record<string, T>,
-  paneKeys: ReadonlySet<string>
-): Record<string, T> {
-  const matchingKeys = Object.keys(record).filter((key) => paneKeys.has(key))
-  if (matchingKeys.length === 0) {
-    return record
-  }
-  const next = { ...record }
-  for (const key of matchingKeys) {
-    delete next[key]
-  }
-  return next
-}
-
-function pruneMigrationUnsupportedEntries(
-  entries: Record<string, MigrationUnsupportedPtyEntry>,
-  predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
-): { next: Record<string, MigrationUnsupportedPtyEntry>; changed: boolean } {
-  let changed = false
-  const next: Record<string, MigrationUnsupportedPtyEntry> = {}
-  for (const [ptyId, entry] of Object.entries(entries)) {
-    if (predicate(entry)) {
-      changed = true
-      continue
-    }
-    next[ptyId] = entry
-  }
-  return { next: changed ? next : entries, changed }
-}
-
-function orchestrationContextsEqual(
-  a: AgentStatusOrchestrationContext,
-  b: AgentStatusOrchestrationContext
-): boolean {
-  return (
-    a.taskId === b.taskId &&
-    a.dispatchId === b.dispatchId &&
-    a.dispatchStatus === b.dispatchStatus &&
-    a.taskTitle === b.taskTitle &&
-    a.displayName === b.displayName &&
-    a.parentTerminalHandle === b.parentTerminalHandle &&
-    a.parentPaneKey === b.parentPaneKey &&
-    a.coordinatorHandle === b.coordinatorHandle &&
-    a.orchestrationRunId === b.orchestrationRunId
-  )
-}
-
-function orchestrationMapsEqual(
-  a: Record<string, AgentStatusOrchestrationContext>,
-  b: Record<string, AgentStatusOrchestrationContext>
-): boolean {
-  const aKeys = Object.keys(a)
-  const bKeys = Object.keys(b)
-  if (aKeys.length !== bKeys.length) {
-    return false
-  }
-  return aKeys.every((key) => b[key] !== undefined && orchestrationContextsEqual(a[key]!, b[key]!))
-}
-
-function mergeCurrentOrchestrationContext(
-  existing: AgentStatusOrchestrationContext | undefined,
-  current: AgentStatusOrchestrationContext
-): AgentStatusOrchestrationContext {
-  if (!existing) {
-    return current
-  }
-  const sameDispatch =
-    existing.taskId === current.taskId && existing.dispatchId === current.dispatchId
-  if (!sameDispatch) {
-    return current
-  }
-  if (current.dispatchStatus !== undefined) {
-    return orchestrationContextsEqual(existing, current) ? existing : current
-  }
-  const merged = { ...existing, ...current }
-  return orchestrationContextsEqual(existing, merged) ? existing : merged
-}
-
-// Why: relay/daemon teardown drops main's rows, but renderer entries whose connectionId stamp never
-// matched (unstamped over SSH) survive and stay "fresh" 30 min (#9030). Resolve each worktree's host
-// via the canonical hostId-first precedence and keep only ids UNAMBIGUOUSLY on this connection — a
-// worktree id is `${repoId}::${path}` (no host component), so the same project mirrored at the same
-// path on two hosts yields one shared id that must not clear another host's live rows.
-function collectWorktreeIdsForConnection(state: AppState, connectionId: string): Set<string> {
-  const hostIdsOnConnection = new Set(
-    state.repos
-      .filter((repo) => repo.connectionId === connectionId)
-      .map((repo) => getRepoExecutionHostId(repo))
-  )
-  if (hostIdsOnConnection.size === 0) {
-    return new Set()
-  }
-  const repoById = new Map(state.repos.map((repo) => [repo.id, repo] as const))
-  const onConnection = new Set<string>()
-  const onOtherHost = new Set<string>()
-  for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
-    const repo = repoById.get(repoId)
-    for (const worktree of worktrees) {
-      const bucket = hostIdsOnConnection.has(getWorktreeExecutionHostId(worktree, repo))
-        ? onConnection
-        : onOtherHost
-      bucket.add(worktree.id)
-    }
-  }
-  // A worktree id that also lives on another host is ambiguous — leave it rather than hide a live row.
-  for (const id of onOtherHost) {
-    onConnection.delete(id)
-  }
-  return onConnection
-}
-
-/** Slices that only the fold touched, so the batch commits as a MERGE.
- *  Why: the fold runs against a snapshot taken at transaction start. Committing that
- *  snapshot wholesale (zustand REPLACE) would silently revert any write that landed on
- *  the real store meanwhile — and it can, because a batched action reaching another
- *  slice's setter through `get()` bypasses the shadowed `set` entirely
- *  (setRuntimeAgentOrchestrationByPaneKey → setGeneratedTabTitleFromAgentPrompt does this).
- *  A merge keeps the single publication while confining conflicts to keys this fold wrote. */
 function buildAgentStatusBatchPatch(
   initialState: AppState,
   nextState: AppState
@@ -466,143 +306,6 @@ function buildAgentStatusBatchPatch(
     }
   }
   return patch as Partial<AppState>
-}
-
-/** The slice of app state the tab-prefix drop reduces over — narrow so callers
- *  outside the store (the paired snapshot apply) can build the same patch. */
-export type AgentStatusTabPrefixDropState = Pick<
-  AppState,
-  | 'acknowledgedAgentsByPaneKey'
-  | 'agentLaunchConfigByPaneKey'
-  | 'agentStatusByPaneKey'
-  | 'agentStatusEpoch'
-  | 'migrationUnsupportedByPtyId'
-  | 'recentlyClosedAgentStatusTabIds'
-  | 'recentlyRetiredAgentStatusPaneKeys'
-  | 'retainedAgentsByPaneKey'
-  | 'retentionSuppressedPaneKeys'
-  | 'sortEpoch'
-  | 'tabsByWorktree'
->
-
-/** Pure form of the dropAgentStatusByTabPrefix reducer: the paired snapshot
- *  apply folds the same sweep into a patch it assembles itself, so the two
- *  paths cannot drift. `retiredAliasPaneKeys` comes from the caller because
- *  retiring pane-authority aliases is a registry side effect, not a reduction. */
-export function buildAgentStatusTabPrefixDropPatch(
-  s: AgentStatusTabPrefixDropState,
-  tabIdPrefix: string,
-  retiredAliasPaneKeys: readonly string[],
-  opts?: DropAgentStatusByTabPrefixOptions
-): { patch: Partial<AgentStatusTabPrefixDropState>; hadLive: boolean } {
-  const prefix = `${tabIdPrefix}:`
-  let hadLive = false
-  const buildPatch = (): Partial<AgentStatusTabPrefixDropState> => {
-    const completedOrphanKeys = findCompletedOrphanPaneKeysForTabClose(s, opts?.worktreeId, prefix)
-    const completedOrphanKeySet = new Set(completedOrphanKeys)
-    const liveKeys = [
-      ...Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix)),
-      ...completedOrphanKeys
-    ]
-    const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
-      (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
-    )
-    const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter(
-      (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
-    )
-    const migrationUnsupported = pruneMigrationUnsupportedEntries(
-      s.migrationUnsupportedByPtyId,
-      (entry) => entry.paneKey?.startsWith(prefix) ?? false
-    )
-    // See removeAgentStatus for ack-cleanup rationale; ack entries are owned by the pane lifecycle regardless of live/retained state.
-    let nextAck = s.acknowledgedAgentsByPaneKey
-    const ackKeys = Object.keys(nextAck).filter(
-      (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
-    )
-    if (ackKeys.length > 0) {
-      nextAck = { ...nextAck }
-      for (const k of ackKeys) {
-        delete nextAck[k]
-      }
-    }
-    const nextClosedTabs = boundRecentlyClosedAgentStatusTabIds(
-      s.recentlyClosedAgentStatusTabIds,
-      tabIdPrefix
-    )
-    const nextRetiredPaneKeys = boundRecentlyRetiredAgentStatusPaneKeys(
-      s.recentlyRetiredAgentStatusPaneKeys,
-      retiredAliasPaneKeys
-    )
-
-    if (
-      liveKeys.length === 0 &&
-      launchConfigKeys.length === 0 &&
-      retainedKeys.length === 0 &&
-      !migrationUnsupported.changed
-    ) {
-      if (nextAck !== s.acknowledgedAgentsByPaneKey) {
-        return {
-          acknowledgedAgentsByPaneKey: nextAck,
-          recentlyClosedAgentStatusTabIds: nextClosedTabs,
-          recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
-        }
-      }
-      return {
-        recentlyClosedAgentStatusTabIds: nextClosedTabs,
-        recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
-      }
-    }
-    hadLive = liveKeys.length > 0
-
-    const nextLive = liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
-    for (const key of liveKeys) {
-      delete nextLive[key]
-    }
-    const nextLaunchConfigs =
-      launchConfigKeys.length > 0
-        ? { ...s.agentLaunchConfigByPaneKey }
-        : s.agentLaunchConfigByPaneKey
-    for (const key of launchConfigKeys) {
-      delete nextLaunchConfigs[key]
-    }
-
-    const nextRetained =
-      retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
-    for (const key of retainedKeys) {
-      delete nextRetained[key]
-    }
-
-    // Why: a suppressor is only consumed on a live→gone transition, so plant one only for live paneKeys and skip already-suppressed and completed-orphan keys — otherwise it leaks (mirrors dropAgentStatus).
-    const suppressorAdds = liveKeys.filter(
-      (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
-    )
-    let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
-    if (suppressorAdds.length > 0) {
-      nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
-      for (const key of suppressorAdds) {
-        nextRetentionSuppressedPaneKeys[key] = true
-      }
-    }
-
-    return {
-      agentStatusByPaneKey: nextLive,
-      agentLaunchConfigByPaneKey: nextLaunchConfigs,
-      retainedAgentsByPaneKey: nextRetained,
-      migrationUnsupportedByPtyId: migrationUnsupported.next,
-      retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-      recentlyClosedAgentStatusTabIds: nextClosedTabs,
-      recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys,
-      ...(nextAck !== s.acknowledgedAgentsByPaneKey
-        ? { acknowledgedAgentsByPaneKey: nextAck }
-        : {}),
-      // Why: mirrors removeAgentStatusByTabPrefix — only bump epochs when the live map changed; retained-only sweeps don't affect sort/freshness.
-      agentStatusEpoch:
-        hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-      sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
-    }
-  }
-  const patch = buildPatch()
-  return { patch, hadLive }
 }
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
@@ -793,69 +496,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
     retireAgentPaneAuthority: (paneKey, options) => {
-      const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
-      const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
-      const retiredPaneKeySet = new Set(retiredPaneKeys)
-      for (const key of retiredPaneKeys) {
-        rendererAgentStatusObservations.forget(key)
-      }
       let hadLive = false
+      let ownerPaneKey = paneKey
       set((s) => {
-        const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
-        hadLive = retiredLivePaneKeys.length > 0
-        let nextRetentionSuppressedPaneKeys = removePaneKeys(
-          s.retentionSuppressedPaneKeys,
-          retiredPaneKeySet
-        )
-        if (
-          retiredLivePaneKeys.length > 0 &&
-          nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
-        ) {
-          nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
-        }
-        for (const key of retiredLivePaneKeys) {
-          nextRetentionSuppressedPaneKeys[key] = true
-        }
-        return {
-          agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
-          runtimeAgentOrchestrationByPaneKey: removePaneKeys(
-            s.runtimeAgentOrchestrationByPaneKey,
-            retiredPaneKeySet
-          ),
-          retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-          sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
-            ? s.sleepingAgentSessionsByPaneKey
-            : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
-          agentLaunchConfigByPaneKey: removePaneKeys(
-            s.agentLaunchConfigByPaneKey,
-            retiredPaneKeySet
-          ),
-          acknowledgedAgentsByPaneKey: removePaneKeys(
-            s.acknowledgedAgentsByPaneKey,
-            retiredPaneKeySet
-          ),
-          paneForegroundAgentByPaneKey: removePaneKeys(
-            s.paneForegroundAgentByPaneKey,
-            retiredPaneKeySet
-          ),
-          unreadTerminalPanes: removePaneKeys(s.unreadTerminalPanes, retiredPaneKeySet),
-          unreadAgentCompletionPanes: removePaneKeys(
-            s.unreadAgentCompletionPanes,
-            retiredPaneKeySet
-          ),
-          lastTerminalInputAtByPaneKey: removePaneKeys(
-            s.lastTerminalInputAtByPaneKey,
-            retiredPaneKeySet
-          ),
-          cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
-          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-          recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
-            s.recentlyRetiredAgentStatusPaneKeys,
-            retiredPaneKeys
-          ),
-          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
-        }
+        const result = retireAgentPaneAuthorityReducer(s, paneKey, options)
+        hadLive = result.hadLive
+        ownerPaneKey = result.ownerPaneKey
+        return result.patch
       })
       if (hadLive) {
         queueMicrotask(() => freshness.schedule())
@@ -865,115 +512,30 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
     },
 
-    // Why: the tombstone claims this pane is gone; a live PTY binding to it proves
-    // otherwise. Lift the fence on that proof rather than on the next hook event —
-    // a pane re-attached mid-turn or while idle emits no new-turn event, so a
-    // turn-triggered revival leaves exactly the reported permanent suppression
-    // (STA-4114). This deliberately does NOT restore the rows retirement dropped;
-    // those are genuinely stale. It only re-opens the pane to future status.
     restoreAgentPaneAuthority: (paneKey) => {
-      const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
-      // Why: a closed tab is a stronger, separate claim — re-attach must not undo it.
-      if (
-        isRecentlyClosedAgentStatusTab(
-          get().recentlyClosedAgentStatusTabIds,
-          getTabIdFromPaneKey(ownerPaneKey)
-        )
-      ) {
-        return
-      }
+      let ownerPaneKey = paneKey
       set((s) => {
-        const restorable = [paneKey, ownerPaneKey].filter(
-          (key) => key in s.recentlyRetiredAgentStatusPaneKeys
-        )
-        if (restorable.length === 0) {
-          return s
-        }
-        const next = { ...s.recentlyRetiredAgentStatusPaneKeys }
-        for (const key of restorable) {
-          delete next[key]
-        }
-        return { recentlyRetiredAgentStatusPaneKeys: next }
+        const result = restoreAgentPaneAuthorityReducer(s, paneKey)
+        ownerPaneKey = result.ownerPaneKey
+        return result.patch ?? s
       })
-      // Why: deliberately OUTSIDE the guard above, and not gated on having cleared
-      // anything here. This map is not a mirror of main's — main fences panes the
-      // renderer never hears about (retirePtyAgentLaunchAuthority on command-finished
-      // and PTY exit calls the hook server directly, and nothing pushes that back), and
-      // this map is per-window and non-persisted, so a renderer reload empties it while
-      // main's survives. Gating the send on a local tombstone reintroduces STA-4114 for
-      // exactly those panes. The send is idempotent and main refuses closed tabs itself.
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.restorePaneAuthority?.(ownerPaneKey)
       }
     },
 
     transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
-      const transfer = transferAgentPaneAuthorityAlias({ fromPaneKey, toPaneKey, ptyId })
-      if (!transfer || transfer.previousOwnerPaneKey === transfer.ownerPaneKey) {
-        return
-      }
-      const from = transfer.previousOwnerPaneKey
-      const to = transfer.ownerPaneKey
-      // Why: the moved row carries the observation stamped for its OLD key; renderer-authored
-      // observations for the new key must sort after it, not race it.
-      rendererAgentStatusObservations.forget(from)
-      rendererAgentStatusObservations.rebind(to)
-      const targetTabId = getTabIdFromPaneKey(to) ?? undefined
-      const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
-      set((s) => ({
-        agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
-          ...entry,
-          paneKey: to,
-          tabId: targetTabId
-        })),
-        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
-        // pane-key change they must observe, not a silent remap.
-        ...(from in s.agentStatusByPaneKey
-          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
-          : {}),
-        runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
-          s.runtimeAgentOrchestrationByPaneKey,
-          from,
-          to
-        ),
-        retainedAgentsByPaneKey: movePaneKeyedRecord(
-          s.retainedAgentsByPaneKey,
-          from,
-          to,
-          (retained) => ({
-            ...retained,
-            entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-            tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-          })
-        ),
-        sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-          s.sleepingAgentSessionsByPaneKey,
-          from,
-          to,
-          (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-        ),
-        agentLaunchConfigByPaneKey: movePaneKeyedRecord(
-          s.agentLaunchConfigByPaneKey,
-          from,
-          to,
-          (entry) => ({
-            ...entry,
-            identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
-          })
-        ),
-        acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
-        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
-        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
-        lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
-        cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-        retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-      }))
-      if (typeof window !== 'undefined') {
+      let transferResult: ReturnType<typeof transferAgentPaneAuthorityReducer> = null
+      set((s) => {
+        transferResult = transferAgentPaneAuthorityReducer(s, { fromPaneKey, toPaneKey, ptyId })
+        return transferResult ? transferResult.patch : s
+      })
+      if (typeof window !== 'undefined' && transferResult) {
+        const res = transferResult as NonNullable<typeof transferResult>
         window.api?.agentStatus?.transferPaneAuthority?.({
-          fromPaneKey: from,
-          toPaneKey: to,
-          ...(transfer.ptyId ? { ptyId: transfer.ptyId } : {})
+          fromPaneKey: res.from,
+          toPaneKey: res.to,
+          ...(res.ptyId ? { ptyId: res.ptyId } : {})
         })
       }
     },
@@ -2653,3 +2215,7 @@ export {
   removeSleepingRecordsReplacedByManualWorktreeSleep
 } from './agent-sleeping-sessions'
 export { collectHibernatedCompletionEvidenceForWorktree } from './agent-status-retention'
+export {
+  buildAgentStatusTabPrefixDropPatch,
+  type AgentStatusTabPrefixDropState
+} from './agent-status-tab-prefix'
