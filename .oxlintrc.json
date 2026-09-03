@@ -91,6 +91,11 @@
             "name": "@linear/sdk",
             "allowTypeImports": true,
             "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+          },
+          {
+            "name": "posthog-node",
+            "allowTypeImports": true,
+            "message": "Value-importing posthog-node loads it eagerly on the main-process startup path even for users with telemetry off. Use `import type` plus loadPostHogModule() from src/main/telemetry/posthog-module-loader.ts."
           }
         ]
       }
