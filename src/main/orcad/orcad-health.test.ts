@@ -24,7 +24,9 @@ vi.mock('../daemon/daemon-init', () => ({
   daemonOwnsFreshPersistentPtys: daemonOwnsFreshPersistentPtysMock
 }))
 
-const { collectOrcadHealth, collectTerminalDaemonHealth, computeOrcadBuildHash } =
+import type { OrcadHealth } from './orcad-health'
+
+const { collectOrcadHealth, collectTerminalDaemonHealth, computeOrcadBuildHash, toHealthProbePayload } =
   await import('./orcad-health')
 
 const LIVE_FACTS = {
@@ -129,6 +131,39 @@ describe('collectOrcadHealth', () => {
     expect(health.nodeAbi).toBe(process.versions.modules)
     expect(health.platform).toBe(process.platform)
     expect(health.terminalDaemon.state).toBe('live')
+  })
+})
+
+describe('toHealthProbePayload', () => {
+  const base: OrcadHealth = {
+    buildHash: 'abc123',
+    buildVersion: '1.2.3',
+    nodeVersion: 'v22.0.0',
+    nodeAbi: '127',
+    platform: 'darwin',
+    arch: 'arm64',
+    pid: 123,
+    terminalDaemon: {
+      state: 'live',
+      ownsFreshSessions: true,
+      pid: 456,
+      buildVersion: '1.2.3',
+      entryPath: '/opt/orca/orcad.js',
+      protocolVersion: 1,
+      selfTest: { ok: true, coverage: 'pty-spawn', verdict: 'healthy', durationMs: 5 }
+    }
+  }
+
+  it('derives top-level ok from the terminal-daemon verdict', () => {
+    expect(toHealthProbePayload(base).ok).toBe(true)
+    expect(toHealthProbePayload({ ...base, terminalDaemon: { ...base.terminalDaemon, state: 'degraded' } }).ok).toBe(false)
+  })
+
+  it('nulls the daemon entryPath so the unauthenticated surface leaks no host paths', () => {
+    const payload = toHealthProbePayload(base)
+    expect(payload.terminalDaemon.entryPath).toBeNull()
+    // Readiness keeps the full object; only the probe payload is stripped.
+    expect(base.terminalDaemon.entryPath).toBe('/opt/orca/orcad.js')
   })
 })
 

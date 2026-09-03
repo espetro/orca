@@ -89,6 +89,10 @@ type OrcaRuntimeRpcServerOptions = {
    */
   pinnedBindHost?: string
   webClientRoot?: string
+  // Why: unauthenticated GET /health on the WS listener; orcad passes toHealthProbePayload here.
+  wsHealthHandler?: () => Promise<Record<string, unknown>>
+  // Why: `orca serve --port` semantics — a pinned port that cannot bind must throw, not silently land on a random one.
+  wsFailClosedOnPortConflict?: boolean
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number
@@ -531,6 +535,8 @@ export class OrcaRuntimeRpcServer {
   private readonly exposeNetworkByDefault: boolean
   private readonly pinnedBindHost: string | null
   private readonly webClientRoot: string | undefined
+  private readonly wsHealthHandler: (() => Promise<Record<string, unknown>>) | undefined
+  private readonly wsFailClosedOnPortConflict: boolean
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   private wsBoundHost: string | null = null
   // Why: STA-2370 — in-flight widen so concurrent pairing requests share a single rebind.
@@ -592,6 +598,8 @@ export class OrcaRuntimeRpcServer {
     exposeNetworkByDefault = false,
     pinnedBindHost,
     webClientRoot,
+    wsHealthHandler,
+    wsFailClosedOnPortConflict = false,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
@@ -608,6 +616,8 @@ export class OrcaRuntimeRpcServer {
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
+    this.wsHealthHandler = wsHealthHandler
+    this.wsFailClosedOnPortConflict = wsFailClosedOnPortConflict
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
@@ -1223,6 +1233,7 @@ export class OrcaRuntimeRpcServer {
             host,
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
+            ...(this.wsFailClosedOnPortConflict ? { failClosedOnPinnedPort: true } : {}),
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
@@ -1298,6 +1309,7 @@ export class OrcaRuntimeRpcServer {
     port: number
     preferPinnedPort: boolean
     fallbackPort?: number
+    failClosedOnPinnedPort?: boolean
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
     const e2eeKeypair = this.e2eeKeypair
@@ -1308,6 +1320,10 @@ export class OrcaRuntimeRpcServer {
       host: options.host,
       port: options.port,
       staticRoot: this.webClientRoot,
+      ...(this.wsHealthHandler ? { healthHandler: this.wsHealthHandler } : {}),
+      // Why initial bind only (failClosedOnPortConflict not passed to widen/recover): a mid-session
+      // rebind must never hard-kill a serving runtime over a temporary port race.
+      ...(options.failClosedOnPinnedPort ? { failClosedOnPortConflict: true } : {}),
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
       ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
     })

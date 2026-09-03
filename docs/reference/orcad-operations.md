@@ -98,7 +98,7 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   | ---- | ------------------------------------------------------------ | -------------------- |
   | 0    | clean shutdown                                               | restart per policy   |
   | 1    | startup or shutdown failure                                  | restart with backoff |
-  | 78   | configuration fault (bind address, data root, instance lock) | **not** restart      |
+  | 78   | configuration fault (bind address, data root, instance lock, port-binding failure) | **not** restart |
 
   78 is `EX_CONFIG`. Put it in systemd's `RestartPreventExitStatus`: restarting on a data
   root owned by someone else is a restart-spin, not a recovery.
@@ -106,8 +106,9 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 - **Logs.** orcad writes human-readable diagnostics to **stderr** and its readiness contract
   to **stdout**; the supervisor owns capture and rotation. The daemon, being detached, writes
   its own NDJSON lifecycle log to `<data-root>/logs/daemon.log` (suppressed by
-  `ORCA_DIAGNOSTICS_DISABLED=1`). Rotation of that file is not implemented — see
-  [What is not covered](#what-is-not-covered).
+  `ORCA_DIAGNOSTICS_DISABLED=1`). The daemon log rotates at 5 MB with up to 2 rotated files
+  kept (`daemon.log.1`, `daemon.log.2`). Rotation is fail-open: any error disables the active
+  file logger rather than throwing, so logging cannot affect daemon lifecycle.
 
 ### orcad supervising the daemon
 
@@ -175,20 +176,41 @@ because those terminals die with orcad. A daemon that answered and then failed i
 probe is also `degraded`, not `absent`: it still holds live sessions, and calling those
 exited would be the verdict `ssh-execution-boundary.md` forbids guessing.
 
+## Continuous health endpoint
+
+GET `/health` on the same listener as the WebSocket transport serves the full orcad health
+payload with a top-level `ok` boolean: `true` iff `terminalDaemon.state === 'live'`. No
+authentication is required. The bind is the same as the RPC listener (loopback by default;
+under `0.0.0.0` it exposes build and node version information, the same class of information
+as the WebSocket handshake).
+
+Results are cached for 5 seconds (`HEALTH_CACHE_MS`), so probes faster than that interval see
+a cached verdict. A supervisor that needs a fresh read must probe at most every 5 seconds.
+
+**Supervisor pattern.** Wire the probe as an external watchdog rather than inside orcad
+itself:
+
+```ini
+[Service]
+Type=simple
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768
+ExecStartPost=curl -sf http://127.0.0.1:6768/health || exit 1
+```
+
+`curl -sf` succeeds while the endpoint answers HTTP 200, which is the liveness signal a
+supervisor needs. To gate on the `ok` field as well, pipe through `jq`: 
+`ExecStartPost=bash -c 'curl -sf http://127.0.0.1:6768/health | jq -e .ok'`. This makes
+systemd itself the watchdog: a failed probe stops the unit without a separate process or
+timer unit.
+
 ## What is not covered
 
 Named here so nothing reads as implemented that is not:
 
-- **A continuous health endpoint.** `health` is published once, in the readiness payload. A
-  supervisor's periodic liveness/readiness probe needs an HTTP or RPC surface over the same
-  `collectOrcadHealth()`; that surface does not exist yet.
 - **libc slot.** §04 asks for it in the health payload. It belongs to the native strategy
   (plan item 5), which owns libc detection; there is no honest value to publish until then.
 - **`degradations[]`.** Plan item 2's contract, not this one.
 - **Credential administration** (list / revoke / rotate devices, expiring pending offers,
   structured security logging) — §04, not delivered here.
-- **Pinned-port fail-closed.** A pinned `--port` still falls back to an OS-assigned port on
-  conflict.
 - **Reconciling `webClientUrl` with reachability** under the loopback default.
 - **State-schema rollback rules.**
-- **Daemon log rotation.** `<data-root>/logs/daemon.log` grows unbounded.

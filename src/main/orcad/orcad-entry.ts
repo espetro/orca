@@ -159,7 +159,7 @@ async function startOrcadRuntime(
   const { initSshHostKeyStoreFile } = await import('../ssh/ssh-host-key-store')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
-  const { collectOrcadHealth } = await import('./orcad-health')
+  const { collectOrcadHealth, toHealthProbePayload } = await import('./orcad-health')
   const { HEADLESS_RUNTIME_WINDOW_ID } = await import('../../shared/runtime-types')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
@@ -230,9 +230,24 @@ async function startOrcadRuntime(
     // restart after its first client paired.
     pinnedBindHost: bindHost,
     webClientRoot,
-    ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
+    ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {}),
+    ...(options.port !== undefined ? { wsFailClosedOnPortConflict: true } : {}),
+    // Why unauthenticated /health: a supervisor needs a probe endpoint without pairing material.
+    wsHealthHandler: async () =>
+      toHealthProbePayload(await collectOrcadHealth(getAppEnvironment().getVersion()))
   })
-  await rpc.start()
+  try {
+    await rpc.start()
+  } catch (error) {
+    // Why: only a caller-pinned port failing to bind is configuration; anything else stays a crash.
+    if (options.port !== undefined) {
+      throw new OrcadPinnedPortError(
+        `failed to bind pinned port ${options.port}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
+      )
+    }
+    throw error
+  }
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const boundEndpoint = rpc.getWebSocketEndpoint()
@@ -369,12 +384,16 @@ export function parseArgs(argv: string[]): OrcadOptions {
 export const ORCAD_EXIT_OK = 0
 export const ORCAD_EXIT_FAILED = 1
 export const ORCAD_EXIT_CONFIGURATION = 78
-
 /** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
 export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
 
+/** A caller-pinned WS port that could not bind — misconfiguration, not a crash. */
+export class OrcadPinnedPortError extends Error {}
+
 export function resolveOrcadExitCode(error: unknown): number {
-  return error instanceof OrcadInstanceLockError || error instanceof OrcadBindAddressError
+  return error instanceof OrcadInstanceLockError ||
+    error instanceof OrcadBindAddressError ||
+    error instanceof OrcadPinnedPortError
     ? ORCAD_EXIT_CONFIGURATION
     : ORCAD_EXIT_FAILED
 }

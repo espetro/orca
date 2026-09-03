@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ORCAD_EXIT_CONFIGURATION,
   ORCAD_EXIT_FAILED,
+  OrcadPinnedPortError,
   parseArgs,
   resolveOrcadExitCode
 } from './orcad-entry'
@@ -39,5 +40,11 @@ describe('resolveOrcadExitCode', () => {
     expect(resolveOrcadExitCode(new OrcadBindAddressError('bad'))).toBe(ORCAD_EXIT_CONFIGURATION)
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
+  })
+
+  it('classifies a pinned-port bind failure as configuration', () => {
+    expect(resolveOrcadExitCode(new OrcadPinnedPortError('failed to bind pinned port 6768'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
   })
 })

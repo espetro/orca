@@ -555,6 +555,46 @@ describe('WebSocketTransport', () => {
     ws.close()
   })
 
+  it('rejects on a pinned-port conflict when failClosedOnPortConflict is set', async () => {
+    const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    transports.push(holder)
+    await holder.start()
+    const occupiedPort = holder.resolvedPort
+
+    const tls = makeTls()
+    const transport = new WebSocketTransport({
+      host: '127.0.0.1',
+      port: occupiedPort,
+      tlsCert: tls.cert,
+      tlsKey: tls.key,
+      failClosedOnPortConflict: true
+    })
+    transports.push(transport)
+
+    await expect(transport.start()).rejects.toThrow(
+      new RegExp(`\\[${occupiedPort}\\] \\(EADDRINUSE\\)`)
+    )
+  })
+
+  it('still falls back to an OS-assigned port by default on a pinned-port conflict', async () => {
+    const { transport: first } = await createTransport()
+    await first.start()
+    const occupiedPort = first.resolvedPort
+
+    const tls = makeTls()
+    const second = new WebSocketTransport({
+      host: '127.0.0.1',
+      port: occupiedPort,
+      tlsCert: tls.cert,
+      tlsKey: tls.key
+    })
+    transports.push(second)
+    await second.start()
+
+    expect(second.resolvedPort).not.toBe(occupiedPort)
+    expect(second.resolvedPort).toBeGreaterThan(0)
+  })
+
   it('reaps a half-open client that stops responding to pings', async () => {
     // Why: regression cover for the half-open-socket leak that would
     // strand mobile clients in the connection pool until OS TCP keepalive

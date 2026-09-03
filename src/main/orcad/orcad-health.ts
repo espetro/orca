@@ -141,6 +141,21 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
   }
 }
 
+export type OrcadHealthProbePayload = OrcadHealth & { ok: boolean }
+
+/**
+ * Unauthenticated /health payload: top-level `ok` plus full detail, with the daemon's
+ * absolute `entryPath` nulled so the no-auth surface never leaks host paths.
+ * Readiness keeps shipping the full OrcadHealth unchanged.
+ */
+export function toHealthProbePayload(health: OrcadHealth): OrcadHealthProbePayload {
+  return {
+    ok: health.terminalDaemon.state === 'live',
+    ...health,
+    terminalDaemon: { ...health.terminalDaemon, entryPath: null }
+  }
+}
+
 export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHealth> {
   return {
     buildHash: computeOrcadBuildHash(),
