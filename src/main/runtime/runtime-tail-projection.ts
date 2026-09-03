@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output. */
 // Pure terminal tail projection: ANSI-normalized tail buffers, wait-state
 // detection, restored-tail seeding, and worktree/agent title classification.
 // Zero runtime state — every function here is a pure transform over its args.
@@ -149,22 +150,22 @@ export type RuntimeTerminalProjection = {
   draft?: string
 }
 
-const WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS = 50
+export const WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS = 50
 // Why: chunks that could complete an actionable prompt bypass the throttle so blocked stamps stay immediate; scanned over the new chunk + short carry, never the whole window.
-const WAIT_BLOCKED_KEYWORD_PATTERN =
+export const WAIT_BLOCKED_KEYWORD_PATTERN =
   /press enter|press t to trust|do you trust|trust this|trusted workspace|permission required|requires permission|allow once|allow always|update available|choose working directory|codex just got an upgrade|hooks need review/
-const WAIT_BLOCKED_KEYWORD_CARRY_CHARS = 31
+export const WAIT_BLOCKED_KEYWORD_CARRY_CHARS = 31
 const MAX_TAIL_LINES = 2000
-const MAX_TAIL_CHARS = 256 * 1024
+export const MAX_TAIL_CHARS = 256 * 1024
 const MAX_TAIL_PARTIAL_CHARS = 4000
 const MAX_TAIL_PENDING_ANSI_CHARS = 4096
-const DEFAULT_TERMINAL_READ_LIMIT = 120
+export const DEFAULT_TERMINAL_READ_LIMIT = 120
 const MAX_TERMINAL_READ_LIMIT = 2000
 const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
 export const AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 8_000
-const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
-const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
-const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
+export const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
+export const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
+export const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
@@ -174,12 +175,12 @@ const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
   working: 3,
   permission: 4
 }
-const DEFAULT_REPO_SEARCH_REFS_LIMIT = 25
-const DEFAULT_TERMINAL_LIST_LIMIT = 200
-const DEFAULT_WORKTREE_LIST_LIMIT = 200
-const DEFAULT_WORKTREE_PS_LIMIT = 200
-const DISCONNECTED_PTY_RECORD_MAX = 128
-const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
+export const DEFAULT_REPO_SEARCH_REFS_LIMIT = 25
+export const DEFAULT_TERMINAL_LIST_LIMIT = 200
+export const DEFAULT_WORKTREE_LIST_LIMIT = 200
+export const DEFAULT_WORKTREE_PS_LIMIT = 200
+export const DISCONNECTED_PTY_RECORD_MAX = 128
+export const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 // Why: agent-scratch repos don't need 30s freshness — the steady-state scan
 // fan-out was measured at ~128 git execs/min on real installs, mostly against
@@ -208,14 +209,14 @@ export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connect
     ? WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS
     : WORKTREE_SCAN_CACHE_TTL_MS
 }
-const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
+export const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // Why: the slice of the list budget reserved for the aggregate to collect the providers
 // that answered after a stalled one gives up.
-const PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS = 500
+export const PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS = 500
 // Why: the renderer waits 15s; leave room for the verified failure response and release the spawn fence before its caller times out.
-const WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS = 12_000
+export const WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS = 12_000
 
-async function waitForWorktreeTerminalMutation(
+export async function waitForWorktreeTerminalMutation(
   previous: Promise<void>,
   deadline?: number
 ): Promise<void> {
@@ -248,7 +249,7 @@ async function waitForWorktreeTerminalMutation(
 // Why: listener fan-out is best-effort delivery. One subscriber throwing synchronously — e.g. a
 // paired-client relay whose stream is closed — must never abort the emitting operation or leak
 // state (a lock/mutation) the caller holds across the emit. Isolate every listener and log.
-function notifyRuntimeListeners<L>(
+export function notifyRuntimeListeners<L>(
   listeners: Iterable<L>,
   deliver: (listener: L) => void,
   context: string
@@ -262,13 +263,13 @@ function notifyRuntimeListeners<L>(
   }
 }
 // Why (§3.3): 30s freshness window reuses a recent fetch for repeat create/dispatch on the same repo+remote; short enough a changed remote is seen next action.
-const FETCH_FRESHNESS_MS = 30_000
+export const FETCH_FRESHNESS_MS = 30_000
 // Why: bound fetches so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation; parity with the exact-base refresh sibling.
-const REMOTE_FETCH_TIMEOUT_MS = 60_000
-const REMOTE_FETCH_CACHE_MAX = 512
-const DRIFT_PROBE_SUBJECT_LIMIT = 5
+export const REMOTE_FETCH_TIMEOUT_MS = 60_000
+export const REMOTE_FETCH_CACHE_MAX = 512
+export const DRIFT_PROBE_SUBJECT_LIMIT = 5
 
-function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
+export function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
   if (map.has(key)) {
     map.delete(key)
   }
@@ -282,7 +283,7 @@ function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: 
   }
 }
 
-function getExplicitWorktreeIdSelector(selector: string | undefined): string | null {
+export function getExplicitWorktreeIdSelector(selector: string | undefined): string | null {
   if (!selector?.startsWith('id:')) {
     return null
   }
@@ -290,7 +291,7 @@ function getExplicitWorktreeIdSelector(selector: string | undefined): string | n
   return id.length > 0 ? id : null
 }
 
-function withTimeoutResult<T>(
+export function withTimeoutResult<T>(
   promise: Promise<T>,
   timeoutMs: number
 ): Promise<{ ok: true; value: T } | { ok: false }> {
@@ -403,7 +404,7 @@ export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTai
   }
 }
 
-function restoredTerminalTailSeedAllowed(record: RestorableTerminalTailRecord): boolean {
+export function restoredTerminalTailSeedAllowed(record: RestorableTerminalTailRecord): boolean {
   return (
     record.lastOutputAt === null &&
     record.preview.length === 0 &&
@@ -415,7 +416,7 @@ function restoredTerminalTailSeedAllowed(record: RestorableTerminalTailRecord): 
 // Deliberately untouched: lastOutputAt (historical bytes must not read as fresh
 // activity) and waitBlockedAt/tailWaitState (a restored prompt is not a live
 // wait signal; the next live chunk recomputes both from this seeded tail).
-function applyRestoredTerminalTailSeed(
+export function applyRestoredTerminalTailSeed(
   record: RestorableTerminalTailRecord,
   seed: RestoredTerminalTailSeed
 ): void {
@@ -432,7 +433,7 @@ function applyRestoredTerminalTailSeed(
   record.preview = seed.preview
 }
 
-function buildTerminalWaitText(lines: string[], partialLine: string, preview: string): string {
+export function buildTerminalWaitText(lines: string[], partialLine: string, preview: string): string {
   const waitText = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -637,7 +638,7 @@ function maxUpwardCursorReach(
   previousRedrawCursor: RetainedTailRedrawCursor | null
 ): number {
   let reach = previousRedrawCursor ? previousRedrawCursor.rowFromEnd : 0
-  const cursorUpPattern = /\x1b\[(\d*)(?:;[\d;]*)?A/g
+  const cursorUpPattern = /\u001b\[(\d*)(?:;[\d;]*)?A/g
   let match: RegExpExecArray | null
   while ((match = cursorUpPattern.exec(normalizedChunk)) !== null) {
     reach += match[1] ? Number.parseInt(match[1], 10) : 1
@@ -873,7 +874,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
   )
 }
 
-type RetainedTailRedrawCursor = {
+export type RetainedTailRedrawCursor = {
   rowFromEnd: number
   column: number
 }
@@ -1186,7 +1187,7 @@ function containsTerminalVerticalLineControl(value: string): boolean {
   return false
 }
 
-function appendCompletedTerminalTranscript(
+export function appendCompletedTerminalTranscript(
   previousLines: string[],
   previousCharacters: number,
   newlyCompletedLines: string[],
@@ -1220,7 +1221,7 @@ function appendCompletedTerminalTranscript(
   }
 }
 
-function tailStateMatches(
+export function tailStateMatches(
   lines: string[],
   transcriptLines: string[],
   partialLine: string,
@@ -1284,7 +1285,7 @@ function buildTailLines(lines: string[], partialLine: string): string[] {
   return partialLine.length > 0 ? [...lines, partialLine] : lines
 }
 
-function terminalReadLimit(limit: number | undefined, defaultLimit: number): number {
+export function terminalReadLimit(limit: number | undefined, defaultLimit: number): number {
   if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
     return defaultLimit
   }
@@ -1319,7 +1320,7 @@ function trimTerminalPreviewToCharacterBudget(
   return { tail, limited: true, omittedLineCount, slicedFirstLine }
 }
 
-function readTerminalTail(args: {
+export function readTerminalTail(args: {
   handle: string
   status: RuntimeTerminalState
   previewLines: string[]
@@ -1395,7 +1396,7 @@ function readTerminalTail(args: {
   }
 }
 
-function shouldFallbackToVisibleTerminalSnapshot(
+export function shouldFallbackToVisibleTerminalSnapshot(
   read: RuntimeTerminalRead,
   opts: { cursor?: number; limit?: number }
 ): boolean {
@@ -1414,7 +1415,7 @@ function visibleNonBlankTerminalLines(lines: string[]): string[] {
   return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
 }
 
-function projectVisibleTerminalLines(emulator: HeadlessEmulator): {
+export function projectVisibleTerminalLines(emulator: HeadlessEmulator): {
   lines: string[]
   draft?: string
 } {
@@ -1459,11 +1460,11 @@ export function projectTerminalTailLines(
 // mistaking the stream for the screen. Rendered lines only ever enter a read through
 // buildVisibleSnapshotReadFallback, which stamps `screen` itself, so anything still unlabelled
 // here is the accumulated stream.
-function labelTerminalReadSource(resolved: RuntimeTerminalRead): RuntimeTerminalRead {
+export function labelTerminalReadSource(resolved: RuntimeTerminalRead): RuntimeTerminalRead {
   return resolved.source ? resolved : { ...resolved, source: 'stream' }
 }
 
-function buildVisibleSnapshotReadFallback(
+export function buildVisibleSnapshotReadFallback(
   read: RuntimeTerminalRead,
   visibleLines: string[],
   limit: number | undefined,
@@ -1486,7 +1487,7 @@ function buildVisibleSnapshotReadFallback(
   }
 }
 
-function getTerminalState(leaf: RuntimeLeafRecord): RuntimeTerminalState {
+export function getTerminalState(leaf: RuntimeLeafRecord): RuntimeTerminalState {
   if (leaf.connected) {
     return 'running'
   }
@@ -1496,7 +1497,7 @@ function getTerminalState(leaf: RuntimeLeafRecord): RuntimeTerminalState {
   return 'unknown'
 }
 
-function buildSendPayload(action: {
+export function buildSendPayload(action: {
   text?: string
   enter?: boolean
   interrupt?: boolean
@@ -1514,7 +1515,7 @@ function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
-async function assertTerminalInputWithinLimitWithYield(text: string | undefined): Promise<void> {
+export async function assertTerminalInputWithinLimitWithYield(text: string | undefined): Promise<void> {
   if (!text) {
     return
   }
@@ -1524,19 +1525,19 @@ async function assertTerminalInputWithinLimitWithYield(text: string | undefined)
 }
 
 // Why: tui-idle needs OSC title transitions; an unsupported CLI/plain shell never fires one, so cap at 5min to avoid indefinite hangs.
-const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
-const TUI_IDLE_POLL_INTERVAL_MS = 2000
-const TUI_IDLE_QUIESCENCE_MS = 3000
+export const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
+export const TUI_IDLE_POLL_INTERVAL_MS = 2000
+export const TUI_IDLE_QUIESCENCE_MS = 3000
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
 const GEMINI_IDLE_PREFIX = '\u25c7'
 const PI_IDLE_PREFIX = '\u03c0 - '
 
 // Clamp for mobileAutoRestoreFitMs: floor above the legacy 300ms debounce, 1h ceiling (a held PTY beyond that is "I forgot", not intentional).
-const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
-const MOBILE_AUTO_RESTORE_FIT_MAX_MS = 60 * 60 * 1000
+export const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
+export const MOBILE_AUTO_RESTORE_FIT_MAX_MS = 60 * 60 * 1000
 
-function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
+export function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   const status = detectAgentStatusFromTitle(title)
   if (status !== 'idle') {
     return null
@@ -1556,7 +1557,7 @@ function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   return null
 }
 
-function isKnownReadyPromptPreview(preview: string): boolean {
+export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
   const readyIndex = findKnownReadyPromptIndex(normalized)
   if (readyIndex === null) {
@@ -1569,7 +1570,7 @@ function isKnownReadyPromptPreview(preview: string): boolean {
   return true
 }
 
-function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
+export function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
   return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
 }
@@ -1760,14 +1761,14 @@ function startOfLastLines(value: string, count: number): number {
 
 /** Why a spread and not `agentWait: value`: an absent key is the only way to say the pane was
  *  never evaluated, which a reader must not confuse with an evaluated "no wait". */
-function expandTerminalInteractiveWait(
+export function expandTerminalInteractiveWait(
   agentWait: RuntimeTerminalInteractiveWait | null | undefined
 ): { agentWait?: RuntimeTerminalInteractiveWait | null } {
   return agentWait === undefined ? {} : { agentWait }
 }
 
 /** A wedged PTY controller must not stall every reader of this pane. */
-const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
+export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 
 function findTerminalWaitBlockedSignal(
   normalized: string
@@ -1862,7 +1863,7 @@ function findTerminalWaitBlockedSignal(
     : null
 }
 
-function buildTerminalWaitResult(
+export function buildTerminalWaitResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
   leaf: RuntimeLeafRecord
@@ -1877,7 +1878,7 @@ function buildTerminalWaitResult(
   )
 }
 
-function buildTerminalWaitBlockedResult(
+export function buildTerminalWaitBlockedResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
   leaf: RuntimeLeafRecord,
@@ -1893,7 +1894,7 @@ function buildTerminalWaitBlockedResult(
   )
 }
 
-function buildPtyTerminalWaitResult(
+export function buildPtyTerminalWaitResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
   pty: RuntimePtyWorktreeRecord
@@ -1908,7 +1909,7 @@ function buildPtyTerminalWaitResult(
   )
 }
 
-function buildPtyTerminalWaitBlockedResult(
+export function buildPtyTerminalWaitBlockedResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
   pty: RuntimePtyWorktreeRecord,
@@ -1943,7 +1944,7 @@ function buildTerminalWait(
   }
 }
 
-function getPtyTerminalState(pty: RuntimePtyWorktreeRecord): RuntimeTerminalState {
+export function getPtyTerminalState(pty: RuntimePtyWorktreeRecord): RuntimeTerminalState {
   return pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown'
 }
 
@@ -1951,12 +1952,12 @@ function normalizeLocalBranchName(branchName: string | undefined): string {
   return branchName?.replace(/^refs\/heads\//, '') ?? ''
 }
 
-function branchSelectorMatches(branch: string, selector: string): boolean {
+export function branchSelectorMatches(branch: string, selector: string): boolean {
   // Why: Git can report a local branch as `refs/heads/foo` or `foo` depending on the plumbing path; accept either.
   return normalizeLocalBranchName(branch) === normalizeLocalBranchName(selector)
 }
 
-function runtimePathsEqual(left: string, right: string): boolean {
+export function runtimePathsEqual(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
 }
 
@@ -1967,12 +1968,12 @@ function runtimePathsEqual(left: string, right: string): boolean {
  * instead lets one session steal a sibling's PTYs. Normalize only path spelling, so
  * Windows/WSL/SSH ids still match themselves across hosts.
  */
-function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
+export function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
   const leftKey = worktreeIdComparisonKey(left)
   return leftKey === null ? left === right : leftKey === worktreeIdComparisonKey(right)
 }
 
-function runtimeWorktreeIdentityKey(worktreeId: string): string {
+export function runtimeWorktreeIdentityKey(worktreeId: string): string {
   // Same suffix rule: this keys PTY refresh, sleep, and mutation-queue state per session.
   const parsed = splitWorktreeId(worktreeId)
   return parsed
@@ -1989,7 +1990,7 @@ function runtimeWorktreeLookupKey(worktreeId: string): string {
   )
 }
 
-function createIncrementalResolvedWorktreeLookup(
+export function createIncrementalResolvedWorktreeLookup(
   resolvedWorktrees: ResolvedWorktree[]
 ): (worktreeId: string) => ResolvedWorktree | undefined {
   const worktreeByIdentity = new Map<string, ResolvedWorktree>()
@@ -2016,7 +2017,7 @@ function createIncrementalResolvedWorktreeLookup(
   }
 }
 
-function resolveTerminalSessionWorktreeId(
+export function resolveTerminalSessionWorktreeId(
   session: WorkspaceSessionState,
   targetWorktreeId: string
 ): string | null {
@@ -2033,7 +2034,7 @@ function resolveTerminalSessionWorktreeId(
   return matches.length > 1 ? null : (matches[0] ?? targetWorktreeId)
 }
 
-function canonicalizeTerminalSessionWorktreeId(
+export function canonicalizeTerminalSessionWorktreeId(
   session: WorkspaceSessionState,
   sourceWorktreeId: string,
   targetWorktreeId: string
@@ -2069,11 +2070,11 @@ function canonicalizeTerminalSessionWorktreeId(
   }
 }
 
-function inferWorktreeIdFromPtyId(ptyId: string): string | null {
+export function inferWorktreeIdFromPtyId(ptyId: string): string | null {
   return parsePtySessionId(ptyId).worktreeId
 }
 
-function indexPersistedPtyWorktreeBindings(
+export function indexPersistedPtyWorktreeBindings(
   session: WorkspaceSessionState | null | undefined
 ): ReadonlyMap<string, string> {
   const worktreeIdByPtyId = new Map<string, string>()
@@ -2105,7 +2106,7 @@ function indexPersistedPtyWorktreeBindings(
   return worktreeIdByPtyId
 }
 
-function indexPersistedPtySurfaceBindings(
+export function indexPersistedPtySurfaceBindings(
   session: WorkspaceSessionState | null | undefined
 ): ReadonlyMap<
   string,
@@ -2148,7 +2149,7 @@ function indexPersistedPtySurfaceBindings(
   return bindingByPtyId
 }
 
-function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+export function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
   if (a.size !== b.size) {
     return false
   }
@@ -2160,7 +2161,7 @@ function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
   return true
 }
 
-function parseRuntimeWorktreeId(
+export function parseRuntimeWorktreeId(
   worktreeId: string
 ): { repoId: string; worktreePath: string } | null {
   const parsed = splitWorktreeId(worktreeId)
@@ -2178,7 +2179,7 @@ type RuntimeWorktreeSummaryPathCandidate = {
   order: number
 }
 
-type RuntimeWorktreeSummaryPathIndex = {
+export type RuntimeWorktreeSummaryPathIndex = {
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
   posixAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
   posixRelative: Map<string, RuntimeWorktreeSummaryPathCandidate>
@@ -2186,7 +2187,7 @@ type RuntimeWorktreeSummaryPathIndex = {
   windowsAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
 }
 
-function buildRuntimeWorktreeSummaryPathIndex(
+export function buildRuntimeWorktreeSummaryPathIndex(
   summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
   resolvedWorktrees: readonly ResolvedWorktree[],
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
@@ -2229,7 +2230,7 @@ function buildRuntimeWorktreeSummaryPathIndex(
   return index
 }
 
-function findRuntimeWorktreeSummaryByPath(
+export function findRuntimeWorktreeSummaryByPath(
   index: RuntimeWorktreeSummaryPathIndex,
   repoId: string,
   worktreePath: string,
@@ -2283,7 +2284,7 @@ function runtimeWorktreeSummaryPathKey(
   return `${repoId}\0${worktreePathComparisonKey(worktreePath, platform)}`
 }
 
-function includeTargetResolvedWorktree(
+export function includeTargetResolvedWorktree(
   resolvedWorktrees: ResolvedWorktree[],
   targetWorktree: ResolvedWorktree | null
 ): ResolvedWorktree[] {
@@ -2293,7 +2294,7 @@ function includeTargetResolvedWorktree(
   return [...resolvedWorktrees, targetWorktree]
 }
 
-function findResolvedWorktreeIdForPath(
+export function findResolvedWorktreeIdForPath(
   resolvedWorktrees: ResolvedWorktree[],
   cwd: string,
   targetWorktreeId?: string | null
@@ -2318,7 +2319,7 @@ function findResolvedWorktreeIdForPath(
   )
 }
 
-function getLeafWorktreeStatus(
+export function getLeafWorktreeStatus(
   leaf: RuntimeLeafRecord,
   tabTitle: string | null
 ): RuntimeWorktreeStatus {
@@ -2333,20 +2334,20 @@ function getLeafWorktreeStatus(
   return getDetectedWorktreeStatus(detected, leaf.ptyId !== null)
 }
 
-function classifyLatestAgentTitle(
+export function classifyLatestAgentTitle(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
 ): 'agent' | 'management' | 'neutral' {
   return classifyAgentTitle(getLatestAgentCandidateTitle(...titles))
 }
 
-function getLatestPtyTitle(pty: RuntimePtyWorktreeRecord): string | null {
+export function getLatestPtyTitle(pty: RuntimePtyWorktreeRecord): string | null {
   return getLatestAgentCandidateTitle(
     { title: pty.title, updatedAt: pty.titleUpdatedAt },
     { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
   )
 }
 
-function getLatestLeafTitle(leaf: RuntimeLeafRecord, tabTitle: string | null): string | null {
+export function getLatestLeafTitle(leaf: RuntimeLeafRecord, tabTitle: string | null): string | null {
   return getLatestAgentCandidateTitle(
     { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
     { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
@@ -2356,7 +2357,7 @@ function getLatestLeafTitle(leaf: RuntimeLeafRecord, tabTitle: string | null): s
 
 // Why: an 'agent' title only proves an agent owns the pane when something other than a
 // quarter-circle spinner carries it — those glyphs are generic progress frames (STA-4028).
-function agentTitleProvesAgentPresence(
+export function agentTitleProvesAgentPresence(
   title: string | null,
   classification: 'agent' | 'management' | 'neutral'
 ): boolean {
@@ -2367,7 +2368,7 @@ function agentTitleProvesAgentPresence(
   )
 }
 
-function ptyTitleProvesAgentPresence(
+export function ptyTitleProvesAgentPresence(
   pty: RuntimePtyWorktreeRecord,
   title: string | null,
   classification: 'agent' | 'management' | 'neutral'
@@ -2381,7 +2382,7 @@ function ptyTitleProvesAgentPresence(
   )
 }
 
-function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neutral' {
+export function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neutral' {
   if (!title) {
     return 'neutral'
   }
@@ -2391,13 +2392,13 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
 }
 
-function isTerminalSendSettlementAgent(
+export function isTerminalSendSettlementAgent(
   agent: TuiAgent | null | undefined
 ): agent is 'claude' | 'codex' {
   return agent === 'claude' || agent === 'codex'
 }
 
-function findLastCompleteOscTitleRange(data: string): { start: number; end: number } | null {
+export function findLastCompleteOscTitleRange(data: string): { start: number; end: number } | null {
   // Why: one forward cursor keeps hostile unterminated OSC output linear-time.
   let last: { start: number; end: number } | null = null
   let searchFrom = 0
@@ -2436,20 +2437,20 @@ function findLastCompleteOscTitleRange(data: string): { start: number; end: numb
   return last
 }
 
-function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {
+export function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {
   if (!title) {
     return false
   }
   return isClaudeManagementTitle(title) || isShellProcess(title)
 }
 
-function getLatestAgentCandidateTitle(
+export function getLatestAgentCandidateTitle(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
 ): string | null {
   return getLatestAgentCandidateTitleInfo(...titles)?.title ?? null
 }
 
-function getLatestAgentCandidateTitleInfo(
+export function getLatestAgentCandidateTitleInfo(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
 ): { title: string; updatedAt: number } | null {
   let latest: { title: string; updatedAt: number } | null = null
@@ -2466,7 +2467,7 @@ function getLatestAgentCandidateTitleInfo(
   return latest
 }
 
-function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
+export function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
   return getDetectedWorktreeStatus(detectAgentStatusFromTitle(title), hasPty)
 }
 
@@ -2483,7 +2484,7 @@ function getDetectedWorktreeStatus(
   return hasPty ? 'active' : 'inactive'
 }
 
-function mapExplicitAgentStateToRuntimeTerminalStatus(
+export function mapExplicitAgentStateToRuntimeTerminalStatus(
   state: AgentStatusEntry['state']
 ): NonNullable<RuntimeTerminalAgentStatus['status']> {
   switch (state) {
@@ -2497,7 +2498,7 @@ function mapExplicitAgentStateToRuntimeTerminalStatus(
   }
 }
 
-function addRuntimeWorkingTerminalEvidence(
+export function addRuntimeWorkingTerminalEvidence(
   evidenceByWorktreeId: Map<string, RuntimeWorkingTerminalEvidence[]>,
   worktreeId: string,
   evidence: RuntimeWorkingTerminalEvidence
@@ -2510,7 +2511,7 @@ function addRuntimeWorkingTerminalEvidence(
   }
 }
 
-function runtimeWorkingTerminalEvidenceMatchesSource(
+export function runtimeWorkingTerminalEvidenceMatchesSource(
   evidence: RuntimeWorkingTerminalEvidence,
   source: RuntimeWorktreeAgentSource
 ): boolean {
@@ -2526,7 +2527,7 @@ function runtimeWorkingTerminalEvidenceMatchesSource(
   return Boolean(evidence.tabId && evidence.tabId === source.tabId)
 }
 
-function mergeWorktreeSummaryStatus(
+export function mergeWorktreeSummaryStatus(
   summary: RuntimeWorktreePsSummary,
   next: RuntimeWorktreeStatus,
   nextWorkingMode?: RuntimeWorktreePsSummary['workingMode']
@@ -2551,7 +2552,7 @@ function mergeWorktreeSummaryStatus(
   }
 }
 
-function normalizeTerminalChunk(
+export function normalizeTerminalChunk(
   chunk: string,
   pendingAnsi: string = ''
 ): { text: string; pendingAnsi: string } {
@@ -2667,7 +2668,7 @@ function isTerminalPreviewLineControl(parsed: {
   )
 }
 
-function maxTimestamp(left: number | null, right: number | null): number | null {
+export function maxTimestamp(left: number | null, right: number | null): number | null {
   if (left === null) {
     return right
   }
@@ -2677,7 +2678,7 @@ function maxTimestamp(left: number | null, right: number | null): number | null 
   return Math.max(left, right)
 }
 
-function compareWorktreePs(
+export function compareWorktreePs(
   left: RuntimeWorktreePsSummary,
   right: RuntimeWorktreePsSummary
 ): number {
