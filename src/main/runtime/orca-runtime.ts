@@ -32,6 +32,8 @@ import { RuntimePtyTitleTrackingCommands } from './runtime-pty-title-tracking-co
 import type { RuntimePtyTitleTrackingCommandsDeps } from './runtime-pty-title-tracking-commands-deps'
 import { RuntimeTerminalAgentStatusBindingCommands } from './runtime-terminal-agent-status-binding-commands'
 import type { RuntimeTerminalAgentStatusBindingCommandsDeps } from './runtime-terminal-agent-status-binding-commands-deps'
+import { RuntimeClientEventPublishingCommands } from './runtime-client-event-publishing-commands'
+import type { RuntimeClientEventPublishingCommandsDeps } from './runtime-client-event-publishing-commands-deps'
 import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
@@ -2703,6 +2705,7 @@ export class OrcaRuntimeService {
   private readonly headlessSessionTabPersistenceCommands: RuntimeHeadlessSessionTabPersistenceCommands
   private readonly ptyTitleTrackingCommands: RuntimePtyTitleTrackingCommands
   private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
+  private readonly clientEventPublishingCommands: RuntimeClientEventPublishingCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3642,6 +3645,41 @@ export class OrcaRuntimeService {
     }
     this.ptyTitleTrackingCommands = new RuntimePtyTitleTrackingCommands(
       ptyTitleTrackingCommandsDeps
+    )
+    const clientEventPublishingCommandsDeps: RuntimeClientEventPublishingCommandsDeps = {
+      store,
+      notifier: null,
+      clientEventListeners: this.clientEventListeners,
+      terminalSideEffectExcludedClientEventListeners:
+        this.terminalSideEffectExcludedClientEventListeners,
+      terminalSideEffectTitleGateKeysByClientEventListener:
+        this.terminalSideEffectTitleGateKeysByClientEventListener,
+      terminalSleepStateByWorktreeId: this.terminalSleepStateByWorktreeId,
+      nativeChatLaunchDraftResolutionByTabId: this.nativeChatLaunchDraftResolutionByTabId,
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      sshRelayRecoveryGenerationByTargetId: this.sshRelayRecoveryGenerationByTargetId,
+      worktreeLifecycleListeners: this.worktreeLifecycleListeners,
+      makeDecorativeTitleGateKey: (rawTitle: string, normalizedTitle: string) =>
+        this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle),
+      notifyRuntimeListeners: notifyRuntimeListeners,
+      notifyMobileSessionTabsChangedNow: (worktreeId, changeSequence) =>
+        this.notifyMobileSessionTabsChangedNow(worktreeId, changeSequence),
+      scheduleMobileSessionTabsChanged: (worktreeId) =>
+        this.scheduleMobileSessionTabsChanged(worktreeId),
+      handles: this.handles,
+      ptysById: this.ptysById,
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId, options) =>
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, options),
+      getKnownWorkspaceSessionWorktreeIds: () => this.getKnownWorkspaceSessionWorktreeIds(),
+      refreshMobileSessionPtyRecords: () => this.refreshMobileSessionPtyRecords(),
+      runtimeWorktreeIdsEqual,
+      parsePaneKey,
+      splitWorktreeId,
+      getPublicSshState,
+      wakeFolderRepoGitUpgradeWatch
+    }
+    this.clientEventPublishingCommands = new RuntimeClientEventPublishingCommands(
+      clientEventPublishingCommandsDeps
     )
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
@@ -5787,6 +5825,7 @@ export class OrcaRuntimeService {
 
   setNotifier(notifier: RuntimeNotifier | null): void {
     this.notifier = notifier
+    this.clientEventPublishingCommands.setNotifier(notifier)
     // Why: run the one-shot fork-upstream backfill once a renderer is attached,
     // so existing forks self-correct on launch and the result can be broadcast.
     if (notifier && !this.forkBackfillStarted) {
@@ -5815,49 +5854,11 @@ export class OrcaRuntimeService {
   }
 
   private countTerminalSideEffectConsumingClientEventListeners(): number {
-    return this.clientEventListeners.size - this.terminalSideEffectExcludedClientEventListeners.size
+    return this.clientEventPublishingCommands.countTerminalSideEffectConsumingClientEventListeners()
   }
 
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
-    const events: RuntimeClientEvent[] = []
-    const sleepStates = [...this.terminalSleepStateByWorktreeId.values()].sort((a, b) =>
-      a.worktreeId.localeCompare(b.worktreeId)
-    )
-    for (const state of sleepStates) {
-      const committedPtyIds = new Set(state.ptyIds)
-      if (state.phase === 'stopping') {
-        const pendingPtyIds = Object.keys(state.terminalHandlesByPtyId)
-          .filter((ptyId) => !committedPtyIds.has(ptyId))
-          .sort()
-        if (pendingPtyIds.length > 0) {
-          events.push({
-            type: 'worktreeTerminalSleepState',
-            worktreeId: state.worktreeId,
-            generation: state.generation,
-            phase: 'started',
-            ptyIds: pendingPtyIds,
-            terminalHandles: this.getRecordedTerminalSleepHandles(
-              pendingPtyIds,
-              state.terminalHandlesByPtyId
-            )
-          })
-        }
-      }
-      if (state.ptyIds.length > 0) {
-        events.push({
-          type: 'worktreeTerminalSleepState',
-          worktreeId: state.worktreeId,
-          generation: state.generation,
-          phase: 'committed',
-          ptyIds: [...state.ptyIds].sort(),
-          terminalHandles: this.getRecordedTerminalSleepHandles(
-            state.ptyIds,
-            state.terminalHandlesByPtyId
-          )
-        })
-      }
-    }
-    return events
+    return this.clientEventPublishingCommands.getTerminalSleepClientEventSnapshot()
   }
 
   getNativeChatLaunchDraftResolutionClientEventSnapshot(): Extract<
@@ -5875,51 +5876,17 @@ export class OrcaRuntimeService {
   }
 
   private emitClientEvent(event: RuntimeClientEvent): void {
-    // Why: filter inside live-Set delivery so a listener removed mid-fan-out
-    // receives nothing and each paired client gets one semantic title frame.
-    // Why: a throwing subscriber here once escaped acquireWorktreeTerminalSpawn after it took the
-    // per-worktree terminal mutation, leaking it and wedging that worktree's sleep until restart.
-    notifyRuntimeListeners(
-      this.clientEventListeners,
-      (listener) => {
-        if (event.type === 'terminalSideEffects') {
-          const filtered = this.filterTerminalSideEffectEventForClient(listener, event)
-          if (filtered) {
-            listener(filtered)
-          }
-        } else {
-          listener(event)
-        }
-      },
-      'client-event'
-    )
+    this.clientEventPublishingCommands.emitClientEvent(event)
   }
 
   private filterTerminalSideEffectEventForClient(
     listener: (event: RuntimeClientEvent) => void,
     event: Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }>
   ): Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }> | null {
-    const titleGateKeys = this.terminalSideEffectTitleGateKeysByClientEventListener.get(listener)
-    if (!titleGateKeys) {
-      return null
-    }
-    const facts = event.batch.facts.filter((fact) => {
-      if (fact.kind !== 'title') {
-        return true
-      }
-      const gateKey = this.makeDecorativeTitleGateKey(fact.rawTitle, fact.normalizedTitle)
-      if (titleGateKeys.get(event.batch.ptyId) === gateKey) {
-        return false
-      }
-      titleGateKeys.set(event.batch.ptyId, gateKey)
-      return true
-    })
-    if (facts.length === 0) {
-      return null
-    }
-    return facts.length === event.batch.facts.length
-      ? event
-      : { ...event, batch: { ...event.batch, facts } }
+    return this.clientEventPublishingCommands.filterTerminalSideEffectEventForClient(
+      listener,
+      event
+    )
   }
 
   notifyNativeChatLaunchDraftResolved(
@@ -5955,96 +5922,31 @@ export class OrcaRuntimeService {
   private resolveNativeChatLaunchDraftOwner(
     handle: string
   ): { tabId: string; worktreeId: string } | null {
-    const record = this.handles.get(handle)
-    if (!record) {
-      return null
-    }
-    if (!record.tabId.startsWith('pty:')) {
-      return { tabId: record.tabId, worktreeId: record.worktreeId }
-    }
-    const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
-    const tabId =
-      pty?.tabId && !pty.tabId.startsWith('pty:')
-        ? pty.tabId
-        : parsePaneKey(pty?.paneKey ?? '')?.tabId
-    if (!pty || !tabId || tabId.startsWith('pty:')) {
-      return null
-    }
-    return { tabId, worktreeId: pty.worktreeId }
+    return this.clientEventPublishingCommands.resolveNativeChatLaunchDraftOwner(handle)
   }
 
   private retireResolvedNativeChatLaunchDraftFromMobileSnapshot(
     resolution: NativeChatLaunchDraftResolutionTombstone
   ): void {
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (!runtimeWorktreeIdsEqual(worktreeId, resolution.worktreeId)) {
-        continue
-      }
-      const next = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
-      if (next === snapshot) {
-        return
-      }
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
-        ...next,
-        snapshotVersion: snapshot.snapshotVersion + 1
-      })
-      this.scheduleMobileSessionTabsChanged(worktreeId)
-      return
-    }
+    this.clientEventPublishingCommands.retireResolvedNativeChatLaunchDraftFromMobileSnapshot(
+      resolution
+    )
   }
 
   private applyNativeChatLaunchDraftResolutionFence(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
-    let changed = false
-    const tabs = snapshot.tabs.map((tab) => {
-      if (tab.type !== 'terminal') {
-        return tab
-      }
-      const resolution = this.nativeChatLaunchDraftResolutionByTabId.get(tab.parentTabId)
-      if (
-        !resolution ||
-        !runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
-        tab.launchDraft !== resolution.text ||
-        tab.launchDraftCreatedAt !== resolution.createdAt
-      ) {
-        return tab
-      }
-      changed = true
-      const next = { ...tab }
-      delete next.launchDraft
-      delete next.launchDraftCreatedAt
-      return next
-    })
-    return changed ? { ...snapshot, tabs } : snapshot
+    return this.clientEventPublishingCommands.applyNativeChatLaunchDraftResolutionFence(snapshot)
   }
 
   private reconcileNativeChatLaunchDraftResolutionTombstones(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): void {
-    for (const [tabId, resolution] of this.nativeChatLaunchDraftResolutionByTabId) {
-      if (!runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
-        continue
-      }
-      const surfaces = snapshot.tabs.filter(
-        (tab): tab is RuntimeMobileSessionTerminalTab =>
-          tab.type === 'terminal' && tab.parentTabId === tabId
-      )
-      if (
-        surfaces.length === 0 ||
-        !surfaces.some(
-          (tab) =>
-            tab.launchDraft === resolution.text && tab.launchDraftCreatedAt === resolution.createdAt
-        )
-      ) {
-        this.nativeChatLaunchDraftResolutionByTabId.delete(tabId)
-      }
-    }
+    this.clientEventPublishingCommands.reconcileNativeChatLaunchDraftResolutionTombstones(snapshot)
   }
 
   private notifyWorktreesChanged(repoId: string): void {
-    this.notifier?.worktreesChanged(repoId)
-    this.emitClientEvent({ type: 'worktreesChanged', repoId })
+    this.clientEventPublishingCommands.notifyWorktreesChanged(repoId)
   }
 
   /** Detail-level worktree lifecycle tap (plugin event bus). The coarse
@@ -6060,19 +5962,11 @@ export class OrcaRuntimeService {
   }
 
   private emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
-    for (const listener of this.worktreeLifecycleListeners) {
-      try {
-        listener(event)
-      } catch (err) {
-        console.error('[runtime] worktree lifecycle listener threw', err)
-      }
-    }
+    this.clientEventPublishingCommands.emitWorktreeLifecycle(event)
   }
 
   private notifyReposChanged(): void {
-    wakeFolderRepoGitUpgradeWatch()
-    this.notifier?.reposChanged()
-    this.emitClientEvent({ type: 'reposChanged' })
+    this.clientEventPublishingCommands.notifyReposChanged()
   }
 
   // Why: automation writes land in the automation service and IPC handlers, so
@@ -6133,49 +6027,19 @@ export class OrcaRuntimeService {
   }
 
   private bumpSshRelayRecoveryGeneration(targetId: string): number {
-    const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
-    this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
-    return generation
+    return this.clientEventPublishingCommands.bumpSshRelayRecoveryGeneration(targetId)
   }
 
   private async publishRecoveredSshMobileSessionTabs(
     targetId: string,
     generation: number
   ): Promise<void> {
-    const repoIds = new Set(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => repo.connectionId === targetId)
-        .map((repo) => repo.id)
+    await this.clientEventPublishingCommands.publishRecoveredSshMobileSessionTabs(
+      targetId,
+      generation
     )
-    if (repoIds.size === 0) {
-      return
-    }
-    const worktreeIds = new Set<string>()
-    for (const worktreeId of [
-      ...this.getKnownWorkspaceSessionWorktreeIds(),
-      ...this.mobileSessionTabsByWorktree.keys()
-    ]) {
-      const parsed = splitWorktreeId(worktreeId)
-      if (parsed && repoIds.has(parsed.repoId)) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-    if (worktreeIds.size === 0) {
-      return
-    }
-
-    // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
-    for (const worktreeId of worktreeIds) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
-    }
-    await this.refreshMobileSessionPtyRecords()
-    if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
-      return
-    }
-    for (const worktreeId of worktreeIds) {
+    // Update the mobile session tabs change sequence after recovery
+    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
       this.notifyMobileSessionTabsChangedNow(worktreeId, ++this.mobileSessionTabsChangeSequence)
     }
   }
@@ -6304,69 +6168,7 @@ export class OrcaRuntimeService {
   }
 
   private persistWindowlessPtyBindingsForDesktopAttach(): void {
-    if (!this.store?.getWorkspaceSession || !this.store.setWorkspaceSession) {
-      return
-    }
-    const partitions = new Map<
-      ExecutionHostId,
-      { session: WorkspaceSessionState; ptys: RuntimePtyWorktreeRecord[] }
-    >()
-    for (const pty of this.ptysById.values()) {
-      if (!pty.connected || !pty.tabId) {
-        continue
-      }
-      const hostId = this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
-      const session = this.store.getWorkspaceSession(hostId)
-      const tab = session.tabsByWorktree[pty.worktreeId]?.find(
-        (candidate) => candidate.id === pty.tabId
-      )
-      if (!tab) {
-        continue
-      }
-      const layoutPtyIds = Object.values(
-        session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
-      )
-      if (tab.ptyId !== pty.ptyId && !layoutPtyIds.includes(pty.ptyId)) {
-        continue
-      }
-      const partition = partitions.get(hostId) ?? { session, ptys: [] }
-      partition.ptys.push(pty)
-      partitions.set(hostId, partition)
-    }
-
-    for (const [hostId, { session, ptys }] of partitions) {
-      // Why: windowless SSH PTYs must be handed to the desktop through their SSH partition, never the local session.
-      const activeWorktreeIdsOnShutdown = [
-        ...new Set([
-          ...(session.activeWorktreeIdsOnShutdown ?? []),
-          ...ptys.map((pty) => pty.worktreeId)
-        ])
-      ]
-      const activeConnectionIdsAtShutdown = [
-        ...new Set([
-          ...(session.activeConnectionIdsAtShutdown ?? []),
-          ...ptys
-            .map((pty) => pty.connectionId)
-            .filter((connectionId): connectionId is string => connectionId !== null)
-        ])
-      ]
-      const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
-      for (const pty of ptys) {
-        if (pty.connectionId && pty.tabId) {
-          remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
-        }
-      }
-
-      this.store.setWorkspaceSession(
-        {
-          ...session,
-          activeWorktreeIdsOnShutdown,
-          ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
-          ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
-        },
-        hostId
-      )
-    }
+    this.clientEventPublishingCommands.persistWindowlessPtyBindingsForDesktopAttach()
   }
 
   syncWindowGraph(
@@ -28325,7 +28127,10 @@ export class OrcaRuntimeService {
     ptyIds: Iterable<string>,
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   ): string[] {
-    return [...new Set([...ptyIds].flatMap((ptyId) => terminalHandlesByPtyId[ptyId] ?? []))].sort()
+    return this.clientEventPublishingCommands.getRecordedTerminalSleepHandles(
+      ptyIds,
+      terminalHandlesByPtyId
+    )
   }
 
   private commitWorktreeTerminalSleepPtys(args: {
