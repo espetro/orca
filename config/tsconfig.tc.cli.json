@@ -2,6 +2,9 @@
   "extends": "./tsconfig.cli.json",
   "compilerOptions": {
     "module": "node16",
-    "moduleResolution": "node16"
+    "moduleResolution": "node16",
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./tc.cli.tsbuildinfo"
   }
 }

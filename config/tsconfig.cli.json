@@ -119,6 +119,9 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./cli.tsbuildinfo",
     // TypeScript 7 removed node10 resolution; Node16 preserves CommonJS emit for this package.
     "module": "Node16",
     "moduleResolution": "Node16",
