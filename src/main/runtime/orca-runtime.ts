@@ -20,9 +20,7 @@ import {
 } from '../../shared/agent-skill-sharing-gate'
 import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { RuntimeLinearCommands } from './runtime-linear-commands'
-import {
-  RuntimeProjectWorktreeCommands
-} from './runtime-project-worktree-commands'
+import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
@@ -191,9 +189,7 @@ import {
   type ProcessedAgentStatusChunk
 } from '../../shared/agent-status-osc'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
-import {
-  iterateTerminalInputChunks
-} from '../../shared/terminal-input'
+import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_SUBMIT,
@@ -214,7 +210,7 @@ import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fe
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir, hostname } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
@@ -287,27 +283,7 @@ import type {
 } from '../../shared/automation-owner-precondition'
 import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
-import type {
-  GitHubPRReviewCommentInput,
-  GitHubReactionContent
-} from '../../shared/github/comment-types'
-import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
-import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
-import type {
-  GitLabIssueUpdate,
-  GitLabMRInlineCommentInput,
-  GitLabMRUpdate,
-  GitLabProjectRef,
-  GitLabWorkItem,
-  MRListState
-} from '../../shared/gitlab-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type {
-  GitHubCreateIssueFields,
-  GitHubIssueUpdate,
-  GitHubPullRequestStateUpdate,
-} from '../../shared/issue-mutation-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -334,7 +310,7 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../shared/project-types'
-import type { BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repo-types'
 import type { Tab, TabGroupLayoutNode } from '../../shared/tab-types'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import type {
@@ -366,8 +342,6 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
-  DetectedWorktree,
-  DetectedWorktreeListResult,
   GitHubPrStartPoint,
   GitPushTarget,
   GitWorktreeInfo,
@@ -430,7 +404,6 @@ import {
   type RuntimeDegradation,
   type RuntimeDesktopWindowStatus,
   type RuntimeGraphStatus,
-  type RuntimeRepoSearchRefs,
   type RuntimeTerminalRead,
   type RuntimeTerminalRename,
   type RuntimeTerminalAgentStatus,
@@ -486,7 +459,6 @@ import {
   type RuntimeTerminalDriverState,
   type RuntimeRendererSyncWindowGraph,
   type RuntimeSyncWindowGraph,
-  type RuntimeWorktreeListResult,
   type BrowserTabInfo,
   type BrowserScreencastResult,
   UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
@@ -575,12 +547,10 @@ import {
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
-import {
-  isWindowsAbsolutePathLike, isPathInsideOrEqual
-} from '../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike, isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -595,18 +565,6 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
-import {
-  applyMetadataFallbackVisibility,
-  buildKnownOrcaWorkspaceLayouts,
-  isLegacyRepoForExternalWorktreeVisibility,
-  toDetectedWorktree
-} from '../../shared/worktree/ownership'
-import {
-  createWorktreeVisibilitySourceMatcher,
-  resolveCustomWorktreeVisibilitySources,
-  type WorktreeVisibilitySourceMatcher
-} from '../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -724,7 +682,6 @@ import {
 } from './mobile-session-tab-close-outcome'
 import type {
   PtyProviderBufferSnapshot,
-  IFilesystemProvider,
   IPtyProvider,
   PtyProcessInfo,
   PtySpawnResult,
@@ -745,7 +702,6 @@ import {
   addClaudeTeammateModeInProcess,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
-import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import type { BrowserWindow } from 'electron'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -754,42 +710,6 @@ import { RendererPublicationThrottle } from '../window/renderer-publication-thro
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { BrowserError } from '../browser/browser-error'
-import {
-  getPRForBranch,
-  getPRForBranchOutcome,
-  getRepoSlug,
-  getRepoUpstream,
-  getWorkItem,
-  listIssues as listGitHubIssues,
-  listWorkItems,
-  countWorkItems,
-  getPRChecks,
-  getPRCheckDetails,
-  rerunPRChecks,
-  getPRComments,
-  setPRCommentReaction,
-  getIssue,
-  resolveReviewThread,
-  setPRFileViewed,
-  getWorkItemByOwnerRepo,
-  updatePRTitle,
-  updatePRDetails,
-  mergePR,
-  markPRReadyForReview,
-  setPRAutoMerge,
-  updatePRState,
-  requestPRReviewers,
-  removePRReviewers,
-  createIssue,
-  updateIssue,
-  addIssueComment,
-  addPRReviewComment,
-  addPRReviewCommentReply,
-  listLabels,
-  listAssignableUsers,
-  type MainWorkItem,
-  type GitHubPRBranchLookupOptions
-} from '../github/client'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import {
   fetchGitHubPullRequestHeadRef,
@@ -804,57 +724,7 @@ import { isTransientReviewHeadFetchError } from '../git/fetch-error-classificati
 import { resolveGitHubReviewHeadRemote } from '../github/review-head-remote'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
-import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
-import { getRateLimit } from '../github/rate-limit'
-import {
-  closeMR as closeGitLabMR,
-  createIssue as createGitLabIssue,
-  diagnoseAuth as diagnoseGitLabAuthClient,
-  getJobTrace as getGitLabJobTrace,
-  getProjectRefForRemote as getGitLabProjectRefForRemote,
-  getRateLimit as getGitLabRateLimit,
-  getWorkItemByProjectRef as getGitLabWorkItemByProjectRef,
-  addIssueComment as addGitLabIssueComment,
-  addMRInlineComment as addGitLabMRInlineComment,
-  addMRComment as addGitLabMRComment,
-  listTodos as listGitLabTodos,
-  listIssues as listGitLabIssues,
-  listLabels as listGitLabLabels,
-  listMergeRequests as listGitLabMergeRequests,
-  listWorkItems as listGitLabWorkItems,
-  mergeMR as mergeGitLabMR,
-  reopenMR as reopenGitLabMR,
-  resolveMRDiscussion as resolveGitLabMRDiscussion,
-  retryJob as retryGitLabJob,
-  updateMR as updateGitLabMR,
-  updateMRReviewers as updateGitLabMRReviewers,
-  updateIssue as updateGitLabIssue
-} from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
-import { getWorkItemDetails as getGitLabWorkItemDetails } from '../gitlab/work-item-details'
-import {
-  normalizeGitLabIssueListArgs,
-  normalizeGitLabMRListState,
-  normalizeGitLabPositiveInteger,
-  type GitLabIssueListState
-} from '../gitlab/gitlab-preload-args'
-import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
-import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
-} from '../../shared/hosted-review'
-import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
-import {
-  createHostedReview as createHostedReviewFromRepo,
-  getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
-} from '../source-control/hosted-review-creation'
-import { createStackedHostedReview as createStackedHostedReviewFromRepo } from '../source-control/stacked-hosted-review-creation'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -877,7 +747,6 @@ import {
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
-import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
   getLocalWorktreePathAccess,
@@ -889,48 +758,16 @@ import {
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
 import {
-  clearProjectItemFieldValue,
-  getProjectViewTable,
-  getWorkItemDetailsBySlug,
-  listAccessibleProjects,
-  listProjectViews,
-  resolveProjectRef,
-  addIssueCommentBySlug,
-  deleteIssueCommentBySlug,
-  listAssignableUsersBySlug,
-  listIssueTypesBySlug,
-  listLabelsBySlug,
-  updateIssueCommentBySlug,
-  updateIssueBySlug,
-  updateIssueTypeBySlug,
-  updateProjectItemFieldValue,
-  updatePullRequestBySlug
-} from '../github/project-view'
-import type {
-  ClearProjectItemFieldArgs,
-  GetProjectViewTableArgs,
-  ListAccessibleProjectsArgs,
-  ListAssignableUsersBySlugArgs,
-  ListIssueTypesBySlugArgs,
-  ListLabelsBySlugArgs,
-  ListProjectViewsArgs,
-  ProjectWorkItemDetailsBySlugArgs,
-  ResolveProjectRefArgs,
-  AddIssueCommentBySlugArgs,
-  DeleteIssueCommentBySlugArgs,
-  UpdateIssueBySlugArgs,
-  UpdateIssueCommentBySlugArgs,
-  UpdateIssueTypeBySlugArgs,
-  UpdateProjectItemFieldArgs,
-  UpdatePullRequestBySlugArgs
-} from '../../shared/github/project-request-types'
-import {
-  getBaseRefDefault, getDefaultRemote, getBranchConflictKind, searchBaseRefDetails, getRemoteCount, normalizeRefSearchQuery, parseAndFilterSearchRefDetails, parseRemoteCount, resolveDefaultBaseRefViaExec, resolveDefaultBaseRefWithLocalGit, buildSearchBaseRefsArgv, isForEachRefExcludeUnsupportedError, mergeBaseRefSearchResultGroups, getRemoteDrift, getRecentDriftSubjects
+  getBaseRefDefault,
+  getDefaultRemote,
+  getBranchConflictKind,
+  resolveDefaultBaseRefWithLocalGit,
+  getRemoteDrift,
+  getRecentDriftSubjects
 } from '../git/repo'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -943,26 +780,10 @@ import {
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
-import {
-  getEffectiveHooks,
-  hasUnrecognizedOrcaYamlKeys,
-  hasHooksFile,
-  loadHooks,
-  parseOrcaYaml,
-  runHook
-} from '../hooks'
+import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
-import {
-  getDefaultTabCommandTrustContent,
-  getDefaultTabsLaunch,
-  getEffectiveSetupRunPolicy,
-  shouldRunSetupForCreate
-} from '../effective-hook-config'
-import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID, getDefaultVoiceSettings
-} from '../../shared/constants'
-import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
+import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultVoiceSettings } from '../../shared/constants'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -997,12 +818,9 @@ import {
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
 } from '../worktree-name-retirement'
-import {
-  createRetiredNameLookup,
-  type RetiredNameRegistry
-} from '../../shared/worktree/retired-name-registry'
+import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
-import type { PtyBindingSourceExpectation, Store } from '../persistence'
+import type { Store } from '../persistence'
 import { collectLayoutLeafIdsInOrder } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -1039,7 +857,6 @@ import {
   resolveWorktreeRemovalRepoOwner
 } from '../worktree-removal-repo-owner'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 import {
@@ -1061,7 +878,6 @@ import {
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
-import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
 import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
@@ -1097,14 +913,15 @@ import {
 } from './runtime-folder-workspace'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
-  assertFolderWorkspacePathUsable, getFolderWorkspacePathStatus, inferFolderWorkspacePathConnection
+  assertFolderWorkspacePathUsable,
+  getFolderWorkspacePathStatus,
+  inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
 import {
   getSshGitProvider,
   getSshGitProviderGeneration,
   requireSshGitProvider
 } from '../providers/ssh-git-dispatch'
-import { detectGitHubAvatarIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -2883,6 +2700,7 @@ export class OrcaRuntimeService {
   private readonly skillArtifactCommands: RuntimeSkillArtifactCommands
   private readonly skillInstallCommands: RuntimeSkillInstallCommands
   private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
+  private readonly repoGitCommands: RuntimeRepoGitCommandsFacade
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3667,10 +3485,32 @@ export class OrcaRuntimeService {
       store: this.store,
       notifyReposChanged: () => this.notifyReposChanged(),
       invalidateResolvedWorktreeCache: () => this.invalidateResolvedWorktreeCache(),
-      invalidateWorktreeScanCacheForRepo: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+      invalidateWorktreeScanCacheForRepo: (repoId) =>
+        this.invalidateWorktreeScanCacheForRepo(repoId),
       listProjectHostSetups: () => this.listProjectHostSetups(),
       resolveRepoSelector: (selector) => this.resolveRepoSelector(selector),
       cloneInFlightByPath: this.cloneInFlightByPath
+    })
+    this.repoGitCommands = new RuntimeRepoGitCommandsFacade({
+      store: this.store,
+      stats: this.statsCollector,
+      ptyController: null,
+      terminalTopologyRevisionByRepoId: this.terminalTopologyRevisionByRepoId,
+      getSshProviderFn: this.getSshProviderFn,
+      onPtyStopped: null,
+      resolveRepoSelector: (selector) => this.resolveRepoSelector(selector),
+      selectReposBySelector: (selector) => this.selectReposBySelector(selector),
+      requireStore: () => this.requireStore(),
+      notifyReposChanged: () => this.notifyReposChanged(),
+      invalidateResolvedWorktreeCache: () => this.invalidateResolvedWorktreeCache(),
+      invalidateWorktreeScanCacheForRepo: (repoId) =>
+        this.invalidateWorktreeScanCacheForRepo(repoId),
+      resolveLiveLeafForHandle: (handle) => this.resolveLiveLeafForHandle(handle),
+      resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+      listResolvedWorktrees: () => this.listResolvedWorktrees(),
+      listRepoWorktreesForResolution: (repo, projectRuntimeByRepoId) =>
+        this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+      getLocalProvider: () => this.getLocalProvider()
     })
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
@@ -5126,7 +4966,11 @@ export class OrcaRuntimeService {
     discoveredSkills: readonly DiscoveredSkill[],
     signal?: AbortSignal
   ): Promise<AgentSkillShareOperation> {
-    return this.skillArtifactCommands.publishDiscoveredSkillsFromAgent(request, discoveredSkills, signal)
+    return this.skillArtifactCommands.publishDiscoveredSkillsFromAgent(
+      request,
+      discoveredSkills,
+      signal
+    )
   }
 
   publishSkillPackage(
@@ -5328,7 +5172,6 @@ export class OrcaRuntimeService {
   async disposeSkillUploadSessions(): Promise<void> {
     await this.skillArtifactCommands.disposeSkillUploadSessions()
   }
-
 
   getRuntimeId(): string {
     return this.runtimeId
@@ -22109,2145 +21952,245 @@ export class OrcaRuntimeService {
     return this.projectWorktreeCommands.cloneRepo(url, destination, executionHostId)
   }
 
-  async showRepo(repoSelector: string): Promise<Repo> {
-    return await this.resolveRepoSelector(repoSelector)
-  }
-
-  async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      throw new Error('Folder mode does not support base refs.')
-    }
-    const updated = this.store.updateRepo(repo.id, { worktreeBaseRef: baseRef })
-    if (!updated) {
-      throw new Error('repo_not_found')
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyReposChanged()
-    return updated
-  }
-
-  async updateRepo(
-    repoSelector: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'repoIcon'
-        | 'upstream'
-        | 'hookSettings'
-        | 'worktreeBaseRef'
-        | 'worktreeBasePath'
-        | 'kind'
-        | 'symlinkPaths'
-        | 'issueSourcePreference'
-        | 'externalWorktreeVisibilityPromptDismissedAt'
-        | 'externalWorktreeInboxBaselinePaths'
-        | 'importedExternalWorktreePaths'
-        | 'agentWorktreeVisibility'
-        | 'customWorktreeVisibilitySources'
-        | 'worktreeVisibilitySourcePreferences'
-        | 'projectGroupId'
-        | 'projectGroupOrder'
-      >
-    > & {
-      externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-      sourceControlAi?: Repo['sourceControlAi'] | null
-      externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-    }
-  ): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const sanitizedUpdates = omitUndefinedProperties(updates)
-    if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
-      sanitizedUpdates.worktreeBasePath = undefined
-    }
-    if ('externalWorktreeVisibility' in updates && updates.externalWorktreeVisibility === null) {
-      sanitizedUpdates.externalWorktreeVisibility = undefined
-    }
-    if (
-      'externalWorktreeDiscoverySuppressedAt' in updates &&
-      updates.externalWorktreeDiscoverySuppressedAt === null
-    ) {
-      sanitizedUpdates.externalWorktreeDiscoverySuppressedAt = undefined
-    }
-    if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
-      sanitizedUpdates.sourceControlAi = null
-    }
-    const updated = this.store.updateRepo(repo.id, sanitizedUpdates)
-    if (!updated) {
-      throw new Error('repo_not_found')
-    }
-    if ('worktreeBasePath' in updates) {
-      await prepareLocalWorktreeRootForRepo(this.store, updated)
-      invalidateAuthorizedRootsCache()
-    }
-    this.invalidateResolvedWorktreeCache()
-    if ('worktreeBasePath' in updates) {
-      this.invalidateWorktreeScanCacheForRepo(repo.id)
-    }
-    this.notifyReposChanged()
-    return updated
-  }
-
-  async removeProject(repoSelector: string): Promise<{ removed: true }> {
-    if (!this.store?.removeProject) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    // Why: removeProject is id-only, but the same id may be registered on a sibling
-    // execution host; a path:/name: selector resolves one row and must remove only it.
-    const hostId = getRepoExecutionHostId(repo)
-    const idExistsOnOtherHost = this.store
-      .getRepos()
-      .some((entry) => entry.id === repo.id && getRepoExecutionHostId(entry) !== hostId)
-    if (idExistsOnOtherHost) {
-      if (!this.store.removeProjectForHost) {
-        throw new Error('runtime_unavailable')
-      }
-      this.store.removeProjectForHost(repo.id, hostId)
-    } else {
-      this.store.removeProject(repo.id)
-    }
-    this.terminalTopologyRevisionByRepoId.delete(repo.id)
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    invalidateAuthorizedRootsCache()
-    this.notifyReposChanged()
-    return { removed: true }
-  }
-
-  async inspectTerminalProcess(
-    terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
-    const leaf = this.resolveLiveLeafForHandle(terminalSelector)
-    if (!leaf?.ptyId || !this.ptyController) {
-      throw new Error('terminal_gone')
-    }
-    if (this.ptyController.inspectProcess) {
-      return this.ptyController.inspectProcess(leaf.ptyId)
-    }
-    const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
-    const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false
-    return { foregroundProcess, hasChildProcesses }
-  }
-
-  reorderRepos(orderedIds: string[]): { status: 'applied' | 'rejected' } {
-    if (!this.store?.reorderRepos) {
-      throw new Error('runtime_unavailable')
-    }
-    // Why: remote clients can race repo add/remove on the server just like
-    // local drag-reorder can race another window. Let the store validate the
-    // full permutation and signal a resync-worthy rejection.
-    const applied = this.store.reorderRepos(orderedIds)
-    if (!applied) {
-      return { status: 'rejected' }
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyReposChanged()
-    return { status: 'applied' }
-  }
-
-  async searchRepoRefs(
-    repoSelector: string,
-    query: string,
-    limit = DEFAULT_REPO_SEARCH_REFS_LIMIT
-  ): Promise<RuntimeRepoSearchRefs> {
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new Error('invalid_limit')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return {
-        refs: [],
-        truncated: false
-      }
-    }
-    const refDetails = repo.connectionId
-      ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
-      : await searchBaseRefDetails(repo.path, query, limit + 1)
-    return {
-      refs: refDetails.slice(0, limit).map((entry) => entry.refName),
-      refDetails: refDetails.slice(0, limit),
-      truncated: refDetails.length > limit
-    }
-  }
-
-  async getRepoBaseRefDefault(
-    repoSelector: string
-  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return { defaultBaseRef: null, remoteCount: 0 }
-    }
-    if (repo.connectionId) {
-      return this.getRemoteRepoBaseRefDefault(repo)
-    }
-    const [defaultBaseRef, remoteCount] = await Promise.all([
-      getBaseRefDefault(repo.path),
-      getRemoteCount(repo.path)
-    ])
-    return { defaultBaseRef, remoteCount }
-  }
-
-  private async getRemoteRepoBaseRefDefault(
-    repo: Repo
-  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
-    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-    if (!provider) {
-      return { defaultBaseRef: null, remoteCount: 0 }
-    }
-    const [defaultBaseRef, remoteCount] = await Promise.all([
-      resolveDefaultBaseRefViaExec(async (argv) => {
-        try {
-          return await provider.exec(argv, repo.path)
-        } catch (err) {
-          if (argv[0] === 'symbolic-ref') {
-            console.warn('[runtime:repo.baseRefDefault] SSH symbolic-ref failed', {
-              path: repo.path,
-              err
-            })
-          }
-          throw err
-        }
-      }),
-      provider
-        .exec(['remote'], repo.path)
-        .then((result) => parseRemoteCount(result.stdout))
-        .catch((err) => {
-          console.warn('[runtime:repo.baseRefDefault] SSH git remote count failed', {
-            path: repo.path,
-            err
-          })
-          return 0
-        })
-    ])
-    return { defaultBaseRef, remoteCount }
-  }
-
-  private async searchRemoteRepoRefs(
-    repo: Repo,
-    query: string,
-    limit: number
-  ): Promise<BaseRefSearchResult[]> {
-    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-    if (!provider) {
-      return []
-    }
-    const normalizedQuery = normalizeRefSearchQuery(query)
-    try {
-      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      const remotes = remotesResult.stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-      const capabilities = getSshGitCapabilityCache(provider)
-      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        return capabilities.runWithFallback(
-          'for-each-ref-exclude',
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  excludeRemoteHead: false,
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          isForEachRefExcludeUnsupportedError
-        )
-      }
-      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
-      if (searchTokens.length > 1) {
-        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
-        return mergeBaseRefSearchResultGroups(
-          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
-          limit
-        )
-      }
-      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
-    } catch (err) {
-      console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
-        path: repo.path,
-        err
-      })
-      return []
-    }
-  }
-
-  private async resolveHostedReviewTarget(args: {
-    repoSelector: string
-    worktreeSelector?: string
-  }): Promise<{ repo: Repo; repoPath: string }> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
-    if (!args.worktreeSelector) {
-      return { repo, repoPath: repo.path }
-    }
-
-    const worktree = await this.resolveWorktreeSelector(args.worktreeSelector)
-    if (worktree.repoId !== repo.id) {
-      throw new Error('Access denied: worktree does not belong to repository')
-    }
-    return { repo, repoPath: worktree.path }
-  }
-
-  private getHostedReviewExecutionOptions(
-    repo: Repo
-  ): { localGitExecOptions: { wslDistro?: string } } | undefined {
-    const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0] ?? {}
-    return Object.keys(localGitOptions).length > 0
-      ? { localGitExecOptions: localGitOptions }
-      : undefined
-  }
-
-  private getLocalGitExecutionOptionArgs(repo: Repo): [] | [{ wslDistro?: string }] {
-    const localGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-    return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
-  }
-
-  private getAgentLaunchPlatformForRepo(repo: Repo): NodeJS.Platform {
-    const projectRuntime = repo.connectionId
-      ? undefined
-      : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-    return getAgentLaunchPlatformForRepo(repo, projectRuntime)
-  }
-
-  private getAgentLaunchPlatformForWorkspace(scope: TerminalWorkspaceLaunchScope): NodeJS.Platform {
-    if (scope.repo) {
-      return this.getAgentLaunchPlatformForRepo(scope.repo)
-    }
-    if (scope.connectionId) {
-      return isWindowsAbsolutePathLike(scope.path) ? 'win32' : 'linux'
-    }
-    return isWslUncPath(scope.path) ? 'linux' : process.platform
-  }
-
-  async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const options = this.getHostedReviewExecutionOptions(repo)
-    return options
-      ? getRepoSlug(repo.path, repo.connectionId ?? null, options)
-      : getRepoSlug(repo.path, repo.connectionId ?? null)
-  }
-
-  async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const options = this.getHostedReviewExecutionOptions(repo)
-    return options
-      ? getRepoUpstream(repo.path, repo.connectionId ?? null, options)
-      : getRepoUpstream(repo.path, repo.connectionId ?? null)
-  }
-
-  // Why: repos added before fork detection existed have no stored `upstream`, so
-  // their avatar/badge would never self-correct. Resolve it once at startup for
-  // local git repos; SSH repos resolve lazily when their settings open (their
-  // connection may not be up yet). Sequential to respect the gh rate limit;
-  // failures leave `upstream` unset so the next launch retries.
-  private async backfillForkUpstreams(): Promise<void> {
-    try {
-      const store = this.requireStore()
-      let changed = false
-      for (const repo of store.getRepos()) {
-        if (repo.upstream !== undefined || repo.kind === 'folder' || repo.connectionId) {
-          continue
-        }
-        let upstream: GitHubOwnerRepo | null
-        try {
-          upstream = await getRepoUpstream(repo.path, null)
-        } catch {
-          continue
-        }
-        const repoIcon =
-          upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
-            ? await detectGitHubAvatarIcon(repo.path, null, upstream)
-            : null
-        // Why: settings can change the repo while the probes above are pending, so
-        // re-read it — a stale snapshot must not clobber a user-chosen icon or an
-        // upstream another path already resolved.
-        const current = store.getRepos().find((candidate) => candidate.id === repo.id)
-        if (!current || current.upstream !== undefined) {
-          continue
-        }
-        const updates: Partial<Repo> = { upstream: upstream ?? null }
-        // Only migrate the auto-detected origin avatar; never touch a chosen icon.
-        if (
-          repoIcon &&
-          current.repoIcon?.type === 'image' &&
-          current.repoIcon.source === 'github'
-        ) {
-          updates.repoIcon = repoIcon
-        }
-        store.updateRepo(repo.id, updates)
-        changed = true
-      }
-      if (changed) {
-        this.notifyReposChanged()
-      }
-    } catch {
-      // Best-effort startup backfill; never disrupt launch.
-    }
-  }
-
-  async listRepoWorkItems(
-    repoSelector: string,
-    limit?: number,
-    query?: string,
-    page?: number,
-    noCache?: boolean
-  ): Promise<ListWorkItemsResult<MainWorkItem>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listWorkItems(
-      repo.path,
-      limit,
-      query,
-      page,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      noCache,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listRepoIssues(
-    repoSelector: string,
-    limit?: number
-  ): Promise<Awaited<ReturnType<typeof listGitHubIssues>>['items']> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const result = await listGitHubIssues(
-      repo.path,
-      limit,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-    return result.items
-  }
-
-  async getRepoWorkItem(
-    repoSelector: string,
-    number: number,
-    type?: 'issue' | 'pr'
-  ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    // Why: open-by-number must pin the same source the list and start-point use,
-    // else a fork and its upstream sharing a PR number resolve to different PRs.
-    return getWorkItem(
-      repo.path,
-      number,
-      type,
-      repo.connectionId ?? null,
-      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
-      repo.issueSourcePreference
-    )
-  }
-
-  async getRepoWorkItemByOwnerRepo(
-    repoSelector: string,
-    ownerRepo: { owner: string; repo: string; host?: string },
-    number: number,
-    type: 'issue' | 'pr'
-  ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getWorkItemByOwnerRepo(
-      repo.path,
-      ownerRepo,
-      number,
-      type,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoWorkItemDetails(
-    repoSelector: string,
-    number: number,
-    type?: 'issue' | 'pr'
-  ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getWorkItemDetails(
-      repo.path,
-      number,
-      type,
-      repo.connectionId ?? null,
-      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
-      repo.issueSourcePreference
-    )
-  }
-
-  async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return countWorkItems(
-      repo.path,
-      query,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listRepoLabels(repoSelector: string): Promise<Awaited<ReturnType<typeof listLabels>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listRepoAssignableUsers(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listAssignableUsers(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  getGitHubRateLimit(options?: {
-    force?: boolean
-  }): Promise<Awaited<ReturnType<typeof getRateLimit>>> {
-    return getRateLimit(options)
-  }
-
-  async getRepoPRForBranch(
-    repoSelector: string,
-    branch: string,
-    linkedPRNumber?: number | null,
-    fallbackPRNumber?: number | null,
-    acceptMergedFallbackPR?: boolean,
-    currentHeadOid?: string | null
-  ): Promise<PRRefreshOutcome> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const options: GitHubPRBranchLookupOptions = this.getHostedReviewExecutionOptions(repo) ?? {}
-    const lookupOptions = { ...options }
-    if (acceptMergedFallbackPR === true) {
-      lookupOptions.acceptMergedFallbackPR = true
-    }
-    if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
-      lookupOptions.currentHeadOid = currentHeadOid.trim()
-    }
-    const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
-      Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
-    // Why: return the full classified outcome (not PRInfo|null) so a runtime gh
-    // auth/network failure crosses the RPC as `upstream-error` instead of
-    // collapsing to `null`, which the renderer would otherwise cache as a false
-    // accepted "no PR found" (design success criterion 1).
-    return getPRForBranchOutcome(
-      repo.path,
-      branch,
-      linkedPRNumber ?? null,
-      repo.connectionId ?? null,
-      linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      ...lookupOptionArgs
-    )
-  }
-
-  async getHostedReviewForBranch(args: {
-    repoSelector: string
-    branch: string
-    currentHeadOid?: string | null
-    active?: boolean
-    linkedGitHubPR?: number | null
-    fallbackGitHubPR?: number | null
-    linkedGitLabMR?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
-  }): Promise<HostedReviewInfo | null> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const review = await getHostedReviewForBranchFromRepo({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      branch: args.branch,
-      currentHeadOid: args.currentHeadOid ?? null,
-      ...(args.active === true ? { active: true } : {}),
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      ...executionOptions
-    })
-    if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
-      this.stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: review.number, prUrl: review.url }
-      })
-    }
-    return review
-  }
-
-  async getHostedReviewCreationEligibility(
-    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & {
-      repoSelector: string
-      worktreeSelector?: string
-    }
-  ): Promise<HostedReviewCreationEligibility> {
-    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    return getHostedReviewCreationEligibilityFromRepo({
-      repoPath,
-      connectionId: repo.connectionId ?? null,
-      branch: args.branch,
-      base: args.base ?? null,
-      hasUncommittedChanges: args.hasUncommittedChanges,
-      hasUpstream: args.hasUpstream,
-      ahead: args.ahead,
-      behind: args.behind,
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      ...executionOptions
-    })
-  }
-
-  async createHostedReview(
-    args: CreateHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
-  ): Promise<CreateHostedReviewResult> {
-    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const input = {
-      provider: args.provider,
-      base: args.base,
-      head: args.head,
-      title: args.title,
-      body: args.body,
-      draft: args.draft,
-      ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
-    }
-    const result = executionOptions
-      ? await createHostedReviewFromRepo(
-          repoPath,
-          input,
-          repo.connectionId ?? null,
-          executionOptions
-        )
-      : await createHostedReviewFromRepo(repoPath, input, repo.connectionId ?? null)
-    if (result.ok && this.stats && !this.stats.hasCountedPR(result.url)) {
-      this.stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: result.number, prUrl: result.url }
-      })
-    }
-    return result
-  }
-
-  async createStackedHostedReview(
-    args: CreateStackedHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
-  ): Promise<CreateStackedHostedReviewResult> {
-    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const result = await createStackedHostedReviewFromRepo(
-      repoPath,
-      {
-        provider: args.provider,
-        base: args.base,
-        head: args.head,
-        title: args.title,
-        body: args.body,
-        draft: args.draft,
-        ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
-      },
-      repo.connectionId ?? null,
-      executionOptions ?? {}
-    )
-    if (result.ok && this.stats && !this.stats.hasCountedPR(result.url)) {
-      this.stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: result.number, prUrl: result.url }
-      })
-    }
-    return result
-  }
-
-  async listGitLabRepoWorkItems(
-    repoSelector: string,
-    state?: MRListState,
-    page?: number,
-    perPage?: number,
-    query?: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabWorkItems>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabWorkItems(
-      repo.path,
-      state ?? 'opened',
-      page ?? 1,
-      perPage ?? 20,
-      repo.issueSourcePreference,
-      query,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitLabRepoMRs(
-    repoSelector: string,
-    state?: MRListState,
-    page?: number,
-    perPage?: number,
-    query?: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabMergeRequests>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabMergeRequests(
-      repo.path,
-      normalizeGitLabMRListState(state),
-      normalizeGitLabPositiveInteger(page, 1, 10_000),
-      normalizeGitLabPositiveInteger(perPage, 20, 100),
-      repo.issueSourcePreference,
-      query,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitLabRepoIssues(
-    repoSelector: string,
-    state?: GitLabIssueListState,
-    assignee?: string,
-    limit?: number,
-    page?: number
-  ): Promise<{
-    items: GitLabWorkItem[]
-    totalPages: number
-    error?: Awaited<ReturnType<typeof listGitLabIssues>>['error']
-  }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
-    // Why: page is after localGitOptions; never spread optional args before it (#13538).
-    const result = await listGitLabIssues(
-      repo.path,
-      normalized.limit,
-      repo.issueSourcePreference,
-      normalized.state,
-      normalized.assignee,
-      repo.connectionId ?? null,
-      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
-      normalized.page
-    )
-    // Why: web runtime mirrors the desktop preload contract, where GitLab
-    // issue rows share the GitLabWorkItem shape with MRs on TaskPage.
-    const items: GitLabWorkItem[] = result.items.map((issue) => ({
-      id: `gitlab-issue-${repo.id}-${issue.number}`,
-      type: 'issue' as const,
-      number: issue.number,
-      title: issue.title,
-      state: issue.state,
-      url: issue.url,
-      labels: issue.labels,
-      updatedAt: issue.updatedAt ?? '',
-      author: issue.author ?? null,
-      repoId: repo.id
-    }))
-    return {
-      items,
-      totalPages: result.totalPages,
-      ...(result.error ? { error: result.error } : {})
-    }
-  }
-
-  async listGitLabRepoTodos(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabTodos>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabTodos(
-      repo.path,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async diagnoseGitLabAuth(): Promise<Awaited<ReturnType<typeof diagnoseGitLabAuthClient>>> {
-    return diagnoseGitLabAuthClient()
-  }
-
-  async getGitLabRateLimit(options?: {
-    force?: boolean
-    host?: string | null
-  }): Promise<Awaited<ReturnType<typeof getGitLabRateLimit>>> {
-    return getGitLabRateLimit(options)
-  }
-
-  async listGitLabRepoLabels(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabLabels>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async createGitLabRepoIssue(
-    repoSelector: string,
-    title: string,
-    body: string
-  ): Promise<Awaited<ReturnType<typeof createGitLabIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return createGitLabIssue(
-      repo.path,
-      title,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoIssue(
-    repoSelector: string,
-    number: number,
-    updates: GitLabIssueUpdate,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabIssue(
-      repo.path,
-      number,
-      updates,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoIssueComment(
-    repoSelector: string,
-    number: number,
-    body: string,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabIssueComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabIssueComment(
-      repo.path,
-      number,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoMRComment(
-    repoSelector: string,
-    iid: number,
-    body: string,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabMRComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabMRComment(
-      repo.path,
-      iid,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoMRInlineComment(
-    repoSelector: string,
-    iid: number,
-    input: GitLabMRInlineCommentInput,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabMRInlineComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabMRInlineComment(
-      repo.path,
-      iid,
-      input,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async resolveGitLabRepoMRDiscussion(
-    repoSelector: string,
-    iid: number,
-    discussionId: string,
-    resolved: boolean,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof resolveGitLabMRDiscussion>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return resolveGitLabMRDiscussion(
-      repo.path,
-      iid,
-      discussionId,
-      resolved,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoJobTrace(
-    repoSelector: string,
-    jobId: number,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof getGitLabJobTrace>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getGitLabJobTrace(
-      repo.path,
-      jobId,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async retryGitLabRepoJob(
-    repoSelector: string,
-    jobId: number,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof retryGitLabJob>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return retryGitLabJob(
-      repo.path,
-      jobId,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async mergeGitLabRepoMR(
-    repoSelector: string,
-    iid: number,
-    method?: 'merge' | 'squash' | 'rebase',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof mergeGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return mergeGitLabMR(
-      repo.path,
-      iid,
-      method ?? 'merge',
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoMRState(
-    repoSelector: string,
-    iid: number,
-    state: 'opened' | 'closed',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof closeGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return state === 'closed'
-      ? closeGitLabMR(
-          repo.path,
-          iid,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          projectRef,
-          ...this.getLocalGitExecutionOptionArgs(repo)
-        )
-      : reopenGitLabMR(
-          repo.path,
-          iid,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          projectRef,
-          ...this.getLocalGitExecutionOptionArgs(repo)
-        )
-  }
-
-  async updateGitLabRepoMR(
-    repoSelector: string,
-    iid: number,
-    updates: GitLabMRUpdate,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabMR(
-      repo.path,
-      iid,
-      updates,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoMRReviewers(
-    repoSelector: string,
-    iid: number,
-    reviewerIds: number[],
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabMRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabMRReviewers(
-      repo.path,
-      iid,
-      reviewerIds,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoWorkItemDetails(
-    repoSelector: string,
-    iid: number,
-    type: 'issue' | 'mr',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getGitLabWorkItemDetails(
-      repo.path,
-      iid,
-      type,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoWorkItemByPath(
-    repoSelector: string,
-    projectRef: GitLabProjectRef,
-    iid: number,
-    type: 'issue' | 'mr'
-  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemByProjectRef>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const result = await getGitLabWorkItemByProjectRef(
-      repo.path,
-      projectRef,
-      iid,
-      type,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-    // Why: remote pasted-URL lookups should update GitLab recents exactly
-    // like the desktop IPC path, but only after a successful lookup.
-    if (result && this.store?.updateSettings) {
-      const store = this.store
-      recordGitLabProjectRecent(
-        {
-          getSettings: () => store.getSettings(),
-          updateSettings: (updates) => store.updateSettings?.(updates)
-        },
-        projectRef.host,
-        projectRef.path
-      )
-    }
-    return result
-  }
-
-  async getRepoIssue(
-    repoSelector: string,
-    number: number
-  ): Promise<Awaited<ReturnType<typeof getIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getIssue(
-      repo.path,
-      number,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoPRChecks(
-    repoSelector: string,
-    prNumber: number,
-    headSha?: string,
-    prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean }
-  ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getPRChecks(
-      repo.path,
-      prNumber,
-      headSha,
-      prRepo ?? null,
-      options,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async rerunRepoPRChecks(
-    repoSelector: string,
-    prNumber: number,
-    options?: {
-      headSha?: string
-      failedOnly?: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }
-  ): Promise<Awaited<ReturnType<typeof rerunPRChecks>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return rerunPRChecks(
-      repo.path,
-      prNumber,
-      options,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoPRCheckDetails(
-    repoSelector: string,
-    args: {
-      checkRunId?: number
-      workflowRunId?: number
-      checkName?: string
-      url?: string | null
-      prRepo?: GitHubOwnerRepo | null
-    },
-    signal?: AbortSignal
-  ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0] ?? {}
-    return getPRCheckDetails(
-      repo.path,
-      { ...args, prRepo: args.prRepo ?? null },
-      repo.connectionId ?? null,
-      localGitOptions,
-      signal
-    )
-  }
-
-  async getRepoPRComments(
-    repoSelector: string,
-    prNumber: number,
-    prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean }
-  ): Promise<Awaited<ReturnType<typeof getPRComments>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getPRComments(
-      repo.path,
-      prNumber,
-      { ...options, prRepo: prRepo ?? null },
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async setRepoPRCommentReaction(
-    repoSelector: string,
-    reactionSubjectId: string,
-    content: GitHubReactionContent,
-    reacted: boolean,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof setPRCommentReaction>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return setPRCommentReaction(
-      repo.path,
-      reactionSubjectId,
-      content,
-      reacted,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoPRFileContents(
-    repoSelector: string,
-    args: {
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-      path: string
-      oldPath?: string
-      status: GitHubPRFile['status']
-      headSha: string
-      baseSha: string
-    }
-  ): Promise<Awaited<ReturnType<typeof getPRFileContents>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getPRFileContents({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      localGitOptions: this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...args
-    })
-  }
-
-  async resolveRepoReviewThread(
-    repoSelector: string,
-    threadId: string,
-    resolve: boolean,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof resolveReviewThread>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return resolveReviewThread(
-      repo.path,
-      threadId,
-      resolve,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async setRepoPRFileViewed(
-    repoSelector: string,
-    args: {
-      prRepo?: GitHubOwnerRepo | null
-      pullRequestId: string
-      path: string
-      viewed: boolean
-    }
-  ): Promise<Awaited<ReturnType<typeof setPRFileViewed>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return setPRFileViewed({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      localGitOptions: this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...args
-    })
-  }
-
-  async updateRepoPRTitle(
-    repoSelector: string,
-    prNumber: number,
-    title: string,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof updatePRTitle>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updatePRTitle(
-      repo.path,
-      prNumber,
-      title,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateRepoPRDetails(
-    repoSelector: string,
-    prNumber: number,
-    updates: { title?: string; body?: string },
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof updatePRDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updatePRDetails(
-      repo.path,
-      prNumber,
-      updates,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async mergeRepoPR(
-    repoSelector: string,
-    prNumber: number,
-    method?: 'merge' | 'squash' | 'rebase',
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof mergePR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return mergePR(
-      repo.path,
-      prNumber,
-      method,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async setRepoPRAutoMerge(
-    repoSelector: string,
-    prNumber: number,
-    enabled: boolean,
-    method?: 'merge' | 'squash' | 'rebase',
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return setPRAutoMerge(
-      repo.path,
-      prNumber,
-      enabled,
-      method,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async markRepoPRReadyForReview(
-    repoSelector: string,
-    prNumber: number,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof markPRReadyForReview>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return markPRReadyForReview(
-      repo.path,
-      prNumber,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateRepoPRState(
-    repoSelector: string,
-    prNumber: number,
-    updates: GitHubPullRequestStateUpdate,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof updatePRState>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updatePRState(
-      repo.path,
-      prNumber,
-      updates,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async requestRepoPRReviewers(
-    repoSelector: string,
-    prNumber: number,
-    reviewers: string[],
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof requestPRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return requestPRReviewers(
-      repo.path,
-      prNumber,
-      reviewers,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async removeRepoPRReviewers(
-    repoSelector: string,
-    prNumber: number,
-    reviewers: string[],
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof removePRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return removePRReviewers(
-      repo.path,
-      prNumber,
-      reviewers,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async createRepoIssue(
-    repoSelector: string,
-    title: string,
-    body: string,
-    fields?: GitHubCreateIssueFields
-  ): Promise<Awaited<ReturnType<typeof createIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return createIssue(
-      repo.path,
-      title,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      fields,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateRepoIssue(
-    repoSelector: string,
-    number: number,
-    updates: GitHubIssueUpdate
-  ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateIssue(
-      repo.path,
-      number,
-      updates,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addRepoIssueComment(
-    repoSelector: string,
-    number: number,
-    body: string,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addIssueComment(
-      repo.path,
-      number,
-      body,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addRepoPRReviewComment(
-    repoSelector: string,
-    args: Omit<GitHubPRReviewCommentInput, 'repoPath'>
-  ): Promise<Awaited<ReturnType<typeof addPRReviewComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addPRReviewComment({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      localGitOptions: this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...args
-    })
-  }
-
-  async addRepoPRReviewCommentReply(
-    repoSelector: string,
-    args: {
-      prNumber: number
-      commentId: number
-      body: string
-      threadId?: string
-      path?: string
-      line?: number
-      prRepo?: GitHubOwnerRepo | null
-    }
-  ): Promise<Awaited<ReturnType<typeof addPRReviewCommentReply>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addPRReviewCommentReply(
-      repo.path,
-      args.prNumber,
-      args.commentId,
-      args.body,
-      args.threadId,
-      args.path,
-      args.line,
-      repo.connectionId ?? null,
-      args.prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitHubProjects(
-    args?: ListAccessibleProjectsArgs
-  ): Promise<Awaited<ReturnType<typeof listAccessibleProjects>>> {
-    return listAccessibleProjects(args)
-  }
-
-  async listGitHubLabelsBySlug(
-    args: ListLabelsBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof listLabelsBySlug>>> {
-    return listLabelsBySlug(args)
-  }
-
-  async listGitHubAssignableUsersBySlug(
-    args: ListAssignableUsersBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof listAssignableUsersBySlug>>> {
-    return listAssignableUsersBySlug(args)
-  }
-
-  async listGitHubIssueTypesBySlug(
-    args: ListIssueTypesBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof listIssueTypesBySlug>>> {
-    return listIssueTypesBySlug(args)
-  }
-
-  async resolveGitHubProjectRef(
-    args: ResolveProjectRefArgs
-  ): Promise<Awaited<ReturnType<typeof resolveProjectRef>>> {
-    return resolveProjectRef(args)
-  }
-
-  async listGitHubProjectViews(
-    args: ListProjectViewsArgs
-  ): Promise<Awaited<ReturnType<typeof listProjectViews>>> {
-    return listProjectViews(args)
-  }
-
-  async getGitHubProjectViewTable(
-    args: GetProjectViewTableArgs
-  ): Promise<Awaited<ReturnType<typeof getProjectViewTable>>> {
-    return getProjectViewTable(args)
-  }
-
-  async getGitHubProjectWorkItemDetailsBySlug(
-    args: ProjectWorkItemDetailsBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof getWorkItemDetailsBySlug>>> {
-    return getWorkItemDetailsBySlug(args)
-  }
-
-  async updateGitHubProjectItemField(
-    args: UpdateProjectItemFieldArgs
-  ): Promise<Awaited<ReturnType<typeof updateProjectItemFieldValue>>> {
-    return updateProjectItemFieldValue(args)
-  }
-
-  async clearGitHubProjectItemField(
-    args: ClearProjectItemFieldArgs
-  ): Promise<Awaited<ReturnType<typeof clearProjectItemFieldValue>>> {
-    return clearProjectItemFieldValue(args)
-  }
-
-  async updateGitHubIssueBySlug(
-    args: UpdateIssueBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updateIssueBySlug>>> {
-    return updateIssueBySlug(args)
-  }
-
-  async updateGitHubPullRequestBySlug(
-    args: UpdatePullRequestBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updatePullRequestBySlug>>> {
-    return updatePullRequestBySlug(args)
-  }
-
-  async updateGitHubIssueTypeBySlug(
-    args: UpdateIssueTypeBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updateIssueTypeBySlug>>> {
-    return updateIssueTypeBySlug(args)
-  }
-
-  async addGitHubIssueCommentBySlug(
-    args: AddIssueCommentBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof addIssueCommentBySlug>>> {
-    return addIssueCommentBySlug(args)
-  }
-
-  async updateGitHubIssueCommentBySlug(
-    args: UpdateIssueCommentBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updateIssueCommentBySlug>>> {
-    return updateIssueCommentBySlug(args)
-  }
-
-  async deleteGitHubIssueCommentBySlug(
-    args: DeleteIssueCommentBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof deleteIssueCommentBySlug>>> {
-    return deleteIssueCommentBySlug(args)
-  }
-
-  private getSetupHookTrustPayload(
-    repo: Repo,
-    scriptContentValue: string | undefined
-  ): { contentHash: string; scriptContent: string } | undefined {
-    const scriptContent = scriptContentValue?.trim()
-    if (!scriptContent || repo.hookSettings?.commandSourcePolicy === 'local-only') {
-      return undefined
-    }
-    return {
-      contentHash: createHash('sha256').update(scriptContent).digest('hex'),
-      scriptContent
-    }
-  }
-
-  private getSharedSetupHookTrustPayload(
-    repo: Repo,
-    sharedSetupScript: string | undefined
-  ): { contentHash: string; scriptContent: string } | undefined {
-    if (repo.hookSettings?.commandSourcePolicy === 'local-only') {
-      return undefined
-    }
-    return this.getSetupHookTrustPayload(repo, sharedSetupScript)
-  }
-
-  async getRepoHooks(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
-        return {
-          hasHooksFile: Boolean(hooks),
-          hooks,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: hooks ? 'orca.yaml' : null,
-          setupTrust: this.getSharedSetupHookTrustPayload(
-            repo,
-            getDefaultTabCommandTrustContent(hooks)
-          )
-        }
-      } catch {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-    }
-    const hasFile = hasHooksFile(repo.path)
-    const hooks = getEffectiveHooks(repo)
-    const sharedHooks = hasFile ? loadHooks(repo.path) : null
-    const setupRunPolicy = getEffectiveSetupRunPolicy(repo)
-    return {
-      hasHooksFile: hasFile,
-      hooks,
-      setupRunPolicy,
-      source: hasFile ? 'orca.yaml' : hooks ? 'legacy' : null,
-      setupTrust: this.getSharedSetupHookTrustPayload(
-        repo,
-        getDefaultTabCommandTrustContent(sharedHooks)
-      )
-    }
-  }
-
-  async checkRepoHooks(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-    }
-
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      // Why: callers cache "no hooks" as authoritative, so an unreadable repo must fail
-      // closed with an error status (mirrors the hooks:check IPC handler) instead of
-      // pinning a false "no setup script" verdict until the client remounts.
-      if (!fsProvider) {
-        return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-      }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        if (result.isBinary) {
-          return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-        }
-        return {
-          status: 'ok' as const,
-          hasHooks: true,
-          hooks: parseOrcaYaml(result.content),
-          mayNeedUpdate: false
-        }
-      } catch (error) {
-        return {
-          status: isENOENT(error) ? ('ok' as const) : ('error' as const),
-          hasHooks: false,
-          hooks: null,
-          mayNeedUpdate: false
-        }
-      }
-    }
-
-    const has = hasHooksFile(repo.path)
-    const hooks = has ? loadHooks(repo.path) : null
-    return {
-      status: 'ok' as const,
-      hasHooks: has,
-      hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
-    }
-  }
-
-  async inspectRepoSetupScriptImports(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return []
-    }
-
-    return inspectSetupScriptImportCandidates(async (relativePath) => {
-      const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (repo.connectionId) {
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
-        if (!fsProvider) {
-          return null
-        }
-        try {
-          const result = await fsProvider.readFile(filePath)
-          return result.isBinary ? null : result.content
-        } catch {
-          return null
-        }
-      }
-
-      try {
-        return await readFile(filePath, 'utf-8')
-      } catch (error) {
-        if (!isENOENT(error)) {
-          console.warn('[runtime] Failed to inspect setup script import candidate:', error)
-        }
-        return null
-      }
-    })
-  }
-
-  async readRepoIssueCommand(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return {
-        localContent: null,
-        sharedContent: null,
-        effectiveContent: null,
-        localFilePath: '',
-        source: 'none' as const
-      }
-    }
-
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          localContent: null,
-          sharedContent: null,
-          effectiveContent: null,
-          localFilePath: issueCommandPath,
-          source: 'none' as const
-        }
-      }
-      const localContent = await this.readRemoteIssueCommandOverride(fsProvider, issueCommandPath)
-      const sharedContent = await this.readRemoteSharedIssueCommand(fsProvider, repo.path)
-      const effectiveContent = localContent ?? sharedContent
-      return {
-        localContent,
-        sharedContent,
-        effectiveContent,
-        localFilePath: issueCommandPath,
-        source: localContent
-          ? ('local' as const)
-          : sharedContent
-            ? ('shared' as const)
-            : ('none' as const)
-      }
-    }
-
-    return readIssueCommand(repo.path)
-  }
-
-  private async readRemoteIssueCommandOverride(
-    fsProvider: IFilesystemProvider,
-    issueCommandPath: string
-  ): Promise<string | null> {
-    try {
-      const result = await fsProvider.readFile(issueCommandPath)
-      if (result.isBinary) {
-        return null
-      }
-      return result.content.trim() || null
-    } catch {
-      return null
-    }
-  }
-
-  private async readRemoteSharedIssueCommand(
-    fsProvider: IFilesystemProvider,
-    repoPath: string
-  ): Promise<string | null> {
-    try {
-      const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
-      if (result.isBinary) {
-        return null
-      }
-      return parseOrcaYaml(result.content)?.issueCommand?.trim() || null
-    } catch {
-      return null
-    }
-  }
-
-  async writeRepoIssueCommand(repoSelector: string, content: string): Promise<{ ok: true }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return { ok: true }
-    }
-
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return { ok: true }
-      }
-      const trimmed = content.trim()
-      if (!trimmed) {
-        await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
-          if (!isENOENT(error)) {
-            throw error
-          }
-        })
-        return { ok: true }
-      }
-      await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-      await this.ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
-      await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
-      return { ok: true }
-    }
-
-    writeIssueCommand(repo.path, content)
-    return { ok: true }
-  }
-
-  private async ensureRemoteOrcaDirIgnored(
-    fsProvider: IFilesystemProvider,
-    repoPath: string,
-    options: { required?: boolean } = {}
-  ): Promise<void> {
-    const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
-    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
-    try {
-      result = await fsProvider.readFile(gitignorePath)
-    } catch (error) {
-      if (!isENOENT(error)) {
-        if (options.required) {
-          throw error
-        }
-        console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
-        return
-      }
-      try {
-        await fsProvider.writeFile(gitignorePath, '.orca\n')
-      } catch (writeError) {
-        if (options.required) {
-          throw writeError
-        }
-        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
-      }
-      return
-    }
-    if (result.isBinary) {
-      if (options.required) {
-        throw new Error('Remote .gitignore is binary; cannot verify .orca is ignored')
-      }
-      return
-    }
-    if (/^\.orca\/?$/m.test(result.content)) {
-      return
-    }
-    const separator = result.content.endsWith('\n') ? '' : '\n'
-    try {
-      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
-    } catch (writeError) {
-      if (options.required) {
-        throw writeError
-      }
-      console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
-    }
-  }
-
-  async listManagedWorktrees(
-    repoSelector?: string,
-    limit = DEFAULT_WORKTREE_LIST_LIMIT,
-    sourceDefaultsSupported = true
-  ): Promise<RuntimeWorktreeListResult> {
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new Error('invalid_limit')
-    }
-    const resolved = await this.listResolvedWorktrees()
-    const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
-    const settings = this.store?.getSettings()
-    const visibilityDefaults = sourceDefaultsSupported
-      ? settings?.worktreeVisibilityDefaults
-      : settings?.worktreeVisibilityDefaults
-        ? { external: settings.worktreeVisibilityDefaults.external }
-        : undefined
-    const visibilitySettings = settings
-      ? { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
-      : undefined
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
-      resolved,
-      visibilityDefaults
-    )
-    const worktrees = resolved.filter((worktree) => {
-      if (repoId && worktree.repoId !== repoId) {
-        return false
-      }
-      return this.isRuntimeWorktreeVisible(
-        worktree,
-        visibilitySourceMatchersByRepoId.get(worktree.repoId),
-        visibilitySettings
-      )
-    })
-    return {
-      worktrees: worktrees.slice(0, limit),
-      totalCount: worktrees.length,
-      truncated: worktrees.length > limit
-    }
-  }
-
-  /** Keyed by repo id on the wire even though one repo is requested: the caller asked by selector
-   *  and needs to know which repo answered.
-   *
-   *  The tier watermark rides alongside the names rather than being expanded into them — expanding
-   *  it would put 552 strings per spent tier on the wire, which is what compaction exists to
-   *  avoid. A client predating the field reads the names only and under-retires, degrading to the
-   *  pre-retirement behavior for compacted tiers instead of breaking. */
-  async listRetiredWorktreeNames(repoSelector: string): Promise<{
-    retiredNamesByRepo: Record<string, readonly string[]>
-    retiredNameTiersByRepo: Record<string, number>
-  }> {
-    const store = this.store
-    if (!store) {
-      return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const settings = store.getSettings()
-    const registry: RetiredNameRegistry = await getRetiredNameRegistryForRepo(
-      store,
-      repo,
-      store.getRepos(),
-      settings
-    )
-    return {
-      retiredNamesByRepo: { [repo.id]: registry.names },
-      retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
-    }
-  }
-
-  async listDetectedManagedWorktrees(
-    repoSelector: string,
-    connectionId?: string | null,
-    sourceDefaultsSupported = true
-  ): Promise<DetectedWorktreeListResult> {
-    return this.listDetectedWorktreesForResolvedRepo(
-      await this.resolveRepoSelectorForConnection(repoSelector, connectionId),
-      sourceDefaultsSupported
-    )
-  }
-
-  private async listDetectedWorktreesForResolvedRepo(
-    repo: Repo,
-    sourceDefaultsSupported = true
-  ): Promise<DetectedWorktreeListResult> {
-    const store = this.requireStore()
-    const settings = store.getSettings()
-    const visibilityDefaults = sourceDefaultsSupported
-      ? settings.worktreeVisibilityDefaults
-      : settings.worktreeVisibilityDefaults
-        ? { external: settings.worktreeVisibilityDefaults.external }
-        : undefined
-    const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
-    if (isFolderRepo(repo)) {
-      const worktrees = listRuntimeFolderWorkspaces(store, repo)
-      const metaById = store.getAllWorktreeMeta()
-      const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-      const matcher = createWorktreeVisibilitySourceMatcher(
-        [repo.path, ...worktrees.map((worktree) => worktree.path)],
-        resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-        resolveConfiguredWorktreeBasePaths(repo)
-      )
-      const detected = worktrees.map((worktree) =>
-        this.toRuntimeDetectedWorktree(
-          repo,
-          worktree,
-          matcher,
-          visibilitySettings,
-          getRepoOwnedWorktreeMeta(repo, worktree.id, metaById, repoOwnerCount) ?? null
-        )
-      )
-      return {
-        repoId: repo.id,
-        authoritative: true,
-        source: 'git',
-        worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
-      }
-    }
-    let scan: RuntimeWorktreeScanResult
-    try {
-      scan = await this.listRepoWorktreesForResolution(repo)
-    } catch {
-      scan = { ok: false, worktrees: [] }
-    }
-    if (scan.ok) {
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
-    }
-    const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
-      [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
-      resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-      resolveConfiguredWorktreeBasePaths(repo)
-    )
-    const expectedHostId = getRepoExecutionHostId(repo)
-    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-    const metaById = store.getAllWorktreeMeta()
-    const detected = scan.worktrees.map((gitWorktree) => {
-      const worktreeId = `${repo.id}::${gitWorktree.path}`
-      // A host-qualified row is exact; the locator-keyed one is only trustworthy when this repo owns it.
-      const meta =
-        readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
-        getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
-      const worktree = {
-        ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-        hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
-      }
-      const detectedWorktree = this.toRuntimeDetectedWorktree(
-        repo,
-        worktree,
-        worktreeVisibilitySourceMatcher,
-        visibilitySettings,
-        meta ?? null
-      )
-      if (scan.ok) {
-        return detectedWorktree
-      }
-      return applyMetadataFallbackVisibility(detectedWorktree)
-    })
-    return {
-      repoId: repo.id,
-      authoritative: scan.ok,
-      source: scan.ok ? 'git' : 'metadata-fallback',
-      worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
-    }
-  }
-
-  async teardownMissingManagedWorktreeTerminals(
-    repoSelector: string,
-    knownWorktreeIds: readonly string[],
-    connectionId?: string | null
-  ): Promise<{ stoppedWorktreeIds: string[] }> {
-    const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
-    // Why: killing PTYs must be proven against the host right now — a cached scan
-    // (30s TTL) can still list a directory git already dropped, and the renderer
-    // purges its state either way, so a stale miss strands those processes for good.
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    // Why: rescanning by `id:` would re-resolve the already-resolved repo, and a
-    // duplicate id across hosts makes that second lookup throw selector_ambiguous
-    // even though the caller's selector was unique — losing the sweep entirely.
-    const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
-    if (!detected.authoritative) {
-      return { stoppedWorktreeIds: [] }
-    }
-    return stopMissingWorktreeTerminals(
-      repo,
-      knownWorktreeIds,
-      detected.worktrees.map((worktree) => worktree.id),
-      {
-        runtime: this,
-        getLocalProvider: () => this.getLocalProvider(),
-        getSshProvider: (connectionId) => this.getSshProviderFn?.(connectionId),
-        onPtyStopped: this.onPtyStopped ?? undefined
-      }
-    )
-  }
-
-  private resolveRepoSelectorForConnection(
-    repoSelector: string,
-    connectionId?: string | null
-  ): Promise<Repo> {
-    if (connectionId === undefined) {
-      return this.resolveRepoSelector(repoSelector)
-    }
-    // Why: an explicit connection identity only *narrows* the selector; it must not
-    // change the grammar. Matching the selector as a bare repo id would make
-    // `path:`/`name:` selectors resolve to repo_not_found on this path alone.
-    const wanted = connectionId?.trim() || null
-    const matches = this.selectReposBySelector(repoSelector).filter(
-      (repo) => (repo.connectionId?.trim() || null) === wanted
-    )
-    if (matches.length !== 1) {
-      throw new Error(matches.length > 1 ? 'selector_ambiguous' : 'repo_not_found')
-    }
-    return Promise.resolve(matches[0])
-  }
-
-  private isRuntimeWorktreeVisible(
-    worktree: Worktree,
-    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
-    settings?: ReturnType<RuntimeStore['getSettings']>
-  ): boolean {
-    const repo = this.store?.getRepo(worktree.repoId)
-    if (!repo || !this.store) {
-      return true
-    }
-    return this.toRuntimeDetectedWorktree(repo, worktree, worktreeVisibilitySourceMatcher, settings)
-      .visible
-  }
-
-  private buildRuntimeVisibilitySourceMatchersByRepoId(
-    worktrees: readonly Worktree[],
-    visibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
-  ): Map<string, WorktreeVisibilitySourceMatcher> {
-    const checkoutPathsByRepoId = new Map<string, string[]>()
-    for (const worktree of worktrees) {
-      const checkoutPaths = checkoutPathsByRepoId.get(worktree.repoId) ?? []
-      checkoutPaths.push(worktree.path)
-      checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
-    }
-    return new Map(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => checkoutPathsByRepoId.has(repo.id))
-        .map((repo) => [
-          repo.id,
-          createWorktreeVisibilitySourceMatcher(
-            [repo.path, ...(checkoutPathsByRepoId.get(repo.id) ?? [])],
-            resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-            resolveConfiguredWorktreeBasePaths(repo)
-          )
-        ])
-    )
-  }
-
-  private toRuntimeDetectedWorktree(
-    repo: Repo,
-    worktree: Worktree,
-    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
-    providedSettings?: ReturnType<RuntimeStore['getSettings']>,
-    providedMeta?: WorktreeMeta | null
-  ): DetectedWorktree {
-    const settings = providedSettings ?? this.store?.getSettings()
-    if (!settings) {
-      return {
-        ...worktree,
-        ownership: 'unknown-legacy',
-        selectedCheckout: false,
-        visible: true
-      }
-    }
-    return toDetectedWorktree({
-      repo,
-      worktree,
-      meta:
-        providedMeta === undefined
-          ? this.store?.getWorktreeMeta(worktree.id)
-          : (providedMeta ?? undefined),
-      settings,
-      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
-      worktreeVisibilitySourceMatcher
-    })
+  get showRepo() {
+    return this.repoGitCommands.showRepo
+  }
+  get setRepoBaseRef() {
+    return this.repoGitCommands.setRepoBaseRef
+  }
+  get updateRepo() {
+    return this.repoGitCommands.updateRepo
+  }
+  get removeProject() {
+    return this.repoGitCommands.removeProject
+  }
+  get inspectTerminalProcess() {
+    return this.repoGitCommands.inspectTerminalProcess
+  }
+  get reorderRepos() {
+    return this.repoGitCommands.reorderRepos
+  }
+  get searchRepoRefs() {
+    return this.repoGitCommands.searchRepoRefs
+  }
+  get getRepoBaseRefDefault() {
+    return this.repoGitCommands.getRepoBaseRefDefault
+  }
+  get getRepoSlug() {
+    return this.repoGitCommands.getRepoSlug
+  }
+  get getRepoUpstream() {
+    return this.repoGitCommands.getRepoUpstream
+  }
+  get listRepoWorkItems() {
+    return this.repoGitCommands.listRepoWorkItems
+  }
+  get listRepoIssues() {
+    return this.repoGitCommands.listRepoIssues
+  }
+  get getRepoWorkItem() {
+    return this.repoGitCommands.getRepoWorkItem
+  }
+  get getRepoWorkItemDetails() {
+    return this.repoGitCommands.getRepoWorkItemDetails
+  }
+  get countRepoWorkItems() {
+    return this.repoGitCommands.countRepoWorkItems
+  }
+  get listRepoLabels() {
+    return this.repoGitCommands.listRepoLabels
+  }
+  get listRepoAssignableUsers() {
+    return this.repoGitCommands.listRepoAssignableUsers
+  }
+  get getGitHubRateLimit() {
+    return this.repoGitCommands.getGitHubRateLimit
+  }
+  get getRepoPRForBranch() {
+    return this.repoGitCommands.getRepoPRForBranch
+  }
+  get getHostedReviewForBranch() {
+    return this.repoGitCommands.getHostedReviewForBranch
+  }
+  get createHostedReview() {
+    return this.repoGitCommands.createHostedReview
+  }
+  get createStackedHostedReview() {
+    return this.repoGitCommands.createStackedHostedReview
+  }
+  get listGitLabRepoWorkItems() {
+    return this.repoGitCommands.listGitLabRepoWorkItems
+  }
+  get listGitLabRepoMRs() {
+    return this.repoGitCommands.listGitLabRepoMRs
+  }
+  get listGitLabRepoIssues() {
+    return this.repoGitCommands.listGitLabRepoIssues
+  }
+  get listGitLabRepoTodos() {
+    return this.repoGitCommands.listGitLabRepoTodos
+  }
+  get diagnoseGitLabAuth() {
+    return this.repoGitCommands.diagnoseGitLabAuth
+  }
+  get getGitLabRateLimit() {
+    return this.repoGitCommands.getGitLabRateLimit
+  }
+  get listGitLabRepoLabels() {
+    return this.repoGitCommands.listGitLabRepoLabels
+  }
+  get createGitLabRepoIssue() {
+    return this.repoGitCommands.createGitLabRepoIssue
+  }
+  get updateGitLabRepoIssue() {
+    return this.repoGitCommands.updateGitLabRepoIssue
+  }
+  get addGitLabRepoIssueComment() {
+    return this.repoGitCommands.addGitLabRepoIssueComment
+  }
+  get addGitLabRepoMRComment() {
+    return this.repoGitCommands.addGitLabRepoMRComment
+  }
+  get addGitLabRepoMRInlineComment() {
+    return this.repoGitCommands.addGitLabRepoMRInlineComment
+  }
+  get getGitLabRepoJobTrace() {
+    return this.repoGitCommands.getGitLabRepoJobTrace
+  }
+  get retryGitLabRepoJob() {
+    return this.repoGitCommands.retryGitLabRepoJob
+  }
+  get mergeGitLabRepoMR() {
+    return this.repoGitCommands.mergeGitLabRepoMR
+  }
+  get updateGitLabRepoMRState() {
+    return this.repoGitCommands.updateGitLabRepoMRState
+  }
+  get updateGitLabRepoMR() {
+    return this.repoGitCommands.updateGitLabRepoMR
+  }
+  get updateGitLabRepoMRReviewers() {
+    return this.repoGitCommands.updateGitLabRepoMRReviewers
+  }
+  get getGitLabRepoWorkItemDetails() {
+    return this.repoGitCommands.getGitLabRepoWorkItemDetails
+  }
+  get getGitLabRepoWorkItemByPath() {
+    return this.repoGitCommands.getGitLabRepoWorkItemByPath
+  }
+  get getRepoIssue() {
+    return this.repoGitCommands.getRepoIssue
+  }
+  get getRepoPRChecks() {
+    return this.repoGitCommands.getRepoPRChecks
+  }
+  get rerunRepoPRChecks() {
+    return this.repoGitCommands.rerunRepoPRChecks
+  }
+  get getRepoPRCheckDetails() {
+    return this.repoGitCommands.getRepoPRCheckDetails
+  }
+  get getRepoPRComments() {
+    return this.repoGitCommands.getRepoPRComments
+  }
+  get setRepoPRCommentReaction() {
+    return this.repoGitCommands.setRepoPRCommentReaction
+  }
+  get getRepoPRFileContents() {
+    return this.repoGitCommands.getRepoPRFileContents
+  }
+  get resolveRepoReviewThread() {
+    return this.repoGitCommands.resolveRepoReviewThread
+  }
+  get setRepoPRFileViewed() {
+    return this.repoGitCommands.setRepoPRFileViewed
+  }
+  get updateRepoPRTitle() {
+    return this.repoGitCommands.updateRepoPRTitle
+  }
+  get updateRepoPRDetails() {
+    return this.repoGitCommands.updateRepoPRDetails
+  }
+  get mergeRepoPR() {
+    return this.repoGitCommands.mergeRepoPR
+  }
+  get setRepoPRAutoMerge() {
+    return this.repoGitCommands.setRepoPRAutoMerge
+  }
+  get markRepoPRReadyForReview() {
+    return this.repoGitCommands.markRepoPRReadyForReview
+  }
+  get updateRepoPRState() {
+    return this.repoGitCommands.updateRepoPRState
+  }
+  get requestRepoPRReviewers() {
+    return this.repoGitCommands.requestRepoPRReviewers
+  }
+  get removeRepoPRReviewers() {
+    return this.repoGitCommands.removeRepoPRReviewers
+  }
+  get createRepoIssue() {
+    return this.repoGitCommands.createRepoIssue
+  }
+  get updateRepoIssue() {
+    return this.repoGitCommands.updateRepoIssue
+  }
+  get addRepoIssueComment() {
+    return this.repoGitCommands.addRepoIssueComment
+  }
+  get addRepoPRReviewComment() {
+    return this.repoGitCommands.addRepoPRReviewComment
+  }
+  get addRepoPRReviewCommentReply() {
+    return this.repoGitCommands.addRepoPRReviewCommentReply
+  }
+  get listGitHubProjects() {
+    return this.repoGitCommands.listGitHubProjects
+  }
+  get listGitHubLabelsBySlug() {
+    return this.repoGitCommands.listGitHubLabelsBySlug
+  }
+  get listGitHubIssueTypesBySlug() {
+    return this.repoGitCommands.listGitHubIssueTypesBySlug
+  }
+  get resolveGitHubProjectRef() {
+    return this.repoGitCommands.resolveGitHubProjectRef
+  }
+  get listGitHubProjectViews() {
+    return this.repoGitCommands.listGitHubProjectViews
+  }
+  get getGitHubProjectViewTable() {
+    return this.repoGitCommands.getGitHubProjectViewTable
+  }
+  get updateGitHubProjectItemField() {
+    return this.repoGitCommands.updateGitHubProjectItemField
+  }
+  get clearGitHubProjectItemField() {
+    return this.repoGitCommands.clearGitHubProjectItemField
+  }
+  get updateGitHubIssueBySlug() {
+    return this.repoGitCommands.updateGitHubIssueBySlug
+  }
+  get updateGitHubIssueTypeBySlug() {
+    return this.repoGitCommands.updateGitHubIssueTypeBySlug
+  }
+  get addGitHubIssueCommentBySlug() {
+    return this.repoGitCommands.addGitHubIssueCommentBySlug
+  }
+  get getRepoHooks() {
+    return this.repoGitCommands.getRepoHooks
+  }
+  get checkRepoHooks() {
+    return this.repoGitCommands.checkRepoHooks
+  }
+  get readRepoIssueCommand() {
+    return this.repoGitCommands.readRepoIssueCommand
+  }
+  get writeRepoIssueCommand() {
+    return this.repoGitCommands.writeRepoIssueCommand
+  }
+  get listManagedWorktrees() {
+    return this.repoGitCommands.listManagedWorktrees
   }
 
   async showManagedWorktree(worktreeSelector: string) {
@@ -36816,69 +34759,140 @@ export class OrcaRuntimeService {
   }
 
   // ── Linear integration ──
-  linearConnect: RuntimeLinearCommands['linearConnect'] = this.linearCommands.linearConnect.bind(this.linearCommands)
-  linearDisconnect: RuntimeLinearCommands['linearDisconnect'] = this.linearCommands.linearDisconnect.bind(this.linearCommands)
-  linearSelectWorkspace: RuntimeLinearCommands['linearSelectWorkspace'] = this.linearCommands.linearSelectWorkspace.bind(this.linearCommands)
-  linearStatus: RuntimeLinearCommands['linearStatus'] = this.linearCommands.linearStatus.bind(this.linearCommands)
-  linearTestConnection: RuntimeLinearCommands['linearTestConnection'] = this.linearCommands.linearTestConnection.bind(this.linearCommands)
-  linearSearchIssues: RuntimeLinearCommands['linearSearchIssues'] = this.linearCommands.linearSearchIssues.bind(this.linearCommands)
-  linearSearchForAgents: RuntimeLinearCommands['linearSearchForAgents'] = this.linearCommands.linearSearchForAgents.bind(this.linearCommands)
-  linearIssueContext: RuntimeLinearCommands['linearIssueContext'] = this.linearCommands.linearIssueContext.bind(this.linearCommands)
-  linearTeamListForAgents: RuntimeLinearCommands['linearTeamListForAgents'] = this.linearCommands.linearTeamListForAgents.bind(this.linearCommands)
-  linearTeamMembersForAgents: RuntimeLinearCommands['linearTeamMembersForAgents'] = this.linearCommands.linearTeamMembersForAgents.bind(this.linearCommands)
-  linearTeamStatesForAgents: RuntimeLinearCommands['linearTeamStatesForAgents'] = this.linearCommands.linearTeamStatesForAgents.bind(this.linearCommands)
-  linearTeamLabelsForAgents: RuntimeLinearCommands['linearTeamLabelsForAgents'] = this.linearCommands.linearTeamLabelsForAgents.bind(this.linearCommands)
-  linearProjectListForAgents: RuntimeLinearCommands['linearProjectListForAgents'] = this.linearCommands.linearProjectListForAgents.bind(this.linearCommands)
-  linearIssueListForAgents: RuntimeLinearCommands['linearIssueListForAgents'] = this.linearCommands.linearIssueListForAgents.bind(this.linearCommands)
-  linearMcpIssueList: RuntimeLinearCommands['linearMcpIssueList'] = this.linearCommands.linearMcpIssueList.bind(this.linearCommands)
-  linearResolveCurrentIssue: RuntimeLinearCommands['linearResolveCurrentIssue'] = this.linearCommands.linearResolveCurrentIssue.bind(this.linearCommands)
-  linearListIssues: RuntimeLinearCommands['linearListIssues'] = this.linearCommands.linearListIssues.bind(this.linearCommands)
-  linearCreateIssue: RuntimeLinearCommands['linearCreateIssue'] = this.linearCommands.linearCreateIssue.bind(this.linearCommands)
-  linearGetIssue: RuntimeLinearCommands['linearGetIssue'] = this.linearCommands.linearGetIssue.bind(this.linearCommands)
-  linearUpdateIssue: RuntimeLinearCommands['linearUpdateIssue'] = this.linearCommands.linearUpdateIssue.bind(this.linearCommands)
-  linearAddIssueComment: RuntimeLinearCommands['linearAddIssueComment'] = this.linearCommands.linearAddIssueComment.bind(this.linearCommands)
-  linearIssueSetState: RuntimeLinearCommands['linearIssueSetState'] = this.linearCommands.linearIssueSetState.bind(this.linearCommands)
-  linearIssueRelationWrite: RuntimeLinearCommands['linearIssueRelationWrite'] = this.linearCommands.linearIssueRelationWrite.bind(this.linearCommands)
-  linearSaveIssue: RuntimeLinearCommands['linearSaveIssue'] = this.linearCommands.linearSaveIssue.bind(this.linearCommands)
-  linearIssueUpdateTask: RuntimeLinearCommands['linearIssueUpdateTask'] = this.linearCommands.linearIssueUpdateTask.bind(this.linearCommands)
-  linearIssueAddComment: RuntimeLinearCommands['linearIssueAddComment'] = this.linearCommands.linearIssueAddComment.bind(this.linearCommands)
-  linearIssueAttachLink: RuntimeLinearCommands['linearIssueAttachLink'] = this.linearCommands.linearIssueAttachLink.bind(this.linearCommands)
-  linearIssueCreate: RuntimeLinearCommands['linearIssueCreate'] = this.linearCommands.linearIssueCreate.bind(this.linearCommands)
-  linearIssueComments: RuntimeLinearCommands['linearIssueComments'] = this.linearCommands.linearIssueComments.bind(this.linearCommands)
-  linearListTeams: RuntimeLinearCommands['linearListTeams'] = this.linearCommands.linearListTeams.bind(this.linearCommands)
-  linearListProjects: RuntimeLinearCommands['linearListProjects'] = this.linearCommands.linearListProjects.bind(this.linearCommands)
-  linearCreateProject: RuntimeLinearCommands['linearCreateProject'] = this.linearCommands.linearCreateProject.bind(this.linearCommands)
-  linearGetProject: RuntimeLinearCommands['linearGetProject'] = this.linearCommands.linearGetProject.bind(this.linearCommands)
-  linearListProjectIssues: RuntimeLinearCommands['linearListProjectIssues'] = this.linearCommands.linearListProjectIssues.bind(this.linearCommands)
-  linearListCustomViews: RuntimeLinearCommands['linearListCustomViews'] = this.linearCommands.linearListCustomViews.bind(this.linearCommands)
-  linearGetCustomView: RuntimeLinearCommands['linearGetCustomView'] = this.linearCommands.linearGetCustomView.bind(this.linearCommands)
-  linearListCustomViewIssues: RuntimeLinearCommands['linearListCustomViewIssues'] = this.linearCommands.linearListCustomViewIssues.bind(this.linearCommands)
-  linearListCustomViewProjects: RuntimeLinearCommands['linearListCustomViewProjects'] = this.linearCommands.linearListCustomViewProjects.bind(this.linearCommands)
-  linearTeamStates: RuntimeLinearCommands['linearTeamStates'] = this.linearCommands.linearTeamStates.bind(this.linearCommands)
-  linearTeamLabels: RuntimeLinearCommands['linearTeamLabels'] = this.linearCommands.linearTeamLabels.bind(this.linearCommands)
-  linearTeamMembers: RuntimeLinearCommands['linearTeamMembers'] = this.linearCommands.linearTeamMembers.bind(this.linearCommands)
-  jiraConnect: RuntimeLinearCommands['jiraConnect'] = this.linearCommands.jiraConnect.bind(this.linearCommands)
-  jiraDisconnect: RuntimeLinearCommands['jiraDisconnect'] = this.linearCommands.jiraDisconnect.bind(this.linearCommands)
-  jiraSelectSite: RuntimeLinearCommands['jiraSelectSite'] = this.linearCommands.jiraSelectSite.bind(this.linearCommands)
-  jiraStatus: RuntimeLinearCommands['jiraStatus'] = this.linearCommands.jiraStatus.bind(this.linearCommands)
-  jiraReadStatus: RuntimeLinearCommands['jiraReadStatus'] = this.linearCommands.jiraReadStatus.bind(this.linearCommands)
-  jiraTestConnection: RuntimeLinearCommands['jiraTestConnection'] = this.linearCommands.jiraTestConnection.bind(this.linearCommands)
-  jiraSearchIssues: RuntimeLinearCommands['jiraSearchIssues'] = this.linearCommands.jiraSearchIssues.bind(this.linearCommands)
-  jiraListIssues: RuntimeLinearCommands['jiraListIssues'] = this.linearCommands.jiraListIssues.bind(this.linearCommands)
-  jiraCreateIssue: RuntimeLinearCommands['jiraCreateIssue'] = this.linearCommands.jiraCreateIssue.bind(this.linearCommands)
-  jiraGetIssue: RuntimeLinearCommands['jiraGetIssue'] = this.linearCommands.jiraGetIssue.bind(this.linearCommands)
-  jiraLookupIssueSummary: RuntimeLinearCommands['jiraLookupIssueSummary'] = this.linearCommands.jiraLookupIssueSummary.bind(this.linearCommands)
-  jiraUpdateIssue: RuntimeLinearCommands['jiraUpdateIssue'] = this.linearCommands.jiraUpdateIssue.bind(this.linearCommands)
-  jiraAddIssueComment: RuntimeLinearCommands['jiraAddIssueComment'] = this.linearCommands.jiraAddIssueComment.bind(this.linearCommands)
-  jiraIssueComments: RuntimeLinearCommands['jiraIssueComments'] = this.linearCommands.jiraIssueComments.bind(this.linearCommands)
-  jiraListProjects: RuntimeLinearCommands['jiraListProjects'] = this.linearCommands.jiraListProjects.bind(this.linearCommands)
-  jiraListIssueTypes: RuntimeLinearCommands['jiraListIssueTypes'] = this.linearCommands.jiraListIssueTypes.bind(this.linearCommands)
-  jiraListCreateFields: RuntimeLinearCommands['jiraListCreateFields'] = this.linearCommands.jiraListCreateFields.bind(this.linearCommands)
-  jiraListPriorities: RuntimeLinearCommands['jiraListPriorities'] = this.linearCommands.jiraListPriorities.bind(this.linearCommands)
-  jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers'] = this.linearCommands.jiraListAssignableUsers.bind(this.linearCommands)
-  jiraListTransitions: RuntimeLinearCommands['jiraListTransitions'] = this.linearCommands.jiraListTransitions.bind(this.linearCommands)
-  jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder'] = this.linearCommands.jiraGetProjectStatusOrder.bind(this.linearCommands)
-
+  linearConnect: RuntimeLinearCommands['linearConnect'] = this.linearCommands.linearConnect.bind(
+    this.linearCommands
+  )
+  linearDisconnect: RuntimeLinearCommands['linearDisconnect'] =
+    this.linearCommands.linearDisconnect.bind(this.linearCommands)
+  linearSelectWorkspace: RuntimeLinearCommands['linearSelectWorkspace'] =
+    this.linearCommands.linearSelectWorkspace.bind(this.linearCommands)
+  linearStatus: RuntimeLinearCommands['linearStatus'] = this.linearCommands.linearStatus.bind(
+    this.linearCommands
+  )
+  linearTestConnection: RuntimeLinearCommands['linearTestConnection'] =
+    this.linearCommands.linearTestConnection.bind(this.linearCommands)
+  linearSearchIssues: RuntimeLinearCommands['linearSearchIssues'] =
+    this.linearCommands.linearSearchIssues.bind(this.linearCommands)
+  linearSearchForAgents: RuntimeLinearCommands['linearSearchForAgents'] =
+    this.linearCommands.linearSearchForAgents.bind(this.linearCommands)
+  linearIssueContext: RuntimeLinearCommands['linearIssueContext'] =
+    this.linearCommands.linearIssueContext.bind(this.linearCommands)
+  linearTeamListForAgents: RuntimeLinearCommands['linearTeamListForAgents'] =
+    this.linearCommands.linearTeamListForAgents.bind(this.linearCommands)
+  linearTeamMembersForAgents: RuntimeLinearCommands['linearTeamMembersForAgents'] =
+    this.linearCommands.linearTeamMembersForAgents.bind(this.linearCommands)
+  linearTeamStatesForAgents: RuntimeLinearCommands['linearTeamStatesForAgents'] =
+    this.linearCommands.linearTeamStatesForAgents.bind(this.linearCommands)
+  linearTeamLabelsForAgents: RuntimeLinearCommands['linearTeamLabelsForAgents'] =
+    this.linearCommands.linearTeamLabelsForAgents.bind(this.linearCommands)
+  linearProjectListForAgents: RuntimeLinearCommands['linearProjectListForAgents'] =
+    this.linearCommands.linearProjectListForAgents.bind(this.linearCommands)
+  linearIssueListForAgents: RuntimeLinearCommands['linearIssueListForAgents'] =
+    this.linearCommands.linearIssueListForAgents.bind(this.linearCommands)
+  linearMcpIssueList: RuntimeLinearCommands['linearMcpIssueList'] =
+    this.linearCommands.linearMcpIssueList.bind(this.linearCommands)
+  linearResolveCurrentIssue: RuntimeLinearCommands['linearResolveCurrentIssue'] =
+    this.linearCommands.linearResolveCurrentIssue.bind(this.linearCommands)
+  linearListIssues: RuntimeLinearCommands['linearListIssues'] =
+    this.linearCommands.linearListIssues.bind(this.linearCommands)
+  linearCreateIssue: RuntimeLinearCommands['linearCreateIssue'] =
+    this.linearCommands.linearCreateIssue.bind(this.linearCommands)
+  linearGetIssue: RuntimeLinearCommands['linearGetIssue'] = this.linearCommands.linearGetIssue.bind(
+    this.linearCommands
+  )
+  linearUpdateIssue: RuntimeLinearCommands['linearUpdateIssue'] =
+    this.linearCommands.linearUpdateIssue.bind(this.linearCommands)
+  linearAddIssueComment: RuntimeLinearCommands['linearAddIssueComment'] =
+    this.linearCommands.linearAddIssueComment.bind(this.linearCommands)
+  linearIssueSetState: RuntimeLinearCommands['linearIssueSetState'] =
+    this.linearCommands.linearIssueSetState.bind(this.linearCommands)
+  linearIssueRelationWrite: RuntimeLinearCommands['linearIssueRelationWrite'] =
+    this.linearCommands.linearIssueRelationWrite.bind(this.linearCommands)
+  linearSaveIssue: RuntimeLinearCommands['linearSaveIssue'] =
+    this.linearCommands.linearSaveIssue.bind(this.linearCommands)
+  linearIssueUpdateTask: RuntimeLinearCommands['linearIssueUpdateTask'] =
+    this.linearCommands.linearIssueUpdateTask.bind(this.linearCommands)
+  linearIssueAddComment: RuntimeLinearCommands['linearIssueAddComment'] =
+    this.linearCommands.linearIssueAddComment.bind(this.linearCommands)
+  linearIssueAttachLink: RuntimeLinearCommands['linearIssueAttachLink'] =
+    this.linearCommands.linearIssueAttachLink.bind(this.linearCommands)
+  linearIssueCreate: RuntimeLinearCommands['linearIssueCreate'] =
+    this.linearCommands.linearIssueCreate.bind(this.linearCommands)
+  linearIssueComments: RuntimeLinearCommands['linearIssueComments'] =
+    this.linearCommands.linearIssueComments.bind(this.linearCommands)
+  linearListTeams: RuntimeLinearCommands['linearListTeams'] =
+    this.linearCommands.linearListTeams.bind(this.linearCommands)
+  linearListProjects: RuntimeLinearCommands['linearListProjects'] =
+    this.linearCommands.linearListProjects.bind(this.linearCommands)
+  linearCreateProject: RuntimeLinearCommands['linearCreateProject'] =
+    this.linearCommands.linearCreateProject.bind(this.linearCommands)
+  linearGetProject: RuntimeLinearCommands['linearGetProject'] =
+    this.linearCommands.linearGetProject.bind(this.linearCommands)
+  linearListProjectIssues: RuntimeLinearCommands['linearListProjectIssues'] =
+    this.linearCommands.linearListProjectIssues.bind(this.linearCommands)
+  linearListCustomViews: RuntimeLinearCommands['linearListCustomViews'] =
+    this.linearCommands.linearListCustomViews.bind(this.linearCommands)
+  linearGetCustomView: RuntimeLinearCommands['linearGetCustomView'] =
+    this.linearCommands.linearGetCustomView.bind(this.linearCommands)
+  linearListCustomViewIssues: RuntimeLinearCommands['linearListCustomViewIssues'] =
+    this.linearCommands.linearListCustomViewIssues.bind(this.linearCommands)
+  linearListCustomViewProjects: RuntimeLinearCommands['linearListCustomViewProjects'] =
+    this.linearCommands.linearListCustomViewProjects.bind(this.linearCommands)
+  linearTeamStates: RuntimeLinearCommands['linearTeamStates'] =
+    this.linearCommands.linearTeamStates.bind(this.linearCommands)
+  linearTeamLabels: RuntimeLinearCommands['linearTeamLabels'] =
+    this.linearCommands.linearTeamLabels.bind(this.linearCommands)
+  linearTeamMembers: RuntimeLinearCommands['linearTeamMembers'] =
+    this.linearCommands.linearTeamMembers.bind(this.linearCommands)
+  jiraConnect: RuntimeLinearCommands['jiraConnect'] = this.linearCommands.jiraConnect.bind(
+    this.linearCommands
+  )
+  jiraDisconnect: RuntimeLinearCommands['jiraDisconnect'] = this.linearCommands.jiraDisconnect.bind(
+    this.linearCommands
+  )
+  jiraSelectSite: RuntimeLinearCommands['jiraSelectSite'] = this.linearCommands.jiraSelectSite.bind(
+    this.linearCommands
+  )
+  jiraStatus: RuntimeLinearCommands['jiraStatus'] = this.linearCommands.jiraStatus.bind(
+    this.linearCommands
+  )
+  jiraReadStatus: RuntimeLinearCommands['jiraReadStatus'] = this.linearCommands.jiraReadStatus.bind(
+    this.linearCommands
+  )
+  jiraTestConnection: RuntimeLinearCommands['jiraTestConnection'] =
+    this.linearCommands.jiraTestConnection.bind(this.linearCommands)
+  jiraSearchIssues: RuntimeLinearCommands['jiraSearchIssues'] =
+    this.linearCommands.jiraSearchIssues.bind(this.linearCommands)
+  jiraListIssues: RuntimeLinearCommands['jiraListIssues'] = this.linearCommands.jiraListIssues.bind(
+    this.linearCommands
+  )
+  jiraCreateIssue: RuntimeLinearCommands['jiraCreateIssue'] =
+    this.linearCommands.jiraCreateIssue.bind(this.linearCommands)
+  jiraGetIssue: RuntimeLinearCommands['jiraGetIssue'] = this.linearCommands.jiraGetIssue.bind(
+    this.linearCommands
+  )
+  jiraLookupIssueSummary: RuntimeLinearCommands['jiraLookupIssueSummary'] =
+    this.linearCommands.jiraLookupIssueSummary.bind(this.linearCommands)
+  jiraUpdateIssue: RuntimeLinearCommands['jiraUpdateIssue'] =
+    this.linearCommands.jiraUpdateIssue.bind(this.linearCommands)
+  jiraAddIssueComment: RuntimeLinearCommands['jiraAddIssueComment'] =
+    this.linearCommands.jiraAddIssueComment.bind(this.linearCommands)
+  jiraIssueComments: RuntimeLinearCommands['jiraIssueComments'] =
+    this.linearCommands.jiraIssueComments.bind(this.linearCommands)
+  jiraListProjects: RuntimeLinearCommands['jiraListProjects'] =
+    this.linearCommands.jiraListProjects.bind(this.linearCommands)
+  jiraListIssueTypes: RuntimeLinearCommands['jiraListIssueTypes'] =
+    this.linearCommands.jiraListIssueTypes.bind(this.linearCommands)
+  jiraListCreateFields: RuntimeLinearCommands['jiraListCreateFields'] =
+    this.linearCommands.jiraListCreateFields.bind(this.linearCommands)
+  jiraListPriorities: RuntimeLinearCommands['jiraListPriorities'] =
+    this.linearCommands.jiraListPriorities.bind(this.linearCommands)
+  jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers'] =
+    this.linearCommands.jiraListAssignableUsers.bind(this.linearCommands)
+  jiraListTransitions: RuntimeLinearCommands['jiraListTransitions'] =
+    this.linearCommands.jiraListTransitions.bind(this.linearCommands)
+  jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder'] =
+    this.linearCommands.jiraGetProjectStatusOrder.bind(this.linearCommands)
 
   // ── Browser automation ──
 
@@ -37398,10 +35412,8 @@ export class OrcaRuntimeService {
 
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  DEFAULT_REPO_SEARCH_REFS_LIMIT,
   DEFAULT_TERMINAL_LIST_LIMIT,
   DEFAULT_TERMINAL_READ_LIMIT,
-  DEFAULT_WORKTREE_LIST_LIMIT,
   DEFAULT_WORKTREE_PS_LIMIT,
   DISCONNECTED_PTY_RECORD_MAX,
   DRIFT_PROBE_SUBJECT_LIMIT,
@@ -37497,12 +35509,12 @@ import {
   terminalReadLimit,
   terminalTitleBlocksExplicitAgentStatus,
   waitForWorktreeTerminalMutation,
-  withTimeoutResult,
+  withTimeoutResult
 } from './runtime-tail-projection'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,
-  TerminalTailWaitState,
+  TerminalTailWaitState
 } from './runtime-tail-projection'
 
 export {
@@ -37518,6 +35530,4 @@ export {
   appendNormalizedToMultilineTailBufferUnwindowed,
   projectTerminalTailLines
 } from './runtime-tail-projection'
-export type {
-  TerminalTailWaitState
-} from './runtime-tail-projection'
+export type { TerminalTailWaitState } from './runtime-tail-projection'
