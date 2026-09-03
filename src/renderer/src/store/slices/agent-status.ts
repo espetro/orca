@@ -12,32 +12,12 @@ import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
-import {
-  getAgentRowGeneratedTitleText,
-  orchestrationLabelsMatchLiveDispatch
-} from '@/lib/agent-row-primary-text'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
-import {
-  retireAgentPaneAuthorityReducer,
-  restoreAgentPaneAuthorityReducer,
-  transferAgentPaneAuthorityReducer
-} from './agent-pane-authority-actions'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
-import { capRetainedAgents } from './agent-status-retention'
 import {
-  mergeCurrentOrchestrationContext,
-  orchestrationMapsEqual
-} from './agent-status-orchestration'
-import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key'
-import {
-  copyLaunchConfig,
   getLaunchConfigForEntry,
-  getLaunchConfigForStatusMetadata,
-  launchConfigRegistryEntriesEqual,
-  normalizeLaunchConfigRegistrationMetadata,
-  registryEntryMatchesStatus
+  getLaunchConfigForStatusMetadata
 } from './agent-launch-config-registry'
-import { sleepingRecordFromEntry } from './agent-sleeping-sessions'
 import {
   removeAgentStatusAction,
   removeAgentStatusByTabPrefixAction,
@@ -47,7 +27,22 @@ import {
   dropHibernatedAgentStatusPaneAction,
   dropAgentStatusByWorktreeAction
 } from './agent-status-drop-actions'
+import {
+  retainAgentsAction,
+  dismissRetainedAgentAction,
+  dismissRetainedAgentsByWorktreeAction,
+  pruneRetainedAgentsAction,
+  clearRetentionSuppressedPaneKeysAction
+} from './agent-status-retained-actions'
 import { recordAgentProviderSessionAction } from './agent-status-provider-session'
+import {
+  clearAgentLaunchConfigAction,
+  registerAgentLaunchConfigAction,
+  restoreAgentPaneAuthorityAction,
+  retireAgentPaneAuthorityAction,
+  setRuntimeAgentOrchestrationByPaneKeyAction,
+  transferAgentPaneAuthorityAction
+} from './agent-status-pane-authority-actions'
 import { setAgentStatusAction } from './agent-status-ingest'
 import type { RetainedAgentEntry } from './agent-status-types'
 
@@ -381,220 +376,23 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     recentlyRetiredAgentStatusPaneKeys: {},
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
-    retireAgentPaneAuthority: (paneKey, options) => {
-      let hadLive = false
-      let ownerPaneKey = paneKey
-      set((s) => {
-        const result = retireAgentPaneAuthorityReducer(s, paneKey, options)
-        hadLive = result.hadLive
-        ownerPaneKey = result.ownerPaneKey
-        return result.patch
-      })
-      if (hadLive) {
-        queueMicrotask(() => freshness.schedule())
-      }
-      if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.retirePaneAuthority?.(ownerPaneKey)
-      }
-    },
+    retireAgentPaneAuthority: (paneKey, options) =>
+      retireAgentPaneAuthorityAction(paneKey, options, () => freshness.schedule(), get, set),
 
-    restoreAgentPaneAuthority: (paneKey) => {
-      let ownerPaneKey = paneKey
-      set((s) => {
-        const result = restoreAgentPaneAuthorityReducer(s, paneKey)
-        ownerPaneKey = result.ownerPaneKey
-        return result.patch ?? s
-      })
-      if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.restorePaneAuthority?.(ownerPaneKey)
-      }
-    },
+    restoreAgentPaneAuthority: (paneKey) => restoreAgentPaneAuthorityAction(paneKey, get, set),
 
-    transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
-      type TransferHit = { from: string; to: string; ptyId?: string | null }
-      const captured: { value: TransferHit | null } = { value: null }
-      set((s) => {
-        const result = transferAgentPaneAuthorityReducer(s, { fromPaneKey, toPaneKey, ptyId })
-        if (!result) {
-          return s
-        }
-        captured.value = { from: result.from, to: result.to, ptyId: result.ptyId }
-        return result.patch
-      })
-      const transferResult = captured.value
-      if (typeof window !== 'undefined' && transferResult) {
-        window.api?.agentStatus?.transferPaneAuthority?.({
-          fromPaneKey: transferResult.from,
-          toPaneKey: transferResult.to,
-          ...(transferResult.ptyId ? { ptyId: transferResult.ptyId } : {})
-        })
-      }
-    },
+    transferAgentPaneAuthority: (args) => transferAgentPaneAuthorityAction(args, get, set),
 
-    setRuntimeAgentOrchestrationByPaneKey: (entries) => {
-      const generatedTitleUpdates: AgentStatusEntry[] = []
-      set((s) => {
-        const runtimeMapChanged = !orchestrationMapsEqual(
-          s.runtimeAgentOrchestrationByPaneKey,
-          entries
-        )
-        let nextLive = s.agentStatusByPaneKey
-        let liveChanged = false
-        let nextRetained = s.retainedAgentsByPaneKey
-        let retainedChanged = false
+    setRuntimeAgentOrchestrationByPaneKey: (entries) =>
+      setRuntimeAgentOrchestrationByPaneKeyAction(entries, get, set),
 
-        for (const [paneKey, runtimeOrchestration] of Object.entries(entries)) {
-          const liveEntry = nextLive[paneKey]
-          if (liveEntry) {
-            const merged = mergeCurrentOrchestrationContext(
-              liveEntry.orchestration,
-              runtimeOrchestration
-            )
-            if (merged !== liveEntry.orchestration) {
-              if (!liveChanged) {
-                nextLive = { ...nextLive }
-                liveChanged = true
-              }
-              const nextEntry = { ...liveEntry, orchestration: merged }
-              nextLive[paneKey] = nextEntry
-              // Why: only replace titles when labels match the live dispatch taskId; sticky completed context must not rename a later turn.
-              if (
-                (merged.displayName?.trim() || merged.taskTitle?.trim()) &&
-                orchestrationLabelsMatchLiveDispatch({
-                  prompt: nextEntry.prompt,
-                  orchestration: merged
-                })
-              ) {
-                generatedTitleUpdates.push(nextEntry)
-              }
-            }
-          }
-
-          const retainedEntry = nextRetained[paneKey]
-          if (retainedEntry) {
-            const merged = mergeCurrentOrchestrationContext(
-              retainedEntry.entry.orchestration,
-              runtimeOrchestration
-            )
-            if (merged !== retainedEntry.entry.orchestration) {
-              if (!retainedChanged) {
-                nextRetained = { ...nextRetained }
-                retainedChanged = true
-              }
-              nextRetained[paneKey] = {
-                ...retainedEntry,
-                entry: { ...retainedEntry.entry, orchestration: merged }
-              }
-            }
-          }
-        }
-
-        if (!runtimeMapChanged && !liveChanged && !retainedChanged) {
-          return s
-        }
-
-        return {
-          ...(runtimeMapChanged ? { runtimeAgentOrchestrationByPaneKey: entries } : {}),
-          ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
-          ...(retainedChanged ? { retainedAgentsByPaneKey: nextRetained } : {}),
-          ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
-        }
-      })
-      for (const entry of generatedTitleUpdates) {
-        get().setGeneratedTabTitleFromAgentPrompt(
-          entry.paneKey,
-          getAgentRowGeneratedTitleText(entry),
-          {
-            replaceExistingGeneratedTitle: true
-          }
-        )
-      }
-    },
-
-    registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
-      set((s) => {
-        const copiedLaunchConfig = copyLaunchConfig(launchConfig)
-        const nextRegistryEntry: AgentLaunchConfigRegistryEntry = {
-          launchConfig: copiedLaunchConfig,
-          registeredAt: Date.now(),
-          identity: normalizeLaunchConfigRegistrationMetadata(paneKey, metadata)
-        }
-        const existingRegistryEntry = s.agentLaunchConfigByPaneKey[paneKey]
-        const registryChanged = !launchConfigRegistryEntriesEqual(
-          existingRegistryEntry,
-          nextRegistryEntry
-        )
-        const existingEntry = s.agentStatusByPaneKey[paneKey]
-        const entryMatchesRegistry = registryEntryMatchesStatus({
-          entry: nextRegistryEntry,
-          paneKey,
-          agentType: existingEntry?.agentType,
-          tabId: existingEntry?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined,
-          terminalHandle: existingEntry?.terminalHandle,
-          launchToken: metadata?.launchToken,
-          providerSession: existingEntry?.providerSession,
-          existingProviderSession: existingEntry?.providerSession,
-          providerSessionChanged: false
-        })
-        const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-        let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
-        if (existingSleepingRecord && entryMatchesRegistry && existingEntry) {
-          const worktreeId =
-            existingEntry.worktreeId ??
-            existingSleepingRecord.worktreeId ??
-            findAgentPaneWorktreeId(s, paneKey)
-          const refreshedRecord = worktreeId
-            ? sleepingRecordFromEntry({
-                state: s,
-                entry: existingEntry,
-                worktreeId,
-                capturedAt: existingSleepingRecord.capturedAt,
-                launchConfig: copiedLaunchConfig,
-                origin: existingSleepingRecord.origin
-              })
-            : null
-          if (refreshedRecord) {
-            nextSleepingAgentSessions = {
-              ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: {
-                ...refreshedRecord,
-                capturedAt: existingSleepingRecord.capturedAt
-              }
-            }
-          }
-        }
-        if (!registryChanged && nextSleepingAgentSessions === s.sleepingAgentSessionsByPaneKey) {
-          return s
-        }
-        return {
-          ...(registryChanged
-            ? {
-                agentLaunchConfigByPaneKey: {
-                  ...s.agentLaunchConfigByPaneKey,
-                  [paneKey]: nextRegistryEntry
-                }
-              }
-            : {}),
-          ...(nextSleepingAgentSessions !== s.sleepingAgentSessionsByPaneKey
-            ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions }
-            : {})
-        }
-      })
-    },
+    registerAgentLaunchConfig: (paneKey, launchConfig, metadata) =>
+      registerAgentLaunchConfigAction(paneKey, launchConfig, metadata, get, set),
     getAgentLaunchConfigForStatusEntry: (entry) => getLaunchConfigForEntry(get(), entry),
     getAgentLaunchConfigForStatusMetadata: (metadata) =>
       getLaunchConfigForStatusMetadata(get(), metadata),
 
-    clearAgentLaunchConfig: (paneKey) => {
-      set((s) => {
-        if (!(paneKey in s.agentLaunchConfigByPaneKey)) {
-          return s
-        }
-        const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
-        delete nextLaunchConfigs[paneKey]
-        return { agentLaunchConfigByPaneKey: nextLaunchConfigs }
-      })
-    },
+    clearAgentLaunchConfig: (paneKey) => clearAgentLaunchConfigAction(paneKey, get, set),
 
     recordAgentProviderSession: (paneKey, agent, providerSession, timing, routing, metadata) => {
       recordAgentProviderSessionAction(
@@ -745,136 +543,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     pruneSleepingAgentSessions: (validWorktreeIds) =>
       pruneSleepingAgentSessionsAction(validWorktreeIds, get, set),
 
-    retainAgents: (entries) => {
-      // Why: retained entries are a pure read-overlay (no epoch bump needed); batch into one set so multi-agent disappearance is atomic.
-      if (entries.length === 0) {
-        return
-      }
-      set((s) => {
-        // Why: skip reallocation when every entry is already present by reference — consumers select on map identity, so a spurious realloc forces re-renders.
-        let changed = false
-        for (const retained of entries) {
-          if (s.retainedAgentsByPaneKey[retained.entry.paneKey] !== retained) {
-            changed = true
-            break
-          }
-        }
-        if (!changed) {
-          return s
-        }
-        const next = { ...s.retainedAgentsByPaneKey }
-        for (const retained of entries) {
-          const runtimeOrchestration = s.runtimeAgentOrchestrationByPaneKey[retained.entry.paneKey]
-          const mergedOrchestration = runtimeOrchestration
-            ? mergeCurrentOrchestrationContext(retained.entry.orchestration, runtimeOrchestration)
-            : retained.entry.orchestration
-          const entry =
-            mergedOrchestration !== retained.entry.orchestration
-              ? { ...retained.entry, orchestration: mergedOrchestration }
-              : retained.entry
-          // INVARIANT: map key equals retained.entry.paneKey, so callers look up retained rows by the same paneKey as agentStatusByPaneKey.
-          next[retained.entry.paneKey] =
-            entry === retained.entry ? retained : { ...retained, entry }
-        }
-        // Why: cap the map so a long multi-agent session can't leak the renderer heap (retainAgents is the only growth path); evicts oldest-retained first.
-        return { retainedAgentsByPaneKey: capRetainedAgents(next) }
-      })
-    },
+    retainAgents: (entries) => retainAgentsAction(entries, get, set),
 
-    dismissRetainedAgent: (paneKey) => {
-      // Why: no epoch bump (mirrors retainAgents) — retained rows are a pure read-overlay that don't affect smart-sort; selectors re-render on map identity.
-      set((s) => {
-        if (!(paneKey in s.retainedAgentsByPaneKey)) {
-          return s
-        }
-        const next = { ...s.retainedAgentsByPaneKey }
-        delete next[paneKey]
-        // Why: mirror dropAgentStatus — plant a one-shot suppressor only when a live entry coexists, so the retention sync doesn't resurrect this dismissed row (gate on hasLive, else it leaks).
-        const hasLive = paneKey in s.agentStatusByPaneKey
-        if (!hasLive || paneKey in s.retentionSuppressedPaneKeys) {
-          return { retainedAgentsByPaneKey: next }
-        }
-        return {
-          retainedAgentsByPaneKey: next,
-          retentionSuppressedPaneKeys: {
-            ...s.retentionSuppressedPaneKeys,
-            [paneKey]: true
-          }
-        }
-      })
-    },
+    dismissRetainedAgent: (paneKey) => dismissRetainedAgentAction(paneKey, get, set),
 
-    dismissRetainedAgentsByWorktree: (worktreeId) => {
-      // Why: collect removed paneKeys inside set, then fan out window.api drop so the on-disk cache doesn't resurrect the dismissed rows on next launch.
-      const dismissedPaneKeys: string[] = []
-      set((s) => {
-        let changed = false
-        const next: Record<string, RetainedAgentEntry> = {}
-        // Why: mirror dismissRetainedAgent — plant a suppressor only for dismissed paneKeys that also have a live entry, else the next live→gone transition re-retains the row (a retained-only suppressor leaks).
-        const toSuppress: string[] = []
-        for (const [key, ra] of Object.entries(s.retainedAgentsByPaneKey)) {
-          if (ra.worktreeId === worktreeId) {
-            changed = true
-            dismissedPaneKeys.push(key)
-            if (key in s.agentStatusByPaneKey && !(key in s.retentionSuppressedPaneKeys)) {
-              toSuppress.push(key)
-            }
-            continue
-          }
-          next[key] = ra
-        }
-        if (!changed) {
-          return s
-        }
-        if (toSuppress.length === 0) {
-          return { retainedAgentsByPaneKey: next }
-        }
-        const nextSuppressed = { ...s.retentionSuppressedPaneKeys }
-        for (const key of toSuppress) {
-          nextSuppressed[key] = true
-        }
-        return {
-          retainedAgentsByPaneKey: next,
-          retentionSuppressedPaneKeys: nextSuppressed
-        }
-      })
-      if (typeof window !== 'undefined') {
-        for (const paneKey of dismissedPaneKeys) {
-          window.api?.agentStatus?.drop?.(paneKey)
-        }
-      }
-    },
+    dismissRetainedAgentsByWorktree: (worktreeId) =>
+      dismissRetainedAgentsByWorktreeAction(worktreeId, get, set),
 
-    pruneRetainedAgents: (validWorktreeIds) => {
-      // Why: intentionally leaves retentionSuppressedPaneKeys — paneKeys are minted fresh on worktree re-create, so stale suppressors can never match a future live entry.
-      set((s) => {
-        let changed = false
-        const next: Record<string, RetainedAgentEntry> = {}
-        for (const [key, ra] of Object.entries(s.retainedAgentsByPaneKey)) {
-          if (!validWorktreeIds.has(ra.worktreeId)) {
-            changed = true
-            continue
-          }
-          next[key] = ra
-        }
-        return changed ? { retainedAgentsByPaneKey: next } : s
-      })
-    },
+    pruneRetainedAgents: (validWorktreeIds) =>
+      pruneRetainedAgentsAction(validWorktreeIds, get, set),
 
-    clearRetentionSuppressedPaneKeys: (paneKeys) => {
-      set((s) => {
-        let changed = false
-        const next = { ...s.retentionSuppressedPaneKeys }
-        for (const paneKey of paneKeys) {
-          if (!(paneKey in next)) {
-            continue
-          }
-          delete next[paneKey]
-          changed = true
-        }
-        return changed ? { retentionSuppressedPaneKeys: next } : s
-      })
-    }
+    clearRetentionSuppressedPaneKeys: (paneKeys) =>
+      clearRetentionSuppressedPaneKeysAction(paneKeys, get, set)
   }
 }
 
