@@ -72,22 +72,6 @@ import {
   mergeLinearCollectionResults
 } from '@/components/task-page/linear/linear-issue-grouping'
 
-import type { TaskPageSourceToolbarProps } from '@/components/task-page/chrome/task-page-source-toolbar'
-import type { TaskPageGithubModeBarProps } from '@/components/task-page/chrome/task-page-github-mode-bar'
-import type { TaskPageGithubItemFiltersProps } from '@/components/task-page/chrome/task-page-github-item-filters'
-import type { TaskPageLinearFiltersProps } from '@/components/task-page/chrome/task-page-linear-filters'
-import type { TaskPageJiraFiltersProps } from '@/components/task-page/chrome/task-page-jira-filters'
-import type { TaskPageGitlabFiltersProps } from '@/components/task-page/chrome/task-page-gitlab-filters'
-import type { GithubDetailHostProps } from '@/components/task-page/github/github-detail-host'
-import type { GithubWorkItemTableProps } from '@/components/task-page/github/github-work-item-table'
-import type { GitlabWorkItemListProps } from '@/components/task-page/gitlab/gitlab-work-item-list'
-import type { JiraIssueListHostProps } from '@/components/task-page/jira/jira-issue-list-host'
-import type { NewGithubIssueDialogProps } from '@/components/task-page/dialogs/new-github-issue-dialog'
-import type { NewLinearProjectDialogProps } from '@/components/task-page/dialogs/new-linear-project-dialog'
-import type { NewLinearIssueDialogProps } from '@/components/task-page/dialogs/new-linear-issue-dialog'
-import type { NewJiraIssueDialogProps } from '@/components/task-page/dialogs/new-jira-issue-dialog'
-import type { TaskPageConnectDialogsProps } from '@/components/task-page/dialogs/task-page-connect-dialogs'
-import type { LinearViewsHostProps } from '@/components/task-page/linear/linear-views-host'
 import { useTaskPageStoreBindings } from '@/components/task-page/hooks/use-task-page-store-bindings'
 import { useTaskPageRepoSelection } from '@/components/task-page/source/use-task-page-repo-selection'
 import { useTaskPageAccountScopes } from '@/components/task-page/hooks/use-task-page-account-scopes'
@@ -128,7 +112,30 @@ import { useTaskPageUseItemActions } from '@/components/task-page/hooks/use-task
 import { TaskPageLayout } from '@/components/task-page/task-page-layout'
 import { useTaskPageGitHubFetch } from '@/components/task-page/hooks/use-task-page-github-fetch'
 import { useTaskPageGitHubQuietRevalidate } from '@/components/task-page/hooks/use-task-page-github-quiet-revalidate'
-
+import {
+  buildSourceToolbar,
+  buildGithubModeBar,
+  buildGithubItemFilters,
+  buildLinearFilters
+} from '@/components/task-page/sections/build-filter-chrome-sections'
+import {
+  buildJiraFilters,
+  buildGitlabFilters
+} from '@/components/task-page/sections/build-jira-gitlab-filter-sections'
+import {
+  buildGithubDetail,
+  buildGithubTable,
+  buildGitlabList,
+  buildJiraList
+} from '@/components/task-page/sections/build-list-sections'
+import { buildLinearViews } from '@/components/task-page/sections/build-linear-dialog-sections'
+import {
+  buildConnectDialogs,
+  buildNewGithubIssue,
+  buildNewJiraIssue,
+  buildNewLinearIssue,
+  buildNewLinearProject
+} from '@/components/task-page/sections/build-connect-dialog-sections'
 export default function TaskPage(): React.JSX.Element {
   const {
     settings,
@@ -339,7 +346,6 @@ export default function TaskPage(): React.JSX.Element {
     setGitlabFilter,
     gitlabItems,
     setGitlabItems,
-    gitlabLoading,
     setGitlabLoading,
     gitlabError,
     setGitlabError,
@@ -361,7 +367,8 @@ export default function TaskPage(): React.JSX.Element {
     setGitlabTodosLoading,
     gitlabEmptyState,
     activeGitlabFilter,
-    displayedGitLabItems
+    displayedGitLabItems,
+    gitlabLoading
   } = useTaskPageGitLabListState({ taskSource, selectedRepos, selectedReposKey })
   const {
     taskSearchInput,
@@ -2581,7 +2588,7 @@ export default function TaskPage(): React.JSX.Element {
     hasLinearViewContext: Boolean(selectedLinearCustomView)
   })
 
-  const sourceToolbar: TaskPageSourceToolbarProps = {
+  const sectionsDeps = {
     closeTaskPage,
     visibleSourceOptions,
     taskSource,
@@ -2592,14 +2599,19 @@ export default function TaskPage(): React.JSX.Element {
     taskSourceContextSummary,
     linearConnected,
     linearWorkspaces,
+    linearMode,
+    gitlabLoading,
+    newLinearIssueTitle,
+    linearConnectOpen,
+    newJiraIssueTitle,
+    newJiraIssueBody,
     selectedLinearWorkspaceId,
     linearTeamOptions,
     linearTeamSelection,
     defaultLinearTeamSelection,
-    onLinearWorkspaceChange: handleLinearWorkspaceChange,
-    onLinearTeamSelectionChange: handleLinearTeamSelectionChange,
-    onOpenLinearConnect: () => setLinearConnectOpen(true),
-    onLinearScopeOpen: handleLinearScopeOpen,
+    handleLinearWorkspaceChange,
+    handleLinearTeamSelectionChange,
+    handleLinearScopeOpen,
     selectedLinearTeamForExternalLink,
     jiraConnected,
     jiraSites,
@@ -2610,9 +2622,7 @@ export default function TaskPage(): React.JSX.Element {
     setJiraIssues,
     setJiraError,
     setJiraLoading,
-    taskSourceAvailabilityNotice
-  }
-  const githubModeBar: TaskPageGithubModeBarProps = {
+    taskSourceAvailabilityNotice,
     projectModeVisible,
     githubModeButtons,
     githubMode,
@@ -2625,17 +2635,12 @@ export default function TaskPage(): React.JSX.Element {
     getTaskPickerRepoHostLabel,
     eligibleRepos,
     setRepoSelection,
-    updateSettings,
     taskPickerRepos,
-    selectedGitHubRepoExternalLink
-  }
-  const githubItemFilters: TaskPageGithubItemFiltersProps = {
-    activeGithubTaskKind,
+    selectedGitHubRepoExternalLink,
     activeTaskPreset,
     setTaskSearchInput,
     setAppliedTaskSearch,
     setActiveTaskPreset,
-    setTaskResumeState,
     setTaskRefreshNonce,
     handleSetDefaultTaskPreset,
     appliedTaskQuery,
@@ -2660,11 +2665,8 @@ export default function TaskPage(): React.JSX.Element {
     handleRefreshGithubTasks,
     githubTasksBusy,
     perRepoSourceState,
-    setIssueSourcePreference
-  }
-  const linearFilters: TaskPageLinearFiltersProps = {
+    setIssueSourcePreference,
     linearModeOptions,
-    linearMode,
     selectLinearMode,
     selectedLinearProject,
     availableTeams,
@@ -2695,26 +2697,19 @@ export default function TaskPage(): React.JSX.Element {
     applyLinearAttributeFilter,
     linearAttributeFilterWorkspaceId,
     linearAttributePrimaryTeam,
-    linearTeamSelection,
-    linearTeamOptions,
     linearTaskSourceContext,
-    settings,
     linearSearchInput,
     setLinearSearchInput,
     setAppliedLinearSearch,
-    setTaskResumeState,
     linearProjectSearchInput,
     setLinearProjectSearchInput,
-    setAppliedLinearProjectSearch
-  }
-  const jiraFilters: TaskPageJiraFiltersProps = {
+    setAppliedLinearProjectSearch,
     jiraPresets,
     jiraSearchInput,
     activeJiraPreset,
     setJiraSearchInput,
     setAppliedJiraSearch,
     setActiveJiraPreset,
-    setTaskResumeState,
     setJiraRefreshNonce,
     sortedAvailableJiraProjects,
     setNewJiraIssueTitle,
@@ -2725,39 +2720,22 @@ export default function TaskPage(): React.JSX.Element {
     setNewJiraIssueTypeId,
     setNewJiraIssueOpen,
     jiraProjectsLoading,
-    jiraLoading
-  }
-  const gitlabFilters: TaskPageGitlabFiltersProps = {
-    gitlabView,
+    jiraLoading,
     setGitlabView,
-    taskPickerGroups,
-    repoSelection,
-    getTaskPickerRepoHostLabel,
-    eligibleRepos,
-    setRepoSelection,
-    updateSettings,
-    taskPickerRepos,
     gitLabIssueFilters,
     gitLabMRFilters,
     activeGitlabFilter,
     setGitlabFilter,
     setGitlabRefreshNonce,
-    gitlabLoading,
-    gitlabTodosLoading
-  }
-  const githubDetail: GithubDetailHostProps | null = dialogWorkItem
-    ? {
-        dialogWorkItem,
-        dialogInitialTab,
-        dialogRepoPath,
-        dialogSourceContext,
-        setDialogWorkItem,
-        handleUseWorkItem,
-        handleDialogReviewRequestsChange,
-        closeTaskDetailPage
-      }
-    : null
-  const githubTable: GithubWorkItemTableProps = {
+    gitlabTodosLoading,
+    dialogWorkItem,
+    dialogInitialTab,
+    dialogRepoPath,
+    dialogSourceContext,
+    setDialogWorkItem,
+    handleUseWorkItem,
+    handleDialogReviewRequestsChange,
+    closeTaskDetailPage,
     githubListScrollRef,
     githubResumeContextKey,
     currentPageRef,
@@ -2765,13 +2743,11 @@ export default function TaskPage(): React.JSX.Element {
     githubListScrollTopRef,
     taskListPositionRef,
     githubTaskGridClass,
-    activeGithubTaskKind,
     showPRManagementColumns,
     tasksError,
     githubUnavailable,
     failedCount,
-    selectedRepos,
-    perRepoSourceState,
+    perRepoSourceStateSelected: perRepoSourceState,
     handleRetryIssuesFetch,
     tasksLoading,
     retryingSourceKeys,
@@ -2787,36 +2763,24 @@ export default function TaskPage(): React.JSX.Element {
     githubWorkItemMutation,
     ensurePRChecksLoaded,
     handleOpenOrUseGitHubWorkItem,
-    handleUseWorkItem,
     currentPage,
     loadingTargetPage,
     pages,
     handleLoadNextPage,
-    setCurrentPage
-  }
-  const gitlabList: GitlabWorkItemListProps = {
+    setCurrentPage,
     gitlabError,
-    gitlabLoading,
     gitlabItems,
     displayedGitLabItems,
     gitlabEmptyState,
     openGitLabDetailPage,
     handleUseGitLabItem,
-    showGitlabIssuePagination: gitlabView === 'issues' && gitlabIssueTotalPages > 1,
+    gitlabView,
     gitlabIssuePage,
     gitlabIssueTotalPages,
     gitlabIssueLoadingTargetPage,
-    onGitlabIssuePageChange: (page: number) => {
-      if (page === gitlabIssuePage) {
-        return
-      }
-      setGitlabIssueLoadingTargetPage(page)
-      setGitlabIssuePage(page)
-    }
-  }
-  const jiraList: JiraIssueListHostProps = {
+    setGitlabIssueLoadingTargetPage,
+    setGitlabIssuePage,
     jiraStatusReady,
-    jiraConnected,
     setJiraConnectOpen,
     hideTaskSource,
     displayedJiraIssues,
@@ -2827,32 +2791,22 @@ export default function TaskPage(): React.JSX.Element {
     jiraError,
     jiraErrorDetailsOpen,
     setJiraErrorDetailsOpen,
-    jiraLoading,
     jiraIssues,
-    jiraSearchInput,
     sortedJiraIssues,
     openJiraDetailPage,
     handleUseJiraItem,
     selectedJiraIssue,
-    selectedJiraSiteId,
     displayedJiraStatusOrder,
-    closeTaskDetailPage,
-    jiraDetailSourceContext
-  }
-  const linearViews: LinearViewsHostProps = {
+    jiraDetailSourceContext,
     selectedLinearIssue,
     activeLinearIssueContextLabel,
     handleUseLinearItem,
     openRelatedLinearIssue,
-    closeTaskDetailPage,
     linearDetailSourceContext,
     linearStatusReady,
-    linearConnected,
     setLinearConnectOpen,
-    selectedLinearProject,
     linearProjectTab,
     selectedLinearProjectDetail,
-    linearProjectDetailLoading,
     linearProjectDetailError,
     linearProjectParentView,
     setSelectedLinearProject,
@@ -2860,174 +2814,96 @@ export default function TaskPage(): React.JSX.Element {
     setLinearProjectTab,
     setLinearMode,
     setSelectedLinearCustomView,
-    setTaskResumeState,
     setLinearProjectParentView,
-    setLinearRefreshNonce,
-    linearMode,
     linearProjectsError,
     linearProjectsResult,
-    linearProjectsLoading,
-    selectedLinearWorkspaceId,
     openLinearProjectContext,
     selectedLinearCustomView,
     linearCustomViewsError,
     linearCustomViewsResult,
-    linearCustomViewsLoading,
     openLinearCustomViewContext,
     linearCustomViewContentsError,
     linearCustomViewProjectsResult,
-    linearCustomViewContentsLoading,
-    issueList: {
-      toolbar: {
-        activeLinearIssueContextLabel,
-        selectedLinearProject,
-        setLinearProjectTab,
-        setSelectedLinearCustomView,
-        setLinearProjectParentView,
-        setTaskResumeState,
-        linearMode,
-        linearViewOptions,
-        linearViewMode,
-        setLinearViewMode,
-        linearGroupBy,
-        setLinearGroupBy,
-        linearGroupOptions,
-        linearOrderBy,
-        setLinearOrderBy,
-        linearOrderOptions,
-        linearDisplayPropertyOptions,
-        effectiveLinearDisplayProperties,
-        toggleLinearDisplayProperty,
-        linearIssueGridStyle
-      },
-      empty: {
-        activeLinearIssueError,
-        activeLinearIssueLoading,
-        activeLinearIssues,
-        activeLinearIssueHasCollectionError,
-        linearMode,
-        linearSearchActive,
-        activeLinearIssueContextLabel,
-        linearAttributeFilter,
-        filteredLinearIssues,
-        linearIssuesHasMore,
-        setLinearIssueLimit
-      },
-      board: {
-        linearBoardSections,
-        handleLinearBoardDragOver,
-        handleLinearBoardDrop,
-        linearBoardDragOverKey,
-        selectedLinearIssueId,
-        linearBoardDraggingIssueId,
-        linearBoardUpdatingIssueIds,
-        selectedLinearWorkspaceId,
-        linearIssueAttachmentIndex,
-        linearStatusBoardEnabled,
-        handleLinearBoardCardDragStart,
-        setLinearBoardDraggingIssueId,
-        setLinearBoardDragOverKey,
-        openLinearDetailPage,
-        effectiveLinearDisplayProperties,
-        handleOpenOrUseLinearItem,
-        linearTaskSourceContext
-      },
-      list: {
-        linearIssueListRows,
-        selectedLinearIssueId,
-        selectedLinearWorkspaceId,
-        linearIssueAttachmentIndex,
-        openLinearDetailPage,
-        linearIssueGridStyle,
-        effectiveLinearDisplayProperties,
-        linearTaskSourceContext,
-        handleOpenOrUseLinearItem
-      },
-      linearViewMode,
-      selectedLinearProject,
-      linearProjectTab,
-      selectedLinearCustomView,
-      linearProjectIssuesResult,
-      linearCustomViewIssuesResult,
-      linearIssues,
-      showLinearEmptyFilteredLoadMore,
-      handleLinearEmptyFilteredLoadMore,
-      activeLinearIssueLoading,
-      showLinearIssuePagination,
-      visibleLinearIssuePage,
-      linearIssueTotalPages,
-      activeLinearIssueLoadingTargetPage,
-      handleLinearIssuePageChange,
-      pagedLinearIssuesCount: pagedLinearIssues.length
-    }
-  }
-  const newGithubIssue: NewGithubIssueDialogProps = {
+    linearCustomViewContentsLoadingError: null,
+    linearViewOptions,
+    linearViewMode,
+    setLinearViewMode,
+    linearGroupBy,
+    setLinearGroupBy,
+    linearGroupOptions,
+    linearOrderBy,
+    setLinearOrderBy,
+    linearOrderOptions,
+    linearDisplayPropertyOptions,
+    effectiveLinearDisplayProperties,
+    toggleLinearDisplayProperty,
+    linearIssueGridStyle,
+    activeLinearIssueError,
+    activeLinearIssueLoading,
+    activeLinearIssues,
+    activeLinearIssueHasCollectionError,
+    linearSearchActive,
+    filteredLinearIssues,
+    linearIssuesHasMore,
+    setLinearIssueLimit,
+    linearBoardSections,
+    handleLinearBoardDragOver,
+    handleLinearBoardDrop,
+    linearBoardDragOverKey,
+    selectedLinearIssueId,
+    linearBoardDraggingIssueId,
+    linearBoardUpdatingIssueIds,
+    linearIssueAttachmentIndex,
+    linearStatusBoardEnabled,
+    handleLinearBoardCardDragStart,
+    setLinearBoardDraggingIssueId,
+    setLinearBoardDragOverKey,
+    openLinearDetailPage,
+    handleOpenOrUseLinearItem,
+    linearIssueListRows,
+    linearProjectIssuesResult,
+    linearCustomViewIssuesResult,
+    linearIssues,
+    showLinearEmptyFilteredLoadMore,
+    handleLinearEmptyFilteredLoadMore,
+    showLinearIssuePagination,
+    visibleLinearIssuePage,
+    linearIssueTotalPages,
+    activeLinearIssueLoadingTargetPage,
+    handleLinearIssuePageChange,
+    pagedLinearIssues,
     newIssueOpen,
     newIssueSubmitting,
-    setNewIssueOpen,
     handleCreateNewIssue,
-    newIssueTargetRepo,
-    perRepoSourceState,
-    setIssueSourcePreference,
-    selectedRepos,
     newIssueRepoId,
-    setNewIssueRepoId,
-    setNewIssueLabels,
-    setNewIssueAssignees,
     newIssueTitle,
-    setNewIssueTitle,
     newIssueBody,
-    setNewIssueBody,
     newIssueRepoLabels,
     newIssueLabels,
     newIssueRepoAssignees,
     newIssueAssignees,
-    submitShortcutLabel
-  }
-  const newLinearProject: NewLinearProjectDialogProps = {
+    submitShortcutLabel,
     newLinearProjectOpen,
     newLinearProjectSubmitting,
-    setNewLinearProjectOpen,
     handleCreateNewLinearProject,
-    availableTeams,
     newLinearProjectTargetTeam,
-    setNewLinearProjectTeamId,
     newLinearProjectName,
-    setNewLinearProjectName,
     newLinearProjectDescription,
-    setNewLinearProjectDescription,
     newLinearProjectContent,
-    setNewLinearProjectContent,
-    submitShortcutLabel,
     newLinearProjectPriority,
-    setNewLinearProjectPriority,
     newLinearProjectMembers,
     newLinearProjectLeadId,
-    setNewLinearProjectLeadId,
     newLinearProjectMemberIds,
-    setNewLinearProjectMemberIds,
     newLinearProjectLabelIds,
-    setNewLinearProjectLabelIds,
     newLinearProjectLabels,
     newLinearProjectStartDate,
-    setNewLinearProjectStartDate,
     newLinearProjectTargetDate,
-    setNewLinearProjectTargetDate
-  }
-  const newLinearIssue: NewLinearIssueDialogProps = {
     newLinearIssueOpen,
     newLinearIssueSubmitting,
-    setNewLinearIssueOpen,
     handleCreateNewLinearIssue,
-    availableTeams,
     newLinearIssueTargetTeam,
     newLinearIssueTeamId,
-    setNewLinearIssueTeamId,
-    newLinearIssueTitle,
-    setNewLinearIssueTitle,
     newLinearIssueBody,
-    setNewLinearIssueBody,
-    submitShortcutLabel,
     newLinearStates,
     newLinearIssueStateId,
     setNewLinearIssueStateId,
@@ -3038,61 +2914,58 @@ export default function TaskPage(): React.JSX.Element {
     setNewLinearIssuePriority,
     newLinearIssueProjects,
     newLinearIssueProjectId,
-    setNewLinearIssueProjectId,
     newLinearIssueProjectsLoading,
     newLinearIssueLabelIds,
     setNewLinearIssueLabelIds,
-    newLinearLabels
-  }
-  const newJiraIssue: NewJiraIssueDialogProps = {
+    newLinearLabels,
     newJiraIssueOpen,
     newJiraIssueSubmitting,
-    setNewJiraIssueOpen,
     handleCreateNewJiraIssue,
     newJiraIssueTargetProject,
     newJiraIssueProjectComboboxOpen,
     handleNewJiraIssueProjectComboboxOpenChange,
     handleNewJiraIssueProjectTriggerKeyDown,
-    sortedAvailableJiraProjects,
     includeJiraSiteNameInProjectLabel,
     newJiraIssueProjectCommandValue,
-    setNewJiraIssueProjectCommandValue,
     newJiraIssueProjectSearchInputRef,
     newJiraIssueProjectQuery,
-    setNewJiraIssueProjectQuery,
     filteredNewJiraIssueProjects,
     newJiraIssueTargetProjectSelectionKey,
     handleNewJiraIssueProjectSelect,
     newJiraIssueTypeId,
     newJiraIssueTargetType,
-    setNewJiraIssueTypeId,
     jiraIssueTypesLoading,
     availableJiraIssueTypes,
-    newJiraIssueTitle,
-    setNewJiraIssueTitle,
-    newJiraIssueBody,
-    setNewJiraIssueBody,
     jiraCreateFieldsLoading,
     jiraCreateFieldsError,
     visibleJiraCreateFields,
     newJiraIssueCustomFieldValues,
     setNewJiraIssueCustomFieldValues,
-    submitShortcutLabel,
-    hasMissingJiraCreateField
-  }
-  const connectDialogs: TaskPageConnectDialogsProps = {
+    hasMissingJiraCreateField,
     gitlabDialogItem,
     gitlabDialogRepo,
     gitlabDialogSourceContext,
     setGitlabDialogItem,
-    handleUseGitLabItem,
-    linearConnectOpen,
-    setLinearConnectOpen,
     selectedLinearWorkspace,
     handleLinearAccessConnected,
-    jiraConnectOpen,
-    setJiraConnectOpen
+    jiraConnectOpen
   }
+  const sourceToolbar = buildSourceToolbar(sectionsDeps)
+  const githubModeBar = buildGithubModeBar(sectionsDeps)
+  const githubItemFilters = buildGithubItemFilters(sectionsDeps)
+  const linearFilters = buildLinearFilters(sectionsDeps)
+  const jiraFilters = buildJiraFilters(sectionsDeps)
+  const gitlabFilters = buildGitlabFilters(sectionsDeps)
+  const githubDetail = buildGithubDetail(sectionsDeps)
+  const githubTable = buildGithubTable(sectionsDeps)
+  const gitlabList = buildGitlabList(sectionsDeps)
+  const jiraList = buildJiraList(sectionsDeps)
+  const linearViews = buildLinearViews(sectionsDeps)
+  const newGithubIssue = buildNewGithubIssue(sectionsDeps)
+  const newLinearProject = buildNewLinearProject(sectionsDeps)
+  const newLinearIssue = buildNewLinearIssue(sectionsDeps)
+  const newJiraIssue = buildNewJiraIssue(sectionsDeps)
+  const connectDialogs = buildConnectDialogs(sectionsDeps)
 
   return (
     <TaskPageLayout

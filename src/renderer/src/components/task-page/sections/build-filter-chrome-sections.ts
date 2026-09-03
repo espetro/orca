@@ -1,0 +1,285 @@
+import type { TaskPageSourceToolbarProps } from '@/components/task-page/chrome/task-page-source-toolbar'
+import type { TaskPageGithubModeBarProps } from '@/components/task-page/chrome/task-page-github-mode-bar'
+import type { TaskPageGithubItemFiltersProps } from '@/components/task-page/chrome/task-page-github-item-filters'
+import type { TaskPageLinearFiltersProps } from '@/components/task-page/chrome/task-page-linear-filters'
+import type { TaskPageSectionsProps } from './task-page-sections-props'
+
+// Pure builders for the TaskPageLayout chrome/filters prop objects.
+type FilterChromeDeps = Pick<
+  TaskPageSectionsProps,
+  | 'closeTaskPage'
+  | 'visibleSourceOptions'
+  | 'taskSource'
+  | 'taskSourceAvailabilityNoticeByProvider'
+  | 'taskSourceManuallyChangedRef'
+  | 'openTaskPage'
+  | 'updateSettings'
+  | 'taskSourceContextSummary'
+  | 'linearConnected'
+  | 'setLinearConnectOpen'
+  | 'linearWorkspaces'
+  | 'selectedLinearWorkspaceId'
+  | 'linearTeamOptions'
+  | 'linearTeamSelection'
+  | 'defaultLinearTeamSelection'
+  | 'handleLinearWorkspaceChange'
+  | 'handleLinearTeamSelectionChange'
+  | 'handleLinearScopeOpen'
+  | 'selectedLinearTeamForExternalLink'
+  | 'jiraConnected'
+  | 'jiraSites'
+  | 'selectedJiraSiteId'
+  | 'selectJiraSite'
+  | 'setSelectedJiraIssueKey'
+  | 'setSelectedJiraIssueFallback'
+  | 'setJiraIssues'
+  | 'setJiraError'
+  | 'setJiraLoading'
+  | 'taskSourceAvailabilityNotice'
+  | 'projectModeVisible'
+  | 'githubModeButtons'
+  | 'githubMode'
+  | 'activeGithubTaskKind'
+  | 'setGithubMode'
+  | 'setTaskResumeState'
+  | 'handleSelectGithubTaskKind'
+  | 'taskPickerGroups'
+  | 'repoSelection'
+  | 'getTaskPickerRepoHostLabel'
+  | 'eligibleRepos'
+  | 'setRepoSelection'
+  | 'taskPickerRepos'
+  | 'selectedGitHubRepoExternalLink'
+  | 'activeTaskPreset'
+  | 'setTaskSearchInput'
+  | 'setAppliedTaskSearch'
+  | 'setActiveTaskPreset'
+  | 'setTaskRefreshNonce'
+  | 'handleSetDefaultTaskPreset'
+  | 'appliedTaskQuery'
+  | 'loadedGitHubAuthorLogins'
+  | 'primaryGithubFilterSlug'
+  | 'settings'
+  | 'applyPRFilterChange'
+  | 'taskSearchInputRef'
+  | 'taskSearchInput'
+  | 'handleTaskSearchChange'
+  | 'handleTaskSearchKeyDown'
+  | 'appliedTaskSearch'
+  | 'handleResetGithubTaskSearch'
+  | 'selectedRepos'
+  | 'setNewIssueTitle'
+  | 'setNewIssueBody'
+  | 'setNewIssueLabels'
+  | 'setNewIssueAssignees'
+  | 'setNewIssueRepoId'
+  | 'setNewIssueOpen'
+  | 'newIssueTargetRepo'
+  | 'handleRefreshGithubTasks'
+  | 'githubTasksBusy'
+  | 'perRepoSourceState'
+  | 'setIssueSourcePreference'
+  | 'linearModeOptions'
+  | 'linearMode'
+  | 'selectLinearMode'
+  | 'selectedLinearProject'
+  | 'availableTeams'
+  | 'setNewLinearProjectName'
+  | 'setNewLinearProjectDescription'
+  | 'setNewLinearProjectContent'
+  | 'setNewLinearProjectTeamId'
+  | 'setNewLinearProjectLeadId'
+  | 'setNewLinearProjectMemberIds'
+  | 'setNewLinearProjectLabelIds'
+  | 'setNewLinearProjectPriority'
+  | 'setNewLinearProjectStartDate'
+  | 'setNewLinearProjectTargetDate'
+  | 'setNewLinearProjectOpen'
+  | 'setNewLinearIssueTitle'
+  | 'setNewLinearIssueBody'
+  | 'setNewLinearIssueTeamId'
+  | 'setNewLinearIssueProjectId'
+  | 'setNewLinearIssueOpen'
+  | 'setLinearRefreshNonce'
+  | 'linearLoading'
+  | 'linearProjectsLoading'
+  | 'linearProjectDetailLoading'
+  | 'linearCustomViewsLoading'
+  | 'linearCustomViewContentsLoading'
+  | 'showLinearAttributeFilters'
+  | 'linearAttributeFilter'
+  | 'applyLinearAttributeFilter'
+  | 'linearAttributeFilterWorkspaceId'
+  | 'linearAttributePrimaryTeam'
+  | 'linearTaskSourceContext'
+  | 'linearSearchInput'
+  | 'setLinearSearchInput'
+  | 'setAppliedLinearSearch'
+  | 'linearProjectSearchInput'
+  | 'setLinearProjectSearchInput'
+  | 'setAppliedLinearProjectSearch'
+  | 'jiraPresets'
+  | 'jiraSearchInput'
+  | 'activeJiraPreset'
+  | 'setJiraSearchInput'
+  | 'setAppliedJiraSearch'
+  | 'setActiveJiraPreset'
+  | 'setJiraRefreshNonce'
+  | 'sortedAvailableJiraProjects'
+  | 'setNewJiraIssueTitle'
+  | 'setNewJiraIssueBody'
+  | 'setNewJiraIssueProjectId'
+  | 'setNewJiraIssueProjectQuery'
+  | 'setNewJiraIssueProjectCommandValue'
+  | 'setNewJiraIssueTypeId'
+  | 'setNewJiraIssueOpen'
+  | 'jiraProjectsLoading'
+  | 'jiraLoading'
+  | 'setGitlabView'
+  | 'gitlabView'
+  | 'gitLabIssueFilters'
+  | 'gitLabMRFilters'
+  | 'activeGitlabFilter'
+  | 'setGitlabFilter'
+  | 'setGitlabRefreshNonce'
+  | 'gitlabLoading'
+  | 'gitlabTodosLoading'
+>
+
+export function buildSourceToolbar(deps: FilterChromeDeps): TaskPageSourceToolbarProps {
+  return {
+    closeTaskPage: deps.closeTaskPage,
+    visibleSourceOptions: deps.visibleSourceOptions,
+    taskSource: deps.taskSource,
+    taskSourceAvailabilityNoticeByProvider: deps.taskSourceAvailabilityNoticeByProvider,
+    taskSourceManuallyChangedRef: deps.taskSourceManuallyChangedRef,
+    openTaskPage: deps.openTaskPage,
+    updateSettings: deps.updateSettings,
+    taskSourceContextSummary: deps.taskSourceContextSummary,
+    linearConnected: deps.linearConnected,
+    linearWorkspaces: deps.linearWorkspaces,
+    selectedLinearWorkspaceId: deps.selectedLinearWorkspaceId,
+    linearTeamOptions: deps.linearTeamOptions,
+    linearTeamSelection: deps.linearTeamSelection,
+    defaultLinearTeamSelection: deps.defaultLinearTeamSelection,
+    onLinearWorkspaceChange: deps.handleLinearWorkspaceChange,
+    onLinearTeamSelectionChange: deps.handleLinearTeamSelectionChange,
+    onOpenLinearConnect: () => deps.setLinearConnectOpen(true),
+    onLinearScopeOpen: deps.handleLinearScopeOpen,
+    selectedLinearTeamForExternalLink: deps.selectedLinearTeamForExternalLink,
+    jiraConnected: deps.jiraConnected,
+    jiraSites: deps.jiraSites,
+    selectedJiraSiteId: deps.selectedJiraSiteId,
+    selectJiraSite: deps.selectJiraSite,
+    setSelectedJiraIssueKey: deps.setSelectedJiraIssueKey,
+    setSelectedJiraIssueFallback: deps.setSelectedJiraIssueFallback,
+    setJiraIssues: deps.setJiraIssues,
+    setJiraError: deps.setJiraError,
+    setJiraLoading: deps.setJiraLoading,
+    taskSourceAvailabilityNotice: deps.taskSourceAvailabilityNotice
+  }
+}
+
+export function buildGithubModeBar(deps: FilterChromeDeps): TaskPageGithubModeBarProps {
+  return {
+    projectModeVisible: deps.projectModeVisible,
+    githubModeButtons: deps.githubModeButtons,
+    githubMode: deps.githubMode,
+    activeGithubTaskKind: deps.activeGithubTaskKind,
+    setGithubMode: deps.setGithubMode,
+    setTaskResumeState: deps.setTaskResumeState,
+    handleSelectGithubTaskKind: deps.handleSelectGithubTaskKind,
+    taskPickerGroups: deps.taskPickerGroups,
+    repoSelection: deps.repoSelection,
+    getTaskPickerRepoHostLabel: deps.getTaskPickerRepoHostLabel,
+    eligibleRepos: deps.eligibleRepos,
+    setRepoSelection: deps.setRepoSelection,
+    updateSettings: deps.updateSettings,
+    taskPickerRepos: deps.taskPickerRepos,
+    selectedGitHubRepoExternalLink: deps.selectedGitHubRepoExternalLink
+  }
+}
+
+export function buildGithubItemFilters(deps: FilterChromeDeps): TaskPageGithubItemFiltersProps {
+  return {
+    activeGithubTaskKind: deps.activeGithubTaskKind,
+    activeTaskPreset: deps.activeTaskPreset,
+    setTaskSearchInput: deps.setTaskSearchInput,
+    setAppliedTaskSearch: deps.setAppliedTaskSearch,
+    setActiveTaskPreset: deps.setActiveTaskPreset,
+    setTaskResumeState: deps.setTaskResumeState,
+    setTaskRefreshNonce: deps.setTaskRefreshNonce,
+    handleSetDefaultTaskPreset: deps.handleSetDefaultTaskPreset,
+    appliedTaskQuery: deps.appliedTaskQuery,
+    loadedGitHubAuthorLogins: deps.loadedGitHubAuthorLogins,
+    primaryGithubFilterSlug: deps.primaryGithubFilterSlug,
+    settings: deps.settings,
+    applyPRFilterChange: deps.applyPRFilterChange,
+    taskSearchInputRef: deps.taskSearchInputRef,
+    taskSearchInput: deps.taskSearchInput,
+    handleTaskSearchChange: deps.handleTaskSearchChange,
+    handleTaskSearchKeyDown: deps.handleTaskSearchKeyDown,
+    appliedTaskSearch: deps.appliedTaskSearch,
+    handleResetGithubTaskSearch: deps.handleResetGithubTaskSearch,
+    selectedRepos: deps.selectedRepos,
+    setNewIssueTitle: deps.setNewIssueTitle,
+    setNewIssueBody: deps.setNewIssueBody,
+    setNewIssueLabels: deps.setNewIssueLabels,
+    setNewIssueAssignees: deps.setNewIssueAssignees,
+    setNewIssueRepoId: deps.setNewIssueRepoId,
+    setNewIssueOpen: deps.setNewIssueOpen,
+    newIssueTargetRepo: deps.newIssueTargetRepo,
+    handleRefreshGithubTasks: deps.handleRefreshGithubTasks,
+    githubTasksBusy: deps.githubTasksBusy,
+    perRepoSourceState: deps.perRepoSourceState,
+    setIssueSourcePreference: deps.setIssueSourcePreference
+  }
+}
+
+export function buildLinearFilters(deps: FilterChromeDeps): TaskPageLinearFiltersProps {
+  return {
+    linearModeOptions: deps.linearModeOptions,
+    linearMode: deps.linearMode,
+    selectLinearMode: deps.selectLinearMode,
+    selectedLinearProject: deps.selectedLinearProject,
+    availableTeams: deps.availableTeams,
+    setNewLinearProjectName: deps.setNewLinearProjectName,
+    setNewLinearProjectDescription: deps.setNewLinearProjectDescription,
+    setNewLinearProjectContent: deps.setNewLinearProjectContent,
+    setNewLinearProjectTeamId: deps.setNewLinearProjectTeamId,
+    setNewLinearProjectLeadId: deps.setNewLinearProjectLeadId,
+    setNewLinearProjectMemberIds: deps.setNewLinearProjectMemberIds,
+    setNewLinearProjectLabelIds: deps.setNewLinearProjectLabelIds,
+    setNewLinearProjectPriority: deps.setNewLinearProjectPriority,
+    setNewLinearProjectStartDate: deps.setNewLinearProjectStartDate,
+    setNewLinearProjectTargetDate: deps.setNewLinearProjectTargetDate,
+    setNewLinearProjectOpen: deps.setNewLinearProjectOpen,
+    setNewLinearIssueTitle: deps.setNewLinearIssueTitle,
+    setNewLinearIssueBody: deps.setNewLinearIssueBody,
+    setNewLinearIssueTeamId: deps.setNewLinearIssueTeamId,
+    setNewLinearIssueProjectId: deps.setNewLinearIssueProjectId,
+    setNewLinearIssueOpen: deps.setNewLinearIssueOpen,
+    setLinearRefreshNonce: deps.setLinearRefreshNonce,
+    linearLoading: deps.linearLoading,
+    linearProjectsLoading: deps.linearProjectsLoading,
+    linearProjectDetailLoading: deps.linearProjectDetailLoading,
+    linearCustomViewsLoading: deps.linearCustomViewsLoading,
+    linearCustomViewContentsLoading: deps.linearCustomViewContentsLoading,
+    showLinearAttributeFilters: deps.showLinearAttributeFilters,
+    linearAttributeFilter: deps.linearAttributeFilter,
+    applyLinearAttributeFilter: deps.applyLinearAttributeFilter,
+    linearAttributeFilterWorkspaceId: deps.linearAttributeFilterWorkspaceId,
+    linearAttributePrimaryTeam: deps.linearAttributePrimaryTeam,
+    linearTeamSelection: deps.linearTeamSelection,
+    linearTeamOptions: deps.linearTeamOptions,
+    linearTaskSourceContext: deps.linearTaskSourceContext,
+    settings: deps.settings,
+    linearSearchInput: deps.linearSearchInput,
+    setLinearSearchInput: deps.setLinearSearchInput,
+    setAppliedLinearSearch: deps.setAppliedLinearSearch,
+    setTaskResumeState: deps.setTaskResumeState,
+    linearProjectSearchInput: deps.linearProjectSearchInput,
+    setLinearProjectSearchInput: deps.setLinearProjectSearchInput,
+    setAppliedLinearProjectSearch: deps.setAppliedLinearProjectSearch
+  }
+}

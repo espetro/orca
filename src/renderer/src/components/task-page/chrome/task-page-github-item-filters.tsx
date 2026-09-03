@@ -50,7 +50,7 @@ export type TaskPageGithubItemFiltersProps = {
   handleTaskSearchKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
   appliedTaskSearch: string
   handleResetGithubTaskSearch: () => void
-  selectedRepos: Repo[]
+  selectedRepos: readonly Repo[]
   setNewIssueTitle: (value: string) => void
   setNewIssueBody: (value: string) => void
   setNewIssueLabels: (labels: string[]) => void
