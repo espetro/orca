@@ -21,8 +21,11 @@ import {
 import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { RuntimeLinearCommands } from './runtime-linear-commands'
 import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-commands'
+import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
+import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
+import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
 import type {
@@ -2701,6 +2704,7 @@ export class OrcaRuntimeService {
   private readonly skillInstallCommands: RuntimeSkillInstallCommands
   private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
   private readonly repoGitCommands: RuntimeRepoGitCommandsFacade
+  private readonly orchestrationCommands: RuntimeOrchestrationCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3512,6 +3516,30 @@ export class OrcaRuntimeService {
         this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
       getLocalProvider: () => this.getLocalProvider()
     })
+    const orchestrationDeps: RuntimeOrchestrationCommandsDeps = {
+      store: this.store,
+      orchestrationDb: this._orchestrationDb,
+      orchestrationMailboxNotifications: this.orchestrationMailboxNotifications,
+      orchestrationPointerAdmissionByPtyId: this.orchestrationPointerAdmissionByPtyId,
+      orchestrationCompatibilitySshAttachments: this.orchestrationCompatibilitySshAttachments,
+      restoredOrchestrationAuthorityByPtyId: this.restoredOrchestrationAuthorityByPtyId,
+      ptyController: null,
+      leaves: this.leaves,
+      ptysById: this.ptysById,
+      issueHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      makeRuntimePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getRecentSettledDispatchForTerminal: (handle, db) =>
+        this.getRecentSettledDispatchForTerminal(handle, db),
+      getWorktreeIdForTerminalHandle: (handle) => this.getWorktreeIdForTerminalHandle(handle),
+      getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+      getPaneKeyForTerminalHandle: (handle) => this.getPaneKeyForTerminalHandle(handle),
+      getOrchestrationDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      handleByLeafKey: this.handleByLeafKey
+    }
+    this.orchestrationCommands = new RuntimeOrchestrationCommands(orchestrationDeps)
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -14849,63 +14877,33 @@ export class OrcaRuntimeService {
     terminalHandle: string,
     launchTokenHash: string
   ): OrchestrationCompatibilityCallerAuthority {
-    return Object.freeze({
-      hostScope: Object.freeze({ ...terminal.hostScope }),
+    return this.orchestrationCommands.freezeOrchestrationCompatibilityCallerAuthority(
+      terminal,
+      processIncarnation,
       paneKey,
       terminalHandle,
-      processIncarnation,
       launchTokenHash
-    })
+    )
   }
 
   private orchestrationCompatibilityHostMatches(
     hostScope: OrchestrationCompatibilityTerminalAuthority['hostScope'],
     host: OrchestrationCompatibilityHostStamp | undefined
   ): boolean {
-    if (hostScope.kind === 'local') {
-      return host === undefined
-    }
-    if (hostScope.kind === 'wsl') {
-      return (
-        host?.kind === 'wsl' && host.hostId === hostScope.hostId && host.distro === hostScope.distro
-      )
-    }
-    if (host?.kind !== 'ssh' || host.targetId !== hostScope.targetId) {
-      return false
-    }
-    const authority = this.orchestrationCompatibilitySshAttachments.get(host.attachmentId)
-    return (
-      authority?.targetId === host.targetId &&
-      authority.connectionIncarnation === host.connectionIncarnation
-    )
+    return this.orchestrationCommands.orchestrationCompatibilityHostMatches(hostScope, host)
   }
 
   private orchestrationCompatibilityHostScopesEqual(
     left: OrchestrationCompatibilityTerminalAuthority['hostScope'],
     right: OrchestrationCompatibilityTerminalAuthority['hostScope']
   ): boolean {
-    if (left.kind !== right.kind) {
-      return false
-    }
-    if (left.kind === 'local' && right.kind === 'local') {
-      return left.hostId === right.hostId
-    }
-    if (left.kind === 'wsl' && right.kind === 'wsl') {
-      return left.hostId === right.hostId && left.distro === right.distro
-    }
-    return left.kind === 'ssh' && right.kind === 'ssh' && left.targetId === right.targetId
+    return this.orchestrationCommands.orchestrationCompatibilityHostScopesEqual(left, right)
   }
 
   private getOrchestrationCompatibilityHostScope(
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationCompatibilityTerminalAuthority['hostScope'] | null {
-    if (pty.connectionId) {
-      return { kind: 'ssh', targetId: pty.connectionId }
-    }
-    if (pty.isWsl || pty.wslDistro) {
-      return pty.wslDistro ? { kind: 'wsl', hostId: 'local', distro: pty.wslDistro } : null
-    }
-    return { kind: 'local', hostId: 'local' }
+    return this.orchestrationCommands.getOrchestrationCompatibilityHostScope(pty)
   }
 
   private rememberRestoredOrchestrationAuthority(
@@ -14913,22 +14911,10 @@ export class OrcaRuntimeService {
     terminalHandle: string,
     incarnationId: string
   ): void {
-    const paneKey = pty.paneKey
-    const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
-    if (!paneKey || !parsePaneKey(paneKey) || !hostScope) {
-      this.restoredOrchestrationAuthorityByPtyId.delete(pty.ptyId)
-      return
-    }
-    this.restoredOrchestrationAuthorityByPtyId.set(
-      pty.ptyId,
-      Object.freeze({
-        ptyId: pty.ptyId,
-        worktreeId: pty.worktreeId,
-        terminalHandle,
-        paneKey,
-        processIncarnation: `${pty.ptyId}:${incarnationId}`,
-        hostScope: Object.freeze({ ...hostScope })
-      })
+    return this.orchestrationCommands.rememberRestoredOrchestrationAuthority(
+      pty,
+      terminalHandle,
+      incarnationId
     )
   }
 
@@ -30576,11 +30562,7 @@ export class OrcaRuntimeService {
   }
 
   private getOrchestrationDbIfAvailable(): OrchestrationDb | null {
-    try {
-      return this._orchestrationDb ?? this.getOrchestrationDb()
-    } catch {
-      return this._orchestrationDb
-    }
+    return this.orchestrationCommands.getOrchestrationDbIfAvailable()
   }
 
   async hydrateInferredWorktreeLineage(): Promise<void> {
@@ -33312,145 +33294,14 @@ export class OrcaRuntimeService {
   private buildAgentOrchestrationByPaneKey():
     | Record<string, AgentStatusOrchestrationContext>
     | undefined {
-    const db = this.getOrchestrationDbIfAvailable()
-    if (!db) {
-      return undefined
-    }
-    // Why: this runs on every 16ms graph publish (title/status churn). With no
-    // dispatch rows — the overwhelming majority who never orchestrate — the
-    // per-terminal query fan-out below can only ever yield an empty result, so
-    // skip it wholesale via the DB's cached emptiness probe. Optional call so
-    // partial test-injected DBs without the probe fall through to the scan.
-    if (db.hasAnyDispatchContexts?.() === false) {
-      return undefined
-    }
-    const contexts: Record<string, AgentStatusOrchestrationContext> = {}
-    const queriedHandles = new Set<string>()
-    for (const leaf of this.leaves.values()) {
-      if (!leaf.ptyId) {
-        continue
-      }
-      const handle = this.issueHandle(leaf)
-      queriedHandles.add(handle)
-      const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
-      if (context) {
-        contexts[this.makeRuntimePaneKey(leaf)] = context
-      }
-    }
-    for (const pty of this.ptysById.values()) {
-      if (!pty.paneKey || contexts[pty.paneKey]) {
-        continue
-      }
-      const handle = this.issuePtyHandle(pty)
-      if (queriedHandles.has(handle)) {
-        continue
-      }
-      queriedHandles.add(handle)
-      const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
-      if (context) {
-        contexts[pty.paneKey] = context
-      }
-    }
-    return Object.keys(contexts).length > 0 ? contexts : undefined
+    return this.orchestrationCommands.buildAgentOrchestrationByPaneKey()
   }
 
   private getAgentStatusOrchestrationContextForHandle(
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): AgentStatusOrchestrationContext | undefined {
-    // Why: active dispatch is authoritative for reused terminals; settled context stale-groups later work once its row is gone.
-    const dispatch =
-      db?.getActiveDispatchForTerminal?.(handle) ??
-      this.getRecentSettledDispatchForTerminal(handle, db)
-    if (!dispatch) {
-      return undefined
-    }
-    const task = db?.getTask?.(dispatch.task_id, dispatch.run_id)
-    const display =
-      typeof task?.spec === 'string'
-        ? buildOrchestrationTaskDisplayMetadata({
-            spec: task.spec,
-            taskTitle: task.task_title,
-            displayName: task.display_name
-          })
-        : { taskTitle: '', displayName: '' }
-    const owningRun =
-      task?.run_id && task.run_id === dispatch.run_id ? db?.getRun?.(dispatch.run_id) : undefined
-    const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
-    const legacyActiveRun =
-      owningRun?.legacy === 1 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
-        ? db?.getActiveCoordinatorRun?.()
-        : undefined
-    // Why: legacy coordinator runs have no durable task ownership, so fail closed across worktrees.
-    const handleWorktreeId = legacyActiveRun ? this.getWorktreeIdForTerminalHandle(handle) : null
-    const legacyCoordinatorWorktreeId = legacyActiveRun
-      ? this.getWorktreeIdForTerminalHandle(legacyActiveRun.coordinator_handle)
-      : null
-    const scopedLegacyActiveRun =
-      legacyActiveRun &&
-      handleWorktreeId &&
-      legacyCoordinatorWorktreeId &&
-      runtimeWorktreeIdsEqual(legacyCoordinatorWorktreeId, handleWorktreeId)
-        ? legacyActiveRun
-        : undefined
-    const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
-    const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyActiveRun?.id
-    const creatorPaneKey = task?.created_by_pane_key
-    const creatorPaneHandle = creatorPaneKey
-      ? this.getTerminalHandleForPaneKey(creatorPaneKey)
-      : null
-    const creatorAuthority = creatorPaneHandle
-      ? this.getOrchestrationDispatchAuthority(creatorPaneHandle)
-      : null
-    const storedCreatorPane = creatorPaneKey ? parsePaneKey(creatorPaneKey) : null
-    const currentCreatorPane = creatorAuthority?.paneKey
-      ? parsePaneKey(creatorAuthority.paneKey)
-      : null
-    const sameCreatorPane = Boolean(
-      creatorPaneKey &&
-      creatorAuthority?.paneKey &&
-      (creatorPaneKey === creatorAuthority.paneKey ||
-        (storedCreatorPane &&
-          currentCreatorPane &&
-          storedCreatorPane.leafId === currentCreatorPane.leafId))
-    )
-    const paneRun = creatorPaneKey ? db?.getCurrentRunForPane?.(creatorPaneKey) : undefined
-    const sameRunCreatorDispatch = Boolean(
-      task?.creator_dispatch_id &&
-      task.creator_dispatch_run_id === owningRun?.id &&
-      task.creator_dispatch_pane_key &&
-      task.creator_dispatch_process_incarnation === task.created_by_process_incarnation &&
-      parsePaneKey(task.creator_dispatch_pane_key)?.leafId === storedCreatorPane?.leafId
-    )
-    const currentCreatorHandle =
-      owningRun?.legacy === 0 &&
-      task?.created_by_run_generation === owningRun.consumer_generation &&
-      task.created_by_process_incarnation === creatorAuthority?.processIncarnation &&
-      sameCreatorPane &&
-      (paneRun
-        ? paneRun.id === owningRun.id &&
-          paneRun.consumer_generation === task.created_by_run_generation
-        : sameRunCreatorDispatch)
-        ? (creatorPaneHandle ?? undefined)
-        : undefined
-    const parentTerminalHandle =
-      currentCreatorHandle ??
-      (coordinatorHandle && coordinatorHandle !== handle ? coordinatorHandle : undefined)
-    const parentPaneKey = parentTerminalHandle
-      ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
-      : undefined
-
-    return {
-      taskId: dispatch.task_id,
-      dispatchId: dispatch.id,
-      dispatchStatus: dispatch.status,
-      ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
-      ...(display.displayName ? { displayName: display.displayName } : {}),
-      ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
-      ...(parentPaneKey ? { parentPaneKey } : {}),
-      ...(coordinatorHandle ? { coordinatorHandle } : {}),
-      ...(orchestrationRunId ? { orchestrationRunId } : {})
-    }
+    return this.orchestrationCommands.getAgentStatusOrchestrationContextForHandle(handle, db)
   }
 
   private getRecentSettledDispatchForTerminal(
@@ -33803,33 +33654,7 @@ export class OrcaRuntimeService {
   >()
 
   private writeOrchestrationPointerPty(ptyId: string, data: string): boolean | Promise<boolean> {
-    try {
-      if (data === '\r') {
-        const admitted = this.orchestrationPointerAdmissionByPtyId.get(ptyId)
-        this.orchestrationPointerAdmissionByPtyId.delete(ptyId)
-        if (admitted) {
-          // Throws when the lease moved under the in-flight pointer, withholding the submit.
-          agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-        }
-      } else {
-        const admission = agentSessionPtyWriteGate.admit(ptyId)
-        if (!admission.admitted) {
-          this.orchestrationPointerAdmissionByPtyId.delete(ptyId)
-          // Preserve the controller's own refusal reporting for internal deliveries.
-          return this.ptyController?.write(ptyId, data) ?? false
-        }
-        this.orchestrationPointerAdmissionByPtyId.set(ptyId, {
-          sessionId: admission.sessionId,
-          runtimeFence: admission.runtimeFence
-        })
-      }
-      if (this.ptyController?.writeWithSettlement) {
-        return this.ptyController.writeWithSettlement(ptyId, data).catch(() => false)
-      }
-      return this.ptyController?.write(ptyId, data) ?? false
-    } catch {
-      return false
-    }
+    return this.orchestrationCommands.writeOrchestrationPointerPty(ptyId, data)
   }
 
   private retireOrchestrationMailboxDeliveryForPty(ptyId: string): void {
