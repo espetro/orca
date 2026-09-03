@@ -1,6 +1,12 @@
 // WebSocket transport letting mobile clients reach the Orca runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
-import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
+import {
+  createServer as createHttpServer,
+  type Server as HttpServer,
+  type IncomingMessage,
+  type RequestListener,
+  type ServerResponse
+} from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
@@ -41,7 +47,13 @@ export type WebSocketTransportOptions = {
   fallbackPort?: number
   // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
+  // Why: closure keeps the transport decoupled from orcad modules; intentionally unauthenticated for LAN probes.
+  healthHandler?: () => Promise<Record<string, unknown>>
+  // Why: an explicitly pinned port must fail closed instead of silently rebinding elsewhere, which clients would never find.
+  failClosedOnPortConflict?: boolean
 }
+
+export const HEALTH_CACHE_MS = 5_000
 
 export class WebSocketTransport implements RpcTransport {
   private readonly host: string
@@ -53,6 +65,11 @@ export class WebSocketTransport implements RpcTransport {
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
+  private readonly healthHandler: (() => Promise<Record<string, unknown>>) | undefined
+  private readonly failClosedOnPortConflict: boolean
+  // Why: memoize health so a tight probe loop can't stampede the underlying collectors.
+  private healthCache: { value: Record<string, unknown>; expiresAt: number } | null = null
+  private healthInFlight: Promise<Record<string, unknown>> | null = null
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -74,7 +91,9 @@ export class WebSocketTransport implements RpcTransport {
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    healthHandler,
+    failClosedOnPortConflict
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -89,6 +108,8 @@ export class WebSocketTransport implements RpcTransport {
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.healthHandler = healthHandler
+    this.failClosedOnPortConflict = failClosedOnPortConflict === true
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -149,7 +170,7 @@ export class WebSocketTransport implements RpcTransport {
         : this.preferPinnedPort
           ? [this.port, persistedFallbackPort]
           : [persistedFallbackPort, this.port]
-    for (const port of candidatePorts) {
+    for (const [index, port] of candidatePorts.entries()) {
       try {
         await this.tryListen(port)
         return
@@ -161,6 +182,12 @@ export class WebSocketTransport implements RpcTransport {
         ) {
           throw error
         }
+        if (this.failClosedOnPortConflict && index === candidatePorts.length - 1) {
+          const code = error instanceof Error && 'code' in error ? String(error.code) : 'unknown'
+          throw new Error(
+            `[ws-transport] Failed to bind requested port(s) [${candidatePorts.join(', ')}] (${code})`
+          )
+        }
         console.warn(
           `[ws-transport] Failed to bind port ${port} (${error instanceof Error ? error.message : String(error)}), trying next candidate`
         )
@@ -171,12 +198,58 @@ export class WebSocketTransport implements RpcTransport {
   }
 
   private createHttpServer(): HttpServer | HttpsServer {
-    const requestListener = this.staticRoot
-      ? createStaticWebClientHandler(this.staticRoot)
-      : undefined
+    const requestListener = this.composeRequestListener()
     return this.tlsCert && this.tlsKey
       ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey }, requestListener)
       : createHttpServer(requestListener)
+  }
+
+  // Why: /health takes precedence over static serving; other paths fall through unchanged.
+  private composeRequestListener(): RequestListener | undefined {
+    if (!this.healthHandler) {
+      return this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : undefined
+    }
+    const staticListener = this.staticRoot
+      ? createStaticWebClientHandler(this.staticRoot)
+      : undefined
+    return (req, res) => {
+      if (req.method === 'GET' && req.url?.split('?')[0] === '/health') {
+        this.serveHealth(req, res)
+        return
+      }
+      if (staticListener) {
+        staticListener(req, res)
+        return
+      }
+      res.statusCode = 404
+      res.end()
+    }
+  }
+
+  private serveHealth(req: IncomingMessage, res: ServerResponse): void {
+    this.readHealth()
+      .then((health) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(health))
+      })
+      .catch(() => {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'health_unavailable' }))
+      })
+    req.on('error', () => {})
+  }
+
+  private async readHealth(): Promise<Record<string, unknown>> {
+    if (this.healthCache && this.healthCache.expiresAt > Date.now()) {
+      return this.healthCache.value
+    }
+    // Why: dedupe concurrent in-flight calls so probe bursts share one invocation.
+    this.healthInFlight ??= this.healthHandler!().then((value) => {
+      this.healthCache = { value, expiresAt: Date.now() + HEALTH_CACHE_MS }
+      this.healthInFlight = null
+      return value
+    })
+    return this.healthInFlight
   }
 
   // Why: attach the WSS only after listen succeeds; earlier it re-emits httpServer's EADDRINUSE as an uncatchable exception and breaks the fallback.

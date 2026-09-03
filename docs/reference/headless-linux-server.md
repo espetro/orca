@@ -207,11 +207,12 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStartPost=curl -sf http://127.0.0.1:6768/health || exit 1
 StandardOutput=journal
 StandardError=journal
 KillMode=mixed
 Restart=on-failure
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 78
 RestartSec=5
 
 [Install]
@@ -225,8 +226,10 @@ clients should use.
 then retains systemd's cgroup-wide `SIGKILL` fallback if shutdown times out.
 This lets Orca keep its owned Xvfb alive until Electron disconnects cleanly.
 
-Exit status `3` means another process already owns this userData profile, so
-`RestartPreventExitStatus=3` stops the unit instead of retrying a launch that
+Exit status `3` means another process already owns this userData profile, and `78`
+means the pinned port cannot be bound (in use or denied): the bind is pinned, so a
+collision means retrying changes nothing. `RestartPreventExitStatus=3 78` stops the
+unit instead of retrying a launch that
 cannot succeed. Any other permanent startup fault is capped at 5 starts per
 5 minutes; systemd's defaults (10s window, 5 starts) can never trip at
 `RestartSec=5`, which is how one bad launch could restart thousands of times.
@@ -302,8 +305,9 @@ WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStartPost=curl -sf http://127.0.0.1:6768/health || exit 1
 Restart=on-failure
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 78
 RestartSec=5
 
 [Install]
