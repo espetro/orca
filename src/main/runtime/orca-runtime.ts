@@ -30,6 +30,8 @@ import { RuntimeHeadlessSessionTabPersistenceCommands } from './runtime-headless
 import type { RuntimeHeadlessSessionTabPersistenceDeps } from './runtime-headless-session-tab-persistence-commands-deps'
 import { RuntimePtyTitleTrackingCommands } from './runtime-pty-title-tracking-commands'
 import type { RuntimePtyTitleTrackingCommandsDeps } from './runtime-pty-title-tracking-commands-deps'
+import { RuntimeTerminalAgentStatusBindingCommands } from './runtime-terminal-agent-status-binding-commands'
+import type { RuntimeTerminalAgentStatusBindingCommandsDeps } from './runtime-terminal-agent-status-binding-commands-deps'
 import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
@@ -177,7 +179,6 @@ import {
   type AgentSessionPtyWriteAdmittance
 } from './agent-session-pty-write-gate'
 import {
-  hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
@@ -2701,6 +2702,7 @@ export class OrcaRuntimeService {
   private readonly orchestrationCommands: RuntimeOrchestrationCommands
   private readonly headlessSessionTabPersistenceCommands: RuntimeHeadlessSessionTabPersistenceCommands
   private readonly ptyTitleTrackingCommands: RuntimePtyTitleTrackingCommands
+  private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3557,6 +3559,31 @@ export class OrcaRuntimeService {
     this.headlessSessionTabPersistenceCommands = new RuntimeHeadlessSessionTabPersistenceCommands(
       headlessSessionTabPersistenceDeps
     )
+    const terminalAgentStatusBindingDeps: RuntimeTerminalAgentStatusBindingCommandsDeps = {
+      ptyController: null,
+      ptysById: this.ptysById,
+      getLivePtyForHandle: (handle) => this.getLivePtyForHandle(handle),
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle),
+      getPrimaryLeafForPty: (ptyId) => this.getPrimaryLeafForPty(ptyId),
+      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+      ptyTitleTrackersByPtyId: this.ptyTitleTrackersByPtyId,
+      ptyForegroundProcessReads: this.ptyForegroundProcessReads,
+      ptyForegroundAgentRefreshes: this.ptyForegroundAgentRefreshes,
+      ptyDelayedForegroundSnapshotTitleObservations:
+        this.ptyDelayedForegroundSnapshotTitleObservations,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      mobileSessionTabsAgentStatusHeartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
+      agentPromptLifecycleByPtyId: this.agentPromptLifecycleByPtyId,
+      recordTerminalSideEffectFact: (ptyId, fact) => this.recordTerminalSideEffectFact(ptyId, fact),
+      deliverPendingMessagesForLeaf: (leaf) => this.deliverPendingMessagesForLeaf(leaf),
+      touchMobileSessionSnapshotsForPty: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+      getFreshExplicitAgentStatusForHandle: (handle) =>
+        this.getFreshExplicitAgentStatusForHandle(handle),
+      getTerminalAgentStatus: (handle) => this.getTerminalAgentStatus(handle)
+    }
+    this.terminalAgentStatusBinding = new RuntimeTerminalAgentStatusBindingCommands(
+      terminalAgentStatusBindingDeps
+    )
     const ptyTitleTrackingCommandsDeps: RuntimePtyTitleTrackingCommandsDeps = {
       ptyTitleTrackersByPtyId: this.ptyTitleTrackersByPtyId,
       ptysById: this.ptysById,
@@ -3581,7 +3608,7 @@ export class OrcaRuntimeService {
       getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
       recordTerminalSideEffectFact: (ptyId, fact) => this.recordTerminalSideEffectFact(ptyId, fact),
       touchMobileSessionSnapshotsForPty: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
-      confirmPtyAgentExit: (ptyId) => this.confirmPtyAgentExit(ptyId),
+      confirmPtyAgentExit: (ptyId) => this.terminalAgentStatusBinding.confirmPtyAgentExit(ptyId),
       retirePtyAgentLaunchAuthority: (ptyId) => this.retirePtyAgentLaunchAuthority(ptyId),
       recordAgentPromptLifecycleState: (ptyId, agentStatus) =>
         this.recordAgentPromptLifecycleState(ptyId, agentStatus),
@@ -3589,13 +3616,20 @@ export class OrcaRuntimeService {
       setPtyManagementTitleFromObservedTitle: (pty, normalizedTitle, observedAt) =>
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt),
       shouldDelayPtyBackedMobileSnapshotForForegroundAgent: (pty, normalizedTitle) =>
-        this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle),
+        this.terminalAgentStatusBinding.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
+          pty,
+          normalizedTitle
+        ),
       refreshPtyForegroundAgentFromController: (ptyId, opts) =>
-        this.refreshPtyForegroundAgentFromController(ptyId, opts),
+        this.terminalAgentStatusBinding.refreshPtyForegroundAgentFromController(ptyId, opts),
       getPendingForegroundAgentRefreshForTitle: (ptyId, observedAt) =>
-        this.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt),
+        this.terminalAgentStatusBinding.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt),
       delayPtyBackedMobileSnapshotForForegroundAgent: (ptyId, observedAt, foregroundRefresh) =>
-        this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh),
+        this.terminalAgentStatusBinding.delayPtyBackedMobileSnapshotForForegroundAgent(
+          ptyId,
+          observedAt,
+          foregroundRefresh
+        ),
       resolvePtyTuiIdleWaiters: (pty, ptyId) => this.resolvePtyTuiIdleWaiters(pty, ptyId),
       resolveTuiIdleWaiters: (leaf) => this.resolveTuiIdleWaiters(leaf),
       deliverPendingMessagesForLeaf: (leaf) => this.deliverPendingMessagesForLeaf(leaf),
@@ -12107,6 +12141,116 @@ export class OrcaRuntimeService {
   private pathFlavorForPty = (pty?: RuntimePtyWorktreeRecord | null): 'posix' | 'win32' =>
     this.ptyTitleTrackingCommands.pathFlavorForPty(pty)
 
+  // Terminal agent status binding methods delegated to terminalAgentStatusBinding facade
+  private getTerminalAgentStatusPtyId = (handle: string): string =>
+    this.terminalAgentStatusBinding.getTerminalAgentStatusPtyId(handle)
+
+  private assertTerminalAgentStatusPtyBinding = (handle: string, expectedPtyId: string): void =>
+    this.terminalAgentStatusBinding.assertTerminalAgentStatusPtyBinding(handle, expectedPtyId)
+
+  private getTerminalAgentStatusSnapshot = (
+    handle: string,
+    expectedPtyId: string,
+    waitTextOverride?: string
+  ) =>
+    this.terminalAgentStatusBinding.getTerminalAgentStatusSnapshot(
+      handle,
+      expectedPtyId,
+      waitTextOverride
+    )
+
+  private probeAgentStatusOncePerPty = (
+    handle: string,
+    ptyId: string
+  ): Promise<RuntimeTerminalAgentStatus | undefined> =>
+    this.terminalAgentStatusBinding.probeAgentStatusOncePerPty(handle, ptyId)
+
+  private shouldDelayPtyBackedMobileSnapshotForForegroundAgent = (
+    pty: RuntimePtyWorktreeRecord,
+    title: string
+  ): boolean =>
+    this.terminalAgentStatusBinding.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, title)
+
+  private confirmPtyAgentExit = (ptyId: string): void =>
+    this.terminalAgentStatusBinding.confirmPtyAgentExit(ptyId)
+
+  private refreshPtyForegroundAgent = (ptyId: string): void =>
+    this.terminalAgentStatusBinding.refreshPtyForegroundAgent(ptyId)
+
+  private getPendingForegroundAgentRefreshForTitle = (
+    ptyId: string,
+    titleObservedAt: number
+  ): Promise<boolean> | undefined =>
+    this.terminalAgentStatusBinding.getPendingForegroundAgentRefreshForTitle(ptyId, titleObservedAt)
+
+  private delayPtyBackedMobileSnapshotForForegroundAgent = (
+    ptyId: string,
+    titleObservedAt: number,
+    foregroundRefresh: Promise<boolean>
+  ): void =>
+    this.terminalAgentStatusBinding.delayPtyBackedMobileSnapshotForForegroundAgent(
+      ptyId,
+      titleObservedAt,
+      foregroundRefresh
+    )
+
+  private refreshPtyForegroundAgentFromController = (
+    ptyId: string,
+    options?: { afterTitleObservation?: number }
+  ): Promise<boolean> =>
+    this.terminalAgentStatusBinding.refreshPtyForegroundAgentFromController(ptyId, options)
+
+  private async loadPtyForegroundAgentFromController(
+    ptyId: string,
+    afterTitleObservation?: number
+  ): Promise<boolean> {
+    return this.terminalAgentStatusBinding.loadPtyForegroundAgentFromController(
+      ptyId,
+      afterTitleObservation
+    )
+  }
+
+  private hasAuthoritativeTerminalWaitPermission = (
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  ): boolean =>
+    this.terminalAgentStatusBinding.hasAuthoritativeTerminalWaitPermission(
+      terminal,
+      explicitStatus,
+      lifecycle
+    )
+
+  private resolveAuthoritativeTerminalWaitPermission = (
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  ) =>
+    this.terminalAgentStatusBinding.resolveAuthoritativeTerminalWaitPermission(
+      terminal,
+      explicitStatus,
+      lifecycle
+    )
+
+  private async getTerminalInteractiveWait(
+    handle: string
+  ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
+    return this.terminalAgentStatusBinding.getTerminalInteractiveWait(handle)
+  }
+
+  private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
+    return this.terminalAgentStatusBinding.terminalHasShellForegroundProcess(handle, ptyId)
+  }
+
+  private readPtyForegroundProcessFromController = (
+    ptyId: string,
+    afterTitleObservation?: number
+  ) =>
+    this.terminalAgentStatusBinding.readPtyForegroundProcessFromController(
+      ptyId,
+      afterTitleObservation
+    )
+
   /** Returns true when any retained agent-row snapshot changed in a
    *  client-visible way, so the caller can republish session snapshots. */
   private emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): boolean {
@@ -18899,501 +19043,6 @@ export class OrcaRuntimeService {
     const isRunningAgent = await this.isTerminalRunningAgent(handle)
     this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
     return { handle, isRunningAgent, status: null }
-  }
-
-  private getTerminalAgentStatusPtyId(handle: string): string {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected) {
-        throw new Error('terminal_gone')
-      }
-      return pty.pty.ptyId
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (getTerminalState(leaf) !== 'running') {
-      throw new Error('terminal_exited')
-    }
-    if (!leaf.ptyId) {
-      throw new Error('terminal_gone')
-    }
-    return leaf.ptyId
-  }
-
-  private assertTerminalAgentStatusPtyBinding(handle: string, expectedPtyId: string): void {
-    if (this.getTerminalAgentStatusPtyId(handle) === expectedPtyId) {
-      return
-    }
-    // Why: delayed process evidence belongs only to the PTY that started the
-    // read, while callers still rely on the established stale-handle contract.
-    throw new Error('terminal_handle_stale')
-  }
-
-  private getTerminalAgentStatusSnapshot(
-    handle: string,
-    expectedPtyId: string,
-    waitTextOverride?: string
-  ): TerminalAgentStatusSnapshot {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected || pty.pty.ptyId !== expectedPtyId) {
-        throw new Error('terminal_not_writable')
-      }
-      const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
-      const leafTitle = leaf
-        ? getLatestAgentCandidateTitleInfo(
-            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
-          )
-        : null
-      const ptyTitle =
-        leafTitle ??
-        getLatestAgentCandidateTitleInfo(
-          { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
-          { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
-        )
-      const waitText =
-        waitTextOverride ??
-        buildTerminalWaitText(pty.pty.tailBuffer, pty.pty.tailPartialLine, pty.pty.preview)
-      return {
-        waitText,
-        waitBlockedAt: pty.pty.waitBlockedAt,
-        title: ptyTitle?.title ?? null,
-        titleStatus: ptyTitle
-          ? detectAgentStatusFromTitle(ptyTitle.title)
-          : pty.pty.lastAgentStatus,
-        titleStatusIsLive: ptyTitle !== null
-      }
-    }
-
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (getTerminalState(leaf) !== 'running') {
-      throw new Error('terminal_exited')
-    }
-    if (!leaf.ptyId) {
-      throw new Error('terminal_gone')
-    }
-    if (leaf.ptyId !== expectedPtyId) {
-      throw new Error('terminal_not_writable')
-    }
-    const title = getLatestAgentCandidateTitleInfo(
-      { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-      { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
-      { title: this.tabs.get(leaf.tabId)?.title, updatedAt: 0 }
-    )
-    return {
-      waitText:
-        waitTextOverride ??
-        buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
-      waitBlockedAt: leaf.waitBlockedAt,
-      title: title?.title ?? null,
-      titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
-      titleStatusIsLive: (title?.updatedAt ?? 0) > 0
-    }
-  }
-
-  private hasAuthoritativeTerminalWaitPermission(
-    terminal: TerminalAgentStatusSnapshot,
-    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
-    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
-  ): boolean {
-    return (
-      this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle) !== null
-    )
-  }
-
-  /** The matched prompt when the tail authoritatively proves a human wait, else null. */
-  private resolveAuthoritativeTerminalWaitPermission(
-    terminal: TerminalAgentStatusSnapshot,
-    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
-    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
-  ): RuntimeTerminalWaitBlockedReason | null {
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
-    if (!blockedByWaitText) {
-      return null
-    }
-    const liveTitleClearsBlockedText =
-      terminal.titleStatusIsLive &&
-      terminal.titleStatus !== null &&
-      terminal.titleStatus !== 'permission' &&
-      !isOpenCodeNativeTitle(terminal.title) &&
-      // Why exempt: cursor-agent keeps spinning in its title while an approval waits, so a
-      // "working" title there is not evidence of progress.
-      blockedByWaitText !== 'agent-approval-prompt'
-    if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
-      return null
-    }
-    // Why no timestamp: the menu is only matched while it still owns the bottom of the screen,
-    // which is the dating. Requiring one would lose a dialog restored from history, across the
-    // app restart an unattended run has to survive.
-    if (blockedByWaitText === 'agent-approval-prompt') {
-      return blockedByWaitText
-    }
-    const newestPermissionAt = Math.max(
-      explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
-      terminal.waitBlockedAt ?? -1
-    )
-    const newestClearAt = Math.max(
-      explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
-    )
-    // Equal wall-clock observations fail closed because their raw intra-chunk order is unknown.
-    return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
-  }
-
-  /** Why: "blocked on a human" is the one worker state a coordinator cannot infer — silence
-   *  covers it, a long tool call, and a wedged process alike. `null` means this pane was
-   *  evaluated and nothing proves a wait; `undefined` means it could not be evaluated, which
-   *  is never the same as "not waiting". */
-  async getTerminalInteractiveWait(
-    handle: string
-  ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
-    let ptyId: string
-    let terminal: TerminalAgentStatusSnapshot
-    try {
-      ptyId = this.getTerminalAgentStatusPtyId(handle)
-      terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
-    } catch {
-      return undefined
-    }
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
-    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
-      terminal,
-      explicitStatus,
-      this.agentPromptLifecycleByPtyId.get(ptyId)
-    )
-    if (promptReason) {
-      // A matched prompt is self-proving: it is on this pane's screen now.
-      return {
-        source: 'prompt-text',
-        reason: promptReason,
-        ...(terminal.waitBlockedAt !== null ? { since: terminal.waitBlockedAt } : {})
-      }
-    }
-    if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
-      return { source: 'title' }
-    }
-    if (explicitStatus?.status !== 'permission') {
-      return null
-    }
-    // Why the extra round trip for hook evidence only: a hook row outlives its agent by up to
-    // AGENT_STATUS_STALE_AFTER_MS, and only the shared verdict proves an agent still owns this
-    // PTY — a shell that took the pane back rarely leaves a title we can recognize as one.
-    // Bounded because it reaches a PTY controller that can be a remote host: a wedged probe
-    // must leave the wait unevaluated, never stall every caller of showTerminal.
-    const status = await withTimeout(
-      this.probeAgentStatusOncePerPty(handle, ptyId),
-      TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
-      undefined
-    )
-    if (!status) {
-      return undefined
-    }
-    return status.isRunningAgent && status.status === 'permission'
-      ? { source: 'hook', since: explicitStatus.updatedAt }
-      : null
-  }
-
-  // Why single-flight: the timeout above abandons the wait, not the request. A wedged remote
-  // host would otherwise accrue one live probe per poll for as long as a coordinator watches.
-  private readonly interactiveWaitProbesByPtyId = new Map<
-    string,
-    Promise<RuntimeTerminalAgentStatus | undefined>
-  >()
-
-  private probeAgentStatusOncePerPty(
-    handle: string,
-    ptyId: string
-  ): Promise<RuntimeTerminalAgentStatus | undefined> {
-    const inFlight = this.interactiveWaitProbesByPtyId.get(ptyId)
-    if (inFlight) {
-      return inFlight
-    }
-    const probe = this.getTerminalAgentStatus(handle)
-      .catch(() => undefined)
-      .finally(() => {
-        if (this.interactiveWaitProbesByPtyId.get(ptyId) === probe) {
-          this.interactiveWaitProbesByPtyId.delete(ptyId)
-        }
-      })
-    this.interactiveWaitProbesByPtyId.set(ptyId, probe)
-    return probe
-  }
-
-  private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
-    if (!this.ptyController) {
-      return false
-    }
-    let foregroundProcess: string | null
-    try {
-      foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
-    } catch {
-      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return false
-    }
-    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    if (!foregroundProcess || !isShellProcess(foregroundProcess)) {
-      return false
-    }
-    const confirmationController = this.ptyController
-    if (!confirmationController?.confirmForegroundProcess) {
-      return true
-    }
-    let confirmedProcess: string | null
-    try {
-      confirmedProcess = await confirmationController.confirmForegroundProcess(ptyId)
-    } catch {
-      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return true
-    }
-    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    // Why: hook identity is generic; strong provider evidence only needs to
-    // prove that some recognized agent still owns this exact PTY.
-    return recognizeAgentProcess(confirmedProcess) === null
-  }
-
-  private shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
-    pty: RuntimePtyWorktreeRecord,
-    title: string
-  ): boolean {
-    return (
-      !pty.launchAgent && pty.foregroundAgent === null && hasCompatibleAgentTitleIdentity(title)
-    )
-  }
-
-  private readPtyForegroundProcessFromController(
-    ptyId: string,
-    afterTitleObservation = 0
-  ): Promise<PtyForegroundProcessRead> | null {
-    const controller = this.ptyController
-    if (!controller) {
-      return null
-    }
-    const pending = this.ptyForegroundProcessReads.get(ptyId)
-    if (
-      pending?.controller === controller &&
-      pending.startedAfterTitleObservation >= afterTitleObservation
-    ) {
-      return pending.promise
-    }
-    if (pending?.controller === controller) {
-      return pending.promise.then(
-        () =>
-          this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation) ?? {
-            controller,
-            process: null,
-            available: false
-          }
-      )
-    }
-    const unavailable: PtyForegroundProcessRead = {
-      controller,
-      process: null,
-      available: false
-    }
-    let processRead: Promise<string | null>
-    try {
-      processRead = Promise.resolve(controller.getForegroundProcess(ptyId))
-    } catch {
-      const entry: PtyForegroundProcessReadEntry = {
-        controller,
-        startedAfterTitleObservation: afterTitleObservation,
-        promise: Promise.resolve(unavailable)
-      }
-      entry.promise = entry.promise.finally(() => {
-        if (this.ptyForegroundProcessReads.get(ptyId) === entry) {
-          this.ptyForegroundProcessReads.delete(ptyId)
-        }
-      })
-      this.ptyForegroundProcessReads.set(ptyId, entry)
-      return entry.promise
-    }
-    let entry: PtyForegroundProcessReadEntry
-    const promise = processRead
-      .then((process) => ({ controller, process, available: true }))
-      .catch(() => unavailable)
-      .finally(() => {
-        if (this.ptyForegroundProcessReads.get(ptyId) === entry) {
-          this.ptyForegroundProcessReads.delete(ptyId)
-        }
-      })
-    entry = {
-      controller,
-      startedAfterTitleObservation: afterTitleObservation,
-      promise
-    }
-    this.ptyForegroundProcessReads.set(ptyId, entry)
-    return entry.promise
-  }
-
-  private confirmPtyAgentExit(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    const titleObservedAt = pty?.lastOscTitleAt ?? null
-    const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
-    if (!pty?.connected || !foregroundRead) {
-      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
-      return
-    }
-    void foregroundRead.then((result) => {
-      const current = this.ptysById.get(ptyId)
-      if (current !== pty || !current.connected) {
-        return
-      }
-      if (current.lastOscTitleAt !== titleObservedAt && current.lastAgentStatus !== null) {
-        return
-      }
-      if (
-        result.controller === this.ptyController &&
-        result.available &&
-        recognizeAgentProcess(result.process) !== null
-      ) {
-        const restoredStatus = this.ptyTitleTrackersByPtyId
-          .get(ptyId)
-          ?.tracker.restoreLastAgentExit()
-        if (restoredStatus !== null && restoredStatus !== undefined) {
-          current.lastAgentStatus = restoredStatus
-          for (const leaf of this.getLeavesForPty(ptyId)) {
-            if (leaf.lastAgentStatus !== null) {
-              continue
-            }
-            // Why: the foreground agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
-            leaf.lastAgentStatus = restoredStatus
-            if (restoredStatus === 'idle') {
-              this.deliverPendingMessagesForLeaf(leaf)
-            }
-          }
-        }
-        return
-      }
-      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
-    })
-  }
-
-  /**
-   * Schedules an asynchronous query to check which agent process is currently
-   * running in the foreground of a PTY.
-   */
-  private refreshPtyForegroundAgent(ptyId: string): void {
-    void this.refreshPtyForegroundAgentFromController(ptyId)
-  }
-
-  private getPendingForegroundAgentRefreshForTitle(
-    ptyId: string,
-    titleObservedAt: number
-  ): Promise<boolean> | undefined {
-    if (!this.ptyForegroundAgentRefreshes.has(ptyId)) {
-      return undefined
-    }
-    return this.refreshPtyForegroundAgentFromController(ptyId, {
-      afterTitleObservation: titleObservedAt
-    })
-  }
-
-  private delayPtyBackedMobileSnapshotForForegroundAgent(
-    ptyId: string,
-    titleObservedAt: number,
-    foregroundRefresh: Promise<boolean>
-  ): void {
-    this.ptyDelayedForegroundSnapshotTitleObservations.set(ptyId, titleObservedAt)
-    void foregroundRefresh.then((foregroundAgentChanged) => {
-      if (this.ptyDelayedForegroundSnapshotTitleObservations.get(ptyId) !== titleObservedAt) {
-        return
-      }
-      this.ptyDelayedForegroundSnapshotTitleObservations.delete(ptyId)
-      if (this.mobileSessionTabListeners.size > 0) {
-        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-      }
-      if (!foregroundAgentChanged) {
-        this.touchMobileSessionSnapshotsForPty(ptyId)
-      }
-    })
-  }
-
-  /**
-   * Deduplicates and manages in-flight foreground agent refresh queries
-   * for a specific PTY.
-   */
-  private refreshPtyForegroundAgentFromController(
-    ptyId: string,
-    options: { afterTitleObservation?: number } = {}
-  ): Promise<boolean> {
-    const startedAfterTitleObservation = options.afterTitleObservation ?? 0
-    const pendingRefresh = this.ptyForegroundAgentRefreshes.get(ptyId)
-    if (pendingRefresh) {
-      pendingRefresh.requestedAfterTitleObservation = Math.max(
-        pendingRefresh.requestedAfterTitleObservation,
-        startedAfterTitleObservation
-      )
-      return pendingRefresh.promise
-    }
-    const entry: PtyForegroundAgentRefresh = {
-      promise: Promise.resolve(false),
-      startedAfterTitleObservation,
-      requestedAfterTitleObservation: startedAfterTitleObservation
-    }
-    const refresh = (async (): Promise<boolean> => {
-      while (true) {
-        entry.startedAfterTitleObservation = entry.requestedAfterTitleObservation
-        const foregroundAgentChanged = await this.loadPtyForegroundAgentFromController(
-          ptyId,
-          entry.startedAfterTitleObservation
-        )
-        if (
-          foregroundAgentChanged ||
-          entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation
-        ) {
-          return foregroundAgentChanged
-        }
-      }
-    })().finally(() => {
-      if (this.ptyForegroundAgentRefreshes.get(ptyId) === entry) {
-        this.ptyForegroundAgentRefreshes.delete(ptyId)
-      }
-    })
-    entry.promise = refresh
-    this.ptyForegroundAgentRefreshes.set(ptyId, entry)
-    return refresh
-  }
-
-  /**
-   * Queries the PTY controller for the active foreground process, identifies if it
-   * is a recognized agent, and updates the PTY's foreground agent state if changed.
-   */
-  private async loadPtyForegroundAgentFromController(
-    ptyId: string,
-    afterTitleObservation = 0
-  ): Promise<boolean> {
-    if (!this.ptyController) {
-      return false
-    }
-    const pty = this.ptysById.get(ptyId)
-    if (!pty?.connected) {
-      return false
-    }
-    // Why: foregroundAgent is only consulted as the owner fallback when
-    // launchAgent is unknown, so a known launchAgent makes the relay
-    // getForegroundProcess round-trip pure waste (covers all launched agents).
-    if (pty.launchAgent) {
-      return false
-    }
-    const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation)
-    if (!foregroundRead) {
-      return false
-    }
-    const result = await foregroundRead
-    if (result.controller !== this.ptyController || !result.available) {
-      return false
-    }
-    const foregroundProcess = result.process
-    const foregroundAgent = foregroundProcess
-      ? (recognizeAgentProcess(foregroundProcess)?.agent ?? null)
-      : null
-    if (pty.foregroundAgent === foregroundAgent) {
-      return false
-    }
-    pty.foregroundAgent = foregroundAgent
-    this.touchMobileSessionSnapshotsForPty(ptyId)
-    return true
   }
 
   private getFreshExplicitAgentStatusForHandle(
@@ -34462,7 +34111,6 @@ import {
   REMOTE_FETCH_CACHE_MAX,
   REMOTE_FETCH_TIMEOUT_MS,
   RESOLVED_WORKTREE_CACHE_TTL_MS,
-  TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS,
@@ -34506,7 +34154,6 @@ import {
   findRuntimeWorktreeSummaryByPath,
   getExplicitWorktreeIdSelector,
   getLatestAgentCandidateTitle,
-  getLatestAgentCandidateTitleInfo,
   getLatestLeafTitle,
   getLatestPtyTitle,
   getLeafWorktreeStatus,
