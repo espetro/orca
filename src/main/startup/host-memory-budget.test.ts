@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { deriveHostMemoryBudget } from './host-memory-budget'
+import { deriveHostMemoryBudget, parseHostMemoryTierOverride } from './host-memory-budget'
 
 const GIB = 1024 * 1024 * 1024
+const NO_ENV: NodeJS.ProcessEnv = {}
 
 describe('deriveHostMemoryBudget', () => {
   it('assigns low tier for memory < 12 GiB', () => {
@@ -86,5 +87,36 @@ describe('deriveHostMemoryBudget', () => {
     const budget = deriveHostMemoryBudget()
     expect(['low', 'mid', 'high']).toContain(budget.tier)
     expect(budget.totalGib).toBeGreaterThan(0)
+  })
+})
+
+describe('ORCA_HOST_MEMORY_TIER override', () => {
+  it('parses low/mid/high case-insensitively and rejects anything else', () => {
+    expect(parseHostMemoryTierOverride('low')).toBe('low')
+    expect(parseHostMemoryTierOverride('  HIGH ')).toBe('high')
+    expect(parseHostMemoryTierOverride('Mid')).toBe('mid')
+    expect(parseHostMemoryTierOverride('')).toBeNull()
+    expect(parseHostMemoryTierOverride(undefined)).toBeNull()
+    expect(parseHostMemoryTierOverride('lowish')).toBeNull()
+  })
+
+  it('forces the requested tier while keeping the real totalGib reading', () => {
+    const forcedHigh = deriveHostMemoryBudget(8 * GIB, { ORCA_HOST_MEMORY_TIER: 'high' })
+    expect(forcedHigh.tier).toBe('high')
+    expect(forcedHigh.totalGib).toBe(8)
+    expect(forcedHigh.rendererMaxOldSpaceMb).toBe(4096)
+    expect(forcedHigh.enableLowEndDeviceMode).toBe(false)
+    expect(forcedHigh.rendererProcessLimit).toBeNull()
+
+    const forcedLow = deriveHostMemoryBudget(64 * GIB, { ORCA_HOST_MEMORY_TIER: 'low' })
+    expect(forcedLow.tier).toBe('low')
+    expect(forcedLow.totalGib).toBe(64)
+    expect(forcedLow.rendererMaxOldSpaceMb).toBe(768)
+    expect(forcedLow.rendererProcessLimit).toBe(2)
+  })
+
+  it('falls through to the RAM thresholds when the override is absent or invalid', () => {
+    expect(deriveHostMemoryBudget(8 * GIB, NO_ENV).tier).toBe('low')
+    expect(deriveHostMemoryBudget(16 * GIB, { ORCA_HOST_MEMORY_TIER: 'huge' }).tier).toBe('mid')
   })
 })

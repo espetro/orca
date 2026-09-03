@@ -41,7 +41,8 @@ function parseRendererHeapOverrideMb(value: string | undefined): HeapOverride {
  */
 export function computeRendererHeapCeilingMb(
   totalMemoryBytes: number,
-  envOverride?: string
+  envOverride?: string,
+  env: NodeJS.ProcessEnv = process.env
 ): number | null {
   const override = parseRendererHeapOverrideMb(envOverride)
   if (override === 'disable') {
@@ -53,7 +54,7 @@ export function computeRendererHeapCeilingMb(
   if (!Number.isFinite(totalMemoryBytes) || totalMemoryBytes <= 0) {
     return null
   }
-  const budget = deriveHostMemoryBudget(totalMemoryBytes)
+  const budget = deriveHostMemoryBudget(totalMemoryBytes, env)
   return budget.rendererMaxOldSpaceMb
 }
 
@@ -64,9 +65,10 @@ export function enableRendererHeapHeadroom(
   if (!Number.isFinite(totalMemoryBytes) || totalMemoryBytes <= 0) {
     return
   }
-  const envOverride = (options.env ?? process.env)[RENDERER_HEAP_ENV_VAR]
-  const ceilingMb = computeRendererHeapCeilingMb(totalMemoryBytes, envOverride)
-  const budget = deriveHostMemoryBudget(totalMemoryBytes)
+  const env = options.env ?? process.env
+  const envOverride = env[RENDERER_HEAP_ENV_VAR]
+  const ceilingMb = computeRendererHeapCeilingMb(totalMemoryBytes, envOverride, env)
+  const budget = deriveHostMemoryBudget(totalMemoryBytes, env)
 
   const existing = app.commandLine.getSwitchValue('js-flags')
   const flagsToAdd: string[] = []
