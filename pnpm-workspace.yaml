@@ -20,12 +20,32 @@ supportedArchitectures:
     - x64
     - arm64
 
-onlyBuiltDependencies:
-  - '@parcel/watcher'
-  - cpu-features
-  - esbuild
-  - node-pty
-  - sherpa-onnx
+# Legacy .npmrc settings. pnpm 11 stops reading shamefully-hoist and
+# minimum-release-age from .npmrc (https://pnpm.io/11.x/release-notes); both
+# are kept explicit so the install stays deterministic across versions.
+# - shamefullyHoist: true keeps node_modules flat so unscoped requires like
+#   `@electron/get` resolve from the project root. (See commit adding
+#   `@electron/get` to devDependencies for the long-term fix path.)
+# - minimumReleaseAge: 4320 hours (~6 months) is a deliberate supply-chain
+#   policy and not a default we are inheriting.
+shamefullyHoist: true
+minimumReleaseAge: 4320
+
+allowBuilds:
+  '@parcel/watcher': true
+  cpu-features: true
+  esbuild: true
+  node-pty: true
+  sherpa-onnx: true
+  # Explicitly denied: skipped today by omission; pnpm 11's strictDepBuilds
+  # default needs each denied package named, or the install hard-fails.
+  '@swc/core': false
+  '@vscode/windows-process-tree': false
+  agent-browser: false
+  electron-winstaller: false
+  msw: false
+  ssh2: false
+  windows-native-registry: false
 
 patchedDependencies:
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch

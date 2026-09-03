@@ -1,5 +1,12 @@
+# Legacy .npmrc settings. pnpm 11 stops reading minimum-release-age from
+# .npmrc; keep it explicit here so install behavior is version-independent.
+minimumReleaseAge: 4320
+
 allowBuilds:
   esbuild: true
 
 overrides:
   xcode>uuid: 11.1.1
+
+patchedDependencies:
+  react-native@0.83.9: patches/react-native@0.83.9.patch
