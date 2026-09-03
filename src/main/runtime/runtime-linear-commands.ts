@@ -41,8 +41,15 @@ import {
 import { isLinearUuid } from '../../shared/linear/uuid'
 import { linearPriorityLabel } from '../../shared/linear/priority-label'
 import { clampLinearIssueListLimit } from '../../shared/linear/issue-read-limits'
-import { sameStringSet } from '../../shared/string-set'
+import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
 import type { RuntimeLinearCommandHost } from './runtime-linear-command-host'
+
+import { resolve } from 'node:path'
+import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { ResolvedWorktree } from './repo-worktree-row-resolution'
+
 import {
   connect as connectLinear,
   disconnect as disconnectLinear,
@@ -141,6 +148,43 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+
+type LinearAgentWriteTarget = {
+  issue: LinearIssueSummary
+  workspaceId: string
+}
+
+type LinearCreateFieldIntent = {
+  stateId?: string
+  assigneeId?: string | null
+  priority?: number
+  estimate?: number | null
+  dueDate?: string | null
+  labelIds?: string[]
+  projectId?: string
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  const rightSet = new Set(right)
+  return left.every((value) => rightSet.has(value))
+}
+
+function labelsForIds(
+  ids: string[],
+  labels: { id?: string | null; name?: string | null; color?: string | null }[]
+): { id: string; name: string; color?: string | null }[] {
+  return ids.map((id) => {
+    const label = labels.find((candidate) => candidate.id === id)
+    return {
+      id,
+      name: label?.name ?? id,
+      ...(label?.color ? { color: label.color } : {})
+    }
+  })
+}
 
 export class RuntimeLinearCommands {
   constructor(private readonly host: RuntimeLinearCommandHost) {}
@@ -373,21 +417,21 @@ async linearMcpIssueList(params: LinearMcpIssueListRequest): Promise<LinearMcpIs
 async linearResolveCurrentIssue(
   context?: LinearCurrentIssueContextHints
 ): Promise<ReturnType<typeof getLinearCurrentIssueFromWorktree>> {
-  if (!this.store) {
+  if (!this.host.store) {
     throw new Error('runtime_unavailable')
   }
 
   let worktree: ResolvedWorktree | null = null
   if (context?.terminalHandle) {
     try {
-      const terminal = await this.showTerminal(context.terminalHandle)
+      const terminal = await this.host.showTerminal(context.terminalHandle)
       if (context.worktreeId && context.worktreeId !== terminal.worktreeId) {
         throw new LinearAgentAccessError(
           'linear_permission_denied',
           'The provided Linear worktree context does not match the caller terminal.'
         )
       }
-      worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+      worktree = await this.host.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
     } catch (error) {
       if (error instanceof LinearAgentAccessError) {
         throw error
@@ -402,7 +446,7 @@ async linearResolveCurrentIssue(
   }
 
   if (!worktree && context?.remote !== true && context?.cwd) {
-    worktree = await this.resolveWorktreeForContainedPath(context.cwd)
+    worktree = await this.host.resolveWorktreeForContainedPath(context.cwd)
     if (!worktree) {
       throw new LinearAgentAccessError(
         'linear_issue_required',
@@ -425,7 +469,7 @@ async linearResolveCurrentIssue(
       worktree.linkedLinearIssueOrganizationUrlKey
     )
     if (backfill?.workspaceId) {
-      this.store.setWorktreeMeta(worktree.id, {
+      this.host.store.setWorktreeMeta(worktree.id, {
         linkedLinearIssueWorkspaceId: backfill.workspaceId,
         linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null
       })
@@ -443,7 +487,7 @@ async linearResolveCurrentIssue(
 private async resolveWorktreeForContainedPath(cwd: string): Promise<ResolvedWorktree | null> {
   const currentPath = resolve(cwd)
   let best: ResolvedWorktree | null = null
-  for (const candidate of await this.listResolvedWorktrees()) {
+  for (const candidate of await this.host.listResolvedWorktrees()) {
     if (!isPathInsideOrEqual(candidate.path, currentPath)) {
       continue
     }
@@ -2304,7 +2348,7 @@ private async notifyLinearLinkedIssueUpdated(
   const normalized = new Map(
     identifiers.map((value) => [value.toLocaleUpperCase(), value] as const)
   )
-  for (const worktree of await this.listResolvedWorktrees()) {
+  for (const worktree of await this.host.listResolvedWorktrees()) {
     const linkedIdentifier = normalized.get(
       (worktree.linkedLinearIssue ?? '').toLocaleUpperCase()
     )
@@ -2315,7 +2359,7 @@ private async notifyLinearLinkedIssueUpdated(
     if (linkedWorkspaceId !== workspaceId) {
       continue
     }
-    this.emitClientEvent({
+    this.host.emitClientEvent({
       type: 'linearLinkedIssueUpdated',
       worktreeId: worktree.id,
       identifier: linkedIdentifier,

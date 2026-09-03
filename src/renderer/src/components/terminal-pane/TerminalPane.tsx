@@ -87,6 +87,7 @@ import { useTerminalPaneFocus } from './use-terminal-pane-focus'
 import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
 import { useTerminalPaneFitSync } from './use-terminal-pane-fit-sync'
 import { useTerminalPaneTitleOverlay } from './use-terminal-pane-title-overlay'
+import { useTerminalPaneShutdownCapture } from './use-terminal-pane-shutdown-capture'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import {
   closeTerminalLinkActionRequest,
@@ -105,7 +106,6 @@ import { connectPanePty } from './pty-connection'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
-import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
   getMobileFitOverridePtyIds,
   getFitOverrideForPty
@@ -116,7 +116,6 @@ import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
-import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-session'
@@ -176,7 +175,6 @@ import {
 } from './terminal-remote-runtime-recovery-ui-state'
 
 // Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
-import { shutdownBufferCaptures } from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { executeTerminalPastePlan, planTerminalPasteWithYield } from './terminal-paste-coordinator'
@@ -1538,49 +1536,17 @@ function TerminalPane(
     })
   }, [paneCount])
 
-  // Register a shutdown capture callback; App.tsx's beforeunload handler invokes all to serialize terminal buffers.
-  useEffect(() => {
-    const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
-      const manager = managerRef.current
-      const container = containerRef.current
-      if (!manager || !container) {
-        return
-      }
-      const panes = manager.getPanes()
-      if (panes.length === 0) {
-        return
-      }
-      // Why: setTabLayout REPLACES, not merges; a transient empty capture (xterm not yet rendered) would wipe a known-good buffer, so merge prior state for empty leaves.
-      const state = useAppStore.getState()
-      const existing = state.terminalLayoutsByTabId[tabId]
-      const includeLocalBuffers = options?.includeLocalBuffers ?? true
-      const shouldCaptureScrollbackBuffers = includeLocalBuffers
-        ? true
-        : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
-      const layout = captureTerminalShutdownLayout({
-        manager,
-        container,
-        expandedPaneId: expandedPaneIdRef.current,
-        paneTransports: paneTransportsRef.current,
-        paneTitlesByPaneId: paneTitlesRef.current,
-        existingLayout: existing,
-        // Why: beforeunload skips local/floating bytes (session payloads prune them); worktree sleep keeps them as defense-in-depth.
-        captureBuffers: shouldCaptureScrollbackBuffers,
-        clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
-      })
-      setTabLayout(tabId, layout)
-      for (const pane of panes) {
-        clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
-      }
-    }
-    shutdownBufferCaptures.set(tabId, captureBuffers)
-    return () => {
-      // Why: only remove if the entry still points at this closure; a remount may have replaced it first.
-      if (shutdownBufferCaptures.get(tabId) === captureBuffers) {
-        shutdownBufferCaptures.delete(tabId)
-      }
-    }
-  }, [tabId, worktreeId, setTabLayout])
+  useTerminalPaneShutdownCapture({
+    tabId,
+    worktreeId,
+    managerRef,
+    containerRef,
+    expandedPaneIdRef,
+    paneTransportsRef,
+    paneTitlesRef,
+    clearedScrollbackLeafIdsRef,
+    setTabLayout
+  })
 
   useEffect(() => {
     if (renamingPaneId === null) {
