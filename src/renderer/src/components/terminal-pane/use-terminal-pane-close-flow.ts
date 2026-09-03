@@ -15,6 +15,7 @@ export type CloseFlowState = {
   handleCancelClose: () => void
   handleRequestClosePane: (paneId: number) => void
   closeActivePane: () => void
+  executeClosePane: (paneId: number) => void
 }
 
 export function useCloseFlowState(args: {
@@ -132,6 +133,7 @@ export function useCloseFlowState(args: {
   }, [handleRequestClosePane, args.managerRef])
 
   return {
+    executeClosePane,
     pendingCloseConfirmation,
     setPendingCloseConfirmation,
     handleConfirmClose,
