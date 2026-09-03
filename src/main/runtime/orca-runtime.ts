@@ -28,6 +28,8 @@ import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
 import { RuntimeHeadlessSessionTabPersistenceCommands } from './runtime-headless-session-tab-persistence-commands'
 import type { RuntimeHeadlessSessionTabPersistenceDeps } from './runtime-headless-session-tab-persistence-commands-deps'
+import { RuntimePtyTitleTrackingCommands } from './runtime-pty-title-tracking-commands'
+import type { RuntimePtyTitleTrackingCommandsDeps } from './runtime-pty-title-tracking-commands-deps'
 import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
@@ -75,8 +77,6 @@ import type {
   ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
-import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
-import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
@@ -87,18 +87,11 @@ import type {
   RemoteTerminalSourceRangeReplacementReservation,
   RemoteTerminalSourceRangeStreamIdentity
 } from './remote-terminal-source-range-consumer'
-import {
-  createTerminalTitleTracker,
-  type TerminalTitleFactMeta,
-  type TerminalTitleTracker
-} from '../../shared/terminal-output-side-effects'
-import { getDecorativeAgentTitleSignature } from '../../shared/agent-decorative-title-signature'
-import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import type { TerminalTitleFactMeta } from '../../shared/terminal-output-side-effects'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
 } from '../../shared/terminal-side-effect-facts'
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import {
@@ -2707,6 +2700,7 @@ export class OrcaRuntimeService {
   private readonly repoGitCommands: RuntimeRepoGitCommandsFacade
   private readonly orchestrationCommands: RuntimeOrchestrationCommands
   private readonly headlessSessionTabPersistenceCommands: RuntimeHeadlessSessionTabPersistenceCommands
+  private readonly ptyTitleTrackingCommands: RuntimePtyTitleTrackingCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3562,6 +3556,58 @@ export class OrcaRuntimeService {
     }
     this.headlessSessionTabPersistenceCommands = new RuntimeHeadlessSessionTabPersistenceCommands(
       headlessSessionTabPersistenceDeps
+    )
+    const ptyTitleTrackingCommandsDeps: RuntimePtyTitleTrackingCommandsDeps = {
+      ptyTitleTrackersByPtyId: this.ptyTitleTrackersByPtyId,
+      ptysById: this.ptysById,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      ptyDelayedForegroundSnapshotTitleObservations:
+        this.ptyDelayedForegroundSnapshotTitleObservations,
+      mobileSessionTabsAgentStatusHeartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
+      terminalSideEffectConsumerAvailable: this.terminalSideEffectConsumerAvailable,
+      terminalSideEffectLocalConsumerAvailable: this.terminalSideEffectLocalConsumerAvailable,
+      onTerminalSideEffects: this.onTerminalSideEffects,
+      terminalSpawnCommandsByPtyId: this.terminalSpawnCommandsByPtyId,
+      oscTitleScanTailByPtyId: this.oscTitleScanTailByPtyId,
+      osc7ScanTailByPtyId: this.osc7ScanTailByPtyId,
+      agentStatusOscProcessorsByPtyId: this.agentStatusOscProcessorsByPtyId,
+      agentPromptLifecycleByPtyId: this.agentPromptLifecycleByPtyId,
+      agentPromptPermissionSequenceByPtyId: this.agentPromptPermissionSequenceByPtyId,
+      terminalSideEffectTitleGateKeysByClientEventListener:
+        this.terminalSideEffectTitleGateKeysByClientEventListener,
+      wslDistroByPtyId: this.wslDistroByPtyId,
+      terminalCwdByPtyId: this.terminalCwdByPtyId,
+      terminalFileUriHostnameByPtyId: this.terminalFileUriHostnameByPtyId,
+      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+      recordTerminalSideEffectFact: (ptyId, fact) => this.recordTerminalSideEffectFact(ptyId, fact),
+      touchMobileSessionSnapshotsForPty: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+      confirmPtyAgentExit: (ptyId) => this.confirmPtyAgentExit(ptyId),
+      retirePtyAgentLaunchAuthority: (ptyId) => this.retirePtyAgentLaunchAuthority(ptyId),
+      recordAgentPromptLifecycleState: (ptyId, agentStatus) =>
+        this.recordAgentPromptLifecycleState(ptyId, agentStatus),
+      nextTitleObservationSequence: () => this.nextTitleObservationSequence(),
+      setPtyManagementTitleFromObservedTitle: (pty, normalizedTitle, observedAt) =>
+        this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt),
+      shouldDelayPtyBackedMobileSnapshotForForegroundAgent: (pty, normalizedTitle) =>
+        this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle),
+      refreshPtyForegroundAgentFromController: (ptyId, opts) =>
+        this.refreshPtyForegroundAgentFromController(ptyId, opts),
+      getPendingForegroundAgentRefreshForTitle: (ptyId, observedAt) =>
+        this.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt),
+      delayPtyBackedMobileSnapshotForForegroundAgent: (ptyId, observedAt, foregroundRefresh) =>
+        this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh),
+      resolvePtyTuiIdleWaiters: (pty, ptyId) => this.resolvePtyTuiIdleWaiters(pty, ptyId),
+      resolveTuiIdleWaiters: (leaf) => this.resolveTuiIdleWaiters(leaf),
+      deliverPendingMessagesForLeaf: (leaf) => this.deliverPendingMessagesForLeaf(leaf),
+      countTerminalSideEffectConsumingClientEventListeners: () =>
+        this.countTerminalSideEffectConsumingClientEventListeners(),
+      clearWaitBlockedCheckState: (ptyId) => this.clearWaitBlockedCheckState(ptyId),
+      primeWaitBlockedBaselineFromSeededTail: (ptyId) =>
+        this.primeWaitBlockedBaselineFromSeededTail(ptyId),
+      clearAgentRowSnapshotsForPty: (ptyId) => this.clearAgentRowSnapshotsForPty(ptyId)
+    }
+    this.ptyTitleTrackingCommands = new RuntimePtyTitleTrackingCommands(
+      ptyTitleTrackingCommandsDeps
     )
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
@@ -11998,446 +12044,68 @@ export class OrcaRuntimeService {
 
   /** Raw last title from main's tracked PTY/leaf records — the title surface
    *  the tracker (live bytes + synthetic frames) keeps current. */
-  private getTrackedRawTitleForPty(ptyId: string): string | null {
-    const recordTitle = this.ptysById.get(ptyId)?.lastOscTitle
-    if (recordTitle) {
-      return recordTitle
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      if (leaf.lastOscTitle) {
-        return leaf.lastOscTitle
-      }
-    }
-    return null
-  }
 
-  private isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {
-    return isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
-  }
+  // PTY title tracking methods delegated to ptyTitleTrackingCommands facade
+  private getTrackedRawTitleForPty = (ptyId: string): string | null =>
+    this.ptyTitleTrackingCommands.getTrackedRawTitleForPty(ptyId)
 
-  /** Display fallback for identities intentionally omitted from liveness records. */
-  private getTrackedDisplayTitleForPty(ptyId: string): string | null {
-    return (
-      this.getTrackedRawTitleForPty(ptyId) ??
-      this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ??
-      null
-    )
-  }
+  private isLiveCursorNativeTitle = (rawTitle: string, meta?: TerminalTitleFactMeta): boolean =>
+    this.ptyTitleTrackingCommands.isLiveCursorNativeTitle(rawTitle, meta)
 
-  private getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
-    if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
-      return null
-    }
-    // Why: a manual title is authoritative until explicitly cleared with null.
-    const pty = this.ptysById.get(ptyId)
-    if (pty && pty.title !== null) {
-      return null
-    }
-    return this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ?? null
-  }
+  private getTrackedDisplayTitleForPty = (ptyId: string): string | null =>
+    this.ptyTitleTrackingCommands.getTrackedDisplayTitleForPty(ptyId)
 
-  /** Why: synthetic agent title frames no longer ride pty:data, so neither
-   *  renderer xterm nor the headless emulator observes them. Mobile-parity
-   *  snapshot titles must prefer main's tracker over snapshot lastTitle, or
-   *  hook-driven spinner/idle titles vanish from mobile tabs. */
-  private preferTrackedLastTitle<T extends { lastTitle?: string }>(ptyId: string, snapshot: T): T {
-    const tracked = this.getTrackedDisplayTitleForPty(ptyId)
-    if (!tracked) {
-      return snapshot
-    }
-    return { ...snapshot, lastTitle: tracked }
-  }
+  private getUnpersistedTrackedTitleForPty = (ptyId: string | null): string | null =>
+    this.ptyTitleTrackingCommands.getUnpersistedTrackedTitleForPty(ptyId)
 
-  /** Decorative comparison key: only recognized agent titles fold leading spinner frames. */
-  private makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
-    // Stable Pi/Gemini/Grok display normalization also defines their semantic gate.
-    const normalizedSignature =
-      rawTitle === normalizedTitle ? null : getDecorativeAgentTitleSignature(normalizedTitle)
-    const signature = normalizedSignature ?? getDecorativeAgentTitleSignature(rawTitle)
-    return signature === null ? `literal\u0000${normalizedTitle}` : `agent\u0000${signature}`
-  }
+  private preferTrackedLastTitle = <T extends { lastTitle?: string }>(
+    ptyId: string,
+    snapshot: T
+  ): T => this.ptyTitleTrackingCommands.preferTrackedLastTitle(ptyId, snapshot)
 
-  private getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry {
-    const existing = this.ptyTitleTrackersByPtyId.get(ptyId)
-    if (existing) {
-      return existing
-    }
-    // Why: trackers are created lazily on the first observed chunk. After an
-    // app relaunch the PTY/leaf records can already hold a persisted title; a
-    // cold tracker would miss the parked working→idle completion and never
-    // arm the stale-title timer for a persisted 'working' title.
-    let initialTitle = this.ptysById.get(ptyId)?.lastOscTitle ?? null
-    if (initialTitle === null) {
-      for (const leaf of this.getLeavesForPty(ptyId)) {
-        if (leaf.lastOscTitle) {
-          initialTitle = leaf.lastOscTitle
-          break
-        }
-      }
-    }
-    const tracker = createTerminalTitleTracker(
-      {
-        onTitle: (normalizedTitle, rawTitle, meta) => {
-          this.recordTerminalSideEffectFact(ptyId, {
-            kind: 'title',
-            normalizedTitle,
-            rawTitle,
-            ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
-          })
-          const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
-          const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-          const live = this.ptyTitleTrackersByPtyId.get(ptyId)
-          const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
-          const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
-          if (live) {
-            live.lastMobileTitleGateKey = gateKey
-          }
-          const tracksReplicatedStatus =
-            live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
-          const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
-          if (
-            tracksReplicatedStatus &&
-            decorativeOnly &&
-            !this.ptyDelayedForegroundSnapshotTitleObservations.has(ptyId) &&
-            (titleStatus === 'working' || titleStatus === 'permission')
-          ) {
-            // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
-            this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
-          }
-          // Why: an identity-only cursor title records nothing, but the tracker
-          // title is that pane's only Cursor identity and must still fan out (#10258).
-          if (!changed && !identityOnlyTitle) {
-            return
-          }
-          if (live?.applyingChunk) {
-            // Why: synthetic spinner ticks change only the braille glyph
-            // ~12.5x/sec; fanning out full mobile session snapshots per frame
-            // is pure churn. Raw lastOscTitle updates above stay cheap.
-            if (!decorativeOnly) {
-              this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-              live.chunkTouchedSessionTabs = true
-            }
-          } else {
-            // Stale-working-title timer path — fires between chunks, so the
-            // per-chunk batching in onPtyData cannot pick it up.
-            this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-            this.touchMobileSessionSnapshotsForPty(ptyId)
-          }
-        },
-        // Why: agent transitions and bells become pty:sideEffect facts —
-        // main is the single byte parser for local/SSH PTYs; the renderer
-        // store handler decides what the facts mean (notification policy).
-        onAgentBecameWorking: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-working' })
-        },
-        onAgentBecameIdle: (title, meta) => {
-          this.recordTerminalSideEffectFact(ptyId, {
-            kind: 'agent-idle',
-            title,
-            ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
-          })
-        },
-        onAgentExited: () => {
-          this.confirmPtyAgentExit(ptyId)
-        },
-        onCommandFinished: (exitCode: number | null) => {
-          this.retirePtyAgentLaunchAuthority(ptyId)
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
-        },
-        onBell: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
-        },
-        onPrLink: (link: TerminalGitHubPRLink) => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
-        },
-        // Why: hidden-delivery-gated views never see 2031 bytes; facts keep their theme registry truthful.
-        onMode2031Subscribe: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
-        },
-        onMode2031Unsubscribe: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
-        }
-      },
-      initialTitle !== null ? { initialTitle } : {}
-    )
-    tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
-    const entry: RuntimePtyTitleTrackerEntry = {
-      tracker,
-      applyingChunk: false,
-      lastMobileTitleGateKey: null,
-      chunkTouchedSessionTabs: false,
-      pendingFacts: [],
-      // Why: command-code facts exist only for the pty:sideEffect channel —
-      // headless serve skips the per-chunk scrape entirely. The detector
-      // self-arms on the Command Code banner; the spawn command (when main
-      // saw one) mirrors the renderer detector's startupCommand fast-arm.
-      commandCodeDetector: this.terminalSideEffectConsumerAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
-    }
-    this.ptyTitleTrackersByPtyId.set(ptyId, entry)
-    return entry
-  }
+  private makeDecorativeTitleGateKey = (rawTitle: string, normalizedTitle: string): string =>
+    this.ptyTitleTrackingCommands.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
 
-  /** Apply one observed OSC title (raw form) to the PTY and leaf records.
-   *  Returns true when the PTY record's title or status changed. */
-  private applyTrackedPtyTitle(
+  private getOrCreatePtyTitleTrackerEntry = (ptyId: string) =>
+    this.ptyTitleTrackingCommands.getOrCreatePtyTitleTrackerEntry(ptyId)
+
+  private applyTrackedPtyTitle = (
     ptyId: string,
     rawTitle: string,
     normalizedTitle: string,
     meta?: TerminalTitleFactMeta
-  ): boolean {
-    // Why: status is detected from the RAW title (mirrors the renderer tracker),
-    // so working/idle transitions are unaffected by normalization; the records
-    // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
-    // one stable stored label (#7880) instead of churning `ps`/mobile tabs.
-    //
-    // Why the identity-only case: the bare cursor-agent literal identifies the pane without
-    // asserting activity, so it records NO title/status evidence — only the tracker keeps it,
-    // for display (#10258). Nulling the status here rather than trusting the detector keeps
-    // that contract local, since every activity-gated effect below is keyed on status.
-    const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-    const recordedTitle = identityOnlyTitle ? null : normalizedTitle
-    const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
-    this.recordAgentPromptLifecycleState(ptyId, agentStatus)
-    let ptyRecordChanged = false
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      const prevStatus = pty.lastAgentStatus
-      const prevTitle = pty.lastOscTitle
-      const observedAt = this.nextTitleObservationSequence()
-      const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
-      pty.lastOscTitle = recordedTitle
-      pty.lastOscTitleAt = identityOnlyTitle ? null : observedAt
-      pty.lastOscTitleEpochMs = observedAtEpochMs
-      pty.lastAgentStatus = agentStatus
-      pty.lastAgentStatusObservedLive = true
-      if (prevStatus !== agentStatus) {
-        pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
-      }
-      if (
-        identityOnlyTitle ||
-        terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
-        (prevStatus !== null && agentStatus !== null && prevStatus !== agentStatus)
-      ) {
-        pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()
-      }
-      if (identityOnlyTitle) {
-        pty.managementTitle = null
-        pty.managementTitleAt = null
-      } else {
-        this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
-      }
-      ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
-        this.resolvePtyTuiIdleWaiters(pty, ptyId)
-      }
-      const shouldDelayMobileSnapshot =
-        ptyRecordChanged &&
-        this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)
-      let foregroundRefresh: Promise<boolean> | undefined
-      // Why: gate on an actual status transition — braille spinner frames
-      // mutate the title every tick, so probing per-title-change would stream
-      // a foreground query per frame during active work.
-      if (prevStatus !== agentStatus) {
-        foregroundRefresh = this.refreshPtyForegroundAgentFromController(ptyId, {
-          afterTitleObservation: observedAt
-        })
-      } else if (shouldDelayMobileSnapshot) {
-        // Why: same-status compatible title changes can arrive before the
-        // foreground owner probe settles; publishing them would flicker.
-        foregroundRefresh = this.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt)
-      }
-      if (foregroundRefresh && shouldDelayMobileSnapshot) {
-        // Why: report "unchanged" so the per-chunk batch skips the mobile
-        // snapshot fan-out; the delayed publish fires when the probe settles.
-        ptyRecordChanged = false
-        this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
-      }
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      // Why: keep the latest OSC title on the leaf so worktree.ps can
-      // recompute status from the live title each call. Without this,
-      // daemon-hosted terminals (no renderer pushing pane titles) had no
-      // way to clear a stale 'working' status after the agent exited and
-      // the shell took over the title — the stuck-spinner bug in #1437.
-      const prevStatus = leaf.lastAgentStatus
-      const prevObservedLive = leaf.lastAgentStatusObservedLive
-      leaf.lastOscTitle = recordedTitle
-      leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
-      // Why: when a new OSC title doesn't classify as an agent state (e.g.
-      // bare shell title after the agent exits), clear lastAgentStatus so
-      // it is no longer sticky. Tui-idle waiters that needed the previous
-      // 'idle' transition were already resolved at the moment of the
-      // transition below; only fresh waiters registered after the agent
-      // exits would observe the cleared value, and they correctly fall
-      // back to title-based detection / polling.
-      leaf.lastAgentStatus = agentStatus
-      leaf.lastAgentStatusObservedLive = true
-      // Why: resolve tui-idle on any transition TO idle (not just working→idle).
-      // Claude Code may skip "working" entirely on fast tasks, going null→idle,
-      // and the coordinator's tui-idle waiter would hang forever waiting for a
-      // working→idle transition that never comes. Permission→idle is excluded:
-      // it means the agent was blocked on user approval and the user said no,
-      // which isn't a task-completion signal.
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
-        this.resolveTuiIdleWaiters(leaf)
-      }
-      // Why the second condition: push delivery is gated on LIVE idle, so its
-      // authorizing edge is liveness as well as status. A restore seed or a
-      // status kept across a same-id respawn leaves a stale 'idle' behind, and
-      // an agent whose first live title is already idle (claude --resume at its
-      // prompt) then shows no transition — the row would strand, which is
-      // exactly #12536. Waiter semantics stay transition-only above.
-      if (agentStatus === 'idle' && (prevStatus !== 'idle' || !prevObservedLive)) {
-        this.deliverPendingMessagesForLeaf(leaf)
-      }
-    }
-    return ptyRecordChanged
-  }
+  ): boolean =>
+    this.ptyTitleTrackingCommands.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
 
-  /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
-   *  teardown so it cannot fire into pruned records. */
-  private disposePtyTitleTracker(ptyId: string): void {
-    this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
-    this.ptyTitleTrackersByPtyId.delete(ptyId)
-    this.ptyDelayedForegroundSnapshotTitleObservations.delete(ptyId)
-    this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
-    for (const titleGateKeys of this.terminalSideEffectTitleGateKeysByClientEventListener.values()) {
-      titleGateKeys.delete(ptyId)
-    }
-  }
+  private disposePtyTitleTracker = (ptyId: string): void =>
+    this.ptyTitleTrackingCommands.disposePtyTitleTracker(ptyId)
 
-  private resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
-    // Why: a replacement daemon session can reuse the PTY id, but title/parser
-    // state from the prior process must not bleed into its snapshots or chunks.
-    this.disposePtyTitleTracker(ptyId)
-    this.oscTitleScanTailByPtyId.delete(ptyId)
-    this.osc7ScanTailByPtyId.delete(ptyId)
-    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.agentPromptLifecycleByPtyId.delete(ptyId)
-    this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
-    this.clearWaitBlockedCheckState(ptyId)
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      pty.lastOscTitle = null
-      pty.lastOscTitleAt = null
-      pty.lastOscTitleEpochMs = null
-      pty.lastAgentStatus = null
-      // Why: the prior process's live frames say nothing about the replacement,
-      // so the seed a same-id restore applies must not inherit its authority.
-      pty.lastAgentStatusObservedLive = false
-      pty.lastAgentStatusStartedAtEpochMs = null
-      pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
-      pty.managementTitle = null
-      pty.managementTitleAt = null
-      pty.waitBlockedAt = null
-      pty.tailWaitState = undefined
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      leaf.lastOscTitle = null
-      leaf.lastOscTitleAt = null
-      leaf.lastAgentStatus = null
-      leaf.lastAgentStatusObservedLive = false
-      leaf.waitBlockedAt = null
-      leaf.tailWaitState = undefined
-    }
-    this.primeWaitBlockedBaselineFromSeededTail(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
-  }
+  private resetTrackedTerminalStateForProviderGeneration = (ptyId: string): void =>
+    this.ptyTitleTrackingCommands.resetTrackedTerminalStateForProviderGeneration(ptyId)
 
-  private setTerminalSideEffectConsumerAvailable(available: boolean): void {
-    this.terminalSideEffectLocalConsumerAvailable = available && this.onTerminalSideEffects !== null
-    this.refreshTerminalSideEffectConsumerAvailability()
-  }
+  private setTerminalSideEffectConsumerAvailable = (available: boolean): void =>
+    this.ptyTitleTrackingCommands.setTerminalSideEffectConsumerAvailable(available)
 
-  private refreshTerminalSideEffectConsumerAvailability(): void {
-    const nextAvailable =
-      this.terminalSideEffectLocalConsumerAvailable ||
-      this.countTerminalSideEffectConsumingClientEventListeners() > 0
-    if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
-      return
-    }
-    this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
-      entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
-    }
-  }
+  private refreshTerminalSideEffectConsumerAvailability = (): void =>
+    this.ptyTitleTrackingCommands.refreshTerminalSideEffectConsumerAvailability()
 
-  private createTerminalSideEffectCommandCodeDetector(
-    ptyId: string
-  ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
-    return createCommandCodeOutputStatusDetector({
-      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-      onWorking: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
-      },
-      onDone: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
-      }
-    })
-  }
+  private createTerminalSideEffectCommandCodeDetector = (ptyId: string) =>
+    this.ptyTitleTrackingCommands.createTerminalSideEffectCommandCodeDetector(ptyId)
 
-  private extractLastOsc7CwdForPty(
+  private extractLastOsc7CwdForPty = (
     ptyId: string,
     data: string
-  ): { path: string; hostname: string } | null {
-    const previousTail = this.osc7ScanTailByPtyId.get(ptyId)
-    if (!previousTail && !data.includes('\x1b]7;')) {
-      return null
-    }
-    const input = `${previousTail ?? ''}${data}`
-    const scanTail = extractOscScanTail(input, 4096)
-    if (scanTail.length > 0) {
-      this.osc7ScanTailByPtyId.set(ptyId, scanTail)
-    } else {
-      this.osc7ScanTailByPtyId.delete(ptyId)
-    }
-    const uri = extractLastOsc7Uri(input)
-    const pty = this.ptysById.get(ptyId)
-    const pathFlavor = this.pathFlavorForPty(pty)
-    return uri
-      ? parseFileUriPathParts(uri, {
-          pathFlavor,
-          remotePosixAuthority: !!pty?.connectionId && pathFlavor !== 'win32',
-          wslDistro: pty?.connectionId
-            ? undefined
-            : (this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro ?? undefined)
-        })
-      : null
-  }
+  ): { path: string; hostname: string } | null =>
+    this.ptyTitleTrackingCommands.extractLastOsc7CwdForPty(ptyId, data)
 
-  private recordOsc7MetadataForPty(
+  private recordOsc7MetadataForPty = (
     ptyId: string,
     data: string
-  ): { cwd: string | null; cwdChanged: boolean } {
-    const osc7 = this.extractLastOsc7CwdForPty(ptyId, data)
-    const cwd = osc7?.path ?? null
-    const cwdChanged =
-      cwd !== null && cwd.trim().length > 0 && this.terminalCwdByPtyId.get(ptyId) !== cwd
-    if (cwdChanged) {
-      this.terminalCwdByPtyId.set(ptyId, cwd)
-    }
-    if (osc7) {
-      if (osc7.hostname) {
-        this.terminalFileUriHostnameByPtyId.set(ptyId, osc7.hostname)
-      } else {
-        this.terminalFileUriHostnameByPtyId.delete(ptyId)
-      }
-    }
-    return { cwd, cwdChanged }
-  }
+  ): { cwd: string | null; cwdChanged: boolean } =>
+    this.ptyTitleTrackingCommands.recordOsc7MetadataForPty(ptyId, data)
 
-  private pathFlavorForPty(pty?: RuntimePtyWorktreeRecord | null): 'posix' | 'win32' {
-    if (!pty?.connectionId) {
-      return process.platform === 'win32' ? 'win32' : 'posix'
-    }
-    const worktreePath = splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath
-    return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
-  }
+  private pathFlavorForPty = (pty?: RuntimePtyWorktreeRecord | null): 'posix' | 'win32' =>
+    this.ptyTitleTrackingCommands.pathFlavorForPty(pty)
 
   /** Returns true when any retained agent-row snapshot changed in a
    *  client-visible way, so the caller can republish session snapshots. */
