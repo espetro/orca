@@ -205,7 +205,7 @@ export function createBenchBuild({
       process.execPath,
       [
         '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
-        path.join(repoRoot, 'config', 'scripts', 'build-relay.mjs')
+        path.join(repoRoot, 'config', 'scripts', 'build-relay.ts')
       ],
       { stdio: 'inherit', cwd: repoRoot }
     )
@@ -223,7 +223,7 @@ export function createBenchBuild({
     log('step 3/5: electron-vite build (VITE_EXPOSE_STORE=true)')
     const viteResult = runner(
       process.execPath,
-      [path.join(repoRoot, 'config', 'scripts', 'run-electron-vite-build.mjs')],
+      [path.join(repoRoot, 'config', 'scripts', 'run-electron-vite-build.ts')],
       {
         env: { ...env, VITE_EXPOSE_STORE: 'true' },
         stdio: 'inherit',
