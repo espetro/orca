@@ -3,6 +3,7 @@ import type { AppProcessMetric, AppEnvironment } from '../../shared/app-environm
 import { collectHostMemory } from '../memory/host-memory'
 import type { HostMemory } from '../../shared/process-stats-types'
 import os from 'node:os'
+import v8 from 'node:v8'
 import type {
   HostContext,
   RecorderOptions,
@@ -33,6 +34,20 @@ function readElectronAppVersion(): string | null {
     return electron.app?.getVersion() ?? null
   } catch {
     return null
+  }
+}
+
+/** v8.getHeapSpaceStatistics() normalized to camelCase; [] if v8 throws. */
+function readV8HeapSpaces(): NonNullable<ResourceTick['mainProcess']>['heapSpaces'] {
+  try {
+    return v8.getHeapSpaceStatistics().map((space) => ({
+      spaceName: space.space_name,
+      spaceSize: space.space_size,
+      spaceUsedSize: space.space_used_size,
+      physicalSpaceSize: space.physical_space_size
+    }))
+  } catch {
+    return []
   }
 }
 
@@ -144,7 +159,8 @@ class ResourceRecorderImpl implements ResourceRecorder {
         rssBytes: memory.rss,
         heapUsedBytes: memory.heapUsed,
         heapTotalBytes: memory.heapTotal,
-        externalBytes: memory.external
+        externalBytes: memory.external,
+        heapSpaces: readV8HeapSpaces()
       }
     } catch {
       mainProcess = null

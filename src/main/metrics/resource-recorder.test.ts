@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import os from 'node:os'
+import v8 from 'node:v8'
 
 const { execFileMock, hostMemoryMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -68,6 +69,22 @@ describe('resource recorder', () => {
       external: 1,
       arrayBuffers: 0
     })
+    vi.spyOn(v8, 'getHeapSpaceStatistics').mockReturnValue([
+      {
+        space_name: 'old_space',
+        space_size: 300,
+        space_used_size: 200,
+        space_available_size: 50,
+        physical_space_size: 280
+      },
+      {
+        space_name: 'code_space',
+        space_size: 120,
+        space_used_size: 90,
+        space_available_size: 10,
+        physical_space_size: 110
+      }
+    ])
     execFileMock.mockImplementation((file: string) => {
       if (file === 'ps') {
         return Promise.resolve({ stdout: PS_STDOUT, stderr: '' })
@@ -127,7 +144,11 @@ describe('resource recorder', () => {
       rssBytes: 10,
       heapUsedBytes: 2,
       heapTotalBytes: 4,
-      externalBytes: 1
+      externalBytes: 1,
+      heapSpaces: [
+        { spaceName: 'old_space', spaceSize: 300, spaceUsedSize: 200, physicalSpaceSize: 280 },
+        { spaceName: 'code_space', spaceSize: 120, spaceUsedSize: 90, physicalSpaceSize: 110 }
+      ]
     })
     expect(dump.hostSamples).toEqual(dump.ticks.map((t) => t.host))
     recorder.stop()

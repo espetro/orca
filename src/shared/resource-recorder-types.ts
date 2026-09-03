@@ -23,6 +23,14 @@ export type ResourceSample = {
   cpuPercent: number
 }
 
+/** One row of v8.getHeapSpaceStatistics(), normalized to camelCase. */
+export type V8HeapSpaceStat = {
+  spaceName: string
+  spaceSize: number
+  spaceUsedSize: number
+  physicalSpaceSize: number
+}
+
 export type HostContext = {
   availableMemoryBytes: number
   /** Reuses HostAvailableMemorySource values. */
@@ -44,6 +52,12 @@ export type ResourceTick = {
     heapUsedBytes: number
     heapTotalBytes: number
     externalBytes: number
+    /**
+     * v8.getHeapSpaceStatistics() per-space sizes; [] when unavailable.
+     * Surfaces code_space / code_large_object_space / large_object_space
+     * separately so the main-process V8 bucket is not one opaque number.
+     */
+    heapSpaces: V8HeapSpaceStat[]
   } | null
 }
 
