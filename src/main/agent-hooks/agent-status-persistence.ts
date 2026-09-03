@@ -7,7 +7,6 @@ import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/lis
 import {
   authorityCommitmentsMatch,
   dropHydratedIdleClaudeSubagents,
-  HYDRATE_MAX_AGE_MS,
   isValidPaneKey,
   readPersistedLaunchTokenHash,
   sanitizeHydratedEntry,
@@ -44,7 +43,7 @@ export class AgentStatusPersistence {
 
   constructor(private server: AgentHookServerDeps) {}
 
-  scheduleStatusPersist(STATUS_PERSIST_DEBOUNCE_MS: number): void {
+  scheduleStatusPersist(debounceMs: number): void {
     if (!this.server.lastStatusFilePath) {
       return
     }
@@ -54,7 +53,7 @@ export class AgentStatusPersistence {
     this.statusPersistTimer = setTimeout(() => {
       this.statusPersistTimer = null
       this.runStatusPersist()
-    }, STATUS_PERSIST_DEBOUNCE_MS)
+    }, debounceMs)
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
     }
@@ -155,7 +154,7 @@ export class AgentStatusPersistence {
     }
   }
 
-  hydrateLastStatusFromDisk(HYDRATE_MAX_AGE_MS: number): void {
+  hydrateLastStatusFromDisk(maxAgeMs: number): void {
     if (!this.server.lastStatusFilePath) {
       return
     }
@@ -200,7 +199,7 @@ export class AgentStatusPersistence {
     let dropped = 0
     let prunedLegacyClaudeSubagents = 0
     let scrubbedLegacyLaunchTokens = 0
-    const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
+    const ttlCutoff = Date.now() - maxAgeMs
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
       const resolvedPaneKey = this.server.resolvePaneKeyAlias(paneKey)
       const rawResolvedEntry =

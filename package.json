@@ -252,6 +252,7 @@
     "lint-staged": "^16.4.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
+    "madge": "8.0.0",
     "marked": "^17.0.1",
     "mermaid": "^11.16.1",
     "monaco-editor": "^0.55.1",

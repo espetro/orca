@@ -5,7 +5,6 @@ import { join } from 'node:path'
 
 import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
 import { track } from '../telemetry/client'
-import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import {
   ORCA_HOOK_PROTOCOL_VERSION,
   ORCA_HOOK_RAW_JSON_TRANSPORT
@@ -23,21 +22,12 @@ import {
   getEndpointFileName,
   writeEndpointFile
 } from '../../shared/agent-hook-listener/endpoint-publication'
-import {
-  hasCodexTranscriptSubagents,
-  markCodexLeadTurnInterrupted,
-  reconcileRemoteCodexState
-} from '../../shared/agent-hook-listener/providers/codex-state'
-import {
-  hasPendingAgentResultText,
-  preparePendingGrokResultDiscovery
-} from '../../shared/agent-hook-listener/grok-result-discovery'
+import { markCodexLeadTurnInterrupted } from '../../shared/agent-hook-listener/providers/codex-state'
 import {
   MAX_PANE_KEY_LEN,
   normalizeClaudePromptId,
   warnOnHookEnvOrVersionMismatch
 } from '../../shared/agent-hook-listener/listener-limits'
-import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { parseFormEncodedBody } from '../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
@@ -70,13 +60,8 @@ import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-st
 import {
   AgentStatusObservationSequencer,
   createAgentStatusAuthorityId,
-  type AgentStatusObservation,
   type AgentStatusObservationOrigin
 } from '../../shared/agent-status-observation'
-import {
-  resolveAgentStatusIdentity,
-  shouldSuppressInheritedTerminalStatus
-} from '../../shared/agent-status-identity'
 import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
@@ -87,7 +72,6 @@ import {
 } from '../../shared/agent-question-answered-intent'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
-import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 import {
   buildSpoolHookBody,
   drainAgentHookSpool,
@@ -98,21 +82,11 @@ import {
 export type { AgentHookSource }
 
 import {
-  ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
-  ASSISTANT_MESSAGE_RETRY_MS,
-  attachClaudeChildOnlyBoundary,
-  attachClaudePermissionToolUseId,
-  CODEX_SUBAGENT_POLL_MS,
   equivalentInterruptAgentType,
-  agentTypeToPromptSentAgentKind,
   HYDRATE_MAX_AGE_MS,
-  INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS,
   isValidPaneKey,
   isValidPiProviderSessionOnly,
-  invalidateClaudeChildOnlyBoundary,
-  isToolProgressWorkingAfterInterrupt,
   LAST_STATUS_FILE_NAME,
-  shouldKeepClaudePermissionVisible,
   STATUS_PERSIST_DEBOUNCE_MS,
   toAgentStatusIpcPayload,
   type AgentHookAuthorityAttestation,
@@ -145,7 +119,8 @@ import {
   type RetiredPaneFence
 } from './pane-authority-transfer'
 import {
-  AgentStatusIngestRegistry
+  AgentStatusIngestRegistry,
+  type AgentHookServerIngestDeps
 } from './agent-status-ingest'
 import { AgentStatusCleanupRegistry, type AgentStatusCleanupDeps } from './agent-status-cleanup'
 
@@ -155,7 +130,7 @@ export {
   type PaneKeyAliasEntry,
   type RetiredPaneFence
 } from './pane-authority-transfer'
-import { AgentStatusPersistence } from './agent-status-persistence'
+import { AgentStatusPersistence, type AgentHookServerDeps } from './agent-status-persistence'
 import { AgentHookHttpServer, type AgentHookHttpServerDeps } from './agent-hook-http-server'
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
@@ -212,8 +187,11 @@ export class AgentHookServer {
   private readonly cleanup: AgentStatusCleanupRegistry
 
   constructor() {
-    this.persistence = new AgentStatusPersistence(this as any)
-    this.ingest = new AgentStatusIngestRegistry(this as any, this.observations)
+    this.persistence = new AgentStatusPersistence(this as unknown as AgentHookServerDeps)
+    this.ingest = new AgentStatusIngestRegistry(
+      this as unknown as AgentHookServerIngestDeps,
+      this.observations
+    )
     this.cleanup = new AgentStatusCleanupRegistry(this as unknown as AgentStatusCleanupDeps)
   }
   // Pane authority tracking — required by PaneAuthorityRegistry

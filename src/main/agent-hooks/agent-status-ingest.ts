@@ -22,10 +22,10 @@ import {
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
-import {
+import type {
   AgentStatusObservationSequencer,
-  type AgentStatusObservation,
-  type AgentStatusObservationOrigin
+  AgentStatusObservation,
+  AgentStatusObservationOrigin
 } from '../../shared/agent-status-observation'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -44,7 +44,7 @@ import {
 } from './agent-hook-payload-sanitize'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 
-type AgentHookServer = {
+export type AgentHookServerIngestDeps = {
   readonly state: HookListenerState
   readonly env: NodeJS.ProcessEnv
   readonly server: unknown
@@ -62,10 +62,10 @@ type AgentHookServer = {
 }
 
 export class AgentStatusIngestRegistry {
-  private readonly _server: AgentHookServer
+  private readonly _server: AgentHookServerIngestDeps
   private readonly _observations: AgentStatusObservationSequencer
 
-  constructor(server: AgentHookServer, observations: AgentStatusObservationSequencer) {
+  constructor(server: AgentHookServerIngestDeps, observations: AgentStatusObservationSequencer) {
     this._server = server
     this._observations = observations
   }
