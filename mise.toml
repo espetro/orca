@@ -1,0 +1,5 @@
+[tools]
+# Pin pnpm to the current major. pnpm 11 stops self-managing via
+# packageManager's managePackageManagerVersions, so contributors rely on
+# mise for the version that pnpm/action-setup already pins in CI.
+pnpm = "11"

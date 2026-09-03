@@ -26,6 +26,6 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable \
-  && corepack prepare pnpm@10.34.5 --activate
+  && corepack prepare pnpm@11.25.0 --activate
 
 WORKDIR /workspace

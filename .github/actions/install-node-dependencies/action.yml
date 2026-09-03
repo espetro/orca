@@ -30,7 +30,7 @@ runs:
     - name: Setup pnpm
       uses: pnpm/action-setup@v6
       with:
-        version: 10.34.5
+        version: 11.25.0
         run_install: false
 
     - name: Setup Node.js
@@ -63,12 +63,16 @@ runs:
         esac
 
     # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    # pnpm 11 reads env vars with the pnpm_config_ prefix; npm_config_ is
+    # honored for compatibility with the npm fallback used by some scripts.
     - name: Use external node-gyp
       if: runner.os == 'Linux' && inputs.native-runtime != 'none'
       shell: bash
       run: |
         npm install -g node-gyp@11.5.0
-        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+        GYP_PATH="$(npm root -g)/node-gyp/bin/node-gyp.js"
+        echo "npm_config_node_gyp=$GYP_PATH" >> "$GITHUB_ENV"
+        echo "pnpm_config_node_gyp=$GYP_PATH" >> "$GITHUB_ENV"
 
     - name: Prepare dependency install
       shell: bash
