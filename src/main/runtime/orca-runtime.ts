@@ -25,6 +25,7 @@ import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
 import { RuntimeAccountCommands } from './runtime-account-commands'
+import { RuntimeAutomationCommands } from './runtime-automation-commands'
 import { RuntimeDisposalTree, type SubscriptionRegistration } from './runtime-disposal-tree'
 import {
   removeManagedWorktree as removeManagedWorktreeImpl,
@@ -33,6 +34,10 @@ import {
 } from './runtime-worktree-lifecycle'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
+import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
+import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
+import { RuntimeOrchestrationGraphReloadCommands } from './runtime-orchestration-graph-reload-commands'
+import type { RuntimeOrchestrationGraphReloadCommandsDeps } from './runtime-orchestration-graph-reload-commands-deps'
 import type {
   AgentSkillShareOperation,
   AgentSkillShareRequest
@@ -270,15 +275,9 @@ import type {
   AutomationUpdateInput,
   AutomationWorkspaceMode
 } from '../../shared/automations-types'
-import {
-  automationChangePublications,
-  type AutomationChangeSelector,
-  type AutomationListParams,
-  type AutomationListResult
-} from '../../shared/automation-list-scope'
+import type { AutomationListParams, AutomationListResult } from '../../shared/automation-list-scope'
 import type {
   AutomationDestination,
-  AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition
 } from '../../shared/automation-owner-precondition'
 import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
@@ -593,7 +592,6 @@ import {
 } from '../ports/workspace-port-ownership'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type { AutomationService } from '../automations/service'
-import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import {
   createRuntimeBrowserCommands,
@@ -1055,25 +1053,6 @@ export type RuntimeAutomationUpdateInput = Omit<
 > & {
   repo?: string
   workspace?: string
-}
-
-function assertAutomationRunContextMatchesRepo(
-  runContext: AutomationCreateInput['runContext'],
-  repo: Repo | null
-): void {
-  if (!runContext || !repo) {
-    return
-  }
-  if (runContext.repoId !== repo.id || runContext.path !== repo.path) {
-    throw new Error('Automation project does not match its run context.')
-  }
-}
-
-function hasRuntimeAutomationUpdateValue<K extends keyof RuntimeAutomationUpdateInput>(
-  updates: RuntimeAutomationUpdateInput,
-  key: K
-): boolean {
-  return Object.hasOwn(updates, key) && updates[key] !== undefined
 }
 
 type RuntimeLeafRecord = RuntimeSyncedLeaf & {
@@ -2562,6 +2541,7 @@ export class OrcaRuntimeService {
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
   private readonly linearCommands: RuntimeLinearCommands
+  private readonly automationCommands: RuntimeAutomationCommands
   private readonly skillArtifactCommands: RuntimeSkillArtifactCommands
   private readonly skillInstallCommands: RuntimeSkillInstallCommands
   private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
@@ -3317,6 +3297,14 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.automationCommands = new RuntimeAutomationCommands({
+      store: this.store,
+      automationService: () => this.automationService,
+      notifier: () => this.notifier,
+      emitClientEvent: (event) => this.emitClientEvent(event),
+      showRepo: (repoSelector) => this.showRepo(repoSelector),
+      showManagedWorktree: (worktreeSelector) => this.showManagedWorktree(worktreeSelector)
+    })
     this.disposalTree = new RuntimeDisposalTree({
       logger: console
     })
@@ -3396,7 +3384,8 @@ export class OrcaRuntimeService {
         this.getRecentSettledDispatchForTerminal(handle, db),
       getWorktreeIdForTerminalHandle: (handle) => this.getWorktreeIdForTerminalHandle(handle),
       getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
-      getPaneKeyForTerminalHandle: (handle) => this.getPaneKeyForTerminalHandle(handle),
+      getPaneKeyForTerminalHandle: (handle) =>
+        this.getPaneKeyForTerminalHandle(handle) ?? undefined,
       getOrchestrationDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
       getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
@@ -4149,128 +4138,31 @@ export class OrcaRuntimeService {
   }
 
   listAutomations(): Automation[] {
-    if (!this.store?.listAutomations) {
-      throw new Error('runtime_unavailable')
-    }
-    return this.store.listAutomations()
-  }
-
-  // Why: Orca's own automation work holds the desktop probe scheduler's
-  // priority lease so queued external probes stay parked behind it; runtime
-  // servers install no lease and run directly.
-  private underExternalProbePriority<T>(run: () => T): T {
-    const wrap = this.automationService?.externalProbePriority
-    return wrap ? wrap(run) : run()
+    return this.automationCommands.listAutomations()
   }
 
   listAutomationsForScope(params: AutomationListParams): AutomationListResult {
-    const store = this.store
-    if (!store?.listAutomationsForScope) {
-      throw new Error('runtime_unavailable')
-    }
-    return this.underExternalProbePriority(() => store.listAutomationsForScope!(params))
-  }
-
-  // Why: a supplied precondition must never degrade to unfenced work, so a store that cannot check it fails the call.
-  private fenceAutomationOwner(
-    id: string,
-    expectedOwner: AutomationOwnerPrecondition | undefined,
-    operation: AutomationOwnerFenceOperation
-  ): void {
-    if (!this.store?.assertAutomationOwnerFence) {
-      if (expectedOwner) {
-        throw new Error('runtime_unavailable')
-      }
-      return
-    }
-    this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
+    return this.automationCommands.listAutomationsForScope(params)
   }
 
   listAutomationRuns(
     automationId?: string,
     expectedOwner?: AutomationOwnerPrecondition
   ): AutomationRun[] {
-    const store = this.store
-    if (!store?.listAutomationRuns) {
-      throw new Error('runtime_unavailable')
-    }
-    if (expectedOwner && !automationId) {
-      throw new Error('An expected owner requires an automation id.')
-    }
-    return this.underExternalProbePriority(() => {
-      if (automationId) {
-        this.fenceAutomationOwner(automationId, expectedOwner, 'read')
-      }
-      return store.listAutomationRuns!(automationId)
-    })
+    return this.automationCommands.listAutomationRuns(automationId, expectedOwner)
   }
 
   /** Null when the store predates the projection: the caller then sends no precondition. */
   automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
-    return this.store?.automationOwnerPrecondition?.(id) ?? null
+    return this.automationCommands.automationOwnerPrecondition(id)
   }
 
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
-    const automation = this.listAutomations().find((entry) => entry.id === id)
-    if (!automation) {
-      throw new Error('Automation not found.')
-    }
-    this.fenceAutomationOwner(id, expectedOwner, 'read')
-    return automation
+    return this.automationCommands.showAutomation(id, expectedOwner)
   }
 
   async createAutomation(input: RuntimeAutomationCreateInput): Promise<Automation> {
-    if (!this.store?.createAutomation) {
-      throw new Error('runtime_unavailable')
-    }
-    const target = await this.resolveAutomationTarget(input)
-    assertAutomationRunContextMatchesRepo(input.runContext, target.repo)
-    if (input.reuseSession && target.workspaceMode !== 'existing') {
-      throw new Error('Session reuse requires an existing workspace target.')
-    }
-    const createInput: AutomationCreateInput = {
-      creationKey: input.creationKey,
-      name: input.name,
-      prompt: input.prompt,
-      precheck: input.precheck,
-      agentId: input.agentId,
-      runContext: input.runContext,
-      sourceContext: input.sourceContext,
-      projectId: target.projectId,
-      workspaceMode: target.workspaceMode,
-      workspaceId: target.workspaceId,
-      baseBranch: input.baseBranch,
-      setupDecision: input.setupDecision,
-      reuseSession: input.reuseSession,
-      timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-      rrule: input.rrule,
-      dtstart: input.dtstart,
-      enabled: input.enabled,
-      missedRunGraceMinutes: input.missedRunGraceMinutes
-    }
-    return this.underExternalProbePriority(() => {
-      const created = this.store!.createAutomation!(
-        createInput,
-        input.destination ? { destination: input.destination } : undefined
-      )
-      const selector = this.automationChangeSelector(created.id)
-      this.publishAutomationDefinitionChange(selector, selector)
-      return created
-    })
-  }
-
-  private automationChangeSelector(id: string): AutomationChangeSelector | null {
-    return this.store?.automationChangeSelector?.(id) ?? null
-  }
-
-  /** A store that cannot name the affected host degrades to one unscoped authority event. */
-  private publishAutomationDefinitionChange(
-    before: AutomationChangeSelector | null,
-    after: AutomationChangeSelector | null
-  ): void {
-    for (const selector of automationChangePublications(before, after)) {
-      this.notifyAutomationsChanged({ reason: 'definition', ...(selector ? { selector } : {}) })
-    }
+    return this.automationCommands.createAutomation(input)
   }
 
   async updateAutomation(
@@ -4278,179 +4170,21 @@ export class OrcaRuntimeService {
     updates: RuntimeAutomationUpdateInput,
     options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
   ): Promise<Automation> {
-    if (!this.store?.updateAutomation) {
-      throw new Error('runtime_unavailable')
-    }
-    const current = this.showAutomation(id)
-    const patch: AutomationUpdateInput = {}
-    if (hasRuntimeAutomationUpdateValue(updates, 'name')) {
-      patch.name = updates.name
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'prompt')) {
-      patch.prompt = updates.prompt
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'precheck')) {
-      patch.precheck = updates.precheck
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'agentId')) {
-      patch.agentId = updates.agentId
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'runContext')) {
-      patch.runContext = updates.runContext
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'sourceContext')) {
-      patch.sourceContext = updates.sourceContext
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'baseBranch')) {
-      patch.baseBranch = updates.baseBranch
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'setupDecision')) {
-      patch.setupDecision = updates.setupDecision
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'reuseSession')) {
-      patch.reuseSession = updates.reuseSession
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'timezone')) {
-      patch.timezone = updates.timezone
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'rrule')) {
-      patch.rrule = updates.rrule
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'dtstart')) {
-      patch.dtstart = updates.dtstart
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'enabled')) {
-      patch.enabled = updates.enabled
-    }
-    if (hasRuntimeAutomationUpdateValue(updates, 'missedRunGraceMinutes')) {
-      patch.missedRunGraceMinutes = updates.missedRunGraceMinutes
-    }
-    const targetChanged =
-      hasRuntimeAutomationUpdateValue(updates, 'repo') ||
-      hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
-      hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
-    if (targetChanged) {
-      const target = await this.resolveAutomationTarget(updates, current)
-      assertAutomationRunContextMatchesRepo(updates.runContext, target.repo)
-      if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
-        throw new Error('Session reuse requires an existing workspace target.')
-      }
-      patch.projectId = target.projectId
-      patch.workspaceMode = target.workspaceMode
-      patch.workspaceId = target.workspaceId
-      if (target.workspaceMode !== 'existing') {
-        patch.reuseSession = false
-      }
-    } else if (hasRuntimeAutomationUpdateValue(updates, 'runContext') && current.projectId) {
-      const currentRepo = await this.showRepo(`id:${current.projectId}`)
-      assertAutomationRunContextMatchesRepo(updates.runContext, currentRepo)
-    }
-    if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
-      throw new Error('Session reuse requires an existing workspace target.')
-    }
-    return this.underExternalProbePriority(() => {
-      // Captured first: an update may move the record to another host.
-      const before = this.automationChangeSelector(id)
-      const updated = this.store!.updateAutomation!(id, patch, options)
-      this.publishAutomationDefinitionChange(before, this.automationChangeSelector(id))
-      return updated
-    })
+    return this.automationCommands.updateAutomation(id, updates, options)
   }
 
   deleteAutomation(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
   ): { removed: boolean; id: string } {
-    if (!this.store?.deleteAutomation) {
-      throw new Error('runtime_unavailable')
-    }
-    return this.underExternalProbePriority(() => {
-      this.showAutomation(id)
-      const before = this.automationChangeSelector(id)
-      this.store!.deleteAutomation!(id, expectedOwner ? { expectedOwner } : undefined)
-      this.publishAutomationDefinitionChange(before, before)
-      return { removed: true, id }
-    })
+    return this.automationCommands.deleteAutomation(id, expectedOwner)
   }
 
   async runAutomationNow(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
   ): Promise<AutomationRun> {
-    const service = this.automationService
-    if (!service) {
-      throw new Error('runtime_unavailable')
-    }
-    // Why: an orphan or re-registered host must be refused before dispatch, not
-    // after a session starts. The lease spans the whole dispatch promise, so
-    // queued external probes stay parked until the run the user is waiting on settles.
-    return await this.underExternalProbePriority(() =>
-      runAutomationNowFenced({
-        fence: () => this.fenceAutomationOwner(id, expectedOwner, 'execute'),
-        service,
-        automationId: id
-      })
-    )
-  }
-
-  private async resolveAutomationTarget(
-    input: {
-      repo?: string
-      workspace?: string
-      workspaceMode?: AutomationWorkspaceMode
-      baseBranch?: string | null
-    },
-    current?: Automation
-  ): Promise<{
-    projectId: string
-    workspaceMode: AutomationWorkspaceMode
-    workspaceId?: string | null
-    repo: Repo | null
-  }> {
-    const hasRepo = input.repo !== undefined
-    const hasWorkspace = input.workspace !== undefined
-    if (
-      current?.workspaceMode === 'existing' &&
-      hasRepo &&
-      !hasWorkspace &&
-      input.workspaceMode !== 'new_per_run'
-    ) {
-      throw new Error(
-        'Repo updates for existing-workspace automation require workspaceMode new_per_run.'
-      )
-    }
-    const workspace = input.workspace ? await this.showManagedWorktree(input.workspace) : null
-    const repoSelector =
-      input.repo ??
-      (workspace?.repoId
-        ? `id:${workspace.repoId}`
-        : current?.projectId
-          ? `id:${current.projectId}`
-          : null)
-    const repo = repoSelector ? await this.showRepo(repoSelector) : null
-    const workspaceMode =
-      input.workspaceMode ??
-      (workspace
-        ? 'existing'
-        : input.repo && !current
-          ? 'new_per_run'
-          : (current?.workspaceMode ?? 'new_per_run'))
-    if (workspaceMode === 'existing') {
-      const workspaceId = workspace?.id ?? current?.workspaceId
-      const projectId = workspace?.repoId ?? current?.projectId
-      if (repo && repo.id !== projectId) {
-        throw new Error('Selected workspace belongs to a different repo.')
-      }
-      if (!workspaceId || !projectId) {
-        throw new Error('Existing-workspace automation requires --workspace.')
-      }
-      return { projectId, workspaceMode, workspaceId, repo }
-    }
-    const projectId = repo?.id ?? workspace?.repoId ?? current?.projectId
-    if (!projectId) {
-      throw new Error('Automation requires --repo or --workspace.')
-    }
-    return { projectId, workspaceMode: 'new_per_run', workspaceId: null, repo }
+    return this.automationCommands.runAutomationNow(id, expectedOwner)
   }
 
   // Why: lazy initialization — the DB path depends on userData, which on the desktop
@@ -5911,8 +5645,7 @@ export class OrcaRuntimeService {
   // like SSH state they need a public entry point onto the client-event stream.
   // Old clients drop the unknown event type; nothing is negotiated for it.
   notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
-    this.notifier?.automationsChanged?.(payload)
-    this.emitClientEvent({ type: 'automationsChanged', ...payload })
+    return this.automationCommands.notifyAutomationsChanged(payload)
   }
 
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
