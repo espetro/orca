@@ -372,11 +372,7 @@ import type {
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 import type { BrowserSessionTabSelectionOptions } from './browser-tab-create-publication'
-import {
-  resolveBrowserDriverAfterMobileRelease,
-  screencastSubscriberDrivesAsMobile,
-  type BrowserScreencastSubscriber
-} from './browser-screencast-driver-scope'
+import type { BrowserScreencastSubscriber } from './browser-screencast-driver-scope'
 import type {
   AutomationsChangedPayload,
   RuntimeClientEvent
@@ -464,7 +460,6 @@ import {
   type RuntimeRendererSyncWindowGraph,
   type RuntimeSyncWindowGraph,
   type BrowserTabInfo,
-  type BrowserScreencastResult,
   UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
 } from '../../shared/runtime-types'
 import {
@@ -709,7 +704,7 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
-import { BrowserError } from '../browser/browser-error'
+import { RuntimeBrowserScreencastCommands } from './runtime-browser-screencast-commands'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import {
   fetchGitHubPullRequestHeadRef,
@@ -31802,6 +31797,21 @@ export class OrcaRuntimeService {
       this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId)
   })
 
+  private readonly browserScreencastCommands = new RuntimeBrowserScreencastCommands({
+    browserCommands: this.browserCommands,
+    activeBrowserScreencastsByConnection: this.activeBrowserScreencastsByConnection,
+    activeBrowserScreencastsByPage: this.activeBrowserScreencastsByPage,
+    browserRemoteViewerPages: this.browserRemoteViewerPages,
+    currentBrowserDriver: this.currentBrowserDriver,
+    getBrowserDriver: (browserPageId) => this.getBrowserDriver(browserPageId),
+    setBrowserDriver: (browserPageId, next) => this.setBrowserDriver(browserPageId, next),
+    publishBrowserRemoteViewers: (browserPageId) => this.publishBrowserRemoteViewers(browserPageId),
+    registerSubscriptionCleanup: (subscriptionId, cleanup, connectionId) =>
+      this.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId),
+    cleanupSubscription: (subscriptionId) => this.cleanupSubscription(subscriptionId),
+    notifier: this.notifier
+  })
+
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
     getEmulatorBridge: () => this.emulatorBridge,
     resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector),
@@ -31812,414 +31822,249 @@ export class OrcaRuntimeService {
   })
 
   browserSnapshot: RuntimeBrowserCommands['browserSnapshot'] =
-    this.browserCommands.browserSnapshot.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSnapshot.bind(this.browserScreencastCommands)
 
-  browserClick: RuntimeBrowserCommands['browserClick'] = this.browserCommands.browserClick.bind(
-    this.browserCommands
-  )
+  browserClick: RuntimeBrowserCommands['browserClick'] =
+    this.browserScreencastCommands.browserClick.bind(this.browserScreencastCommands)
 
-  browserGoto: RuntimeBrowserCommands['browserGoto'] = this.browserCommands.browserGoto.bind(
-    this.browserCommands
-  )
+  browserGoto: RuntimeBrowserCommands['browserGoto'] =
+    this.browserScreencastCommands.browserGoto.bind(this.browserScreencastCommands)
 
-  browserFill: RuntimeBrowserCommands['browserFill'] = this.browserCommands.browserFill.bind(
-    this.browserCommands
-  )
+  browserFill: RuntimeBrowserCommands['browserFill'] =
+    this.browserScreencastCommands.browserFill.bind(this.browserScreencastCommands)
 
-  browserType: RuntimeBrowserCommands['browserType'] = this.browserCommands.browserType.bind(
-    this.browserCommands
-  )
+  browserType: RuntimeBrowserCommands['browserType'] =
+    this.browserScreencastCommands.browserType.bind(this.browserScreencastCommands)
 
-  browserSelect: RuntimeBrowserCommands['browserSelect'] = this.browserCommands.browserSelect.bind(
-    this.browserCommands
-  )
+  browserSelect: RuntimeBrowserCommands['browserSelect'] =
+    this.browserScreencastCommands.browserSelect.bind(this.browserScreencastCommands)
 
-  browserScroll: RuntimeBrowserCommands['browserScroll'] = this.browserCommands.browserScroll.bind(
-    this.browserCommands
-  )
+  browserScroll: RuntimeBrowserCommands['browserScroll'] =
+    this.browserScreencastCommands.browserScroll.bind(this.browserScreencastCommands)
 
-  browserBack: RuntimeBrowserCommands['browserBack'] = this.browserCommands.browserBack.bind(
-    this.browserCommands
-  )
+  browserBack: RuntimeBrowserCommands['browserBack'] =
+    this.browserScreencastCommands.browserBack.bind(this.browserScreencastCommands)
 
-  browserReload: RuntimeBrowserCommands['browserReload'] = this.browserCommands.browserReload.bind(
-    this.browserCommands
-  )
+  browserReload: RuntimeBrowserCommands['browserReload'] =
+    this.browserScreencastCommands.browserReload.bind(this.browserScreencastCommands)
 
   browserScreenshot: RuntimeBrowserCommands['browserScreenshot'] =
-    this.browserCommands.browserScreenshot.bind(this.browserCommands)
+    this.browserScreencastCommands.browserScreenshot.bind(this.browserScreencastCommands)
 
-  async browserScreencast(
-    params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
-    options: {
-      connectionId?: string
-      pairedDeviceId?: string
-      clientKind?: 'mobile' | 'runtime'
-      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-      signal?: AbortSignal
-      emit: (result: BrowserScreencastResult) => void
-    }
-  ): Promise<void> {
-    if (!options.sendBinary) {
-      throw new BrowserError(
-        'browser_error',
-        'Browser screencast requires a binary streaming transport.'
-      )
-    }
+  browserScreencast: RuntimeBrowserCommands['browserScreencast'] =
+    this.browserScreencastCommands.browserScreencast.bind(this.browserScreencastCommands)
 
-    const connectionKey = options.connectionId ?? 'local'
-    const drivesAsMobile = screencastSubscriberDrivesAsMobile(options.clientKind)
-    let existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
-    while (existingStream) {
-      existingStream.cancel()
-      await existingStream.done
-      existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
-    }
-    if (options.signal?.aborted) {
-      throw new BrowserError('browser_error', 'Browser screencast was cancelled.')
-    }
-
-    let screencast: Awaited<ReturnType<RuntimeBrowserCommands['browserScreencast']>> | null = null
-    let registeredSubscriptionId: string | null = null
-    let activeBrowserPageId: string | null = null
-    let activePageStream: BrowserScreencastSubscriber | null = null
-    let ended = false
-    let cancelledBeforeStart = false
-    let readyEmitted = false
-    let resolveActiveDone!: () => void
-    const activeDone = new Promise<void>((resolve) => {
-      resolveActiveDone = resolve
-    })
-    const end = (emitEnd: boolean): void => {
-      if (ended) {
-        return
-      }
-      ended = true
-      screencast?.session.stop()
-      if (emitEnd && screencast) {
-        options.emit({ type: 'end', subscriptionId: screencast.subscriptionId })
-      }
-    }
-    const cancel = (emitEnd = false): void => {
-      if (!screencast) {
-        cancelledBeforeStart = true
-        return
-      }
-      end(emitEnd)
-    }
-    const abortScreencast = (): void => cancel()
-    const sendBinaryAfterReady = (bytes: Uint8Array<ArrayBufferLike>): boolean | void => {
-      if (!readyEmitted) {
-        // Why: clients learn the owning subscription from ready, so CDP frames must stay unacked until the JSON ready event is delivered.
-        return false
-      }
-      return options.sendBinary?.(bytes)
-    }
-
-    // Why: a phone can rotate before the first stream reaches ready (no subscriptionId yet), so a same-socket replacement cancels and waits here instead of racing.
-    this.activeBrowserScreencastsByConnection.set(connectionKey, {
-      cancel,
-      done: activeDone,
-      connectionKey
-    })
-    options.signal?.addEventListener('abort', abortScreencast, { once: true })
-    try {
-      screencast = await this.browserCommands.browserScreencast(params, {
-        sendBinary: sendBinaryAfterReady,
-        emit: options.emit,
-        pairedDeviceId: options.pairedDeviceId
-      })
-      if (cancelledBeforeStart || options.signal?.aborted) {
-        end(false)
-        await screencast.session.done
-        return
-      }
-      activeBrowserPageId = screencast.ready.browserPageId
-      activePageStream = {
-        cancel,
-        done: activeDone,
-        connectionKey,
-        drivesAsMobile
-      }
-      const pageStreams =
-        this.activeBrowserScreencastsByPage.get(activeBrowserPageId) ??
-        new Set<BrowserScreencastSubscriber>()
-      pageStreams.add(activePageStream)
-      this.activeBrowserScreencastsByPage.set(activeBrowserPageId, pageStreams)
-      this.publishBrowserRemoteViewers(activeBrowserPageId)
-      if (drivesAsMobile) {
-        this.setBrowserDriver(activeBrowserPageId, { kind: 'mobile', clientId: connectionKey })
-      }
-
-      // Why: screencast frames are connection-scoped; tie Page.stopScreencast to the exact socket so dropped connections don't leave Chromium streaming.
-      this.registerSubscriptionCleanup(
-        screencast.subscriptionId,
-        () => end(true),
-        options.connectionId
-      )
-      registeredSubscriptionId = screencast.subscriptionId
-      options.emit(screencast.ready)
-      readyEmitted = true
-      // Why: a joining subscriber's viewport snapshot is captured before this gate opens, and
-      // on a static page Chromium emits nothing after it — without the replay the pane stays blank.
-      screencast.flushPendingFrame()
-      await screencast.session.done
-      end(true)
-      this.cleanupSubscription(screencast.subscriptionId)
-    } finally {
-      options.signal?.removeEventListener('abort', abortScreencast)
-      if (!ended) {
-        end(false)
-      }
-      if (registeredSubscriptionId) {
-        this.cleanupSubscription(registeredSubscriptionId)
-      }
-      const active = this.activeBrowserScreencastsByConnection.get(connectionKey)
-      if (active?.done === activeDone) {
-        this.activeBrowserScreencastsByConnection.delete(connectionKey)
-      }
-      if (activeBrowserPageId) {
-        const pageStreams = this.activeBrowserScreencastsByPage.get(activeBrowserPageId)
-        if (activePageStream && pageStreams) {
-          pageStreams.delete(activePageStream)
-          if (pageStreams.size === 0) {
-            this.activeBrowserScreencastsByPage.delete(activeBrowserPageId)
-          }
-        }
-        this.publishBrowserRemoteViewers(activeBrowserPageId)
-        const driver = this.getBrowserDriver(activeBrowserPageId)
-        if (driver.kind === 'mobile' && driver.clientId === connectionKey) {
-          this.setBrowserDriver(
-            activeBrowserPageId,
-            resolveBrowserDriverAfterMobileRelease(pageStreams ?? [])
-          )
-        }
-      }
-      resolveActiveDone()
-    }
-  }
-
-  browserEval: RuntimeBrowserCommands['browserEval'] = this.browserCommands.browserEval.bind(
-    this.browserCommands
-  )
+  browserEval: RuntimeBrowserCommands['browserEval'] =
+    this.browserScreencastCommands.browserEval.bind(this.browserCommands)
 
   browserTabList: RuntimeBrowserCommands['browserTabList'] =
-    this.browserCommands.browserTabList.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabList.bind(this.browserCommands)
   browserProceedCertificate: RuntimeBrowserCommands['browserProceedCertificate'] =
-    this.browserCommands.browserProceedCertificate.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProceedCertificate.bind(this.browserCommands)
 
   browserTabShow: RuntimeBrowserCommands['browserTabShow'] =
-    this.browserCommands.browserTabShow.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabShow.bind(this.browserCommands)
 
   browserTabCurrent: RuntimeBrowserCommands['browserTabCurrent'] =
-    this.browserCommands.browserTabCurrent.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabCurrent.bind(this.browserCommands)
 
   browserTabSwitch: RuntimeBrowserCommands['browserTabSwitch'] =
-    this.browserCommands.browserTabSwitch.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabSwitch.bind(this.browserCommands)
 
-  browserHover: RuntimeBrowserCommands['browserHover'] = this.browserCommands.browserHover.bind(
-    this.browserCommands
-  )
+  browserHover: RuntimeBrowserCommands['browserHover'] =
+    this.browserScreencastCommands.browserHover.bind(this.browserCommands)
 
-  browserDrag: RuntimeBrowserCommands['browserDrag'] = this.browserCommands.browserDrag.bind(
-    this.browserCommands
-  )
+  browserDrag: RuntimeBrowserCommands['browserDrag'] =
+    this.browserScreencastCommands.browserDrag.bind(this.browserCommands)
 
-  browserUpload: RuntimeBrowserCommands['browserUpload'] = this.browserCommands.browserUpload.bind(
-    this.browserCommands
-  )
+  browserUpload: RuntimeBrowserCommands['browserUpload'] =
+    this.browserScreencastCommands.browserUpload.bind(this.browserCommands)
 
-  browserWait: RuntimeBrowserCommands['browserWait'] = this.browserCommands.browserWait.bind(
-    this.browserCommands
-  )
+  browserWait: RuntimeBrowserCommands['browserWait'] =
+    this.browserScreencastCommands.browserWait.bind(this.browserCommands)
 
-  browserCheck: RuntimeBrowserCommands['browserCheck'] = this.browserCommands.browserCheck.bind(
-    this.browserCommands
-  )
+  browserCheck: RuntimeBrowserCommands['browserCheck'] =
+    this.browserScreencastCommands.browserCheck.bind(this.browserCommands)
 
-  browserFocus: RuntimeBrowserCommands['browserFocus'] = this.browserCommands.browserFocus.bind(
-    this.browserCommands
-  )
+  browserFocus: RuntimeBrowserCommands['browserFocus'] =
+    this.browserScreencastCommands.browserFocus.bind(this.browserCommands)
 
-  browserClear: RuntimeBrowserCommands['browserClear'] = this.browserCommands.browserClear.bind(
-    this.browserCommands
-  )
+  browserClear: RuntimeBrowserCommands['browserClear'] =
+    this.browserScreencastCommands.browserClear.bind(this.browserCommands)
 
   browserSelectAll: RuntimeBrowserCommands['browserSelectAll'] =
-    this.browserCommands.browserSelectAll.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSelectAll.bind(this.browserCommands)
 
   browserKeypress: RuntimeBrowserCommands['browserKeypress'] =
-    this.browserCommands.browserKeypress.bind(this.browserCommands)
+    this.browserScreencastCommands.browserKeypress.bind(this.browserCommands)
 
-  browserPdf: RuntimeBrowserCommands['browserPdf'] = this.browserCommands.browserPdf.bind(
+  browserPdf: RuntimeBrowserCommands['browserPdf'] = this.browserScreencastCommands.browserPdf.bind(
     this.browserCommands
   )
 
   browserFullScreenshot: RuntimeBrowserCommands['browserFullScreenshot'] =
-    this.browserCommands.browserFullScreenshot.bind(this.browserCommands)
+    this.browserScreencastCommands.browserFullScreenshot.bind(this.browserCommands)
 
   browserCookieGet: RuntimeBrowserCommands['browserCookieGet'] =
-    this.browserCommands.browserCookieGet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCookieGet.bind(this.browserCommands)
 
   browserCookieSet: RuntimeBrowserCommands['browserCookieSet'] =
-    this.browserCommands.browserCookieSet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCookieSet.bind(this.browserCommands)
 
   browserCookieDelete: RuntimeBrowserCommands['browserCookieDelete'] =
-    this.browserCommands.browserCookieDelete.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCookieDelete.bind(this.browserCommands)
 
   browserSetViewport: RuntimeBrowserCommands['browserSetViewport'] =
-    this.browserCommands.browserSetViewport.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetViewport.bind(this.browserCommands)
 
   browserSetGeolocation: RuntimeBrowserCommands['browserSetGeolocation'] =
-    this.browserCommands.browserSetGeolocation.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetGeolocation.bind(this.browserCommands)
 
   browserInterceptEnable: RuntimeBrowserCommands['browserInterceptEnable'] =
-    this.browserCommands.browserInterceptEnable.bind(this.browserCommands)
+    this.browserScreencastCommands.browserInterceptEnable.bind(this.browserCommands)
 
   browserInterceptDisable: RuntimeBrowserCommands['browserInterceptDisable'] =
-    this.browserCommands.browserInterceptDisable.bind(this.browserCommands)
+    this.browserScreencastCommands.browserInterceptDisable.bind(this.browserCommands)
 
   browserInterceptList: RuntimeBrowserCommands['browserInterceptList'] =
-    this.browserCommands.browserInterceptList.bind(this.browserCommands)
+    this.browserScreencastCommands.browserInterceptList.bind(this.browserCommands)
 
   browserCaptureStart: RuntimeBrowserCommands['browserCaptureStart'] =
-    this.browserCommands.browserCaptureStart.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCaptureStart.bind(this.browserCommands)
 
   browserCaptureStop: RuntimeBrowserCommands['browserCaptureStop'] =
-    this.browserCommands.browserCaptureStop.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCaptureStop.bind(this.browserCommands)
 
   browserConsoleLog: RuntimeBrowserCommands['browserConsoleLog'] =
-    this.browserCommands.browserConsoleLog.bind(this.browserCommands)
+    this.browserScreencastCommands.browserConsoleLog.bind(this.browserCommands)
 
   browserNetworkLog: RuntimeBrowserCommands['browserNetworkLog'] =
-    this.browserCommands.browserNetworkLog.bind(this.browserCommands)
+    this.browserScreencastCommands.browserNetworkLog.bind(this.browserCommands)
 
   browserDblclick: RuntimeBrowserCommands['browserDblclick'] =
-    this.browserCommands.browserDblclick.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDblclick.bind(this.browserCommands)
 
   browserForward: RuntimeBrowserCommands['browserForward'] =
-    this.browserCommands.browserForward.bind(this.browserCommands)
+    this.browserScreencastCommands.browserForward.bind(this.browserCommands)
 
   browserScrollIntoView: RuntimeBrowserCommands['browserScrollIntoView'] =
-    this.browserCommands.browserScrollIntoView.bind(this.browserCommands)
+    this.browserScreencastCommands.browserScrollIntoView.bind(this.browserCommands)
 
-  browserGet: RuntimeBrowserCommands['browserGet'] = this.browserCommands.browserGet.bind(
+  browserGet: RuntimeBrowserCommands['browserGet'] = this.browserScreencastCommands.browserGet.bind(
     this.browserCommands
   )
 
-  browserIs: RuntimeBrowserCommands['browserIs'] = this.browserCommands.browserIs.bind(
+  browserIs: RuntimeBrowserCommands['browserIs'] = this.browserScreencastCommands.browserIs.bind(
     this.browserCommands
   )
 
   browserKeyboardInsertText: RuntimeBrowserCommands['browserKeyboardInsertText'] =
-    this.browserCommands.browserKeyboardInsertText.bind(this.browserCommands)
+    this.browserScreencastCommands.browserKeyboardInsertText.bind(this.browserCommands)
 
   browserMouseMove: RuntimeBrowserCommands['browserMouseMove'] =
-    this.browserCommands.browserMouseMove.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseMove.bind(this.browserCommands)
 
   browserMouseDown: RuntimeBrowserCommands['browserMouseDown'] =
-    this.browserCommands.browserMouseDown.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseDown.bind(this.browserCommands)
 
   browserMouseClick: RuntimeBrowserCommands['browserMouseClick'] =
-    this.browserCommands.browserMouseClick.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseClick.bind(this.browserCommands)
 
   browserMouseUp: RuntimeBrowserCommands['browserMouseUp'] =
-    this.browserCommands.browserMouseUp.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseUp.bind(this.browserCommands)
 
   browserMouseWheel: RuntimeBrowserCommands['browserMouseWheel'] =
-    this.browserCommands.browserMouseWheel.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseWheel.bind(this.browserCommands)
 
-  browserFind: RuntimeBrowserCommands['browserFind'] = this.browserCommands.browserFind.bind(
-    this.browserCommands
-  )
+  browserFind: RuntimeBrowserCommands['browserFind'] =
+    this.browserScreencastCommands.browserFind.bind(this.browserCommands)
 
   browserSetDevice: RuntimeBrowserCommands['browserSetDevice'] =
-    this.browserCommands.browserSetDevice.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetDevice.bind(this.browserCommands)
 
   browserSetOffline: RuntimeBrowserCommands['browserSetOffline'] =
-    this.browserCommands.browserSetOffline.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetOffline.bind(this.browserCommands)
 
   browserSetHeaders: RuntimeBrowserCommands['browserSetHeaders'] =
-    this.browserCommands.browserSetHeaders.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetHeaders.bind(this.browserCommands)
 
   browserSetCredentials: RuntimeBrowserCommands['browserSetCredentials'] =
-    this.browserCommands.browserSetCredentials.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetCredentials.bind(this.browserCommands)
 
   browserSetMedia: RuntimeBrowserCommands['browserSetMedia'] =
-    this.browserCommands.browserSetMedia.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetMedia.bind(this.browserCommands)
 
   browserClipboardRead: RuntimeBrowserCommands['browserClipboardRead'] =
-    this.browserCommands.browserClipboardRead.bind(this.browserCommands)
+    this.browserScreencastCommands.browserClipboardRead.bind(this.browserCommands)
 
   browserClipboardWrite: RuntimeBrowserCommands['browserClipboardWrite'] =
-    this.browserCommands.browserClipboardWrite.bind(this.browserCommands)
+    this.browserScreencastCommands.browserClipboardWrite.bind(this.browserCommands)
 
   browserDialogAccept: RuntimeBrowserCommands['browserDialogAccept'] =
-    this.browserCommands.browserDialogAccept.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDialogAccept.bind(this.browserCommands)
 
   browserDialogDismiss: RuntimeBrowserCommands['browserDialogDismiss'] =
-    this.browserCommands.browserDialogDismiss.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDialogDismiss.bind(this.browserCommands)
 
   browserStorageLocalGet: RuntimeBrowserCommands['browserStorageLocalGet'] =
-    this.browserCommands.browserStorageLocalGet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageLocalGet.bind(this.browserCommands)
 
   browserStorageLocalSet: RuntimeBrowserCommands['browserStorageLocalSet'] =
-    this.browserCommands.browserStorageLocalSet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageLocalSet.bind(this.browserCommands)
 
   browserStorageLocalClear: RuntimeBrowserCommands['browserStorageLocalClear'] =
-    this.browserCommands.browserStorageLocalClear.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageLocalClear.bind(this.browserCommands)
 
   browserStorageSessionGet: RuntimeBrowserCommands['browserStorageSessionGet'] =
-    this.browserCommands.browserStorageSessionGet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageSessionGet.bind(this.browserCommands)
 
   browserStorageSessionSet: RuntimeBrowserCommands['browserStorageSessionSet'] =
-    this.browserCommands.browserStorageSessionSet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageSessionSet.bind(this.browserCommands)
 
   browserStorageSessionClear: RuntimeBrowserCommands['browserStorageSessionClear'] =
-    this.browserCommands.browserStorageSessionClear.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageSessionClear.bind(this.browserCommands)
 
   browserDownload: RuntimeBrowserCommands['browserDownload'] =
-    this.browserCommands.browserDownload.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDownload.bind(this.browserCommands)
 
   browserHighlight: RuntimeBrowserCommands['browserHighlight'] =
-    this.browserCommands.browserHighlight.bind(this.browserCommands)
+    this.browserScreencastCommands.browserHighlight.bind(this.browserCommands)
 
-  browserExec: RuntimeBrowserCommands['browserExec'] = this.browserCommands.browserExec.bind(
-    this.browserCommands
-  )
+  browserExec: RuntimeBrowserCommands['browserExec'] =
+    this.browserScreencastCommands.browserExec.bind(this.browserCommands)
 
   browserTabCreate: RuntimeBrowserCommands['browserTabCreate'] =
-    this.browserCommands.browserTabCreate.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabCreate.bind(this.browserCommands)
 
   browserTabSetProfile: RuntimeBrowserCommands['browserTabSetProfile'] =
-    this.browserCommands.browserTabSetProfile.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabSetProfile.bind(this.browserCommands)
 
   browserTabProfileShow: RuntimeBrowserCommands['browserTabProfileShow'] =
-    this.browserCommands.browserTabProfileShow.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabProfileShow.bind(this.browserCommands)
 
   browserTabProfileClone: RuntimeBrowserCommands['browserTabProfileClone'] =
-    this.browserCommands.browserTabProfileClone.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabProfileClone.bind(this.browserCommands)
 
   browserProfileList: RuntimeBrowserCommands['browserProfileList'] =
-    this.browserCommands.browserProfileList.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileList.bind(this.browserCommands)
 
   browserProfileCreate: RuntimeBrowserCommands['browserProfileCreate'] =
-    this.browserCommands.browserProfileCreate.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileCreate.bind(this.browserCommands)
 
   browserProfileDelete: RuntimeBrowserCommands['browserProfileDelete'] =
-    this.browserCommands.browserProfileDelete.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileDelete.bind(this.browserCommands)
 
   browserProfileDetectBrowsers: RuntimeBrowserCommands['browserProfileDetectBrowsers'] =
-    this.browserCommands.browserProfileDetectBrowsers.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileDetectBrowsers.bind(this.browserCommands)
 
   browserProfileImportFromBrowser: RuntimeBrowserCommands['browserProfileImportFromBrowser'] =
-    this.browserCommands.browserProfileImportFromBrowser.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileImportFromBrowser.bind(this.browserCommands)
 
   browserProfileClearDefaultCookies: RuntimeBrowserCommands['browserProfileClearDefaultCookies'] =
-    this.browserCommands.browserProfileClearDefaultCookies.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileClearDefaultCookies.bind(this.browserCommands)
 
   browserTabClose: RuntimeBrowserCommands['browserTabClose'] =
-    this.browserCommands.browserTabClose.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabClose.bind(this.browserCommands)
 
   // Emulator bindings (delegated to dedicated commands for surface separation).
   emulatorTap: RuntimeEmulatorCommands['emulatorTap'] = this.emulatorCommands.emulatorTap.bind(
