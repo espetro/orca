@@ -24,6 +24,7 @@ import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-comma
 import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
+import { RuntimeAccountCommands } from './runtime-account-commands'
 import { RuntimeDisposalTree, type SubscriptionRegistration } from './runtime-disposal-tree'
 import {
   removeManagedWorktree as removeManagedWorktreeImpl,
@@ -3249,7 +3250,7 @@ export class OrcaRuntimeService {
   private ptyControllerInventorySequence = 0
   private ptyControllerAggregateInventoryGeneration = 0
   private ptyControllerInventoryGenerationByProvider = new Map<string, number>()
-  private accountServices: RuntimeAccountServices | null = null
+  private readonly accountCommands = new RuntimeAccountCommands()
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
   private readonly skillTransactionRecovery: Promise<unknown>
@@ -3341,11 +3342,11 @@ export class OrcaRuntimeService {
     }
     this.skillArtifactCommands = new RuntimeSkillArtifactCommands({
       ...skillArtifactCommandsDeps,
-      accountServices: () => this.accountServices
+      accountServices: () => this.accountCommands.getAccountServices()
     })
     this.skillInstallCommands = new RuntimeSkillInstallCommands({
       ...skillArtifactCommandsDeps,
-      accountServices: () => this.accountServices
+      accountServices: () => this.accountCommands.getAccountServices()
     })
     this.projectWorktreeCommands = new RuntimeProjectWorktreeCommands({
       store: this.store,
@@ -13448,7 +13449,7 @@ export class OrcaRuntimeService {
   // ─── Account Services (mobile RPC bridge) ─────────────────────
 
   setAccountServices(services: RuntimeAccountServices): void {
-    this.accountServices = services
+    this.accountCommands.setAccountServices(services)
   }
 
   setCommitMessageAgentEnvironmentResolvers(
@@ -13768,20 +13769,8 @@ export class OrcaRuntimeService {
     this.cancelMobileDictationSession(session)
   }
 
-  private requireAccountServices(): RuntimeAccountServices {
-    if (!this.accountServices) {
-      throw new Error('Account services are not configured on this runtime')
-    }
-    return this.accountServices
-  }
-
   getAccountsSnapshot(): AccountsSnapshot {
-    const { claudeAccounts, codexAccounts, rateLimits } = this.requireAccountServices()
-    return {
-      claude: claudeAccounts.listAccounts(),
-      codex: codexAccounts.listAccounts(),
-      rateLimits: rateLimits.getState()
-    }
+    return this.accountCommands.getAccountsSnapshot()
   }
 
   // Why: RateLimitService polls only when the Electron window is visible AND
@@ -13790,71 +13779,39 @@ export class OrcaRuntimeService {
   // phone shows 0% / "—" against a backgrounded desktop. Errors swallowed
   // because partial usage is still useful for the rest of the snapshot.
   async refreshAccountsForMobile(): Promise<void> {
-    const { rateLimits } = this.requireAccountServices()
-    await Promise.allSettled([
-      rateLimits.refresh(),
-      rateLimits.fetchInactiveClaudeAccountsOnOpen(),
-      rateLimits.fetchInactiveCodexAccountsOnOpen()
-    ])
+    return this.accountCommands.refreshAccountsForMobile()
   }
 
   // Why: connection migration replays subscriptions; use the stale-aware lane
   // so a reconnect cannot turn one mobile viewer into continuous forced fetches.
   async refreshAccountsForMobileSubscriber(): Promise<void> {
-    const { rateLimits } = this.requireAccountServices()
-    await Promise.allSettled([
-      rateLimits.refreshIfStale(),
-      rateLimits.fetchInactiveClaudeAccountsOnOpen(),
-      rateLimits.fetchInactiveCodexAccountsOnOpen()
-    ])
+    return this.accountCommands.refreshAccountsForMobileSubscriber()
   }
 
   selectClaudeAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireAccountServices().claudeAccounts.selectAccount(accountId)
+    return this.accountCommands.selectClaudeAccount(accountId)
   }
 
   selectCodexAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
-    return this.requireAccountServices().codexAccounts.selectAccount(accountId)
+    return this.accountCommands.selectCodexAccount(accountId)
   }
 
   selectCodexAccountForTarget(
     accountId: string | null,
     target: CodexAccountSelectionTarget
   ): Promise<CodexRateLimitAccountsState> {
-    return this.requireAccountServices().codexAccounts.selectAccountForTarget(accountId, target)
+    return this.accountCommands.selectCodexAccountForTarget(accountId, target)
   }
 
   async consumeCodexRateLimitResetCredit(
     idempotencyKey: string,
     expectedScope: CodexResetCreditExpectedScope
   ): Promise<CodexRateLimitResetRpcResult> {
-    const { claudeAccounts, codexAccounts } = this.requireAccountServices()
-    const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
-    // Why: Codex selection and usage were captured before its mutation queue
-    // advanced. Re-reading them here could pair scope A with queued selection B.
-    const snapshot = {
-      claude: claudeAccounts.listAccounts(),
-      codex: result.codex,
-      rateLimits: result.rateLimits
-    }
-    if ('status' in result) {
-      return {
-        status: result.status,
-        retryDisposition: result.retryDisposition,
-        reason: result.reason,
-        scope: result.scope,
-        snapshot
-      }
-    }
-    return {
-      outcome: result.outcome,
-      scope: result.scope,
-      snapshot
-    }
+    return this.accountCommands.consumeCodexRateLimitResetCredit(idempotencyKey, expectedScope)
   }
 
   removeClaudeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireAccountServices().claudeAccounts.removeAccount(accountId)
+    return this.accountCommands.removeClaudeAccount(accountId)
   }
 
   // Why: register a managed Claude account from a CLAUDE_CONFIG_DIR the caller
@@ -13869,11 +13826,11 @@ export class OrcaRuntimeService {
       previousLegacyCredentialsSha256?: string | null
     }
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireAccountServices().claudeAccounts.addAccountFromConfigDir(configDir, options)
+    return this.accountCommands.addClaudeAccountFromConfigDir(configDir, options)
   }
 
   removeCodexAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
-    return this.requireAccountServices().codexAccounts.removeAccount(accountId)
+    return this.accountCommands.removeCodexAccount(accountId)
   }
 
   // Why: Codex counterpart of addClaudeAccountFromConfigDir — register a managed
@@ -13883,7 +13840,7 @@ export class OrcaRuntimeService {
     sourceHome: string,
     target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
   ): Promise<CodexRateLimitAccountsState> {
-    return this.requireAccountServices().codexAccounts.addAccountFromHome(sourceHome, target)
+    return this.accountCommands.addCodexAccountFromHome(sourceHome, target)
   }
 
   // Why: rate-limit polling fires every 5 minutes and on account switch.
@@ -13891,14 +13848,7 @@ export class OrcaRuntimeService {
   // RateLimitService pushes new usage data, mirroring the existing
   // `rateLimits:update` IPC channel desktop already uses.
   onAccountsChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
-    const services = this.requireAccountServices()
-    return services.rateLimits.onStateChange((rateLimits) => {
-      listener({
-        claude: services.claudeAccounts.listAccounts(),
-        codex: services.codexAccounts.listAccounts(),
-        rateLimits
-      })
-    })
+    return this.accountCommands.onAccountsChanged(listener)
   }
 
   // ─── Mobile Fit Override Management ─────────────────────────
