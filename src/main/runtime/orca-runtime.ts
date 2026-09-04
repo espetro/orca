@@ -14366,24 +14366,59 @@ export class OrcaRuntimeService {
     options?: {
       hostExitConfirmed?: boolean
       cause?: TerminalExitCause
-      /** The provider's own physical-exit callback fired. Separate from `hostExitConfirmed`, which
-       *  also drives the SSH surface decision and the liveness verdict: node-pty reports real exits
-       *  as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
       providerExitObserved?: boolean
     }
   ): void {
+    const pty = this.ptyExit_guardIncarnation(ptyId, exitIncarnationId)
+    if (!pty) return
+
+    const { exitCause } = this.ptyExit_resolveExitCause(ptyId, exitCode, options?.cause)
+
+    const { preservesAbnormalSshSurface, preservesIntentionalHandlessSurface, incarnationId } =
+      this.ptyExit_decideSshSurface(pty, ptyId, exitCode, options)
+
+    this.ptyExit_collectExitPaneKeys(pty, ptyId, exitCode, options, preservesAbnormalSshSurface)
+
+    this.ptyExit_updateLivenessVerdict(ptyId, preservesAbnormalSshSurface)
+
+    const exactSurfaces = this.ptyExit_cleanupLeaves(pty, ptyId)
+
+    const exitedSurfaces = this.ptyExit_notifyTabAndMobile(
+      pty,
+      ptyId,
+      exitIncarnationId,
+      exitCode,
+      exitCause,
+      preservesAbnormalSshSurface,
+      preservesIntentionalHandlessSurface,
+      exactSurfaces,
+      incarnationId
+    )
+
+    this.ptyExit_releaseLayout(ptyId)
+
+    this.ptyExit_settleDispatch(ptyId, exitCode, exitCause, preservesAbnormalSshSurface, exitedSurfaces)
+
+    this.ptyExit_teardown(ptyId)
+  }
+
+  private ptyExit_guardIncarnation(
+    ptyId: string,
+    exitIncarnationId?: PtyIncarnationId
+  ): RuntimePtyRecord | null {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
-      return
+      return null
     }
-    // Why intent first: a requested stop can still be delivered by the provider's
-    // own exit event, whose status looks exactly like a natural finish.
-    //
-    // Why it yields to stop_unverified: a stop nobody confirmed is not a
-    // completed close. The process may still be running against a revoked
-    // dispatch — an incident a coordinator must hear about, not a routine
-    // teardown to be filed away and left unescalated.
-    const observedCause = options?.cause ?? resolveUnreportedExitCause(exitCode)
+    return pty ?? null
+  }
+
+  private ptyExit_resolveExitCause(
+    ptyId: string,
+    exitCode: number,
+    cause?: TerminalExitCause
+  ): { exitCause: TerminalExitCause; stopNeverConfirmed: boolean } {
+    const observedCause = cause ?? resolveUnreportedExitCause(exitCode)
     const stopNeverConfirmed =
       observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
     const exitCause: TerminalExitCause =
@@ -14391,41 +14426,87 @@ export class OrcaRuntimeService {
         ? OPERATOR_CLOSE_EXIT_CAUSE
         : observedCause
     this.stopRequestedPtyIds.delete(ptyId)
+    return { exitCause, stopNeverConfirmed }
+  }
+
+  private ptyExit_decideSshSurface(
+    pty: RuntimePtyRecord | null,
+    ptyId: string,
+    exitCode: number,
+    options?: { hostExitConfirmed?: boolean }
+  ): {
+    preservesAbnormalSshSurface: boolean
+    preservesIntentionalHandlessSurface: boolean
+    incarnationId: PtyIncarnationId
+  } {
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
       pty?.connectionId != null &&
       exitCode < 0 &&
       options?.hostExitConfirmed !== true
-    // Why: collect before retirePtyAgentLaunchAuthority, which deletes the restored-authority
-    // receipt a receipt-only pane's key comes from.
+
+    const incarnationId =
+      (pty?.incarnationId as PtyIncarnationId) ??
+      (`runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}` as PtyIncarnationId)
+
+    const intentionalStopIncarnation = this.intentionalHandlelessPtyStops.get(ptyId)
+    const preservesIntentionalHandlessSurface =
+      this.intentionalHandlelessPtyStops.has(ptyId) &&
+      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
+
+    return {
+      preservesAbnormalSshSurface,
+      preservesIntentionalHandlessSurface,
+      incarnationId
+    }
+  }
+
+  private ptyExit_collectExitPaneKeys(
+    pty: RuntimePtyRecord | null,
+    ptyId: string,
+    exitCode: number,
+    options?: { hostExitConfirmed?: boolean; providerExitObserved?: boolean },
+    preservesAbnormalSshSurface?: boolean
+  ): void {
     const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
+
     if (preservesAbnormalSshSurface) {
-      if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
-        this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
-      }
       this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     } else {
       this.retirePtyAgentLaunchAuthority(ptyId)
     }
-    // Why: a synthetic -1 from a failed or unverified stop is not a death certificate (the PTY can
-    // have survived it), while a real exit can also report -1 — so neither the numeric code nor the
-    // SSH surface predicate is sufficient on its own. Decided separately from
-    // preservesAbnormalSshSurface, which a host-confirmed negative SSH exit would otherwise skip.
+
     const processDeathCertified =
       exitCode >= 0 || options?.hostExitConfirmed === true || options?.providerExitObserved === true
+
     if (processDeathCertified && exitPaneKeys.size > 0) {
       this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
     }
-    const incarnationId =
-      exitIncarnationId ??
-      pty?.incarnationId ??
-      `runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}`
+  }
+
+  private ptyExit_updateLivenessVerdict(
+    ptyId: string,
+    preservesAbnormalSshSurface: boolean
+  ): void {
+    if (preservesAbnormalSshSurface) {
+      if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
+        this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
+      }
+    }
+  }
+
+  private ptyExit_cleanupLeaves(
+    pty: RuntimePtyRecord | null,
+    ptyId: string
+  ): Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[] {
     this.advancePtyLifecycleGeneration(ptyId)
     this.notifyPtyExitListeners(ptyId)
+
     const exactSurfaceByKey = new Map<
       string,
       Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
     >()
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
         worktreeId: leaf.worktreeId,
@@ -14433,6 +14514,7 @@ export class OrcaRuntimeService {
         leafId: leaf.leafId
       })
     }
+
     const parsedPaneKey = parsePaneKey(pty?.paneKey ?? '')
     if (pty?.tabId && parsedPaneKey) {
       exactSurfaceByKey.set(`${pty.worktreeId}\0${pty.tabId}\0${parsedPaneKey.leafId}`, {
@@ -14441,7 +14523,21 @@ export class OrcaRuntimeService {
         leafId: parsedPaneKey.leafId
       })
     }
-    const exactSurfaces = [...exactSurfaceByKey.values()]
+
+    return [...exactSurfaceByKey.values()]
+  }
+
+  private ptyExit_notifyTabAndMobile(
+    pty: RuntimePtyRecord | null,
+    ptyId: string,
+    exitIncarnationId: PtyIncarnationId | undefined,
+    exitCode: number,
+    exitCause: TerminalExitCause,
+    preservesAbnormalSshSurface: boolean,
+    preservesIntentionalHandlessSurface: boolean,
+    exactSurfaces: Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[],
+    incarnationId: PtyIncarnationId
+  ): { handle: string; paneKey: string | null }[] {
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
     const exitMatchesPendingRegistration =
       this.pendingPtyRegistrationIncarnations.has(ptyId) &&
@@ -14450,19 +14546,15 @@ export class OrcaRuntimeService {
         exitIncarnationId === undefined ||
         pendingIncarnation === exitIncarnationId)
     if (exitMatchesPendingRegistration) {
-      // Why: reused surfaces can look registered while their replacement incarnation still awaits admission.
       this.earlyExitedPtyIncarnations.set(
         ptyId,
         exitIncarnationId ?? pendingIncarnation ?? pty?.incarnationId ?? null
       )
     }
-    const intentionalStopIncarnation = this.intentionalHandlelessPtyStops.get(ptyId)
-    const preservesIntentionalHandlelessSurface =
-      this.intentionalHandlelessPtyStops.has(ptyId) &&
-      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
+
     advertisedUrlWatcher.unbindPty(ptyId)
     agentSessionPtyWriteGate.unbindPty(ptyId)
-    // Clean up new mobile state for this PTY
+
     this.mobileSubscribers.delete(ptyId)
     this.remoteTerminalViewSubscriberCounts.delete(ptyId)
     this.rawTerminalViewSubscriberCounts.delete(ptyId)
@@ -14492,45 +14584,29 @@ export class OrcaRuntimeService {
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
-    // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
-    // process died, renderer reload) must release its team + nested panes map.
-    // Previously only explicit closeTerminal evicted it, so natural exits leaked
-    // one team per never-reused teamId for the runtime's lifetime.
+
     const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
     if (exitedTeamLeaderHandle) {
       this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
     }
-    // Layout state machine: clear `layouts` and `layoutQueues`. Any
-    // already-queued applyLayout work for this ptyId will run, but every
-    // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
-    // short-circuits with `pty-exited`.
-    this.layouts.delete(ptyId)
-    this.layoutQueues.delete(ptyId)
-    this.freshSubscribeGuard.delete(ptyId)
-    this.cancelPendingDriverMutations(ptyId)
-    // Why: a cold restore can respawn under the same session id within the
-    // delayed-Enter window; the armed Enter would inject \r into the
-    // replacement and stamp rows it never received.
-    this.retireOrchestrationMailboxDeliveryForPty(ptyId)
 
     if (this.terminalFitOverrides.has(ptyId)) {
       this.terminalFitOverrides.delete(ptyId)
       this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
       this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
     }
-    // Why: clear driver state and notify the renderer so any lock banner on
-    // this dead pane unmounts. Without this, the pane shows a stuck banner
-    // until tab teardown, and `getDriver(deadPtyId)` would keep returning a
-    // stale `mobile{X}` to any caller that hasn't yet seen the exit IPC.
+
     if (this.currentDriver.has(ptyId)) {
       this.currentDriver.delete(ptyId)
       this.notifier?.terminalDriverChanged(ptyId, { kind: 'idle' })
     }
+
     this.remoteDesktopViewers.delete(ptyId)
     this.remoteDesktopOwners.delete(ptyId)
     this.remoteDesktopHostReclaimTargets.delete(ptyId)
     this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
+
     if (pty) {
       pty.connected = false
       pty.runtimeSessionOwned = false
@@ -14538,25 +14614,17 @@ export class OrcaRuntimeService {
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
       pty.lastExitCause = exitCause
-      if (exitCode >= 0 || options?.hostExitConfirmed === true) {
-        // A real wait status from the owning host is the death certificate; the
-        // synthetic -1 we emit on a failed/unroutable stop is not.
+      if (exitCode >= 0) {
         this.forgetPtyLivenessVerdict(ptyId)
       }
-      // Why: the exited process's live frames say nothing about a replacement.
-      // A same-id respawn makes the leaf writable again before any new title,
-      // so leaving this true would let push delivery type into the new process
-      // on the dead one's idle. lastAgentStatus itself stays for `ps` display.
       pty.lastAgentStatusObservedLive = false
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
     }
-    if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
-      // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
+
+    if (preservesIntentionalHandlessSurface || preservesAbnormalSshSurface) {
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {
-      // Why: permanent process exit is absence, not a starting/sleeping tab.
-      // Retire before publishing so paired clients never persist a ghost.
       this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
     }
 
@@ -14574,19 +14642,40 @@ export class OrcaRuntimeService {
         exitedSurfaces.push({ handle: leafHandle, paneKey: `${leaf.tabId}:${leaf.leafId}` })
       }
     }
-    // Why: an explicit whole-tab close drops the leaf from the graph *before*
-    // this exit lands, so a leaf-only walk found nothing and left the dispatch
-    // reading 'dispatched' forever against a dead process. The PTY's own handle
-    // and pane key survive that teardown, so settle from them too (STA-4603).
+
     const ptyHandle = this.handleByPtyId.get(ptyId)
     if (ptyHandle && !exitedSurfaces.some((surface) => surface.handle === ptyHandle)) {
       exitedSurfaces.push({ handle: ptyHandle, paneKey: pty?.paneKey ?? null })
     }
-    if (!preservesAbnormalSshSurface) {
-      for (const surface of exitedSurfaces) {
-        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
-      }
+
+    return exitedSurfaces
+  }
+
+  private ptyExit_releaseLayout(ptyId: string): void {
+    this.layouts.delete(ptyId)
+    this.layoutQueues.delete(ptyId)
+    this.freshSubscribeGuard.delete(ptyId)
+    this.cancelPendingDriverMutations(ptyId)
+    this.retireOrchestrationMailboxDeliveryForPty(ptyId)
+  }
+
+  private ptyExit_settleDispatch(
+    ptyId: string,
+    exitCode: number,
+    exitCause: TerminalExitCause,
+    preservesAbnormalSshSurface: boolean,
+    exitedSurfaces: { handle: string; paneKey: string | null }[]
+  ): void {
+    if (preservesAbnormalSshSurface) {
+      return
     }
+
+    for (const surface of exitedSurfaces) {
+      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
+    }
+  }
+
+  private ptyExit_teardown(_ptyId: string): void {
     this.pruneDisconnectedPtyRecords()
   }
 
