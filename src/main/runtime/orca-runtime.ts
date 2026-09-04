@@ -32,6 +32,7 @@ import { RuntimeHeadlessSessionTabPersistenceCommands } from './runtime-headless
 import type { RuntimeHeadlessSessionTabPersistenceDeps } from './runtime-headless-session-tab-persistence-commands-deps'
 import { RuntimePtyTitleTrackingCommands } from './runtime-pty-title-tracking-commands'
 import type { RuntimePtyTitleTrackingCommandsDeps } from './runtime-pty-title-tracking-commands-deps'
+import type { PtyRuntimeRecord } from './pty-runtime-record'
 import { RuntimeTerminalAgentStatusBindingCommands } from './runtime-terminal-agent-status-binding-commands'
 import type { RuntimeTerminalAgentStatusBindingCommandsDeps } from './runtime-terminal-agent-status-binding-commands-deps'
 import { RuntimeClientEventPublishingCommands } from './runtime-client-event-publishing-commands'
@@ -2833,6 +2834,9 @@ export class OrcaRuntimeService {
   private structuredAgentSessionTabRestorePromise: Promise<void> | null = null
   private structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
   private leaves = new Map<string, RuntimeLeafRecord>()
+  // Why: consolidated store for all pty-keyed state. Fields are optional to support
+  // lazy initialization and deletion on pty exit. Access via ptyRecordsById.get(ptyId)?.fieldName
+  private ptyRecordsById = new Map<string, PtyRuntimeRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
