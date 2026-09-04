@@ -20,9 +20,8 @@ import {
 } from '../../shared/agent-skill-sharing-gate'
 import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { RuntimeLinearCommands } from './runtime-linear-commands'
-import {
-  RuntimeProjectWorktreeCommands
-} from './runtime-project-worktree-commands'
+import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-commands'
+import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
 import {
@@ -76,8 +75,6 @@ import type {
   ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
-import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
-import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
@@ -88,18 +85,11 @@ import type {
   RemoteTerminalSourceRangeReplacementReservation,
   RemoteTerminalSourceRangeStreamIdentity
 } from './remote-terminal-source-range-consumer'
-import {
-  createTerminalTitleTracker,
-  type TerminalTitleFactMeta,
-  type TerminalTitleTracker
-} from '../../shared/terminal-output-side-effects'
-import { getDecorativeAgentTitleSignature } from '../../shared/agent-decorative-title-signature'
-import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import type { TerminalTitleFactMeta } from '../../shared/terminal-output-side-effects'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
 } from '../../shared/terminal-side-effect-facts'
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import {
@@ -185,7 +175,6 @@ import {
   type AgentSessionPtyWriteAdmittance
 } from './agent-session-pty-write-gate'
 import {
-  hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
@@ -196,9 +185,7 @@ import {
   type ProcessedAgentStatusChunk
 } from '../../shared/agent-status-osc'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
-import {
-  iterateTerminalInputChunks
-} from '../../shared/terminal-input'
+import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_SUBMIT,
@@ -219,7 +206,7 @@ import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fe
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir, hostname } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
@@ -294,27 +281,7 @@ import type {
 } from '../../shared/automation-owner-precondition'
 import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
-import type {
-  GitHubPRReviewCommentInput,
-  GitHubReactionContent
-} from '../../shared/github/comment-types'
-import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
-import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
-import type {
-  GitLabIssueUpdate,
-  GitLabMRInlineCommentInput,
-  GitLabMRUpdate,
-  GitLabProjectRef,
-  GitLabWorkItem,
-  MRListState
-} from '../../shared/gitlab-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type {
-  GitHubCreateIssueFields,
-  GitHubIssueUpdate,
-  GitHubPullRequestStateUpdate,
-} from '../../shared/issue-mutation-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -341,14 +308,10 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../shared/project-types'
-import type { BaseRefSearchResult, Repo } from '../../shared/repo-types'
-import type { Tab, TabGroupLayoutNode } from '../../shared/tab-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
-} from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
@@ -373,8 +336,6 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
-  DetectedWorktree,
-  DetectedWorktreeListResult,
   GitHubPrStartPoint,
   GitPushTarget,
   GitWorktreeInfo,
@@ -400,11 +361,7 @@ import type {
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 import type { BrowserSessionTabSelectionOptions } from './browser-tab-create-publication'
-import {
-  resolveBrowserDriverAfterMobileRelease,
-  screencastSubscriberDrivesAsMobile,
-  type BrowserScreencastSubscriber
-} from './browser-screencast-driver-scope'
+import type { BrowserScreencastSubscriber } from './browser-screencast-driver-scope'
 import type {
   AutomationsChangedPayload,
   RuntimeClientEvent
@@ -421,7 +378,6 @@ import {
 } from '../../shared/tab-activation-intent'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
-import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
 import {
   describeTerminalExitCause,
   isDeliberateTerminalExit,
@@ -437,7 +393,6 @@ import {
   type RuntimeDegradation,
   type RuntimeDesktopWindowStatus,
   type RuntimeGraphStatus,
-  type RuntimeRepoSearchRefs,
   type RuntimeTerminalRead,
   type RuntimeTerminalRename,
   type RuntimeTerminalAgentStatus,
@@ -493,9 +448,7 @@ import {
   type RuntimeTerminalDriverState,
   type RuntimeRendererSyncWindowGraph,
   type RuntimeSyncWindowGraph,
-  type RuntimeWorktreeListResult,
   type BrowserTabInfo,
-  type BrowserScreencastResult,
   UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
 } from '../../shared/runtime-types'
 import {
@@ -524,7 +477,6 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../shared/setup-agent-sequencing'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
-import { FIRST_PANE_ID } from '../../shared/pane-key'
 import {
   isTerminalLeafId,
   makePaneKey,
@@ -582,12 +534,10 @@ import {
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
-import {
-  isWindowsAbsolutePathLike, isPathInsideOrEqual
-} from '../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike, isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -602,18 +552,6 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
-import {
-  applyMetadataFallbackVisibility,
-  buildKnownOrcaWorkspaceLayouts,
-  isLegacyRepoForExternalWorktreeVisibility,
-  toDetectedWorktree
-} from '../../shared/worktree/ownership'
-import {
-  createWorktreeVisibilitySourceMatcher,
-  resolveCustomWorktreeVisibilitySources,
-  type WorktreeVisibilitySourceMatcher
-} from '../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -666,9 +604,15 @@ import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-insta
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
 import {
-  persistClientHostedBrowserPages,
-  rehydrateClientHostedBrowserPages
-} from './client-hosted-browser-page-persistence'
+  rehydrateClientHostedBrowserPages,
+  persistClientHostedBrowserPagesForWorktree,
+  getAllBrowserDrivers,
+  getBrowserDriver,
+  setBrowserDriver,
+  getBrowserRemoteViewerPages,
+  publishBrowserRemoteViewers,
+  reclaimBrowserForDesktop
+} from './runtime-browser-screencast'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
 import {
@@ -709,10 +653,7 @@ import {
   SSH_PROVIDER_UNREGISTERED_REASON,
   type PtyLivenessVerdict
 } from '../../shared/pty-liveness-verdict'
-import {
-  advanceTerminalTopologyRevision,
-  hasHostAuthoritativeTerminalMembership
-} from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
@@ -731,7 +672,6 @@ import {
 } from './mobile-session-tab-close-outcome'
 import type {
   PtyProviderBufferSnapshot,
-  IFilesystemProvider,
   IPtyProvider,
   PtyProcessInfo,
   PtySpawnResult,
@@ -752,7 +692,6 @@ import {
   addClaudeTeammateModeInProcess,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
-import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import type { BrowserWindow } from 'electron'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -760,43 +699,7 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
-import { BrowserError } from '../browser/browser-error'
-import {
-  getPRForBranch,
-  getPRForBranchOutcome,
-  getRepoSlug,
-  getRepoUpstream,
-  getWorkItem,
-  listIssues as listGitHubIssues,
-  listWorkItems,
-  countWorkItems,
-  getPRChecks,
-  getPRCheckDetails,
-  rerunPRChecks,
-  getPRComments,
-  setPRCommentReaction,
-  getIssue,
-  resolveReviewThread,
-  setPRFileViewed,
-  getWorkItemByOwnerRepo,
-  updatePRTitle,
-  updatePRDetails,
-  mergePR,
-  markPRReadyForReview,
-  setPRAutoMerge,
-  updatePRState,
-  requestPRReviewers,
-  removePRReviewers,
-  createIssue,
-  updateIssue,
-  addIssueComment,
-  addPRReviewComment,
-  addPRReviewCommentReply,
-  listLabels,
-  listAssignableUsers,
-  type MainWorkItem,
-  type GitHubPRBranchLookupOptions
-} from '../github/client'
+import { RuntimeBrowserScreencastCommands } from './runtime-browser-screencast-commands'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import {
   fetchGitHubPullRequestHeadRef,
@@ -811,57 +714,7 @@ import { isTransientReviewHeadFetchError } from '../git/fetch-error-classificati
 import { resolveGitHubReviewHeadRemote } from '../github/review-head-remote'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
-import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
-import { getRateLimit } from '../github/rate-limit'
-import {
-  closeMR as closeGitLabMR,
-  createIssue as createGitLabIssue,
-  diagnoseAuth as diagnoseGitLabAuthClient,
-  getJobTrace as getGitLabJobTrace,
-  getProjectRefForRemote as getGitLabProjectRefForRemote,
-  getRateLimit as getGitLabRateLimit,
-  getWorkItemByProjectRef as getGitLabWorkItemByProjectRef,
-  addIssueComment as addGitLabIssueComment,
-  addMRInlineComment as addGitLabMRInlineComment,
-  addMRComment as addGitLabMRComment,
-  listTodos as listGitLabTodos,
-  listIssues as listGitLabIssues,
-  listLabels as listGitLabLabels,
-  listMergeRequests as listGitLabMergeRequests,
-  listWorkItems as listGitLabWorkItems,
-  mergeMR as mergeGitLabMR,
-  reopenMR as reopenGitLabMR,
-  resolveMRDiscussion as resolveGitLabMRDiscussion,
-  retryJob as retryGitLabJob,
-  updateMR as updateGitLabMR,
-  updateMRReviewers as updateGitLabMRReviewers,
-  updateIssue as updateGitLabIssue
-} from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
-import { getWorkItemDetails as getGitLabWorkItemDetails } from '../gitlab/work-item-details'
-import {
-  normalizeGitLabIssueListArgs,
-  normalizeGitLabMRListState,
-  normalizeGitLabPositiveInteger,
-  type GitLabIssueListState
-} from '../gitlab/gitlab-preload-args'
-import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
-import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
-} from '../../shared/hosted-review'
-import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
-import {
-  createHostedReview as createHostedReviewFromRepo,
-  getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
-} from '../source-control/hosted-review-creation'
-import { createStackedHostedReview as createStackedHostedReviewFromRepo } from '../source-control/stacked-hosted-review-creation'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -884,7 +737,6 @@ import {
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
-import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
   getLocalWorktreePathAccess,
@@ -896,48 +748,16 @@ import {
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
 import {
-  clearProjectItemFieldValue,
-  getProjectViewTable,
-  getWorkItemDetailsBySlug,
-  listAccessibleProjects,
-  listProjectViews,
-  resolveProjectRef,
-  addIssueCommentBySlug,
-  deleteIssueCommentBySlug,
-  listAssignableUsersBySlug,
-  listIssueTypesBySlug,
-  listLabelsBySlug,
-  updateIssueCommentBySlug,
-  updateIssueBySlug,
-  updateIssueTypeBySlug,
-  updateProjectItemFieldValue,
-  updatePullRequestBySlug
-} from '../github/project-view'
-import type {
-  ClearProjectItemFieldArgs,
-  GetProjectViewTableArgs,
-  ListAccessibleProjectsArgs,
-  ListAssignableUsersBySlugArgs,
-  ListIssueTypesBySlugArgs,
-  ListLabelsBySlugArgs,
-  ListProjectViewsArgs,
-  ProjectWorkItemDetailsBySlugArgs,
-  ResolveProjectRefArgs,
-  AddIssueCommentBySlugArgs,
-  DeleteIssueCommentBySlugArgs,
-  UpdateIssueBySlugArgs,
-  UpdateIssueCommentBySlugArgs,
-  UpdateIssueTypeBySlugArgs,
-  UpdateProjectItemFieldArgs,
-  UpdatePullRequestBySlugArgs
-} from '../../shared/github/project-request-types'
-import {
-  getBaseRefDefault, getDefaultRemote, getBranchConflictKind, searchBaseRefDetails, getRemoteCount, normalizeRefSearchQuery, parseAndFilterSearchRefDetails, parseRemoteCount, resolveDefaultBaseRefViaExec, resolveDefaultBaseRefWithLocalGit, buildSearchBaseRefsArgv, isForEachRefExcludeUnsupportedError, mergeBaseRefSearchResultGroups, getRemoteDrift, getRecentDriftSubjects
+  getBaseRefDefault,
+  getDefaultRemote,
+  getBranchConflictKind,
+  resolveDefaultBaseRefWithLocalGit,
+  getRemoteDrift,
+  getRecentDriftSubjects
 } from '../git/repo'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -950,26 +770,10 @@ import {
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
-import {
-  getEffectiveHooks,
-  hasUnrecognizedOrcaYamlKeys,
-  hasHooksFile,
-  loadHooks,
-  parseOrcaYaml,
-  runHook
-} from '../hooks'
+import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
-import {
-  getDefaultTabCommandTrustContent,
-  getDefaultTabsLaunch,
-  getEffectiveSetupRunPolicy,
-  shouldRunSetupForCreate
-} from '../effective-hook-config'
-import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID, getDefaultVoiceSettings
-} from '../../shared/constants'
-import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
+import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultVoiceSettings } from '../../shared/constants'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -1004,13 +808,9 @@ import {
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
 } from '../worktree-name-retirement'
-import {
-  createRetiredNameLookup,
-  type RetiredNameRegistry
-} from '../../shared/worktree/retired-name-registry'
+import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
-import type { PtyBindingSourceExpectation, Store } from '../persistence'
-import { collectLayoutLeafIdsInOrder } from '../persistence/restoring-sessions/terminal-layout-normalization'
+import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
   computeValidatedBranchName,
@@ -1046,7 +846,6 @@ import {
   resolveWorktreeRemovalRepoOwner
 } from '../worktree-removal-repo-owner'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 import {
@@ -1068,7 +867,6 @@ import {
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
-import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
 import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
@@ -1104,14 +902,15 @@ import {
 } from './runtime-folder-workspace'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
-  assertFolderWorkspacePathUsable, getFolderWorkspacePathStatus, inferFolderWorkspacePathConnection
+  assertFolderWorkspacePathUsable,
+  getFolderWorkspacePathStatus,
+  inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
 import {
   getSshGitProvider,
   getSshGitProviderGeneration,
   requireSshGitProvider
 } from '../providers/ssh-git-dispatch'
-import { detectGitHubAvatarIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -2046,7 +1845,6 @@ const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
-const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
 // short enough that a recreated session id regains writability quickly even if
 // its runtime record (which also invalidates the verdict) is late.
@@ -2890,6 +2688,14 @@ export class OrcaRuntimeService {
   private readonly skillArtifactCommands: RuntimeSkillArtifactCommands
   private readonly skillInstallCommands: RuntimeSkillInstallCommands
   private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
+  private readonly repoGitCommands: RuntimeRepoGitCommandsFacade
+  private readonly orchestrationCommands: RuntimeOrchestrationCommands
+  private readonly orchestrationGraphReloadCommands: RuntimeOrchestrationGraphReloadCommands
+  private readonly headlessSessionTabPersistenceCommands: RuntimeHeadlessSessionTabPersistenceCommands
+  private readonly ptyTitleTrackingCommands: RuntimePtyTitleTrackingCommands
+  private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
+  private readonly clientEventPublishingCommands: RuntimeClientEventPublishingCommands
+  private readonly hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3022,6 +2828,12 @@ export class OrcaRuntimeService {
   private structuredAgentSessionTabRestorePromise: Promise<void> | null = null
   private structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
   private leaves = new Map<string, RuntimeLeafRecord>()
+  // Why: consolidated store for all pty-keyed state. Fields are optional to support
+  // lazy initialization and deletion on pty exit. Access via ptyRecordsById.get(ptyId)?.fieldName
+  private ptyRecordsById = new Map<string, PtyRuntimeRecord>()
+  // Why: consolidated registry for terminal handles and leaves, managing bidirectional
+  // indices (handles ↔ leaves ↔ ptyIds). Enforces mutual-index invariant on removal.
+  private readonly handleRegistry = new TerminalHandleRegistry()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
@@ -3674,11 +3486,280 @@ export class OrcaRuntimeService {
       store: this.store,
       notifyReposChanged: () => this.notifyReposChanged(),
       invalidateResolvedWorktreeCache: () => this.invalidateResolvedWorktreeCache(),
-      invalidateWorktreeScanCacheForRepo: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+      invalidateWorktreeScanCacheForRepo: (repoId) =>
+        this.invalidateWorktreeScanCacheForRepo(repoId),
       listProjectHostSetups: () => this.listProjectHostSetups(),
       resolveRepoSelector: (selector) => this.resolveRepoSelector(selector),
       cloneInFlightByPath: this.cloneInFlightByPath
     })
+    this.repoGitCommands = new RuntimeRepoGitCommandsFacade({
+      store: this.store,
+      stats: this.statsCollector,
+      ptyController: null,
+      terminalTopologyRevisionByRepoId: this.terminalTopologyRevisionByRepoId,
+      getSshProviderFn: this.getSshProviderFn,
+      onPtyStopped: null,
+      resolveRepoSelector: (selector) => this.resolveRepoSelector(selector),
+      selectReposBySelector: (selector) => this.selectReposBySelector(selector),
+      requireStore: () => this.requireStore(),
+      notifyReposChanged: () => this.notifyReposChanged(),
+      invalidateResolvedWorktreeCache: () => this.invalidateResolvedWorktreeCache(),
+      invalidateWorktreeScanCacheForRepo: (repoId) =>
+        this.invalidateWorktreeScanCacheForRepo(repoId),
+      resolveLiveLeafForHandle: (handle) => this.resolveLiveLeafForHandle(handle),
+      resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+      listResolvedWorktrees: () => this.listResolvedWorktrees(),
+      listRepoWorktreesForResolution: (repo, projectRuntimeByRepoId) =>
+        this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+      getLocalProvider: () => this.getLocalProvider()
+    })
+    const orchestrationDeps: RuntimeOrchestrationCommandsDeps = {
+      store: this.store,
+      orchestrationDb: this._orchestrationDb,
+      orchestrationMailboxNotifications: this.orchestrationMailboxNotifications,
+      orchestrationPointerAdmissionByPtyId: this.orchestrationPointerAdmissionByPtyId,
+      orchestrationCompatibilitySshAttachments: this.orchestrationCompatibilitySshAttachments,
+      restoredOrchestrationAuthorityByPtyId: this.restoredOrchestrationAuthorityByPtyId,
+      ptyController: null,
+      leaves: this.leaves,
+      ptysById: this.ptysById,
+      issueHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      makeRuntimePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      getRecentSettledDispatchForTerminal: (handle, db) =>
+        this.getRecentSettledDispatchForTerminal(handle, db),
+      getWorktreeIdForTerminalHandle: (handle) => this.getWorktreeIdForTerminalHandle(handle),
+      getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+      getPaneKeyForTerminalHandle: (handle) => this.getPaneKeyForTerminalHandle(handle),
+      getOrchestrationDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      handleByLeafKey: this.handleByLeafKey
+    }
+    this.orchestrationCommands = new RuntimeOrchestrationCommands(orchestrationDeps)
+    const orchestrationGraphReloadDeps: RuntimeOrchestrationGraphReloadCommandsDeps = {
+      store,
+      graphReloadLifecycle: this.graphReloadLifecycle,
+      getRendererGraphEpoch: () => this.rendererGraphEpoch,
+      setRendererGraphEpoch: (value) => {
+        this.rendererGraphEpoch = value
+      },
+      getGraphStatus: () => this.graphStatus,
+      setGraphStatus: (value) => {
+        this.graphStatus = value
+      },
+      getAuthoritativeWindowId: () => this.authoritativeWindowId,
+      setAuthoritativeWindowId: (value) => {
+        this.authoritativeWindowId = value
+      },
+      isHeadlessGraphFallbackAvailable: () => this.headlessGraphFallbackAvailable,
+      setHeadlessGraphFallbackAvailable: (value) => {
+        this.headlessGraphFallbackAvailable = value
+      },
+      getPendingHeadlessPromotionWindowId: () => this.pendingHeadlessPromotionWindowId,
+      setPendingHeadlessPromotionWindowId: (value) => {
+        this.pendingHeadlessPromotionWindowId = value
+      },
+      getRendererGeneration: () => this.rendererGeneration,
+      setRendererGeneration: (value) => {
+        this.rendererGeneration = value
+      },
+      getSessionTabsInventoryPublicationEpoch: () => this.sessionTabsInventoryPublicationEpoch,
+      setSessionTabsInventoryPublicationEpoch: (value) => {
+        this.sessionTabsInventoryPublicationEpoch = value
+      },
+      tabs: this.tabs,
+      leaves: this.leaves,
+      leavesByPtyId: this.leavesByPtyId,
+      handles: this.handles,
+      handleByLeafKey: this.handleByLeafKey,
+      handleByPtyId: this.handleByPtyId,
+      handleByPtyIncarnation: this.handleByPtyIncarnation,
+      detachedPreAllocatedLeaves: this.detachedPreAllocatedLeaves,
+      waitersByHandle: this.waitersByHandle,
+      ptysById: this.ptysById,
+      setTerminalSideEffectConsumerAvailable: (available) =>
+        this.setTerminalSideEffectConsumerAvailable(available),
+      rememberDetachedPreAllocatedLeaves: () => this.rememberDetachedPreAllocatedLeaves(),
+      refreshWritableFlags: () => this.refreshWritableFlags(),
+      adoptPreAllocatedHandle: (leaf) => this.adoptPreAllocatedHandle(leaf),
+      rejectWaitersForHandle: (handle, reason) => this.rejectWaitersForHandle(handle, reason),
+      rejectAllWaiters: (reason) => this.rejectAllWaiters(reason),
+      reconcilePtyIncarnationHandles: () => this.reconcilePtyIncarnationHandles(),
+      clearPtyIncarnationHandles: () => this.clearPtyIncarnationHandles(),
+      markSessionTabsInventoryPublished: () => this.markSessionTabsInventoryPublished(),
+      attachWindow: (windowId) => this.attachWindow(windowId)
+    }
+    this.orchestrationGraphReloadCommands = new RuntimeOrchestrationGraphReloadCommands(
+      orchestrationGraphReloadDeps
+    )
+    const headlessSessionTabPersistenceDeps: RuntimeHeadlessSessionTabPersistenceDeps = {
+      getWorkspaceSessionForWorktree: (worktreeId) =>
+        this.getWorkspaceSessionForWorktree(worktreeId),
+      setWorkspaceSessionForWorktree: (worktreeId, session) =>
+        this.setWorkspaceSessionForWorktree(worktreeId, session),
+      getMobileSessionTabsByWorktree: (worktreeId) =>
+        this.mobileSessionTabsByWorktree.get(worktreeId),
+      setMobileSessionTabsByWorktree: (worktreeId, snapshot) =>
+        this.mobileSessionTabsByWorktree.set(worktreeId, snapshot),
+      emitMobileSessionTabsSnapshot: (snapshot) => this.emitMobileSessionTabsSnapshot(snapshot),
+      setTerminalLayoutsByTabId: (tabId, layout) => {
+        this.terminalLayoutsByTabId.set(tabId, layout)
+      },
+      setExpandedLeafIdByTabId: (tabId, leafId) => {
+        this.expandedLeafIdByTabId.set(tabId, leafId)
+      },
+      store
+    }
+    this.headlessSessionTabPersistenceCommands = new RuntimeHeadlessSessionTabPersistenceCommands(
+      headlessSessionTabPersistenceDeps
+    )
+    const terminalAgentStatusBindingDeps: RuntimeTerminalAgentStatusBindingCommandsDeps = {
+      ptyController: null,
+      ptysById: this.ptysById,
+      getLivePtyForHandle: (handle) => this.getLivePtyForHandle(handle),
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle),
+      getPrimaryLeafForPty: (ptyId) => this.getPrimaryLeafForPty(ptyId),
+      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+      ptyTitleTrackersByPtyId: this.ptyTitleTrackersByPtyId,
+      ptyForegroundProcessReads: this.ptyForegroundProcessReads,
+      ptyForegroundAgentRefreshes: this.ptyForegroundAgentRefreshes,
+      ptyDelayedForegroundSnapshotTitleObservations:
+        this.ptyDelayedForegroundSnapshotTitleObservations,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      mobileSessionTabsAgentStatusHeartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
+      agentPromptLifecycleByPtyId: this.agentPromptLifecycleByPtyId,
+      recordTerminalSideEffectFact: (ptyId, fact) => this.recordTerminalSideEffectFact(ptyId, fact),
+      deliverPendingMessagesForLeaf: (leaf) => this.deliverPendingMessagesForLeaf(leaf),
+      touchMobileSessionSnapshotsForPty: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+      getFreshExplicitAgentStatusForHandle: (handle) =>
+        this.getFreshExplicitAgentStatusForHandle(handle),
+      getTerminalAgentStatus: (handle) => this.getTerminalAgentStatus(handle)
+    }
+    this.terminalAgentStatusBinding = new RuntimeTerminalAgentStatusBindingCommands(
+      terminalAgentStatusBindingDeps
+    )
+    const ptyTitleTrackingCommandsDeps: RuntimePtyTitleTrackingCommandsDeps = {
+      ptyTitleTrackersByPtyId: this.ptyTitleTrackersByPtyId,
+      ptysById: this.ptysById,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      ptyDelayedForegroundSnapshotTitleObservations:
+        this.ptyDelayedForegroundSnapshotTitleObservations,
+      mobileSessionTabsAgentStatusHeartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
+      terminalSideEffectConsumerAvailable: this.terminalSideEffectConsumerAvailable,
+      terminalSideEffectLocalConsumerAvailable: this.terminalSideEffectLocalConsumerAvailable,
+      onTerminalSideEffects: this.onTerminalSideEffects,
+      terminalSpawnCommandsByPtyId: this.terminalSpawnCommandsByPtyId,
+      oscTitleScanTailByPtyId: this.oscTitleScanTailByPtyId,
+      osc7ScanTailByPtyId: this.osc7ScanTailByPtyId,
+      agentStatusOscProcessorsByPtyId: this.agentStatusOscProcessorsByPtyId,
+      agentPromptLifecycleByPtyId: this.agentPromptLifecycleByPtyId,
+      agentPromptPermissionSequenceByPtyId: this.agentPromptPermissionSequenceByPtyId,
+      terminalSideEffectTitleGateKeysByClientEventListener:
+        this.terminalSideEffectTitleGateKeysByClientEventListener,
+      wslDistroByPtyId: this.wslDistroByPtyId,
+      terminalCwdByPtyId: this.terminalCwdByPtyId,
+      terminalFileUriHostnameByPtyId: this.terminalFileUriHostnameByPtyId,
+      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+      recordTerminalSideEffectFact: (ptyId, fact) => this.recordTerminalSideEffectFact(ptyId, fact),
+      touchMobileSessionSnapshotsForPty: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+      confirmPtyAgentExit: (ptyId) => this.terminalAgentStatusBinding.confirmPtyAgentExit(ptyId),
+      retirePtyAgentLaunchAuthority: (ptyId) => this.retirePtyAgentLaunchAuthority(ptyId),
+      recordAgentPromptLifecycleState: (ptyId, agentStatus) =>
+        this.recordAgentPromptLifecycleState(ptyId, agentStatus),
+      nextTitleObservationSequence: () => this.nextTitleObservationSequence(),
+      setPtyManagementTitleFromObservedTitle: (pty, normalizedTitle, observedAt) =>
+        this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt),
+      shouldDelayPtyBackedMobileSnapshotForForegroundAgent: (pty, normalizedTitle) =>
+        this.terminalAgentStatusBinding.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
+          pty,
+          normalizedTitle
+        ),
+      refreshPtyForegroundAgentFromController: (ptyId, opts) =>
+        this.terminalAgentStatusBinding.refreshPtyForegroundAgentFromController(ptyId, opts),
+      getPendingForegroundAgentRefreshForTitle: (ptyId, observedAt) =>
+        this.terminalAgentStatusBinding.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt),
+      delayPtyBackedMobileSnapshotForForegroundAgent: (ptyId, observedAt, foregroundRefresh) =>
+        this.terminalAgentStatusBinding.delayPtyBackedMobileSnapshotForForegroundAgent(
+          ptyId,
+          observedAt,
+          foregroundRefresh
+        ),
+      resolvePtyTuiIdleWaiters: (pty, ptyId) => this.resolvePtyTuiIdleWaiters(pty, ptyId),
+      resolveTuiIdleWaiters: (leaf) => this.resolveTuiIdleWaiters(leaf),
+      deliverPendingMessagesForLeaf: (leaf) => this.deliverPendingMessagesForLeaf(leaf),
+      countTerminalSideEffectConsumingClientEventListeners: () =>
+        this.countTerminalSideEffectConsumingClientEventListeners(),
+      clearWaitBlockedCheckState: (ptyId) => this.clearWaitBlockedCheckState(ptyId),
+      primeWaitBlockedBaselineFromSeededTail: (ptyId) =>
+        this.primeWaitBlockedBaselineFromSeededTail(ptyId),
+      clearAgentRowSnapshotsForPty: (ptyId) => this.clearAgentRowSnapshotsForPty(ptyId)
+    }
+    this.ptyTitleTrackingCommands = new RuntimePtyTitleTrackingCommands(
+      ptyTitleTrackingCommandsDeps
+    )
+    const clientEventPublishingCommandsDeps: RuntimeClientEventPublishingCommandsDeps = {
+      store,
+      notifier: null,
+      clientEventListeners: this.clientEventListeners,
+      terminalSideEffectExcludedClientEventListeners:
+        this.terminalSideEffectExcludedClientEventListeners,
+      terminalSideEffectTitleGateKeysByClientEventListener:
+        this.terminalSideEffectTitleGateKeysByClientEventListener,
+      terminalSleepStateByWorktreeId: this.terminalSleepStateByWorktreeId,
+      nativeChatLaunchDraftResolutionByTabId: this.nativeChatLaunchDraftResolutionByTabId,
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      sshRelayRecoveryGenerationByTargetId: this.sshRelayRecoveryGenerationByTargetId,
+      worktreeLifecycleListeners: this.worktreeLifecycleListeners,
+      makeDecorativeTitleGateKey: (rawTitle: string, normalizedTitle: string) =>
+        this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle),
+      notifyRuntimeListeners: notifyRuntimeListeners,
+      notifyMobileSessionTabsChangedNow: (worktreeId, changeSequence) =>
+        this.notifyMobileSessionTabsChangedNow(worktreeId, changeSequence),
+      scheduleMobileSessionTabsChanged: (worktreeId) =>
+        this.scheduleMobileSessionTabsChanged(worktreeId),
+      handles: this.handles,
+      ptysById: this.ptysById,
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId, options) =>
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, options),
+      getKnownWorkspaceSessionWorktreeIds: () => this.getKnownWorkspaceSessionWorktreeIds(),
+      refreshMobileSessionPtyRecords: () => this.refreshMobileSessionPtyRecords(),
+      runtimeWorktreeIdsEqual,
+      parsePaneKey,
+      splitWorktreeId,
+      getPublicSshState,
+      wakeFolderRepoGitUpgradeWatch
+    }
+    this.clientEventPublishingCommands = new RuntimeClientEventPublishingCommands(
+      clientEventPublishingCommandsDeps
+    )
+    const hookAgentRowResolutionCommandsDeps: RuntimeHookAgentRowResolutionCommandsDeps = {
+      ptysById: this.ptysById,
+      leaves: this.leaves,
+      latestAgentStatusByPaneKey: this.latestAgentStatusByPaneKey,
+      handles: this.handles,
+      tabs: this.tabs,
+      runtimeId: this.runtimeId,
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      getLivePtyForHandle: (handle) => this.getLivePtyForHandle(handle),
+      parsePaneKey,
+      isTerminalLeafId,
+      makePaneKey,
+      pickParsedAgentStatusPayload,
+      getUnpersistedTrackedTitleForPty: (ptyId) =>
+        this.ptyTitleTrackingCommands.getUnpersistedTrackedTitleForPty(ptyId),
+      getLatestAgentCandidateTitle,
+      getLatestPtyTitle,
+      classifyAgentTitle,
+      terminalTitleBlocksExplicitAgentStatus,
+      resolvePaneAgentOwner,
+      normalizeCompatibleAgentTitleForOwner,
+      normalizeCompatibleAgentStatusEntryForOwner,
+      orchestrationCommands: this.orchestrationCommands
+    }
+    this.hookAgentRowResolutionCommands = new RuntimeHookAgentRowResolutionCommands(
+      hookAgentRowResolutionCommandsDeps
+    )
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -3748,6 +3829,93 @@ export class OrcaRuntimeService {
         state.emulator.applyPushedViewAttributes(attributes)
       }
     })
+    this.snapshotValueComparison = new RuntimeMobileSnapshotValueComparisonCommands({
+      ptysById: this.ptysById,
+      tabs: this.tabs,
+      store: this.store,
+      startedAt: this.startedAt,
+      pendingMobileTerminalCreatesByKey: this.pendingMobileTerminalCreatesByKey,
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      getWorkspaceSessionForWorktree: (worktreeId) =>
+        this.getWorkspaceSessionForWorktree(worktreeId),
+      findPtyForMobileTerminalTab: (worktreeId, tab) =>
+        this.findPtyForMobileTerminalTab(worktreeId, tab),
+      getMobileSessionSnapshotTabIdentityKeys: (tab) =>
+        this.getMobileSessionSnapshotTabIdentityKeys(tab)
+    })
+    const mobileSessionTabsChangeSequence = { value: this.mobileSessionTabsChangeSequence }
+    this.mobileSnapshotMerge = new RuntimeMobileSnapshotMergeCommands({
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      mobileSessionTabsChangeSequence,
+      offscreenBrowserBackend: this.offscreenBrowserBackend,
+      mergeMobileSessionSnapshotTabs: (a, b) => this.mergeMobileSessionSnapshotTabs(a, b),
+      mergeMobileSessionTabGroups: (worktreeId, groups, terminalTabs, activeTab) =>
+        this.mergeMobileSessionTabGroups(worktreeId, groups, terminalTabs, activeTab),
+      getMobileSessionSnapshotTabIdentityKeys: (tab) =>
+        this.getMobileSessionSnapshotTabIdentityKeys(tab),
+      getHeadlessMobileSessionGroupId: (worktreeId) =>
+        this.getHeadlessMobileSessionGroupId(worktreeId),
+      getRuntimeBrowserPageForTab: (tab, _worktreeId) => {
+        if (typeof tab.browserPageId === 'string') {
+          return getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
+        }
+        return undefined
+      },
+      sameRuntimeBrowserPlacement: (a, b) => sameRuntimeBrowserPlacement(a, b),
+      getLiveBrowserTabsByPageId: (worktreeId) => this.getLiveBrowserTabsByPageId(worktreeId),
+      hasLiveRuntimeSessionOwnedPtyBinding: (worktreeId, tab) =>
+        this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab),
+      hasLiveOrPersistedServeOrSshOwnedPtyBinding: (worktreeId, tab) =>
+        this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(worktreeId, tab),
+      toMobileSessionTabsResult: (snapshot) => this.toMobileSessionTabsResult(snapshot),
+      projectMobileSessionTabsForClient: (result, clientNavigationId) =>
+        this.projectMobileSessionTabsForClient(result, clientNavigationId)
+    })
+    Object.defineProperty(this, 'mobileSessionTabsChangeSequence', {
+      get: () => mobileSessionTabsChangeSequence.value,
+      set: (v: number) => {
+        mobileSessionTabsChangeSequence.value = v
+      }
+    })
+    const mobileSessionTabSnapshotCommandsDeps: RuntimeMobileSessionTabSnapshotCommandsDeps = {
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      mobileSessionTabsChangeSequence,
+      offscreenBrowserBackend: this.offscreenBrowserBackend,
+      agentBrowserBridge: this.agentBrowserBridge,
+      notifyMobileSessionTabsChanged: (worktreeId) =>
+        this.notifyMobileSessionTabsChanged(worktreeId),
+      scheduleMobileSessionTabsChanged: (worktreeId) =>
+        this.scheduleMobileSessionTabsChanged(worktreeId),
+      getTerminalWorktreeIdForPaneKey: (paneKey) => this.getTerminalWorktreeIdForPaneKey(paneKey),
+      getWorkspaceSessionForWorktree: (worktreeId) =>
+        this.getWorkspaceSessionForWorktree(worktreeId),
+      getWorkspaceSessionForHostId: (hostId) => this.getWorkspaceSessionForHostId(hostId),
+      tryGetWorkspaceSessionHostIdForWorktree: (worktreeId) =>
+        this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId),
+      setWorkspaceSession: (session, hostId) => this.setWorkspaceSession(session, hostId),
+      setWorkspaceSessionForWorktree: (worktreeId, session) =>
+        this.setWorkspaceSessionForWorktree(worktreeId, session),
+      canSetWorkspaceSession: () => this.canSetWorkspaceSession(),
+      flushOrThrow: this.flushOrThrow,
+      hasHostAuthoritativeTerminalMembership: (session, worktreeId) =>
+        this.hasHostAuthoritativeTerminalMembership(session, worktreeId),
+      terminalTopologyRevisionByRepoId: this.terminalTopologyRevisionByRepoId,
+      ptysById: this.ptysById,
+      parsePaneKey: (key) => parsePaneKey(key),
+      buildHeadlessTerminalSplitLayout: (layout, options) =>
+        this.buildHeadlessTerminalSplitLayout(layout, options),
+      getRuntimeInstance: () => this,
+      toMobileSessionTabsResult: (snapshot) => this.toMobileSessionTabsResult(snapshot),
+      projectMobileSessionTabsForClient: (result, clientNavigationId) =>
+        this.projectMobileSessionTabsForClient(result, clientNavigationId),
+      withClientHostedPagesHold: (result, clientNavigationId) =>
+        this.withClientHostedPagesHold(result, clientNavigationId)
+    }
+    this.mobileTabSnapshots = new RuntimeMobileSessionTabSnapshotCommands(
+      mobileSessionTabSnapshotCommandsDeps
+    )
   }
 
   /**
@@ -3761,28 +3929,7 @@ export class OrcaRuntimeService {
    * explicit, and so constructing a runtime stays free of persistence reads.
    */
   rehydrateClientHostedBrowserPages(): void {
-    if (!this.store?.getWorkspaceSession) {
-      return
-    }
-    try {
-      const registry = getRuntimeBrowserPageRegistry(this)
-      const liveRepoIds = new Set((this.store.getRepos?.() ?? []).map((repo) => repo.id))
-      rehydrateClientHostedBrowserPages(registry, {
-        listWorkspaceSessions: () => this.listWorkspaceSessionPartitions(),
-        // Why the same discriminant hydration uses: session keys are `${repoId}::${path}` and are
-        // not pruned when a repo leaves this client's view, so a row whose repo is gone would
-        // surface a tab with no live workspace behind it. Unparseable keys are left alone.
-        isKnownWorktree: (worktreeId) => {
-          const ownerRepoId = splitWorktreeIdForFilesystem(worktreeId)?.repoId
-          return !ownerRepoId || liveRepoIds.has(ownerRepoId)
-        }
-      })
-      for (const page of registry.listPages()) {
-        this.persistedClientHostedBrowserWorktreeIds.add(page.workspaceId)
-      }
-    } catch (error) {
-      console.warn('[browser-host-lease] client page rehydration failed:', error)
-    }
+    rehydrateClientHostedBrowserPages(this)
   }
 
   /**
@@ -3793,24 +3940,7 @@ export class OrcaRuntimeService {
    * read for every one of those.
    */
   private persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
-    const registry = getRuntimeBrowserPageRegistry(this)
-    const hasPages = registry.listPages(worktreeId).length > 0
-    if (!hasPages && !this.persistedClientHostedBrowserWorktreeIds.has(worktreeId)) {
-      return
-    }
-    if (hasPages) {
-      this.persistedClientHostedBrowserWorktreeIds.add(worktreeId)
-    } else {
-      this.persistedClientHostedBrowserWorktreeIds.delete(worktreeId)
-    }
-    persistClientHostedBrowserPages(
-      {
-        getWorkspaceSession: (id) => this.getWorkspaceSessionForWorktree(id),
-        setWorkspaceSession: (id, session) => this.setWorkspaceSessionForWorktree(id, session)
-      },
-      registry,
-      worktreeId
-    )
+    persistClientHostedBrowserPagesForWorktree(this, worktreeId)
   }
 
   private listWorkspaceSessionPartitions(): WorkspaceSessionState[] {
@@ -5133,7 +5263,11 @@ export class OrcaRuntimeService {
     discoveredSkills: readonly DiscoveredSkill[],
     signal?: AbortSignal
   ): Promise<AgentSkillShareOperation> {
-    return this.skillArtifactCommands.publishDiscoveredSkillsFromAgent(request, discoveredSkills, signal)
+    return this.skillArtifactCommands.publishDiscoveredSkillsFromAgent(
+      request,
+      discoveredSkills,
+      signal
+    )
   }
 
   publishSkillPackage(
@@ -5335,7 +5469,6 @@ export class OrcaRuntimeService {
   async disposeSkillUploadSessions(): Promise<void> {
     await this.skillArtifactCommands.disposeSkillUploadSessions()
   }
-
 
   getRuntimeId(): string {
     return this.runtimeId
@@ -5690,6 +5823,7 @@ export class OrcaRuntimeService {
 
   setNotifier(notifier: RuntimeNotifier | null): void {
     this.notifier = notifier
+    this.clientEventPublishingCommands.setNotifier(notifier)
     // Why: run the one-shot fork-upstream backfill once a renderer is attached,
     // so existing forks self-correct on launch and the result can be broadcast.
     if (notifier && !this.forkBackfillStarted) {
@@ -5718,49 +5852,11 @@ export class OrcaRuntimeService {
   }
 
   private countTerminalSideEffectConsumingClientEventListeners(): number {
-    return this.clientEventListeners.size - this.terminalSideEffectExcludedClientEventListeners.size
+    return this.clientEventPublishingCommands.countTerminalSideEffectConsumingClientEventListeners()
   }
 
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
-    const events: RuntimeClientEvent[] = []
-    const sleepStates = [...this.terminalSleepStateByWorktreeId.values()].sort((a, b) =>
-      a.worktreeId.localeCompare(b.worktreeId)
-    )
-    for (const state of sleepStates) {
-      const committedPtyIds = new Set(state.ptyIds)
-      if (state.phase === 'stopping') {
-        const pendingPtyIds = Object.keys(state.terminalHandlesByPtyId)
-          .filter((ptyId) => !committedPtyIds.has(ptyId))
-          .sort()
-        if (pendingPtyIds.length > 0) {
-          events.push({
-            type: 'worktreeTerminalSleepState',
-            worktreeId: state.worktreeId,
-            generation: state.generation,
-            phase: 'started',
-            ptyIds: pendingPtyIds,
-            terminalHandles: this.getRecordedTerminalSleepHandles(
-              pendingPtyIds,
-              state.terminalHandlesByPtyId
-            )
-          })
-        }
-      }
-      if (state.ptyIds.length > 0) {
-        events.push({
-          type: 'worktreeTerminalSleepState',
-          worktreeId: state.worktreeId,
-          generation: state.generation,
-          phase: 'committed',
-          ptyIds: [...state.ptyIds].sort(),
-          terminalHandles: this.getRecordedTerminalSleepHandles(
-            state.ptyIds,
-            state.terminalHandlesByPtyId
-          )
-        })
-      }
-    }
-    return events
+    return this.clientEventPublishingCommands.getTerminalSleepClientEventSnapshot()
   }
 
   getNativeChatLaunchDraftResolutionClientEventSnapshot(): Extract<
@@ -5778,51 +5874,17 @@ export class OrcaRuntimeService {
   }
 
   private emitClientEvent(event: RuntimeClientEvent): void {
-    // Why: filter inside live-Set delivery so a listener removed mid-fan-out
-    // receives nothing and each paired client gets one semantic title frame.
-    // Why: a throwing subscriber here once escaped acquireWorktreeTerminalSpawn after it took the
-    // per-worktree terminal mutation, leaking it and wedging that worktree's sleep until restart.
-    notifyRuntimeListeners(
-      this.clientEventListeners,
-      (listener) => {
-        if (event.type === 'terminalSideEffects') {
-          const filtered = this.filterTerminalSideEffectEventForClient(listener, event)
-          if (filtered) {
-            listener(filtered)
-          }
-        } else {
-          listener(event)
-        }
-      },
-      'client-event'
-    )
+    this.clientEventPublishingCommands.emitClientEvent(event)
   }
 
   private filterTerminalSideEffectEventForClient(
     listener: (event: RuntimeClientEvent) => void,
     event: Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }>
   ): Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }> | null {
-    const titleGateKeys = this.terminalSideEffectTitleGateKeysByClientEventListener.get(listener)
-    if (!titleGateKeys) {
-      return null
-    }
-    const facts = event.batch.facts.filter((fact) => {
-      if (fact.kind !== 'title') {
-        return true
-      }
-      const gateKey = this.makeDecorativeTitleGateKey(fact.rawTitle, fact.normalizedTitle)
-      if (titleGateKeys.get(event.batch.ptyId) === gateKey) {
-        return false
-      }
-      titleGateKeys.set(event.batch.ptyId, gateKey)
-      return true
-    })
-    if (facts.length === 0) {
-      return null
-    }
-    return facts.length === event.batch.facts.length
-      ? event
-      : { ...event, batch: { ...event.batch, facts } }
+    return this.clientEventPublishingCommands.filterTerminalSideEffectEventForClient(
+      listener,
+      event
+    )
   }
 
   notifyNativeChatLaunchDraftResolved(
@@ -5858,96 +5920,31 @@ export class OrcaRuntimeService {
   private resolveNativeChatLaunchDraftOwner(
     handle: string
   ): { tabId: string; worktreeId: string } | null {
-    const record = this.handles.get(handle)
-    if (!record) {
-      return null
-    }
-    if (!record.tabId.startsWith('pty:')) {
-      return { tabId: record.tabId, worktreeId: record.worktreeId }
-    }
-    const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
-    const tabId =
-      pty?.tabId && !pty.tabId.startsWith('pty:')
-        ? pty.tabId
-        : parsePaneKey(pty?.paneKey ?? '')?.tabId
-    if (!pty || !tabId || tabId.startsWith('pty:')) {
-      return null
-    }
-    return { tabId, worktreeId: pty.worktreeId }
+    return this.clientEventPublishingCommands.resolveNativeChatLaunchDraftOwner(handle)
   }
 
   private retireResolvedNativeChatLaunchDraftFromMobileSnapshot(
     resolution: NativeChatLaunchDraftResolutionTombstone
   ): void {
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (!runtimeWorktreeIdsEqual(worktreeId, resolution.worktreeId)) {
-        continue
-      }
-      const next = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
-      if (next === snapshot) {
-        return
-      }
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
-        ...next,
-        snapshotVersion: snapshot.snapshotVersion + 1
-      })
-      this.scheduleMobileSessionTabsChanged(worktreeId)
-      return
-    }
+    this.clientEventPublishingCommands.retireResolvedNativeChatLaunchDraftFromMobileSnapshot(
+      resolution
+    )
   }
 
   private applyNativeChatLaunchDraftResolutionFence(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
-    let changed = false
-    const tabs = snapshot.tabs.map((tab) => {
-      if (tab.type !== 'terminal') {
-        return tab
-      }
-      const resolution = this.nativeChatLaunchDraftResolutionByTabId.get(tab.parentTabId)
-      if (
-        !resolution ||
-        !runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
-        tab.launchDraft !== resolution.text ||
-        tab.launchDraftCreatedAt !== resolution.createdAt
-      ) {
-        return tab
-      }
-      changed = true
-      const next = { ...tab }
-      delete next.launchDraft
-      delete next.launchDraftCreatedAt
-      return next
-    })
-    return changed ? { ...snapshot, tabs } : snapshot
+    return this.clientEventPublishingCommands.applyNativeChatLaunchDraftResolutionFence(snapshot)
   }
 
   private reconcileNativeChatLaunchDraftResolutionTombstones(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): void {
-    for (const [tabId, resolution] of this.nativeChatLaunchDraftResolutionByTabId) {
-      if (!runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
-        continue
-      }
-      const surfaces = snapshot.tabs.filter(
-        (tab): tab is RuntimeMobileSessionTerminalTab =>
-          tab.type === 'terminal' && tab.parentTabId === tabId
-      )
-      if (
-        surfaces.length === 0 ||
-        !surfaces.some(
-          (tab) =>
-            tab.launchDraft === resolution.text && tab.launchDraftCreatedAt === resolution.createdAt
-        )
-      ) {
-        this.nativeChatLaunchDraftResolutionByTabId.delete(tabId)
-      }
-    }
+    this.clientEventPublishingCommands.reconcileNativeChatLaunchDraftResolutionTombstones(snapshot)
   }
 
   private notifyWorktreesChanged(repoId: string): void {
-    this.notifier?.worktreesChanged(repoId)
-    this.emitClientEvent({ type: 'worktreesChanged', repoId })
+    this.clientEventPublishingCommands.notifyWorktreesChanged(repoId)
   }
 
   /** Detail-level worktree lifecycle tap (plugin event bus). The coarse
@@ -5963,19 +5960,11 @@ export class OrcaRuntimeService {
   }
 
   private emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
-    for (const listener of this.worktreeLifecycleListeners) {
-      try {
-        listener(event)
-      } catch (err) {
-        console.error('[runtime] worktree lifecycle listener threw', err)
-      }
-    }
+    this.clientEventPublishingCommands.emitWorktreeLifecycle(event)
   }
 
   private notifyReposChanged(): void {
-    wakeFolderRepoGitUpgradeWatch()
-    this.notifier?.reposChanged()
-    this.emitClientEvent({ type: 'reposChanged' })
+    this.clientEventPublishingCommands.notifyReposChanged()
   }
 
   // Why: automation writes land in the automation service and IPC handlers, so
@@ -6036,49 +6025,19 @@ export class OrcaRuntimeService {
   }
 
   private bumpSshRelayRecoveryGeneration(targetId: string): number {
-    const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
-    this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
-    return generation
+    return this.clientEventPublishingCommands.bumpSshRelayRecoveryGeneration(targetId)
   }
 
   private async publishRecoveredSshMobileSessionTabs(
     targetId: string,
     generation: number
   ): Promise<void> {
-    const repoIds = new Set(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => repo.connectionId === targetId)
-        .map((repo) => repo.id)
+    await this.clientEventPublishingCommands.publishRecoveredSshMobileSessionTabs(
+      targetId,
+      generation
     )
-    if (repoIds.size === 0) {
-      return
-    }
-    const worktreeIds = new Set<string>()
-    for (const worktreeId of [
-      ...this.getKnownWorkspaceSessionWorktreeIds(),
-      ...this.mobileSessionTabsByWorktree.keys()
-    ]) {
-      const parsed = splitWorktreeId(worktreeId)
-      if (parsed && repoIds.has(parsed.repoId)) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-    if (worktreeIds.size === 0) {
-      return
-    }
-
-    // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
-    for (const worktreeId of worktreeIds) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
-    }
-    await this.refreshMobileSessionPtyRecords()
-    if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
-      return
-    }
-    for (const worktreeId of worktreeIds) {
+    // Update the mobile session tabs change sequence after recovery
+    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
       this.notifyMobileSessionTabsChangedNow(worktreeId, ++this.mobileSessionTabsChangeSequence)
     }
   }
@@ -6207,69 +6166,7 @@ export class OrcaRuntimeService {
   }
 
   private persistWindowlessPtyBindingsForDesktopAttach(): void {
-    if (!this.store?.getWorkspaceSession || !this.store.setWorkspaceSession) {
-      return
-    }
-    const partitions = new Map<
-      ExecutionHostId,
-      { session: WorkspaceSessionState; ptys: RuntimePtyWorktreeRecord[] }
-    >()
-    for (const pty of this.ptysById.values()) {
-      if (!pty.connected || !pty.tabId) {
-        continue
-      }
-      const hostId = this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
-      const session = this.store.getWorkspaceSession(hostId)
-      const tab = session.tabsByWorktree[pty.worktreeId]?.find(
-        (candidate) => candidate.id === pty.tabId
-      )
-      if (!tab) {
-        continue
-      }
-      const layoutPtyIds = Object.values(
-        session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
-      )
-      if (tab.ptyId !== pty.ptyId && !layoutPtyIds.includes(pty.ptyId)) {
-        continue
-      }
-      const partition = partitions.get(hostId) ?? { session, ptys: [] }
-      partition.ptys.push(pty)
-      partitions.set(hostId, partition)
-    }
-
-    for (const [hostId, { session, ptys }] of partitions) {
-      // Why: windowless SSH PTYs must be handed to the desktop through their SSH partition, never the local session.
-      const activeWorktreeIdsOnShutdown = [
-        ...new Set([
-          ...(session.activeWorktreeIdsOnShutdown ?? []),
-          ...ptys.map((pty) => pty.worktreeId)
-        ])
-      ]
-      const activeConnectionIdsAtShutdown = [
-        ...new Set([
-          ...(session.activeConnectionIdsAtShutdown ?? []),
-          ...ptys
-            .map((pty) => pty.connectionId)
-            .filter((connectionId): connectionId is string => connectionId !== null)
-        ])
-      ]
-      const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
-      for (const pty of ptys) {
-        if (pty.connectionId && pty.tabId) {
-          remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
-        }
-      }
-
-      this.store.setWorkspaceSession(
-        {
-          ...session,
-          activeWorktreeIdsOnShutdown,
-          ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
-          ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
-        },
-        hostId
-      )
-    }
+    this.clientEventPublishingCommands.persistWindowlessPtyBindingsForDesktopAttach()
   }
 
   syncWindowGraph(
@@ -7001,110 +6898,11 @@ export class OrcaRuntimeService {
   // client-visible field EXCEPT publicationEpoch/snapshotVersion (both are
   // freshly minted on each rebuild and would defeat the comparison). Tab and
   // group objects are rebuilt each hydrate, so compare by value, not identity.
-  private headlessMobileSnapshotContentUnchanged(
-    existing: RuntimeMobileSessionTabsSnapshot,
-    next: RuntimeMobileSessionTabsSnapshot
-  ): boolean {
-    if (
-      existing.worktree !== next.worktree ||
-      existing.activeGroupId !== next.activeGroupId ||
-      existing.activeTabId !== next.activeTabId ||
-      existing.activeTabType !== next.activeTabType
-    ) {
-      return false
-    }
-    // Why: this runs per persisted worktree on EVERY graph sync whenever a
-    // serve PTY exists, so compare structurally instead of stable-stringifying
-    // both sides (which allocated six full serialized trees per worktree).
-    return (
-      this.mobileSnapshotValueEqual(existing.tabs, next.tabs) &&
-      this.mobileSnapshotValueEqual(existing.tabGroups ?? null, next.tabGroups ?? null) &&
-      this.mobileSnapshotValueEqual(existing.tabGroupLayout ?? null, next.tabGroupLayout ?? null)
-    )
-  }
-
   // Deep structural equality over plain snapshot JSON (objects/arrays/scalars).
   // Key order is irrelevant; a mismatch only costs a coalesced no-op emit.
-  private mobileSnapshotValueEqual(a: unknown, b: unknown): boolean {
-    if (a === b) {
-      return true
-    }
-    if (Array.isArray(a) || Array.isArray(b)) {
-      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-        return false
-      }
-      for (let index = 0; index < a.length; index++) {
-        if (!this.mobileSnapshotValueEqual(a[index], b[index])) {
-          return false
-        }
-      }
-      return true
-    }
-    if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
-      const aRecord = a as Record<string, unknown>
-      const bRecord = b as Record<string, unknown>
-      const aKeys = Object.keys(aRecord)
-      if (aKeys.length !== Object.keys(bRecord).length) {
-        return false
-      }
-      for (const key of aKeys) {
-        if (
-          !Object.hasOwn(bRecord, key) ||
-          !this.mobileSnapshotValueEqual(aRecord[key], bRecord[key])
-        ) {
-          return false
-        }
-      }
-      return true
-    }
-    return false
-  }
-
   // Why: keep an existing snapshot's browser tabs in sync with the live bridge
   // without rebuilding stable terminal state. Replaces browser entries with the
   // current live set and rewrites the browser portion of the primary group order.
-  private reconcileHeadlessMobileSessionBrowserTabs(
-    worktreeId: string,
-    existing: RuntimeMobileSessionTabsSnapshot
-  ): void {
-    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    const liveIds = liveBrowserTabs.map((tab) => tab.id)
-    const existingBrowserTabs = existing.tabs.filter(
-      (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
-    )
-    const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
-    if (this.headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
-      return
-    }
-    const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
-    const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...nonBrowserTabs, ...liveBrowserTabs]
-    const liveIdSet = new Set(liveIds)
-    const tabGroups = this.appendBrowserTabOrder(
-      (existing.tabGroups ?? []).map((group) => ({
-        ...group,
-        // Drop closed browser ids; appendBrowserTabOrder re-adds the live ones.
-        tabOrder: group.tabOrder.filter(
-          (id) => liveIdSet.has(id) || !existingBrowserIds.includes(id)
-        )
-      })),
-      liveIds
-    )
-    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
-    const active = activeStillPresent
-      ? null
-      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
-    this.mobileSessionTabsByWorktree.set(worktreeId, {
-      ...existing,
-      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
-      snapshotVersion: existing.snapshotVersion + 1,
-      ...(activeStillPresent
-        ? {}
-        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
-      tabGroups,
-      tabs: nextTabs
-    })
-  }
-
   // Why: browser session tabs have no parentTabId so the terminal-only group
   // builder drops them from tabOrder; this re-adds their ids to a group.
   // Browser tabs are live-only (no persisted session entry), but their GROUP
@@ -7115,334 +6913,24 @@ export class OrcaRuntimeService {
   // that group exists) and otherwise to the first group. Previously every
   // browser was force-pushed into group[0], so opening a browser in the right
   // split group always snapped it back to the left on the next rebuild.
-  private appendBrowserTabOrder(
-    groups: readonly RuntimeMobileSessionTabGroup[],
-    browserTabIds: readonly string[],
-    newTabAssignment?: { tabId: string; groupId: string },
-    // browserPageId -> groupId from the prior/persisted groups. The terminal
-    // distributor rebuilds tabOrder from terminal ids only and drops browser
-    // ids, so this carries each browser's group across rebuilds.
-    priorGroupByBrowserId?: ReadonlyMap<string, string>
-  ): RuntimeMobileSessionTabGroup[] {
-    if (browserTabIds.length === 0) {
-      return [...groups]
-    }
-    const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
-    if (next.length === 0) {
-      return next
-    }
-    const groupById = new Map(next.map((group) => [group.id, group]))
-    const ownerGroupByTabId = new Map<string, RuntimeMobileSessionTabGroup>()
-    for (const group of next) {
-      for (const id of group.tabOrder) {
-        ownerGroupByTabId.set(id, group)
-      }
-    }
-    for (const id of browserTabIds) {
-      if (ownerGroupByTabId.has(id)) {
-        continue
-      }
-      const priorGroupId = priorGroupByBrowserId?.get(id)
-      const targetGroup =
-        (newTabAssignment?.tabId === id ? groupById.get(newTabAssignment.groupId) : undefined) ??
-        (priorGroupId ? groupById.get(priorGroupId) : undefined) ??
-        next[0]!
-      targetGroup.tabOrder.push(id)
-    }
-    return next
-  }
-
   // browserPageId -> groupId from a set of groups (the persisted/prior layout),
   // so a browser stays in its group across rebuilds that drop browser ids.
-  private collectBrowserGroupAssignment(
-    groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
-    browserTabIds: readonly string[]
-  ): Map<string, string> {
-    const browserIdSet = new Set(browserTabIds)
-    const assignment = new Map<string, string>()
-    for (const group of groups ?? []) {
-      for (const id of group.tabOrder) {
-        if (browserIdSet.has(id)) {
-          assignment.set(id, group.id)
-        }
-      }
-    }
-    return assignment
-  }
-
-  private isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return typeof ptyId === 'string' && ptyId.startsWith('serve-')
-  }
-
-  private isSshOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return typeof ptyId === 'string' && parseAppSshPtyId(ptyId) !== null
-  }
-
-  private workspaceSessionHasRuntimeOwnedPtyCandidate(session: WorkspaceSessionState): boolean {
-    return Object.entries(session.tabsByWorktree ?? {}).some(([worktreeId, tabs]) =>
-      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
-    )
-  }
-
-  private workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
-    session: WorkspaceSessionState,
-    worktreeId: string,
-    tabs: WorkspaceSessionState['tabsByWorktree'][string]
-  ): boolean {
-    return tabs.some((tab) => {
-      if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
-        return true
-      }
-      const leafPtyIds = session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId
-      return (
-        (leafPtyIds &&
-          Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))) ||
-        // Why: expiry keeps pane coordinates so paired viewers can request a fresh shell.
-        this.getRecentExpiredSshLease(worktreeId, tab.id, undefined) !== null
-      )
-    })
-  }
-
-  private getRecentExpiredSshLease(
-    worktreeId: string,
-    tabId: string,
-    leafId: string | undefined,
-    ptyId?: string
-  ): ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number] | null {
-    const now = Date.now()
-    return (
-      this.store
-        ?.getSshRemotePtyLeases?.()
-        .find(
-          (lease) =>
-            lease.state === 'expired' &&
-            lease.worktreeId === worktreeId &&
-            lease.tabId === tabId &&
-            (ptyId === undefined || lease.ptyId === ptyId) &&
-            (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
-            lease.updatedAt <= now &&
-            now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
-        ) ?? null
-    )
-  }
-
-  private hasRecentExpiredSshLeasePane(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    return this.getRecentExpiredSshLease(worktreeId, tab.parentTabId, tab.leafId) !== null
-  }
-
   // Why: serve-* (local serve) and ssh:<conn>@@<relay> (SSH relay) ids are minted
   // ONLY for runtime-owned terminals and are preserved/re-hydrated, so tear them
   // down even if the renderer adopted a view (else they resurrect). The daemon
   // session form <worktreeId>@@<shortUuid> is deliberately NOT here: the daemon
   // mints it for ordinary renderer-owned local terminals too, so id shape can't
   // classify ownership for that form — renderer-graph membership does (below).
-  private isServeOrSshOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return this.isServeOwnedPtyId(ptyId) || this.isSshOwnedPtyId(ptyId)
-  }
-
-  private hasServeOrSshOwnedBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
-    if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
-      return true
-    }
-    return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
-      this.isServeOrSshOwnedPtyId(ptyId)
-    )
-  }
-
   // Why: a snapshot tab can keep a serve/SSH-owned ptyId after the runtime
   // terminal died and was de-persisted, so id shape alone must not preserve it
   // against a renderer publication. Require the binding to be backed by a live
   // PTY or by the persisted workspace session (a dormant persisted serve/SSH
   // binding is still re-hydratable, so it stays preserved).
-  private hasLiveOrPersistedServeOrSshOwnedPtyBinding(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    const boundPtyIds = [
-      tab.ptyId,
-      ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})
-    ].filter((ptyId): ptyId is string => this.isServeOrSshOwnedPtyId(ptyId))
-    const boundSshPtyIds = boundPtyIds.filter((ptyId) => this.isSshOwnedPtyId(ptyId))
-    if (boundPtyIds.length === 0) {
-      return this.hasRecentExpiredSshLeasePane(worktreeId, tab)
-    }
-    // Why: exited PTY records are archived in ptysById, so require a connected
-    // record — a dead serve shell whose persisted binding is also gone must
-    // stop being preserved.
-    if (boundPtyIds.some((ptyId) => this.ptysById.get(ptyId)?.connected === true)) {
-      return true
-    }
-    const now = Date.now()
-    if (
-      boundPtyIds.some((ptyId) => {
-        const pty = this.ptysById.get(ptyId)
-        return (
-          pty?.connectionId != null &&
-          pty.lastExitCode != null &&
-          pty.lastExitCode < 0 &&
-          pty.disconnectedAt != null &&
-          now - pty.disconnectedAt <= SSH_PANE_RECOVERY_GRACE_MS
-        )
-      })
-    ) {
-      // Why: an abnormal SSH transport exit can beat paired-viewer recovery; retain its pane briefly so the HUB remains addressable.
-      return true
-    }
-    if (
-      now - this.startedAt <= SSH_PANE_RECOVERY_GRACE_MS &&
-      boundSshPtyIds.some((ptyId) => {
-        const pty = this.ptysById.get(ptyId)
-        return !pty || (!pty.connected && pty.lastExitCode === null)
-      })
-    ) {
-      // Why: after a HUB restart, failed SSH reattach can remove persistence before the fresh runtime records an exit; keep the pane reachable for ensure.
-      return true
-    }
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session) {
-      return false
-    }
-    const persistedTab = (session.tabsByWorktree?.[worktreeId] ?? []).find(
-      (candidate) => candidate.id === tab.parentTabId
-    )
-    if (!persistedTab) {
-      return false
-    }
-    const persistedPtyIds = new Set(
-      [
-        persistedTab.ptyId,
-        ...Object.values(session.terminalLayoutsByTabId?.[persistedTab.id]?.ptyIdsByLeafId ?? {})
-      ].filter((ptyId): ptyId is string => typeof ptyId === 'string')
-    )
-    return boundPtyIds.some((ptyId) => persistedPtyIds.has(ptyId))
-  }
-
-  private hasLiveRuntimeSessionOwnedPtyBinding(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    return pty?.connected === true && pty.runtimeSessionOwned
-  }
-
-  private clearRuntimeSessionOwnershipForMobileTab(
-    worktreeId: string,
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    parentTabId: string
-  ): void {
-    for (const tab of snapshot.tabs) {
-      if (tab.type !== 'terminal' || tab.parentTabId !== parentTabId) {
-        continue
-      }
-      const ptyIds = [tab.ptyId, ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})].filter(
-        (ptyId): ptyId is string => typeof ptyId === 'string'
-      )
-      for (const ptyId of ptyIds) {
-        const pty = this.ptysById.get(ptyId)
-        if (pty?.worktreeId === worktreeId && pty.tabId === parentTabId) {
-          pty.runtimeSessionOwned = false
-          this.setPairedRendererSessionOwnership(pty.ptyId, false)
-        }
-      }
-    }
-  }
-
-  private getMobileTerminalLeafPtyIds(tab: RuntimeMobileSessionTerminalTab): string[] {
-    return [tab.ptyId, tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]].filter(
-      (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
-    )
-  }
-
-  private clearRuntimeSessionOwnershipForMobileTerminalLeaf(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): void {
-    for (const ptyId of this.getMobileTerminalLeafPtyIds(tab)) {
-      const pty = this.ptysById.get(ptyId)
-      if (pty?.worktreeId === worktreeId && pty.tabId === tab.parentTabId) {
-        pty.runtimeSessionOwned = false
-        this.setPairedRendererSessionOwnership(pty.ptyId, false)
-      }
-    }
-  }
-
   // Why: only positive evidence that the persisted parent dropped this leaf may
   // release it — a parent with no persisted layout is no evidence of a split.
-  private persistedParentStillBindsMobileTerminalLeaf(
-    session: WorkspaceSessionState,
-    persistedParent: TerminalTab,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    const layout = session.terminalLayoutsByTabId?.[tab.parentTabId]
-    if (!layout) {
-      return true
-    }
-    if (
-      typeof layout.ptyIdsByLeafId?.[tab.leafId] === 'string' ||
-      collectLayoutLeafIdsInOrder(layout.root).includes(tab.leafId)
-    ) {
-      return true
-    }
-    // Why: renderer and headless sources can derive different leafIds for one
-    // surface, so a still-bound PTY id outranks a leafId that no longer matches.
-    const leafPtyIds = new Set(this.getMobileTerminalLeafPtyIds(tab))
-    if (leafPtyIds.size === 0) {
-      return true
-    }
-    return [persistedParent.ptyId, ...Object.values(layout.ptyIdsByLeafId ?? {})].some(
-      (ptyId) => typeof ptyId === 'string' && leafPtyIds.has(ptyId)
-    )
-  }
-
   // Why: omitted from the publication AND from persistence = durably closed, so release
   // ownership — else a lagging or failed kill preserves the tab back into every merge.
   // A create still in flight has not been retired, only not published yet.
-  private releaseRuntimeSessionOwnershipForRendererRetiredTabs(
-    incoming: RuntimeMobileSessionTabsSnapshot,
-    existing: RuntimeMobileSessionTabsSnapshot | undefined
-  ): void {
-    if (!existing || this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)) {
-      return
-    }
-    const worktreeId = existing.worktree
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    const persistedTabs = session?.tabsByWorktree?.[worktreeId]
-    if (!session || !persistedTabs) {
-      return
-    }
-    const persistedTabsById = new Map(persistedTabs.map((tab) => [tab.id, tab]))
-    const incomingIdentityKeys = new Set(
-      incoming.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab))
-    )
-    for (const tab of existing.tabs) {
-      if (tab.type !== 'terminal') {
-        continue
-      }
-      if (
-        this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${tab.parentTabId}`) ||
-        this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
-          incomingIdentityKeys.has(id)
-        ) ||
-        !this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)
-      ) {
-        continue
-      }
-      const persistedParent = persistedTabsById.get(tab.parentTabId)
-      if (!persistedParent) {
-        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, existing, tab.parentTabId)
-        continue
-      }
-      // Why: a split parent outlives its retired leaf, so releasing the parent's
-      // PTYs would retire the surviving sibling with it.
-      if (!this.persistedParentStillBindsMobileTerminalLeaf(session, persistedParent, tab)) {
-        this.clearRuntimeSessionOwnershipForMobileTerminalLeaf(worktreeId, tab)
-      }
-    }
-  }
-
   // Why: a tab needs authoritative runtime teardown (kill + de-persist + prune)
   // only when the renderer can't durably tear it down: either it's serve/SSH
   // (preserved + re-hydrated, would resurrect) or the renderer graph never
@@ -7450,44 +6938,6 @@ export class OrcaRuntimeService {
   // host materialized but the renderer never showed). A tab the renderer graph
   // DOES list — including an ordinary daemon-backed local terminal or a pending
   // tab whose PTY hasn't bound — is renderer-owned: delegate, do not de-persist.
-  private isRuntimeOwnedHeadlessMobileTab(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    if (this.hasServeOrSshOwnedBinding(tab)) {
-      return true
-    }
-    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    if (pty && this.isServeOrSshOwnedPtyId(pty.ptyId)) {
-      return true
-    }
-    return !this.tabs.has(tab.parentTabId)
-  }
-
-  private mergeMobileSessionSnapshotTabs(
-    baseTabs: readonly RuntimeMobileSessionSnapshotTab[],
-    extraTabs: readonly RuntimeMobileSessionSnapshotTab[]
-  ): RuntimeMobileSessionSnapshotTab[] {
-    const seenIds = new Set<string>()
-    const merged: RuntimeMobileSessionSnapshotTab[] = []
-    const add = (tab: RuntimeMobileSessionSnapshotTab): void => {
-      const ids = this.getMobileSessionSnapshotTabIdentityKeys(tab)
-      if (ids.some((id) => seenIds.has(id))) {
-        return
-      }
-      for (const id of ids) {
-        seenIds.add(id)
-      }
-      merged.push(tab)
-    }
-    for (const tab of baseTabs) {
-      add(tab)
-    }
-    for (const tab of extraTabs) {
-      add(tab)
-    }
-    return merged
-  }
 
   private getMobileSessionSnapshotTabIdentityKeys(tab: RuntimeMobileSessionSnapshotTab): string[] {
     if (tab.type === 'terminal') {
@@ -7505,67 +6955,6 @@ export class OrcaRuntimeService {
       return [tab.id, tab.browserWorkspaceId]
     }
     return [tab.id]
-  }
-
-  private mergeMobileSessionTabGroups(
-    worktreeId: string,
-    groups: readonly RuntimeMobileSessionTabGroup[],
-    terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
-    activeTab: RuntimeMobileSessionTerminalTab | null
-  ): RuntimeMobileSessionTabGroup[] {
-    const parentTabOrder = this.collectHeadlessParentTabOrder(terminalTabs)
-    if (parentTabOrder.length === 0) {
-      return [...groups]
-    }
-    const targetGroupId = groups[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
-    const nextGroups =
-      groups.length > 0
-        ? groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
-        : [
-            {
-              id: targetGroupId,
-              activeTabId: null,
-              tabOrder: []
-            }
-          ]
-    // Why: keep each tab in the group that already owns it (a multi-group split
-    // must survive the merge), drop tabs no longer present, and route only
-    // genuinely-new tabs into the active group — never funnel everything into
-    // group[0], which duplicated/coalesced tabs that lived in other groups.
-    const ownerGroupId = new Map<string, string>()
-    for (const group of nextGroups) {
-      for (const tabId of group.tabOrder) {
-        ownerGroupId.set(tabId, group.id)
-      }
-    }
-    const liveTabIds = new Set(parentTabOrder)
-    const activeParentId = activeTab?.parentTabId ?? null
-    const activeGroupId =
-      (activeParentId ? ownerGroupId.get(activeParentId) : undefined) ?? nextGroups[0]!.id
-    const retainedOrder = new Map<string, string[]>(nextGroups.map((group) => [group.id, []]))
-    for (const tabId of parentTabOrder) {
-      const groupId = ownerGroupId.get(tabId) ?? activeGroupId
-      retainedOrder.get(groupId)?.push(tabId)
-    }
-    return nextGroups
-      .map((group) => {
-        const tabOrder = retainedOrder.get(group.id) ?? []
-        const keptActive =
-          group.activeTabId &&
-          tabOrder.includes(group.activeTabId) &&
-          liveTabIds.has(group.activeTabId)
-            ? group.activeTabId
-            : null
-        return {
-          ...group,
-          tabOrder,
-          activeTabId:
-            activeParentId && tabOrder.includes(activeParentId)
-              ? activeParentId
-              : (keptActive ?? tabOrder[0] ?? null)
-        }
-      })
-      .filter((group) => group.tabOrder.length > 0)
   }
 
   /**
@@ -7696,821 +7085,6 @@ export class OrcaRuntimeService {
     if (args.notify !== false) {
       this.notifyMobileSessionTabsChanged(worktreeId)
     }
-  }
-
-  private touchMobileSessionSnapshotsForPty(
-    ptyId: string,
-    options: { immediate?: boolean } = {}
-  ): void {
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (!hasPtyBackedTab) {
-        continue
-      }
-      this.touchMobileSessionTabsForWorktree(worktreeId, options)
-    }
-  }
-
-  private getMobileSessionWorktreeIdsForPty(ptyId: string): string[] {
-    const worktreeIds: string[] = []
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (hasPtyBackedTab) {
-        worktreeIds.push(worktreeId)
-      }
-    }
-    return worktreeIds
-  }
-
-  /** Bump the snapshot version and emit, coalesced unless `immediate`.
-   *  Why the bump: clients gate mirrored snapshots on a strictly increasing
-   *  `snapshotVersion`, so a re-emit at the same version is silently dropped. */
-  touchMobileSessionTabsForWorktree(
-    worktreeId: string,
-    options: { immediate?: boolean } = {}
-  ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      return
-    }
-    this.mobileSessionTabsByWorktree.set(worktreeId, {
-      ...snapshot,
-      snapshotVersion: snapshot.snapshotVersion + 1
-    })
-    if (options.immediate) {
-      // Why: readiness/lifecycle changes are structural and must not wait
-      // behind the title/status coalescing window.
-      this.notifyMobileSessionTabsChanged(worktreeId)
-      return
-    }
-    // Why: title/status flips several times a second under spinner-in-title
-    // agents. Coalesce the emit instead of fanning out every version.
-    this.scheduleMobileSessionTabsChanged(worktreeId)
-  }
-
-  /** Republish the workspace snapshot after a pane's hook status changed.
-   *  Hook rows feed the headless `agentStatus` projection, which nothing else touches. */
-  touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void {
-    const resolved = worktreeId ?? this.getTerminalWorktreeIdForPaneKey(paneKey)
-    if (!resolved) {
-      return
-    }
-    this.touchMobileSessionTabsForWorktree(resolved)
-  }
-
-  private mobileSessionSnapshotHasSurface(
-    worktreeId: string,
-    parentTabId: string,
-    leafId: string
-  ): boolean {
-    return Boolean(
-      this.mobileSessionTabsByWorktree
-        .get(worktreeId)
-        ?.tabs.some(
-          (tab) =>
-            tab.type === 'terminal' && tab.parentTabId === parentTabId && tab.leafId === leafId
-        )
-    )
-  }
-
-  private isMobileSessionSurfaceMembershipAllowed(
-    worktreeId: string,
-    parentTabId: string,
-    leafId: string,
-    candidatePtyId: string | null | undefined
-  ): boolean {
-    const session = this.store?.getWorkspaceSession?.()
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    if (
-      !hasHostAuthoritativeTerminalMembership(session, worktreeId) &&
-      (session !== undefined || !this.terminalTopologyRevisionByRepoId.has(repoId))
-    ) {
-      return true
-    }
-    if (this.mobileSessionSnapshotHasSurface(worktreeId, parentTabId, leafId)) {
-      return true
-    }
-    if (!candidatePtyId) {
-      return false
-    }
-    const pty = this.ptysById.get(candidatePtyId)
-    const pane = parsePaneKey(pty?.paneKey ?? '')
-    return Boolean(
-      pty?.connected &&
-      pty.worktreeId === worktreeId &&
-      pty.tabId === parentTabId &&
-      pane?.leafId === leafId
-    )
-  }
-
-  private reconcileMobileSessionRetirementFences(
-    leaves: readonly RuntimeSyncedLeaf[]
-  ): RuntimeSyncedLeaf[] {
-    return leaves.filter((leaf) =>
-      this.isMobileSessionSurfaceMembershipAllowed(
-        leaf.worktreeId,
-        leaf.tabId,
-        leaf.leafId,
-        leaf.ptyId
-      )
-    )
-  }
-
-  private applyMobileSessionRetirementFences(
-    snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsSnapshot {
-    let next = snapshot
-    for (const tab of snapshot.tabs) {
-      if (
-        tab.type !== 'terminal' ||
-        this.isMobileSessionSurfaceMembershipAllowed(
-          snapshot.worktree,
-          tab.parentTabId,
-          tab.leafId,
-          tab.ptyId
-        )
-      ) {
-        continue
-      }
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot: next,
-        ptyId: tab.ptyId ?? '',
-        exactSurfaces: [{ parentTabId: tab.parentTabId, leafId: tab.leafId }],
-        exactOnly: true
-      })
-      if (retired) {
-        next = retired.snapshot
-      }
-    }
-    return next
-  }
-
-  /**
-   * Retires each surface in the session partition of the host that owns its worktree.
-   * Why: an SSH pane's durable surface lives in that connection's partition; retiring it
-   * against the local partition strands the real ghost and bumps a foreign host's epoch.
-   * Returns null when nothing may be published because persistence is unavailable or failed.
-   */
-  private persistTerminalSurfaceRetirements(
-    retiredSurfaces: readonly RetiredTerminalSurface[]
-  ): { accepted: RetiredTerminalSurface[]; unpersisted: RetiredTerminalSurface[] } | null {
-    const surfacesByHostId = new Map<ExecutionHostId, RetiredTerminalSurface[]>()
-    for (const surface of retiredSurfaces) {
-      const hostId =
-        this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? LOCAL_EXECUTION_HOST_ID
-      const bucket = surfacesByHostId.get(hostId)
-      if (bucket) {
-        bucket.push(surface)
-      } else {
-        surfacesByHostId.set(hostId, [surface])
-      }
-    }
-    const accepted: RetiredTerminalSurface[] = []
-    const unpersisted: RetiredTerminalSurface[] = []
-    const pendingWrites: { hostId: ExecutionHostId; session: WorkspaceSessionState }[] = []
-    for (const [hostId, surfaces] of surfacesByHostId) {
-      const session = this.store?.getWorkspaceSession?.(hostId)
-      if (!session) {
-        unpersisted.push(...surfaces)
-        continue
-      }
-      // Why: publishing absence before its host membership fence is durable lets a crash or
-      // stale renderer write resurrect the retired surface.
-      if (!this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
-        return null
-      }
-      let nextSession = session
-      const acceptedForHost: RetiredTerminalSurface[] = []
-      for (const surface of surfaces) {
-        const candidate = retireTerminalSurfaceFromPersistence(nextSession, surface)
-        if (candidate !== nextSession) {
-          acceptedForHost.push(surface)
-          nextSession = candidate
-        }
-      }
-      if (acceptedForHost.length === 0) {
-        continue
-      }
-      accepted.push(...acceptedForHost)
-      pendingWrites.push({ hostId, session: nextSession })
-    }
-    if (pendingWrites.length > 0) {
-      try {
-        for (const write of pendingWrites) {
-          this.store?.setWorkspaceSession?.(write.session, write.hostId)
-        }
-        this.store?.flushOrThrow?.()
-      } catch (error) {
-        console.error('[runtime] failed to persist terminal retirement:', error)
-        return null
-      }
-    }
-    return { accepted, unpersisted }
-  }
-
-  private retireMobileSessionSurfacesForPty(
-    ptyId: string,
-    incarnationId: string,
-    exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
-  ): void {
-    const retiredSurfaceByKey = new Map<string, RetiredTerminalSurface>()
-    for (const surface of exactSurfaces) {
-      retiredSurfaceByKey.set(`${surface.worktreeId}\0${surface.parentTabId}\0${surface.leafId}`, {
-        ...surface,
-        ptyId,
-        incarnationId
-      })
-    }
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot,
-        ptyId,
-        exactSurfaces: exactSurfaces.filter((surface) => surface.worktreeId === worktreeId)
-      })
-      if (!retired) {
-        continue
-      }
-      for (const surface of retired.retired) {
-        retiredSurfaceByKey.set(
-          `${surface.worktreeId}\0${surface.parentTabId}\0${surface.leafId}`,
-          { ...surface, incarnationId }
-        )
-      }
-    }
-    const retiredSurfaces = [...retiredSurfaceByKey.values()]
-    if (retiredSurfaces.length === 0) {
-      return
-    }
-    const persisted = this.persistTerminalSurfaceRetirements(retiredSurfaces)
-    if (!persisted) {
-      return
-    }
-    for (const surface of persisted.unpersisted) {
-      const repoId = getRepoIdFromWorktreeId(surface.worktreeId)
-      this.terminalTopologyRevisionByRepoId.set(
-        repoId,
-        (this.terminalTopologyRevisionByRepoId.get(repoId) ?? 0) + 1
-      )
-    }
-    // Why: one repo epoch can cover multiple exits, but only surfaces individually accepted by persistence may disappear.
-    const publishableRetiredSurfaces = [...persisted.accepted, ...persisted.unpersisted]
-    if (publishableRetiredSurfaces.length === 0) {
-      return
-    }
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot,
-        ptyId,
-        exactSurfaces: publishableRetiredSurfaces.filter(
-          (surface) => surface.worktreeId === worktreeId
-        ),
-        // Why: discovery is broad by PTY id, but publication may remove only surfaces whose durable retirement was accepted.
-        exactOnly: true
-      })
-      if (retired) {
-        this.mobileSessionTabsByWorktree.set(worktreeId, retired.snapshot)
-        this.notifyMobileSessionTabsChanged(worktreeId)
-      }
-    }
-  }
-
-  private buildHeadlessMobileSessionTerminalTabs(
-    worktreeId: string,
-    persistedTabs: readonly TerminalTab[],
-    session: WorkspaceSessionState
-  ): RuntimeMobileSessionTerminalTab[] {
-    return [...persistedTabs]
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
-      .flatMap((tab, index) => {
-        const layout = session.terminalLayoutsByTabId?.[tab.id]
-        const leafIds = this.collectPersistedTerminalLeafIds(layout)
-        if (leafIds.length === 0) {
-          leafIds.push(this.deriveHeadlessLegacyTerminalLeafId(tab.id))
-        }
-        return leafIds.flatMap((leafId) => {
-          const ptyId =
-            layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
-          const title =
-            tab.customTitle?.trim() ||
-            tab.generatedTitle?.trim() ||
-            tab.title?.trim() ||
-            tab.defaultTitle?.trim() ||
-            `Terminal ${index + 1}`
-          return [
-            {
-              type: 'terminal' as const,
-              id: `${tab.id}::${leafId}`,
-              parentTabId: tab.id,
-              leafId,
-              title,
-              ...(ptyId ? { ptyId } : {}),
-              ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-              ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
-              ...(layout ? { parentLayout: this.cloneTerminalLayoutSnapshot(layout) } : {}),
-              ...(tab.color != null ? { color: tab.color } : {}),
-              ...(tab.isPinned ? { isPinned: true } : {}),
-              ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
-              isActive: this.isPersistedTerminalLeafActive(
-                session,
-                worktreeId,
-                tab.id,
-                leafId,
-                layout
-              )
-            }
-          ]
-        })
-      })
-  }
-
-  // Why: headless serve backs browser panes with offscreen WebContents that live
-  // only in the BrowserManager, never in a renderer graph. Without surfacing them
-  // as session tabs, a session.tabs snapshot (e.g. on terminal open) prunes the
-  // paired browser tab and closing it fails with tab_not_found. Synthesize browser
-  // session tabs from the live bridge so they are first-class alongside terminals.
-  private buildHeadlessMobileSessionBrowserTabs(
-    worktreeId: string
-  ): RuntimeMobileSessionBrowserTab[] {
-    const serverTabs =
-      this.offscreenBrowserBackend && this.agentBrowserBridge?.tabList
-        ? this.agentBrowserBridge.tabList(worktreeId).tabs
-        : []
-    const publishedServerTabs = serverTabs.map((tab) => {
-      const persistedProps = this.getPersistedUnifiedSessionTabProps(worktreeId, tab.browserPageId)
-      return {
-        type: 'browser' as const,
-        // Why: an offscreen page has no separate workspace identity, so the page id
-        // is its own workspace id (matches the server's browserWorkspaceId fallback).
-        id: tab.browserPageId,
-        title: tab.title || tab.url || 'Browser',
-        browserWorkspaceId: tab.browserPageId,
-        browserPageId: tab.browserPageId,
-        url: tab.url || 'about:blank',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false,
-        loadError: tab.loadError ?? undefined,
-        certificateFailure: tab.certificateFailure ?? undefined,
-        ...(persistedProps ? { color: persistedProps.color } : {}),
-        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
-        isActive: tab.active === true
-      }
-    })
-    const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .map((page) => ({
-        type: 'browser' as const,
-        id: page.browserPageId,
-        title: page.title || page.url || 'Browser',
-        browserWorkspaceId: page.browserPageId,
-        browserPageId: page.browserPageId,
-        browserProfileId: page.browserProfileId,
-        executionHostKey: page.executionHostKey,
-        placement: page.placement,
-        url: page.url,
-        loading: page.loading,
-        canGoBack: page.canGoBack,
-        canGoForward: page.canGoForward,
-        isActive: page.active
-      }))
-    return [...publishedServerTabs, ...publishedClientTabs]
-  }
-
-  // Why: change detection for headless browser tabs. Compares the fields that
-  // actually vary (a JSON.stringify equality was order-sensitive and silently
-  // dropped `undefined` keys, so it only worked while both sides shared one
-  // construction path).
-  private headlessBrowserTabsUnchanged(
-    live: RuntimeMobileSessionBrowserTab[],
-    existing: RuntimeMobileSessionBrowserTab[]
-  ): boolean {
-    if (live.length !== existing.length) {
-      return false
-    }
-    return live.every((tab, index) => {
-      const prev = existing[index]
-      return (
-        tab.id === prev.id &&
-        tab.title === prev.title &&
-        tab.url === prev.url &&
-        tab.loading === prev.loading &&
-        tab.canGoBack === prev.canGoBack &&
-        tab.canGoForward === prev.canGoForward &&
-        tab.browserProfileId === prev.browserProfileId &&
-        tab.executionHostKey === prev.executionHostKey &&
-        ((tab.placement === undefined && prev.placement === undefined) ||
-          (tab.placement !== undefined &&
-            prev.placement !== undefined &&
-            sameRuntimeBrowserPlacement(tab.placement, prev.placement))) &&
-        tab.isActive === prev.isActive &&
-        (tab.isPinned ?? false) === (prev.isPinned ?? false) &&
-        (tab.color ?? null) === (prev.color ?? null) &&
-        this.browserLoadErrorsEqual(tab.loadError, prev.loadError) &&
-        this.browserCertificateFailuresEqual(tab.certificateFailure, prev.certificateFailure)
-      )
-    })
-  }
-
-  private browserLoadErrorsEqual(
-    a: RuntimeMobileSessionBrowserTab['loadError'],
-    b: RuntimeMobileSessionBrowserTab['loadError']
-  ): boolean {
-    const left = a ?? null
-    const right = b ?? null
-    if (left === right) {
-      return true
-    }
-    if (!left || !right) {
-      return false
-    }
-    return (
-      left.code === right.code &&
-      left.description === right.description &&
-      left.validatedUrl === right.validatedUrl
-    )
-  }
-
-  private browserCertificateFailuresEqual(
-    a: RuntimeMobileSessionBrowserTab['certificateFailure'],
-    b: RuntimeMobileSessionBrowserTab['certificateFailure']
-  ): boolean {
-    const left = a ?? null
-    const right = b ?? null
-    if (left === right) {
-      return true
-    }
-    if (!left || !right) {
-      return false
-    }
-    return (
-      left.challengeId === right.challengeId &&
-      left.browserPageId === right.browserPageId &&
-      left.errorCode === right.errorCode &&
-      left.error === right.error &&
-      left.origin === right.origin &&
-      left.displayHost === right.displayHost &&
-      left.canProceed === right.canProceed &&
-      left.observedAt === right.observedAt
-    )
-  }
-
-  private getPersistedUnifiedSessionTabProps(
-    worktreeId: string,
-    tabId: string
-  ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
-    return tab ? { color: tab.color, isPinned: tab.isPinned } : null
-  }
-
-  private collectPersistedTerminalLeafIds(layout: TerminalLayoutSnapshot | undefined): string[] {
-    if (!layout) {
-      return []
-    }
-    const leafIds = new Set<string>()
-    const visit = (node: TerminalLayoutSnapshot['root']): void => {
-      if (!node) {
-        return
-      }
-      if (node.type === 'leaf') {
-        if (isTerminalLeafId(node.leafId)) {
-          leafIds.add(node.leafId)
-        }
-        return
-      }
-      visit(node.first)
-      visit(node.second)
-    }
-    visit(layout.root)
-    if (layout.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
-      leafIds.add(layout.activeLeafId)
-    }
-    for (const leafId of Object.keys(layout.ptyIdsByLeafId ?? {})) {
-      if (isTerminalLeafId(leafId)) {
-        leafIds.add(leafId)
-      }
-    }
-    return [...leafIds]
-  }
-
-  private deriveHeadlessLegacyTerminalLeafId(tabId: string): string {
-    const hash = createHash('sha256').update(`headless-terminal-leaf:${tabId}`).digest('hex')
-    const variant = ((Number.parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16)
-    const leafId = [
-      hash.slice(0, 8),
-      hash.slice(8, 12),
-      `4${hash.slice(13, 16)}`,
-      `${variant}${hash.slice(17, 20)}`,
-      hash.slice(20, 32)
-    ].join('-')
-    if (!isTerminalLeafId(leafId)) {
-      return randomUUID()
-    }
-    return leafId
-  }
-
-  private cloneTerminalLayoutSnapshot(layout: TerminalLayoutSnapshot): TerminalLayoutSnapshot {
-    const cloned: TerminalLayoutSnapshot = {
-      root: layout.root,
-      activeLeafId: layout.activeLeafId,
-      expandedLeafId: layout.expandedLeafId
-    }
-    if (layout.ptyIdsByLeafId) {
-      cloned.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }
-    }
-    if (layout.buffersByLeafId) {
-      cloned.buffersByLeafId = { ...layout.buffersByLeafId }
-    }
-    if (layout.scrollbackRefsByLeafId) {
-      cloned.scrollbackRefsByLeafId = { ...layout.scrollbackRefsByLeafId }
-    }
-    if (layout.titlesByLeafId) {
-      cloned.titlesByLeafId = { ...layout.titlesByLeafId }
-    }
-    return cloned
-  }
-
-  private isPersistedTerminalLeafActive(
-    session: WorkspaceSessionState,
-    worktreeId: string,
-    tabId: string,
-    leafId: string,
-    layout: TerminalLayoutSnapshot | undefined
-  ): boolean {
-    const activeTabId = session.activeTabIdByWorktree?.[worktreeId] ?? session.activeTabId
-    return activeTabId === tabId && (!layout?.activeLeafId || layout.activeLeafId === leafId)
-  }
-
-  private pickHeadlessActiveTerminalTab(
-    tabs: readonly RuntimeMobileSessionTerminalTab[]
-  ): RuntimeMobileSessionTerminalTab | null {
-    return tabs.find((tab) => tab.isActive) ?? tabs.find((tab) => tab.parentTabId) ?? null
-  }
-
-  private collectHeadlessParentTabOrder(
-    tabs: readonly RuntimeMobileSessionTerminalTab[]
-  ): string[] {
-    const order: string[] = []
-    const seen = new Set<string>()
-    for (const tab of tabs) {
-      if (!seen.has(tab.parentTabId)) {
-        seen.add(tab.parentTabId)
-        order.push(tab.parentTabId)
-      }
-    }
-    return order
-  }
-
-  // Why: the group tab order must follow actual creation/insertion order across
-  // both terminals and browsers, not list terminals first. A terminal's top-level
-  // id is its parentTabId (split leaves share one); a browser's is its own id.
-  private collectHeadlessTopLevelTabOrder(
-    tabs: readonly RuntimeMobileSessionSnapshotTab[]
-  ): string[] {
-    const order: string[] = []
-    const seen = new Set<string>()
-    for (const tab of tabs) {
-      const topLevelId = tab.type === 'terminal' ? tab.parentTabId : tab.id
-      if (!seen.has(topLevelId)) {
-        seen.add(topLevelId)
-        order.push(topLevelId)
-      }
-    }
-    return order
-  }
-
-  private getHeadlessMobileSessionGroupId(worktreeId: string): string {
-    return `headless-terminals:${worktreeId}`
-  }
-
-  private buildHeadlessMobileSessionTabGroups(
-    worktreeId: string,
-    tabs: readonly RuntimeMobileSessionSnapshotTab[],
-    activeTab: RuntimeMobileSessionSnapshotTab | null,
-    existingGroups?: readonly RuntimeMobileSessionTabGroup[],
-    // Why: a new tab created via a specific group's "+" must land in THAT group,
-    // not the active one — otherwise every "+" in a split funnels to one group.
-    newTabAssignment?: { tabId: string; groupId: string }
-  ): RuntimeMobileSessionTabGroup[] {
-    // Why: order across terminals and browsers in their actual array order so a
-    // tab opened after a browser tab lands to its right, not regrouped before it.
-    const tabOrder = this.collectHeadlessTopLevelTabOrder(tabs)
-    const topLevelOf = (tab: RuntimeMobileSessionSnapshotTab): string =>
-      tab.type === 'terminal' ? tab.parentTabId : tab.id
-    const activeTopLevelId =
-      (activeTab ? topLevelOf(activeTab) : null) ??
-      existingGroups?.[0]?.activeTabId ??
-      (() => {
-        const active = tabs.find((tab) => tab.isActive)
-        return active ? topLevelOf(active) : null
-      })() ??
-      tabOrder[0] ??
-      null
-
-    // Why: when the user has split tabs into multiple groups, preserve that
-    // assignment across rebuilds instead of coalescing back to one group.
-    if (existingGroups && existingGroups.length > 1) {
-      return this.distributeHeadlessTabsAcrossGroups(
-        existingGroups,
-        tabOrder,
-        activeTopLevelId,
-        newTabAssignment
-      )
-    }
-
-    const groupId = existingGroups?.[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
-    return [
-      {
-        id: groupId,
-        activeTabId:
-          activeTopLevelId && tabOrder.includes(activeTopLevelId)
-            ? activeTopLevelId
-            : (tabOrder[0] ?? null),
-        tabOrder
-      }
-    ]
-  }
-
-  // Distribute live top-level tabs into the existing multi-group structure,
-  // keeping each tab in its group; tabs new since the last snapshot join the
-  // active group. Emptied groups are dropped so a closed split collapses.
-  private distributeHeadlessTabsAcrossGroups(
-    existingGroups: readonly RuntimeMobileSessionTabGroup[],
-    tabOrder: readonly string[],
-    activeTopLevelId: string | null,
-    newTabAssignment?: { tabId: string; groupId: string }
-  ): RuntimeMobileSessionTabGroup[] {
-    const groupIdByTabId = new Map<string, string>()
-    for (const group of existingGroups) {
-      for (const tabId of group.tabOrder) {
-        groupIdByTabId.set(tabId, group.id)
-      }
-    }
-    // Why: route a freshly-created tab to the group its "+" was clicked in,
-    // when that group still exists; otherwise fall through to the active group.
-    const hasTargetGroup =
-      newTabAssignment !== undefined &&
-      existingGroups.some((group) => group.id === newTabAssignment.groupId)
-    if (hasTargetGroup) {
-      groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
-    }
-    const activeGroupId =
-      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ?? existingGroups[0]!.id
-    const orderByGroup = new Map<string, string[]>(existingGroups.map((group) => [group.id, []]))
-    for (const tabId of tabOrder) {
-      const groupId = groupIdByTabId.get(tabId) ?? activeGroupId
-      orderByGroup.get(groupId)?.push(tabId)
-    }
-    return existingGroups
-      .map((group) => {
-        const nextOrder = orderByGroup.get(group.id) ?? []
-        return {
-          ...group,
-          tabOrder: nextOrder,
-          activeTabId:
-            activeTopLevelId && nextOrder.includes(activeTopLevelId)
-              ? activeTopLevelId
-              : group.activeTabId && nextOrder.includes(group.activeTabId)
-                ? group.activeTabId
-                : (nextOrder[0] ?? null)
-        }
-      })
-      .filter((group) => group.tabOrder.length > 0)
-  }
-
-  private buildMaterializedHeadlessParentLayout(
-    leafId: string,
-    ptyId: string,
-    existingLayout: TerminalLayoutSnapshot | undefined,
-    split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
-  ): TerminalLayoutSnapshot {
-    if (!existingLayout) {
-      return {
-        root: { type: 'leaf', leafId },
-        activeLeafId: leafId,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [leafId]: ptyId }
-      }
-    }
-    // Why: a split must insert the new leaf into the live layout tree with the
-    // requested direction, or the published snapshot keeps the old single-leaf
-    // root and the split renders with a fallback direction ("Split Right" lands
-    // as a top/bottom split). Reuse the persisted-split builder for parity.
-    if (split) {
-      return buildHeadlessTerminalSplitLayout(this.cloneTerminalLayoutSnapshot(existingLayout), {
-        leafId,
-        ptyId,
-        splitFromLeafId: split.splitFromLeafId,
-        direction: split.direction
-      })
-    }
-    return {
-      ...this.cloneTerminalLayoutSnapshot(existingLayout),
-      ptyIdsByLeafId: {
-        ...existingLayout.ptyIdsByLeafId,
-        [leafId]: ptyId
-      }
-    }
-  }
-
-  private removePersistedHeadlessTerminalTab(
-    worktreeId: string,
-    parentTabId: string,
-    options: { allowMissing?: boolean } = {}
-  ): string[] {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      throw new Error('workspace_session_unavailable')
-    }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId)
-    if (result.pinned) {
-      throw new Error('terminal_tab_pinned')
-    }
-    if (!result.closed) {
-      if (options.allowMissing) {
-        return []
-      }
-      throw new Error('tab_not_found')
-    }
-    this.setWorkspaceSessionForWorktree(
-      worktreeId,
-      advanceTerminalTopologyRevision(result.session, worktreeId)
-    )
-    return result.ptyIdsToKill
-  }
-
-  private persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return
-    }
-    const orderIndexByTabId = new Map(tabOrder.map((tabId, index) => [tabId, index]))
-    const tabs = session.tabsByWorktree[worktreeId] ?? []
-    const reordered = [...tabs]
-      .sort((a, b) => {
-        const aIndex = orderIndexByTabId.get(a.id) ?? Number.MAX_SAFE_INTEGER
-        const bIndex = orderIndexByTabId.get(b.id) ?? Number.MAX_SAFE_INTEGER
-        return aIndex - bIndex || a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
-      })
-      .map((tab, index) => ({
-        ...tab,
-        sortOrder: index
-      }))
-    this.setWorkspaceSessionForWorktree(worktreeId, {
-      ...session,
-      tabsByWorktree: {
-        ...session.tabsByWorktree,
-        [worktreeId]: reordered
-      }
-    })
-  }
-
-  private emitMobileSessionTabsSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void {
-    if (this.mobileSessionTabListeners.size === 0) {
-      return
-    }
-    const result = this.toMobileSessionTabsResult(snapshot)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
-  }
-
-  /**
-   * Answers one client's session-tabs question: whether this runtime has taken back *that* client's
-   * client-hosted pages yet, then that client's own tab selection.
-   *
-   * The hold is decided here and nowhere else, and it is set or cleared rather than only set, so a
-   * frame built for one client can never carry another client's answer.
-   */
-  private projectMobileSessionTabsForClient(
-    result: RuntimeMobileSessionTabsResult,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult {
-    return this.clientSessionTabSelections.project(
-      this.withClientHostedPagesHold(result, clientNavigationId),
-      clientNavigationId
-    )
-  }
-
-  private withClientHostedPagesHold(
-    result: RuntimeMobileSessionTabsResult,
-    clientNavigationId: string | undefined
-  ): RuntimeMobileSessionTabsResult {
-    return this.clientHostedPageReconciliation.holdFor(result, clientNavigationId, Date.now())
   }
 
   private async refreshMobileSessionPtyRecords(
@@ -9541,143 +8115,46 @@ export class OrcaRuntimeService {
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
-    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
+    this.headlessSessionTabPersistenceCommands.persistHeadlessSessionTabProps(
+      worktreeId,
+      hostTabId,
+      args
+    )
+    this.headlessSessionTabPersistenceCommands.applyHeadlessSessionTabPropsToSnapshot(
+      worktreeId,
+      hostTabId,
+      args
+    )
     return { updated: true }
   }
 
-  private persistHeadlessSessionTabProps(
+  // Delegation methods
+  private persistHeadlessSessionTabProps = (
     worktreeId: string,
     tabId: string,
     props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
-  ): void {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return
-    }
-    const tabs = session.tabsByWorktree[worktreeId]
-    const nextSession: WorkspaceSessionState = { ...session }
-    let changed = false
-    if (tabs?.some((tab) => tab.id === tabId)) {
-      changed = true
-      nextSession.tabsByWorktree = {
-        ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-                ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-              }
-            : tab
-        )
-      }
-    }
-
-    const unifiedTabs = session.unifiedTabs?.[worktreeId]
-    if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
-      changed = true
-      nextSession.unifiedTabs = {
-        ...session.unifiedTabs,
-        [worktreeId]: unifiedTabs.map((tab) =>
-          tab.id === tabId || tab.entityId === tabId
-            ? {
-                ...tab,
-                ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
-              }
-            : tab
-        )
-      }
-    }
-
-    if (!changed) {
-      return
-    }
-    this.setWorkspaceSessionForWorktree(worktreeId, nextSession)
-  }
-
-  private applyHeadlessSessionTabPropsToSnapshot(
-    worktreeId: string,
-    tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
-  ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      return
-    }
-    let changed = false
-    const tabs = snapshot.tabs.map((tab) => {
-      if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
-        return tab
-      }
-      changed = true
-      return {
-        ...tab,
-        ...(props.color !== undefined ? { color: props.color } : {}),
-        ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-        ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
-      }
-    })
-    if (!changed) {
-      return
-    }
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      tabs
-    }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
-  }
-
-  private getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
-    return tab.type === 'terminal' ? tab.parentTabId : tab.id
-  }
-
-  // Merge the client's pane structure into the persisted tab layout. PTY
-  // bindings and active leaf stay host-owned; only ratios/expand/titles change.
-  // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
-  private persistHeadlessTerminalPaneLayout(
-    worktreeId: string,
-    args: {
-      tabId: string
-      root: TerminalPaneLayoutNode | null
-      expandedLeafId: string | null
-      titlesByLeafId?: Record<string, string>
-    }
-  ): TerminalLayoutSnapshot | undefined {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return undefined
-    }
-    const existing = session.terminalLayoutsByTabId?.[args.tabId]
-    if (!existing) {
-      return undefined
-    }
-    const candidate = {
-      ...session,
-      terminalLayoutsByTabId: {
-        ...session.terminalLayoutsByTabId,
-        [args.tabId]: {
-          ...this.cloneTerminalLayoutSnapshot(existing),
-          root: args.root ?? existing.root,
-          expandedLeafId: args.expandedLeafId,
-          ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
-        }
-      }
-    }
-    this.setWorkspaceSessionForWorktree(worktreeId, candidate)
-    // Why: persistence may reject stale membership while accepting its metadata; publish only that rebased layout.
-    return (
-      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId[args.tabId] ??
-      candidate.terminalLayoutsByTabId[args.tabId]
+  ) =>
+    this.headlessSessionTabPersistenceCommands.persistHeadlessSessionTabProps(
+      worktreeId,
+      tabId,
+      props
     )
-  }
 
-  private applyHeadlessTerminalPaneLayoutToSnapshot(
+  private applyHeadlessSessionTabPropsToSnapshot = (
+    worktreeId: string,
+    tabId: string,
+    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+  ) =>
+    this.headlessSessionTabPersistenceCommands.applyHeadlessSessionTabPropsToSnapshot(
+      worktreeId,
+      tabId,
+      props
+    )
+
+  private getMobileSessionTopLevelTabId = (tab: RuntimeMobileSessionSnapshotTab) =>
+    this.headlessSessionTabPersistenceCommands.getMobileSessionTopLevelTabId(tab)
+
+  private persistHeadlessTerminalPaneLayout = (
     worktreeId: string,
     args: {
       tabId: string
@@ -9685,39 +8162,25 @@ export class OrcaRuntimeService {
       expandedLeafId: string | null
       titlesByLeafId?: Record<string, string>
     }
-  ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      return
-    }
-    let changed = false
-    const tabs = snapshot.tabs.map((tab) => {
-      if (tab.type !== 'terminal' || tab.parentTabId !== args.tabId || !tab.parentLayout) {
-        return tab
-      }
-      changed = true
-      return {
-        ...tab,
-        parentLayout: {
-          ...tab.parentLayout,
-          root: args.root ?? tab.parentLayout.root,
-          expandedLeafId: args.expandedLeafId,
-          ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
-        }
-      }
-    })
-    if (!changed) {
-      return
-    }
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      tabs
-    }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+  ) => {
+    this.headlessSessionTabPersistenceCommands.persistHeadlessTerminalPaneLayout(worktreeId, args)
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    return session?.terminalLayoutsByTabId?.[args.tabId]
   }
+
+  private applyHeadlessTerminalPaneLayoutToSnapshot = (
+    worktreeId: string,
+    args: {
+      tabId: string
+      root: TerminalPaneLayoutNode | null
+      expandedLeafId: string | null
+      titlesByLeafId?: Record<string, string>
+    }
+  ) =>
+    this.headlessSessionTabPersistenceCommands.applyHeadlessTerminalPaneLayoutToSnapshot(
+      worktreeId,
+      args
+    )
 
   private moveHeadlessMobileSessionTab(
     worktreeId: string,
@@ -12584,446 +11047,178 @@ export class OrcaRuntimeService {
 
   /** Raw last title from main's tracked PTY/leaf records — the title surface
    *  the tracker (live bytes + synthetic frames) keeps current. */
-  private getTrackedRawTitleForPty(ptyId: string): string | null {
-    const recordTitle = this.ptysById.get(ptyId)?.lastOscTitle
-    if (recordTitle) {
-      return recordTitle
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      if (leaf.lastOscTitle) {
-        return leaf.lastOscTitle
-      }
-    }
-    return null
-  }
 
-  private isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {
-    return isCursorNativeAgentTitle(rawTitle) && meta?.staleWorkingTitleClear !== true
-  }
+  // PTY title tracking methods delegated to ptyTitleTrackingCommands facade
+  private getTrackedRawTitleForPty = (ptyId: string): string | null =>
+    this.ptyTitleTrackingCommands.getTrackedRawTitleForPty(ptyId)
 
-  /** Display fallback for identities intentionally omitted from liveness records. */
-  private getTrackedDisplayTitleForPty(ptyId: string): string | null {
-    return (
-      this.getTrackedRawTitleForPty(ptyId) ??
-      this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ??
-      null
-    )
-  }
+  private isLiveCursorNativeTitle = (rawTitle: string, meta?: TerminalTitleFactMeta): boolean =>
+    this.ptyTitleTrackingCommands.isLiveCursorNativeTitle(rawTitle, meta)
 
-  private getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
-    if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
-      return null
-    }
-    // Why: a manual title is authoritative until explicitly cleared with null.
-    const pty = this.ptysById.get(ptyId)
-    if (pty && pty.title !== null) {
-      return null
-    }
-    return this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ?? null
-  }
+  private getTrackedDisplayTitleForPty = (ptyId: string): string | null =>
+    this.ptyTitleTrackingCommands.getTrackedDisplayTitleForPty(ptyId)
 
-  /** Why: synthetic agent title frames no longer ride pty:data, so neither
-   *  renderer xterm nor the headless emulator observes them. Mobile-parity
-   *  snapshot titles must prefer main's tracker over snapshot lastTitle, or
-   *  hook-driven spinner/idle titles vanish from mobile tabs. */
-  private preferTrackedLastTitle<T extends { lastTitle?: string }>(ptyId: string, snapshot: T): T {
-    const tracked = this.getTrackedDisplayTitleForPty(ptyId)
-    if (!tracked) {
-      return snapshot
-    }
-    return { ...snapshot, lastTitle: tracked }
-  }
+  private getUnpersistedTrackedTitleForPty = (ptyId: string | null): string | null =>
+    this.ptyTitleTrackingCommands.getUnpersistedTrackedTitleForPty(ptyId)
 
-  /** Decorative comparison key: only recognized agent titles fold leading spinner frames. */
-  private makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
-    // Stable Pi/Gemini/Grok display normalization also defines their semantic gate.
-    const normalizedSignature =
-      rawTitle === normalizedTitle ? null : getDecorativeAgentTitleSignature(normalizedTitle)
-    const signature = normalizedSignature ?? getDecorativeAgentTitleSignature(rawTitle)
-    return signature === null ? `literal\u0000${normalizedTitle}` : `agent\u0000${signature}`
-  }
+  private preferTrackedLastTitle = <T extends { lastTitle?: string }>(
+    ptyId: string,
+    snapshot: T
+  ): T => this.ptyTitleTrackingCommands.preferTrackedLastTitle(ptyId, snapshot)
 
-  private getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry {
-    const existing = this.ptyTitleTrackersByPtyId.get(ptyId)
-    if (existing) {
-      return existing
-    }
-    // Why: trackers are created lazily on the first observed chunk. After an
-    // app relaunch the PTY/leaf records can already hold a persisted title; a
-    // cold tracker would miss the parked working→idle completion and never
-    // arm the stale-title timer for a persisted 'working' title.
-    let initialTitle = this.ptysById.get(ptyId)?.lastOscTitle ?? null
-    if (initialTitle === null) {
-      for (const leaf of this.getLeavesForPty(ptyId)) {
-        if (leaf.lastOscTitle) {
-          initialTitle = leaf.lastOscTitle
-          break
-        }
-      }
-    }
-    const tracker = createTerminalTitleTracker(
-      {
-        onTitle: (normalizedTitle, rawTitle, meta) => {
-          this.recordTerminalSideEffectFact(ptyId, {
-            kind: 'title',
-            normalizedTitle,
-            rawTitle,
-            ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
-          })
-          const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
-          const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-          const live = this.ptyTitleTrackersByPtyId.get(ptyId)
-          const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
-          const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
-          if (live) {
-            live.lastMobileTitleGateKey = gateKey
-          }
-          const tracksReplicatedStatus =
-            live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
-          const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
-          if (
-            tracksReplicatedStatus &&
-            decorativeOnly &&
-            !this.ptyDelayedForegroundSnapshotTitleObservations.has(ptyId) &&
-            (titleStatus === 'working' || titleStatus === 'permission')
-          ) {
-            // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
-            this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
-          }
-          // Why: an identity-only cursor title records nothing, but the tracker
-          // title is that pane's only Cursor identity and must still fan out (#10258).
-          if (!changed && !identityOnlyTitle) {
-            return
-          }
-          if (live?.applyingChunk) {
-            // Why: synthetic spinner ticks change only the braille glyph
-            // ~12.5x/sec; fanning out full mobile session snapshots per frame
-            // is pure churn. Raw lastOscTitle updates above stay cheap.
-            if (!decorativeOnly) {
-              this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-              live.chunkTouchedSessionTabs = true
-            }
-          } else {
-            // Stale-working-title timer path — fires between chunks, so the
-            // per-chunk batching in onPtyData cannot pick it up.
-            this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-            this.touchMobileSessionSnapshotsForPty(ptyId)
-          }
-        },
-        // Why: agent transitions and bells become pty:sideEffect facts —
-        // main is the single byte parser for local/SSH PTYs; the renderer
-        // store handler decides what the facts mean (notification policy).
-        onAgentBecameWorking: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-working' })
-        },
-        onAgentBecameIdle: (title, meta) => {
-          this.recordTerminalSideEffectFact(ptyId, {
-            kind: 'agent-idle',
-            title,
-            ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
-          })
-        },
-        onAgentExited: () => {
-          this.confirmPtyAgentExit(ptyId)
-        },
-        onCommandFinished: (exitCode: number | null) => {
-          this.retirePtyAgentLaunchAuthority(ptyId)
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
-        },
-        onBell: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
-        },
-        onPrLink: (link: TerminalGitHubPRLink) => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
-        },
-        // Why: hidden-delivery-gated views never see 2031 bytes; facts keep their theme registry truthful.
-        onMode2031Subscribe: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
-        },
-        onMode2031Unsubscribe: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
-        }
-      },
-      initialTitle !== null ? { initialTitle } : {}
-    )
-    tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
-    const entry: RuntimePtyTitleTrackerEntry = {
-      tracker,
-      applyingChunk: false,
-      lastMobileTitleGateKey: null,
-      chunkTouchedSessionTabs: false,
-      pendingFacts: [],
-      // Why: command-code facts exist only for the pty:sideEffect channel —
-      // headless serve skips the per-chunk scrape entirely. The detector
-      // self-arms on the Command Code banner; the spawn command (when main
-      // saw one) mirrors the renderer detector's startupCommand fast-arm.
-      commandCodeDetector: this.terminalSideEffectConsumerAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
-    }
-    this.ptyTitleTrackersByPtyId.set(ptyId, entry)
-    return entry
-  }
+  private makeDecorativeTitleGateKey = (rawTitle: string, normalizedTitle: string): string =>
+    this.ptyTitleTrackingCommands.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
 
-  /** Apply one observed OSC title (raw form) to the PTY and leaf records.
-   *  Returns true when the PTY record's title or status changed. */
-  private applyTrackedPtyTitle(
+  private getOrCreatePtyTitleTrackerEntry = (ptyId: string) =>
+    this.ptyTitleTrackingCommands.getOrCreatePtyTitleTrackerEntry(ptyId)
+
+  private applyTrackedPtyTitle = (
     ptyId: string,
     rawTitle: string,
     normalizedTitle: string,
     meta?: TerminalTitleFactMeta
-  ): boolean {
-    // Why: status is detected from the RAW title (mirrors the renderer tracker),
-    // so working/idle transitions are unaffected by normalization; the records
-    // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
-    // one stable stored label (#7880) instead of churning `ps`/mobile tabs.
-    //
-    // Why the identity-only case: the bare cursor-agent literal identifies the pane without
-    // asserting activity, so it records NO title/status evidence — only the tracker keeps it,
-    // for display (#10258). Nulling the status here rather than trusting the detector keeps
-    // that contract local, since every activity-gated effect below is keyed on status.
-    const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-    const recordedTitle = identityOnlyTitle ? null : normalizedTitle
-    const agentStatus = identityOnlyTitle ? null : detectAgentStatusFromTitle(rawTitle)
-    this.recordAgentPromptLifecycleState(ptyId, agentStatus)
-    let ptyRecordChanged = false
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      const prevStatus = pty.lastAgentStatus
-      const prevTitle = pty.lastOscTitle
-      const observedAt = this.nextTitleObservationSequence()
-      const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
-      pty.lastOscTitle = recordedTitle
-      pty.lastOscTitleAt = identityOnlyTitle ? null : observedAt
-      pty.lastOscTitleEpochMs = observedAtEpochMs
-      pty.lastAgentStatus = agentStatus
-      pty.lastAgentStatusObservedLive = true
-      if (prevStatus !== agentStatus) {
-        pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
-      }
-      if (
-        identityOnlyTitle ||
-        terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
-        (prevStatus !== null && agentStatus !== null && prevStatus !== agentStatus)
-      ) {
-        pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()
-      }
-      if (identityOnlyTitle) {
-        pty.managementTitle = null
-        pty.managementTitleAt = null
-      } else {
-        this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
-      }
-      ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
-        this.resolvePtyTuiIdleWaiters(pty, ptyId)
-      }
-      const shouldDelayMobileSnapshot =
-        ptyRecordChanged &&
-        this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)
-      let foregroundRefresh: Promise<boolean> | undefined
-      // Why: gate on an actual status transition — braille spinner frames
-      // mutate the title every tick, so probing per-title-change would stream
-      // a foreground query per frame during active work.
-      if (prevStatus !== agentStatus) {
-        foregroundRefresh = this.refreshPtyForegroundAgentFromController(ptyId, {
-          afterTitleObservation: observedAt
-        })
-      } else if (shouldDelayMobileSnapshot) {
-        // Why: same-status compatible title changes can arrive before the
-        // foreground owner probe settles; publishing them would flicker.
-        foregroundRefresh = this.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt)
-      }
-      if (foregroundRefresh && shouldDelayMobileSnapshot) {
-        // Why: report "unchanged" so the per-chunk batch skips the mobile
-        // snapshot fan-out; the delayed publish fires when the probe settles.
-        ptyRecordChanged = false
-        this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
-      }
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      // Why: keep the latest OSC title on the leaf so worktree.ps can
-      // recompute status from the live title each call. Without this,
-      // daemon-hosted terminals (no renderer pushing pane titles) had no
-      // way to clear a stale 'working' status after the agent exited and
-      // the shell took over the title — the stuck-spinner bug in #1437.
-      const prevStatus = leaf.lastAgentStatus
-      const prevObservedLive = leaf.lastAgentStatusObservedLive
-      leaf.lastOscTitle = recordedTitle
-      leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
-      // Why: when a new OSC title doesn't classify as an agent state (e.g.
-      // bare shell title after the agent exits), clear lastAgentStatus so
-      // it is no longer sticky. Tui-idle waiters that needed the previous
-      // 'idle' transition were already resolved at the moment of the
-      // transition below; only fresh waiters registered after the agent
-      // exits would observe the cleared value, and they correctly fall
-      // back to title-based detection / polling.
-      leaf.lastAgentStatus = agentStatus
-      leaf.lastAgentStatusObservedLive = true
-      // Why: resolve tui-idle on any transition TO idle (not just working→idle).
-      // Claude Code may skip "working" entirely on fast tasks, going null→idle,
-      // and the coordinator's tui-idle waiter would hang forever waiting for a
-      // working→idle transition that never comes. Permission→idle is excluded:
-      // it means the agent was blocked on user approval and the user said no,
-      // which isn't a task-completion signal.
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
-        this.resolveTuiIdleWaiters(leaf)
-      }
-      // Why the second condition: push delivery is gated on LIVE idle, so its
-      // authorizing edge is liveness as well as status. A restore seed or a
-      // status kept across a same-id respawn leaves a stale 'idle' behind, and
-      // an agent whose first live title is already idle (claude --resume at its
-      // prompt) then shows no transition — the row would strand, which is
-      // exactly #12536. Waiter semantics stay transition-only above.
-      if (agentStatus === 'idle' && (prevStatus !== 'idle' || !prevObservedLive)) {
-        this.deliverPendingMessagesForLeaf(leaf)
-      }
-    }
-    return ptyRecordChanged
-  }
+  ): boolean =>
+    this.ptyTitleTrackingCommands.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
 
-  /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
-   *  teardown so it cannot fire into pruned records. */
-  private disposePtyTitleTracker(ptyId: string): void {
-    this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
-    this.ptyTitleTrackersByPtyId.delete(ptyId)
-    this.ptyDelayedForegroundSnapshotTitleObservations.delete(ptyId)
-    this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
-    for (const titleGateKeys of this.terminalSideEffectTitleGateKeysByClientEventListener.values()) {
-      titleGateKeys.delete(ptyId)
-    }
-  }
+  private disposePtyTitleTracker = (ptyId: string): void =>
+    this.ptyTitleTrackingCommands.disposePtyTitleTracker(ptyId)
 
-  private resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
-    // Why: a replacement daemon session can reuse the PTY id, but title/parser
-    // state from the prior process must not bleed into its snapshots or chunks.
-    this.disposePtyTitleTracker(ptyId)
-    this.oscTitleScanTailByPtyId.delete(ptyId)
-    this.osc7ScanTailByPtyId.delete(ptyId)
-    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.agentPromptLifecycleByPtyId.delete(ptyId)
-    this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
-    this.clearWaitBlockedCheckState(ptyId)
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      pty.lastOscTitle = null
-      pty.lastOscTitleAt = null
-      pty.lastOscTitleEpochMs = null
-      pty.lastAgentStatus = null
-      // Why: the prior process's live frames say nothing about the replacement,
-      // so the seed a same-id restore applies must not inherit its authority.
-      pty.lastAgentStatusObservedLive = false
-      pty.lastAgentStatusStartedAtEpochMs = null
-      pty.lastAgentStatusRichInvalidatedAtEpochMs = Date.now()
-      pty.managementTitle = null
-      pty.managementTitleAt = null
-      pty.waitBlockedAt = null
-      pty.tailWaitState = undefined
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      leaf.lastOscTitle = null
-      leaf.lastOscTitleAt = null
-      leaf.lastAgentStatus = null
-      leaf.lastAgentStatusObservedLive = false
-      leaf.waitBlockedAt = null
-      leaf.tailWaitState = undefined
-    }
-    this.primeWaitBlockedBaselineFromSeededTail(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
-  }
+  private resetTrackedTerminalStateForProviderGeneration = (ptyId: string): void =>
+    this.ptyTitleTrackingCommands.resetTrackedTerminalStateForProviderGeneration(ptyId)
 
-  private setTerminalSideEffectConsumerAvailable(available: boolean): void {
-    this.terminalSideEffectLocalConsumerAvailable = available && this.onTerminalSideEffects !== null
-    this.refreshTerminalSideEffectConsumerAvailability()
-  }
+  private setTerminalSideEffectConsumerAvailable = (available: boolean): void =>
+    this.ptyTitleTrackingCommands.setTerminalSideEffectConsumerAvailable(available)
 
-  private refreshTerminalSideEffectConsumerAvailability(): void {
-    const nextAvailable =
-      this.terminalSideEffectLocalConsumerAvailable ||
-      this.countTerminalSideEffectConsumingClientEventListeners() > 0
-    if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
-      return
-    }
-    this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
-      entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
-    }
-  }
+  private refreshTerminalSideEffectConsumerAvailability = (): void =>
+    this.ptyTitleTrackingCommands.refreshTerminalSideEffectConsumerAvailability()
 
-  private createTerminalSideEffectCommandCodeDetector(
+  private createTerminalSideEffectCommandCodeDetector = (ptyId: string) =>
+    this.ptyTitleTrackingCommands.createTerminalSideEffectCommandCodeDetector(ptyId)
+
+  private extractLastOsc7CwdForPty = (
+    ptyId: string,
+    data: string
+  ): { path: string; hostname: string } | null =>
+    this.ptyTitleTrackingCommands.extractLastOsc7CwdForPty(ptyId, data)
+
+  private recordOsc7MetadataForPty = (
+    ptyId: string,
+    data: string
+  ): { cwd: string | null; cwdChanged: boolean } =>
+    this.ptyTitleTrackingCommands.recordOsc7MetadataForPty(ptyId, data)
+
+  private pathFlavorForPty = (pty?: RuntimePtyWorktreeRecord | null): 'posix' | 'win32' =>
+    this.ptyTitleTrackingCommands.pathFlavorForPty(pty)
+
+  // Terminal agent status binding methods delegated to terminalAgentStatusBinding facade
+  private getTerminalAgentStatusPtyId = (handle: string): string =>
+    this.terminalAgentStatusBinding.getTerminalAgentStatusPtyId(handle)
+
+  private assertTerminalAgentStatusPtyBinding = (handle: string, expectedPtyId: string): void =>
+    this.terminalAgentStatusBinding.assertTerminalAgentStatusPtyBinding(handle, expectedPtyId)
+
+  private getTerminalAgentStatusSnapshot = (
+    handle: string,
+    expectedPtyId: string,
+    waitTextOverride?: string
+  ) =>
+    this.terminalAgentStatusBinding.getTerminalAgentStatusSnapshot(
+      handle,
+      expectedPtyId,
+      waitTextOverride
+    )
+
+  private probeAgentStatusOncePerPty = (
+    handle: string,
     ptyId: string
-  ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
-    return createCommandCodeOutputStatusDetector({
-      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-      onWorking: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
-      },
-      onDone: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
-      }
-    })
-  }
+  ): Promise<RuntimeTerminalAgentStatus | undefined> =>
+    this.terminalAgentStatusBinding.probeAgentStatusOncePerPty(handle, ptyId)
 
-  private extractLastOsc7CwdForPty(
+  private shouldDelayPtyBackedMobileSnapshotForForegroundAgent = (
+    pty: RuntimePtyWorktreeRecord,
+    title: string
+  ): boolean =>
+    this.terminalAgentStatusBinding.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, title)
+
+  private confirmPtyAgentExit = (ptyId: string): void =>
+    this.terminalAgentStatusBinding.confirmPtyAgentExit(ptyId)
+
+  private refreshPtyForegroundAgent = (ptyId: string): void =>
+    this.terminalAgentStatusBinding.refreshPtyForegroundAgent(ptyId)
+
+  private getPendingForegroundAgentRefreshForTitle = (
     ptyId: string,
-    data: string
-  ): { path: string; hostname: string } | null {
-    const previousTail = this.osc7ScanTailByPtyId.get(ptyId)
-    if (!previousTail && !data.includes('\x1b]7;')) {
-      return null
-    }
-    const input = `${previousTail ?? ''}${data}`
-    const scanTail = extractOscScanTail(input, 4096)
-    if (scanTail.length > 0) {
-      this.osc7ScanTailByPtyId.set(ptyId, scanTail)
-    } else {
-      this.osc7ScanTailByPtyId.delete(ptyId)
-    }
-    const uri = extractLastOsc7Uri(input)
-    const pty = this.ptysById.get(ptyId)
-    const pathFlavor = this.pathFlavorForPty(pty)
-    return uri
-      ? parseFileUriPathParts(uri, {
-          pathFlavor,
-          remotePosixAuthority: !!pty?.connectionId && pathFlavor !== 'win32',
-          wslDistro: pty?.connectionId
-            ? undefined
-            : (this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro ?? undefined)
-        })
-      : null
-  }
+    titleObservedAt: number
+  ): Promise<boolean> | undefined =>
+    this.terminalAgentStatusBinding.getPendingForegroundAgentRefreshForTitle(ptyId, titleObservedAt)
 
-  private recordOsc7MetadataForPty(
+  private delayPtyBackedMobileSnapshotForForegroundAgent = (
     ptyId: string,
-    data: string
-  ): { cwd: string | null; cwdChanged: boolean } {
-    const osc7 = this.extractLastOsc7CwdForPty(ptyId, data)
-    const cwd = osc7?.path ?? null
-    const cwdChanged =
-      cwd !== null && cwd.trim().length > 0 && this.terminalCwdByPtyId.get(ptyId) !== cwd
-    if (cwdChanged) {
-      this.terminalCwdByPtyId.set(ptyId, cwd)
-    }
-    if (osc7) {
-      if (osc7.hostname) {
-        this.terminalFileUriHostnameByPtyId.set(ptyId, osc7.hostname)
-      } else {
-        this.terminalFileUriHostnameByPtyId.delete(ptyId)
-      }
-    }
-    return { cwd, cwdChanged }
+    titleObservedAt: number,
+    foregroundRefresh: Promise<boolean>
+  ): void =>
+    this.terminalAgentStatusBinding.delayPtyBackedMobileSnapshotForForegroundAgent(
+      ptyId,
+      titleObservedAt,
+      foregroundRefresh
+    )
+
+  private refreshPtyForegroundAgentFromController = (
+    ptyId: string,
+    options?: { afterTitleObservation?: number }
+  ): Promise<boolean> =>
+    this.terminalAgentStatusBinding.refreshPtyForegroundAgentFromController(ptyId, options)
+
+  private async loadPtyForegroundAgentFromController(
+    ptyId: string,
+    afterTitleObservation?: number
+  ): Promise<boolean> {
+    return this.terminalAgentStatusBinding.loadPtyForegroundAgentFromController(
+      ptyId,
+      afterTitleObservation
+    )
   }
 
-  private pathFlavorForPty(pty?: RuntimePtyWorktreeRecord | null): 'posix' | 'win32' {
-    if (!pty?.connectionId) {
-      return process.platform === 'win32' ? 'win32' : 'posix'
-    }
-    const worktreePath = splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath
-    return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
+  private hasAuthoritativeTerminalWaitPermission = (
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  ): boolean =>
+    this.terminalAgentStatusBinding.hasAuthoritativeTerminalWaitPermission(
+      terminal,
+      explicitStatus,
+      lifecycle
+    )
+
+  private resolveAuthoritativeTerminalWaitPermission = (
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  ) =>
+    this.terminalAgentStatusBinding.resolveAuthoritativeTerminalWaitPermission(
+      terminal,
+      explicitStatus,
+      lifecycle
+    )
+
+  private async getTerminalInteractiveWait(
+    handle: string
+  ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
+    return this.terminalAgentStatusBinding.getTerminalInteractiveWait(handle)
   }
+
+  private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
+    return this.terminalAgentStatusBinding.terminalHasShellForegroundProcess(handle, ptyId)
+  }
+
+  private readPtyForegroundProcessFromController = (
+    ptyId: string,
+    afterTitleObservation?: number
+  ) =>
+    this.terminalAgentStatusBinding.readPtyForegroundProcessFromController(
+      ptyId,
+      afterTitleObservation
+    )
 
   /** Returns true when any retained agent-row snapshot changed in a
    *  client-visible way, so the caller can republish session snapshots. */
@@ -14809,13 +13004,7 @@ export class OrcaRuntimeService {
   private getOrchestrationCompatibilityHostScope(
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationCompatibilityTerminalAuthority['hostScope'] | null {
-    if (pty.connectionId) {
-      return { kind: 'ssh', targetId: pty.connectionId }
-    }
-    if (pty.isWsl || pty.wslDistro) {
-      return pty.wslDistro ? { kind: 'wsl', hostId: 'local', distro: pty.wslDistro } : null
-    }
-    return { kind: 'local', hostId: 'local' }
+    return this.orchestrationCommands.getOrchestrationCompatibilityHostScope(pty)
   }
 
   private rememberRestoredOrchestrationAuthority(
@@ -14823,22 +13012,10 @@ export class OrcaRuntimeService {
     terminalHandle: string,
     incarnationId: string
   ): void {
-    const paneKey = pty.paneKey
-    const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
-    if (!paneKey || !parsePaneKey(paneKey) || !hostScope) {
-      this.restoredOrchestrationAuthorityByPtyId.delete(pty.ptyId)
-      return
-    }
-    this.restoredOrchestrationAuthorityByPtyId.set(
-      pty.ptyId,
-      Object.freeze({
-        ptyId: pty.ptyId,
-        worktreeId: pty.worktreeId,
-        terminalHandle,
-        paneKey,
-        processIncarnation: `${pty.ptyId}:${incarnationId}`,
-        hostScope: Object.freeze({ ...hostScope })
-      })
+    return this.orchestrationCommands.rememberRestoredOrchestrationAuthority(
+      pty,
+      terminalHandle,
+      incarnationId
     )
   }
 
@@ -15927,58 +14104,28 @@ export class OrcaRuntimeService {
   }
 
   getAllBrowserDrivers(): Map<string, RuntimeBrowserDriverState> {
-    return new Map(this.currentBrowserDriver)
+    return getAllBrowserDrivers(this)
   }
 
   private getBrowserDriver(browserPageId: string): RuntimeBrowserDriverState {
-    return this.currentBrowserDriver.get(browserPageId) ?? { kind: 'idle' }
+    return getBrowserDriver(this, browserPageId)
   }
 
   private setBrowserDriver(browserPageId: string, next: RuntimeBrowserDriverState): void {
-    const prev = this.getBrowserDriver(browserPageId)
-    if (prev.kind === next.kind) {
-      if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
-        return
-      }
-      if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
-        return
-      }
-    }
-    if (next.kind === 'idle') {
-      this.currentBrowserDriver.delete(browserPageId)
-    } else {
-      this.currentBrowserDriver.set(browserPageId, next)
-    }
-    this.notifier?.browserDriverChanged?.(browserPageId, next)
+    setBrowserDriver(this, browserPageId, next)
   }
 
   getBrowserRemoteViewerPages(): string[] {
-    return Array.from(this.browserRemoteViewerPages)
+    return getBrowserRemoteViewerPages(this)
   }
 
   /** Republishes from the live subscriber set, so every add and remove has one settling point. */
   private publishBrowserRemoteViewers(browserPageId: string): void {
-    const watched = (this.activeBrowserScreencastsByPage.get(browserPageId)?.size ?? 0) > 0
-    if (this.browserRemoteViewerPages.has(browserPageId) === watched) {
-      return
-    }
-    if (watched) {
-      this.browserRemoteViewerPages.add(browserPageId)
-    } else {
-      this.browserRemoteViewerPages.delete(browserPageId)
-    }
-    this.notifier?.browserRemoteViewersChanged?.(browserPageId, watched)
+    publishBrowserRemoteViewers(this, browserPageId)
   }
 
   reclaimBrowserForDesktop(browserPageId: string): boolean {
-    this.setBrowserDriver(browserPageId, { kind: 'desktop' })
-    for (const stream of this.activeBrowserScreencastsByPage.get(browserPageId) ?? []) {
-      // Why: take-back revokes the phone's control, not a co-viewing desktop/web client's stream.
-      if (stream.drivesAsMobile) {
-        stream.cancel(true)
-      }
-    }
-    return true
+    return reclaimBrowserForDesktop(this, browserPageId)
   }
 
   onClientDisconnected(clientId: string): void {
@@ -19700,501 +17847,6 @@ export class OrcaRuntimeService {
     return { handle, isRunningAgent, status: null }
   }
 
-  private getTerminalAgentStatusPtyId(handle: string): string {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected) {
-        throw new Error('terminal_gone')
-      }
-      return pty.pty.ptyId
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (getTerminalState(leaf) !== 'running') {
-      throw new Error('terminal_exited')
-    }
-    if (!leaf.ptyId) {
-      throw new Error('terminal_gone')
-    }
-    return leaf.ptyId
-  }
-
-  private assertTerminalAgentStatusPtyBinding(handle: string, expectedPtyId: string): void {
-    if (this.getTerminalAgentStatusPtyId(handle) === expectedPtyId) {
-      return
-    }
-    // Why: delayed process evidence belongs only to the PTY that started the
-    // read, while callers still rely on the established stale-handle contract.
-    throw new Error('terminal_handle_stale')
-  }
-
-  private getTerminalAgentStatusSnapshot(
-    handle: string,
-    expectedPtyId: string,
-    waitTextOverride?: string
-  ): TerminalAgentStatusSnapshot {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected || pty.pty.ptyId !== expectedPtyId) {
-        throw new Error('terminal_not_writable')
-      }
-      const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
-      const leafTitle = leaf
-        ? getLatestAgentCandidateTitleInfo(
-            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
-          )
-        : null
-      const ptyTitle =
-        leafTitle ??
-        getLatestAgentCandidateTitleInfo(
-          { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
-          { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
-        )
-      const waitText =
-        waitTextOverride ??
-        buildTerminalWaitText(pty.pty.tailBuffer, pty.pty.tailPartialLine, pty.pty.preview)
-      return {
-        waitText,
-        waitBlockedAt: pty.pty.waitBlockedAt,
-        title: ptyTitle?.title ?? null,
-        titleStatus: ptyTitle
-          ? detectAgentStatusFromTitle(ptyTitle.title)
-          : pty.pty.lastAgentStatus,
-        titleStatusIsLive: ptyTitle !== null
-      }
-    }
-
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (getTerminalState(leaf) !== 'running') {
-      throw new Error('terminal_exited')
-    }
-    if (!leaf.ptyId) {
-      throw new Error('terminal_gone')
-    }
-    if (leaf.ptyId !== expectedPtyId) {
-      throw new Error('terminal_not_writable')
-    }
-    const title = getLatestAgentCandidateTitleInfo(
-      { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-      { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
-      { title: this.tabs.get(leaf.tabId)?.title, updatedAt: 0 }
-    )
-    return {
-      waitText:
-        waitTextOverride ??
-        buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
-      waitBlockedAt: leaf.waitBlockedAt,
-      title: title?.title ?? null,
-      titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
-      titleStatusIsLive: (title?.updatedAt ?? 0) > 0
-    }
-  }
-
-  private hasAuthoritativeTerminalWaitPermission(
-    terminal: TerminalAgentStatusSnapshot,
-    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
-    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
-  ): boolean {
-    return (
-      this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle) !== null
-    )
-  }
-
-  /** The matched prompt when the tail authoritatively proves a human wait, else null. */
-  private resolveAuthoritativeTerminalWaitPermission(
-    terminal: TerminalAgentStatusSnapshot,
-    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
-    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
-  ): RuntimeTerminalWaitBlockedReason | null {
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
-    if (!blockedByWaitText) {
-      return null
-    }
-    const liveTitleClearsBlockedText =
-      terminal.titleStatusIsLive &&
-      terminal.titleStatus !== null &&
-      terminal.titleStatus !== 'permission' &&
-      !isOpenCodeNativeTitle(terminal.title) &&
-      // Why exempt: cursor-agent keeps spinning in its title while an approval waits, so a
-      // "working" title there is not evidence of progress.
-      blockedByWaitText !== 'agent-approval-prompt'
-    if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
-      return null
-    }
-    // Why no timestamp: the menu is only matched while it still owns the bottom of the screen,
-    // which is the dating. Requiring one would lose a dialog restored from history, across the
-    // app restart an unattended run has to survive.
-    if (blockedByWaitText === 'agent-approval-prompt') {
-      return blockedByWaitText
-    }
-    const newestPermissionAt = Math.max(
-      explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
-      terminal.waitBlockedAt ?? -1
-    )
-    const newestClearAt = Math.max(
-      explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
-    )
-    // Equal wall-clock observations fail closed because their raw intra-chunk order is unknown.
-    return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
-  }
-
-  /** Why: "blocked on a human" is the one worker state a coordinator cannot infer — silence
-   *  covers it, a long tool call, and a wedged process alike. `null` means this pane was
-   *  evaluated and nothing proves a wait; `undefined` means it could not be evaluated, which
-   *  is never the same as "not waiting". */
-  async getTerminalInteractiveWait(
-    handle: string
-  ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
-    let ptyId: string
-    let terminal: TerminalAgentStatusSnapshot
-    try {
-      ptyId = this.getTerminalAgentStatusPtyId(handle)
-      terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
-    } catch {
-      return undefined
-    }
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
-    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
-      terminal,
-      explicitStatus,
-      this.agentPromptLifecycleByPtyId.get(ptyId)
-    )
-    if (promptReason) {
-      // A matched prompt is self-proving: it is on this pane's screen now.
-      return {
-        source: 'prompt-text',
-        reason: promptReason,
-        ...(terminal.waitBlockedAt !== null ? { since: terminal.waitBlockedAt } : {})
-      }
-    }
-    if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
-      return { source: 'title' }
-    }
-    if (explicitStatus?.status !== 'permission') {
-      return null
-    }
-    // Why the extra round trip for hook evidence only: a hook row outlives its agent by up to
-    // AGENT_STATUS_STALE_AFTER_MS, and only the shared verdict proves an agent still owns this
-    // PTY — a shell that took the pane back rarely leaves a title we can recognize as one.
-    // Bounded because it reaches a PTY controller that can be a remote host: a wedged probe
-    // must leave the wait unevaluated, never stall every caller of showTerminal.
-    const status = await withTimeout(
-      this.probeAgentStatusOncePerPty(handle, ptyId),
-      TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
-      undefined
-    )
-    if (!status) {
-      return undefined
-    }
-    return status.isRunningAgent && status.status === 'permission'
-      ? { source: 'hook', since: explicitStatus.updatedAt }
-      : null
-  }
-
-  // Why single-flight: the timeout above abandons the wait, not the request. A wedged remote
-  // host would otherwise accrue one live probe per poll for as long as a coordinator watches.
-  private readonly interactiveWaitProbesByPtyId = new Map<
-    string,
-    Promise<RuntimeTerminalAgentStatus | undefined>
-  >()
-
-  private probeAgentStatusOncePerPty(
-    handle: string,
-    ptyId: string
-  ): Promise<RuntimeTerminalAgentStatus | undefined> {
-    const inFlight = this.interactiveWaitProbesByPtyId.get(ptyId)
-    if (inFlight) {
-      return inFlight
-    }
-    const probe = this.getTerminalAgentStatus(handle)
-      .catch(() => undefined)
-      .finally(() => {
-        if (this.interactiveWaitProbesByPtyId.get(ptyId) === probe) {
-          this.interactiveWaitProbesByPtyId.delete(ptyId)
-        }
-      })
-    this.interactiveWaitProbesByPtyId.set(ptyId, probe)
-    return probe
-  }
-
-  private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
-    if (!this.ptyController) {
-      return false
-    }
-    let foregroundProcess: string | null
-    try {
-      foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
-    } catch {
-      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return false
-    }
-    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    if (!foregroundProcess || !isShellProcess(foregroundProcess)) {
-      return false
-    }
-    const confirmationController = this.ptyController
-    if (!confirmationController?.confirmForegroundProcess) {
-      return true
-    }
-    let confirmedProcess: string | null
-    try {
-      confirmedProcess = await confirmationController.confirmForegroundProcess(ptyId)
-    } catch {
-      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return true
-    }
-    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    // Why: hook identity is generic; strong provider evidence only needs to
-    // prove that some recognized agent still owns this exact PTY.
-    return recognizeAgentProcess(confirmedProcess) === null
-  }
-
-  private shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
-    pty: RuntimePtyWorktreeRecord,
-    title: string
-  ): boolean {
-    return (
-      !pty.launchAgent && pty.foregroundAgent === null && hasCompatibleAgentTitleIdentity(title)
-    )
-  }
-
-  private readPtyForegroundProcessFromController(
-    ptyId: string,
-    afterTitleObservation = 0
-  ): Promise<PtyForegroundProcessRead> | null {
-    const controller = this.ptyController
-    if (!controller) {
-      return null
-    }
-    const pending = this.ptyForegroundProcessReads.get(ptyId)
-    if (
-      pending?.controller === controller &&
-      pending.startedAfterTitleObservation >= afterTitleObservation
-    ) {
-      return pending.promise
-    }
-    if (pending?.controller === controller) {
-      return pending.promise.then(
-        () =>
-          this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation) ?? {
-            controller,
-            process: null,
-            available: false
-          }
-      )
-    }
-    const unavailable: PtyForegroundProcessRead = {
-      controller,
-      process: null,
-      available: false
-    }
-    let processRead: Promise<string | null>
-    try {
-      processRead = Promise.resolve(controller.getForegroundProcess(ptyId))
-    } catch {
-      const entry: PtyForegroundProcessReadEntry = {
-        controller,
-        startedAfterTitleObservation: afterTitleObservation,
-        promise: Promise.resolve(unavailable)
-      }
-      entry.promise = entry.promise.finally(() => {
-        if (this.ptyForegroundProcessReads.get(ptyId) === entry) {
-          this.ptyForegroundProcessReads.delete(ptyId)
-        }
-      })
-      this.ptyForegroundProcessReads.set(ptyId, entry)
-      return entry.promise
-    }
-    let entry: PtyForegroundProcessReadEntry
-    const promise = processRead
-      .then((process) => ({ controller, process, available: true }))
-      .catch(() => unavailable)
-      .finally(() => {
-        if (this.ptyForegroundProcessReads.get(ptyId) === entry) {
-          this.ptyForegroundProcessReads.delete(ptyId)
-        }
-      })
-    entry = {
-      controller,
-      startedAfterTitleObservation: afterTitleObservation,
-      promise
-    }
-    this.ptyForegroundProcessReads.set(ptyId, entry)
-    return entry.promise
-  }
-
-  private confirmPtyAgentExit(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    const titleObservedAt = pty?.lastOscTitleAt ?? null
-    const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
-    if (!pty?.connected || !foregroundRead) {
-      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
-      return
-    }
-    void foregroundRead.then((result) => {
-      const current = this.ptysById.get(ptyId)
-      if (current !== pty || !current.connected) {
-        return
-      }
-      if (current.lastOscTitleAt !== titleObservedAt && current.lastAgentStatus !== null) {
-        return
-      }
-      if (
-        result.controller === this.ptyController &&
-        result.available &&
-        recognizeAgentProcess(result.process) !== null
-      ) {
-        const restoredStatus = this.ptyTitleTrackersByPtyId
-          .get(ptyId)
-          ?.tracker.restoreLastAgentExit()
-        if (restoredStatus !== null && restoredStatus !== undefined) {
-          current.lastAgentStatus = restoredStatus
-          for (const leaf of this.getLeavesForPty(ptyId)) {
-            if (leaf.lastAgentStatus !== null) {
-              continue
-            }
-            // Why: the foreground agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
-            leaf.lastAgentStatus = restoredStatus
-            if (restoredStatus === 'idle') {
-              this.deliverPendingMessagesForLeaf(leaf)
-            }
-          }
-        }
-        return
-      }
-      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
-    })
-  }
-
-  /**
-   * Schedules an asynchronous query to check which agent process is currently
-   * running in the foreground of a PTY.
-   */
-  private refreshPtyForegroundAgent(ptyId: string): void {
-    void this.refreshPtyForegroundAgentFromController(ptyId)
-  }
-
-  private getPendingForegroundAgentRefreshForTitle(
-    ptyId: string,
-    titleObservedAt: number
-  ): Promise<boolean> | undefined {
-    if (!this.ptyForegroundAgentRefreshes.has(ptyId)) {
-      return undefined
-    }
-    return this.refreshPtyForegroundAgentFromController(ptyId, {
-      afterTitleObservation: titleObservedAt
-    })
-  }
-
-  private delayPtyBackedMobileSnapshotForForegroundAgent(
-    ptyId: string,
-    titleObservedAt: number,
-    foregroundRefresh: Promise<boolean>
-  ): void {
-    this.ptyDelayedForegroundSnapshotTitleObservations.set(ptyId, titleObservedAt)
-    void foregroundRefresh.then((foregroundAgentChanged) => {
-      if (this.ptyDelayedForegroundSnapshotTitleObservations.get(ptyId) !== titleObservedAt) {
-        return
-      }
-      this.ptyDelayedForegroundSnapshotTitleObservations.delete(ptyId)
-      if (this.mobileSessionTabListeners.size > 0) {
-        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-      }
-      if (!foregroundAgentChanged) {
-        this.touchMobileSessionSnapshotsForPty(ptyId)
-      }
-    })
-  }
-
-  /**
-   * Deduplicates and manages in-flight foreground agent refresh queries
-   * for a specific PTY.
-   */
-  private refreshPtyForegroundAgentFromController(
-    ptyId: string,
-    options: { afterTitleObservation?: number } = {}
-  ): Promise<boolean> {
-    const startedAfterTitleObservation = options.afterTitleObservation ?? 0
-    const pendingRefresh = this.ptyForegroundAgentRefreshes.get(ptyId)
-    if (pendingRefresh) {
-      pendingRefresh.requestedAfterTitleObservation = Math.max(
-        pendingRefresh.requestedAfterTitleObservation,
-        startedAfterTitleObservation
-      )
-      return pendingRefresh.promise
-    }
-    const entry: PtyForegroundAgentRefresh = {
-      promise: Promise.resolve(false),
-      startedAfterTitleObservation,
-      requestedAfterTitleObservation: startedAfterTitleObservation
-    }
-    const refresh = (async (): Promise<boolean> => {
-      while (true) {
-        entry.startedAfterTitleObservation = entry.requestedAfterTitleObservation
-        const foregroundAgentChanged = await this.loadPtyForegroundAgentFromController(
-          ptyId,
-          entry.startedAfterTitleObservation
-        )
-        if (
-          foregroundAgentChanged ||
-          entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation
-        ) {
-          return foregroundAgentChanged
-        }
-      }
-    })().finally(() => {
-      if (this.ptyForegroundAgentRefreshes.get(ptyId) === entry) {
-        this.ptyForegroundAgentRefreshes.delete(ptyId)
-      }
-    })
-    entry.promise = refresh
-    this.ptyForegroundAgentRefreshes.set(ptyId, entry)
-    return refresh
-  }
-
-  /**
-   * Queries the PTY controller for the active foreground process, identifies if it
-   * is a recognized agent, and updates the PTY's foreground agent state if changed.
-   */
-  private async loadPtyForegroundAgentFromController(
-    ptyId: string,
-    afterTitleObservation = 0
-  ): Promise<boolean> {
-    if (!this.ptyController) {
-      return false
-    }
-    const pty = this.ptysById.get(ptyId)
-    if (!pty?.connected) {
-      return false
-    }
-    // Why: foregroundAgent is only consulted as the owner fallback when
-    // launchAgent is unknown, so a known launchAgent makes the relay
-    // getForegroundProcess round-trip pure waste (covers all launched agents).
-    if (pty.launchAgent) {
-      return false
-    }
-    const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation)
-    if (!foregroundRead) {
-      return false
-    }
-    const result = await foregroundRead
-    if (result.controller !== this.ptyController || !result.available) {
-      return false
-    }
-    const foregroundProcess = result.process
-    const foregroundAgent = foregroundProcess
-      ? (recognizeAgentProcess(foregroundProcess)?.agent ?? null)
-      : null
-    if (pty.foregroundAgent === foregroundAgent) {
-      return false
-    }
-    pty.foregroundAgent = foregroundAgent
-    this.touchMobileSessionSnapshotsForPty(ptyId)
-    return true
-  }
-
   private getFreshExplicitAgentStatusForHandle(
     handle: string,
     paneKeyOverride?: string | null
@@ -21823,2145 +19475,245 @@ export class OrcaRuntimeService {
     return this.projectWorktreeCommands.cloneRepo(url, destination, executionHostId)
   }
 
-  async showRepo(repoSelector: string): Promise<Repo> {
-    return await this.resolveRepoSelector(repoSelector)
-  }
-
-  async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      throw new Error('Folder mode does not support base refs.')
-    }
-    const updated = this.store.updateRepo(repo.id, { worktreeBaseRef: baseRef })
-    if (!updated) {
-      throw new Error('repo_not_found')
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyReposChanged()
-    return updated
-  }
-
-  async updateRepo(
-    repoSelector: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'repoIcon'
-        | 'upstream'
-        | 'hookSettings'
-        | 'worktreeBaseRef'
-        | 'worktreeBasePath'
-        | 'kind'
-        | 'symlinkPaths'
-        | 'issueSourcePreference'
-        | 'externalWorktreeVisibilityPromptDismissedAt'
-        | 'externalWorktreeInboxBaselinePaths'
-        | 'importedExternalWorktreePaths'
-        | 'agentWorktreeVisibility'
-        | 'customWorktreeVisibilitySources'
-        | 'worktreeVisibilitySourcePreferences'
-        | 'projectGroupId'
-        | 'projectGroupOrder'
-      >
-    > & {
-      externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-      sourceControlAi?: Repo['sourceControlAi'] | null
-      externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-    }
-  ): Promise<Repo> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const sanitizedUpdates = omitUndefinedProperties(updates)
-    if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
-      sanitizedUpdates.worktreeBasePath = undefined
-    }
-    if ('externalWorktreeVisibility' in updates && updates.externalWorktreeVisibility === null) {
-      sanitizedUpdates.externalWorktreeVisibility = undefined
-    }
-    if (
-      'externalWorktreeDiscoverySuppressedAt' in updates &&
-      updates.externalWorktreeDiscoverySuppressedAt === null
-    ) {
-      sanitizedUpdates.externalWorktreeDiscoverySuppressedAt = undefined
-    }
-    if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
-      sanitizedUpdates.sourceControlAi = null
-    }
-    const updated = this.store.updateRepo(repo.id, sanitizedUpdates)
-    if (!updated) {
-      throw new Error('repo_not_found')
-    }
-    if ('worktreeBasePath' in updates) {
-      await prepareLocalWorktreeRootForRepo(this.store, updated)
-      invalidateAuthorizedRootsCache()
-    }
-    this.invalidateResolvedWorktreeCache()
-    if ('worktreeBasePath' in updates) {
-      this.invalidateWorktreeScanCacheForRepo(repo.id)
-    }
-    this.notifyReposChanged()
-    return updated
-  }
-
-  async removeProject(repoSelector: string): Promise<{ removed: true }> {
-    if (!this.store?.removeProject) {
-      throw new Error('runtime_unavailable')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    // Why: removeProject is id-only, but the same id may be registered on a sibling
-    // execution host; a path:/name: selector resolves one row and must remove only it.
-    const hostId = getRepoExecutionHostId(repo)
-    const idExistsOnOtherHost = this.store
-      .getRepos()
-      .some((entry) => entry.id === repo.id && getRepoExecutionHostId(entry) !== hostId)
-    if (idExistsOnOtherHost) {
-      if (!this.store.removeProjectForHost) {
-        throw new Error('runtime_unavailable')
-      }
-      this.store.removeProjectForHost(repo.id, hostId)
-    } else {
-      this.store.removeProject(repo.id)
-    }
-    this.terminalTopologyRevisionByRepoId.delete(repo.id)
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    invalidateAuthorizedRootsCache()
-    this.notifyReposChanged()
-    return { removed: true }
-  }
-
-  async inspectTerminalProcess(
-    terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
-    const leaf = this.resolveLiveLeafForHandle(terminalSelector)
-    if (!leaf?.ptyId || !this.ptyController) {
-      throw new Error('terminal_gone')
-    }
-    if (this.ptyController.inspectProcess) {
-      return this.ptyController.inspectProcess(leaf.ptyId)
-    }
-    const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
-    const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false
-    return { foregroundProcess, hasChildProcesses }
-  }
-
-  reorderRepos(orderedIds: string[]): { status: 'applied' | 'rejected' } {
-    if (!this.store?.reorderRepos) {
-      throw new Error('runtime_unavailable')
-    }
-    // Why: remote clients can race repo add/remove on the server just like
-    // local drag-reorder can race another window. Let the store validate the
-    // full permutation and signal a resync-worthy rejection.
-    const applied = this.store.reorderRepos(orderedIds)
-    if (!applied) {
-      return { status: 'rejected' }
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyReposChanged()
-    return { status: 'applied' }
-  }
-
-  async searchRepoRefs(
-    repoSelector: string,
-    query: string,
-    limit = DEFAULT_REPO_SEARCH_REFS_LIMIT
-  ): Promise<RuntimeRepoSearchRefs> {
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new Error('invalid_limit')
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return {
-        refs: [],
-        truncated: false
-      }
-    }
-    const refDetails = repo.connectionId
-      ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
-      : await searchBaseRefDetails(repo.path, query, limit + 1)
-    return {
-      refs: refDetails.slice(0, limit).map((entry) => entry.refName),
-      refDetails: refDetails.slice(0, limit),
-      truncated: refDetails.length > limit
-    }
-  }
-
-  async getRepoBaseRefDefault(
-    repoSelector: string
-  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return { defaultBaseRef: null, remoteCount: 0 }
-    }
-    if (repo.connectionId) {
-      return this.getRemoteRepoBaseRefDefault(repo)
-    }
-    const [defaultBaseRef, remoteCount] = await Promise.all([
-      getBaseRefDefault(repo.path),
-      getRemoteCount(repo.path)
-    ])
-    return { defaultBaseRef, remoteCount }
-  }
-
-  private async getRemoteRepoBaseRefDefault(
-    repo: Repo
-  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
-    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-    if (!provider) {
-      return { defaultBaseRef: null, remoteCount: 0 }
-    }
-    const [defaultBaseRef, remoteCount] = await Promise.all([
-      resolveDefaultBaseRefViaExec(async (argv) => {
-        try {
-          return await provider.exec(argv, repo.path)
-        } catch (err) {
-          if (argv[0] === 'symbolic-ref') {
-            console.warn('[runtime:repo.baseRefDefault] SSH symbolic-ref failed', {
-              path: repo.path,
-              err
-            })
-          }
-          throw err
-        }
-      }),
-      provider
-        .exec(['remote'], repo.path)
-        .then((result) => parseRemoteCount(result.stdout))
-        .catch((err) => {
-          console.warn('[runtime:repo.baseRefDefault] SSH git remote count failed', {
-            path: repo.path,
-            err
-          })
-          return 0
-        })
-    ])
-    return { defaultBaseRef, remoteCount }
-  }
-
-  private async searchRemoteRepoRefs(
-    repo: Repo,
-    query: string,
-    limit: number
-  ): Promise<BaseRefSearchResult[]> {
-    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-    if (!provider) {
-      return []
-    }
-    const normalizedQuery = normalizeRefSearchQuery(query)
-    try {
-      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      const remotes = remotesResult.stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-      const capabilities = getSshGitCapabilityCache(provider)
-      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        return capabilities.runWithFallback(
-          'for-each-ref-exclude',
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  excludeRemoteHead: false,
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          isForEachRefExcludeUnsupportedError
-        )
-      }
-      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
-      if (searchTokens.length > 1) {
-        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
-        return mergeBaseRefSearchResultGroups(
-          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
-          limit
-        )
-      }
-      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
-    } catch (err) {
-      console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
-        path: repo.path,
-        err
-      })
-      return []
-    }
-  }
-
-  private async resolveHostedReviewTarget(args: {
-    repoSelector: string
-    worktreeSelector?: string
-  }): Promise<{ repo: Repo; repoPath: string }> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
-    if (!args.worktreeSelector) {
-      return { repo, repoPath: repo.path }
-    }
-
-    const worktree = await this.resolveWorktreeSelector(args.worktreeSelector)
-    if (worktree.repoId !== repo.id) {
-      throw new Error('Access denied: worktree does not belong to repository')
-    }
-    return { repo, repoPath: worktree.path }
-  }
-
-  private getHostedReviewExecutionOptions(
-    repo: Repo
-  ): { localGitExecOptions: { wslDistro?: string } } | undefined {
-    const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0] ?? {}
-    return Object.keys(localGitOptions).length > 0
-      ? { localGitExecOptions: localGitOptions }
-      : undefined
-  }
-
-  private getLocalGitExecutionOptionArgs(repo: Repo): [] | [{ wslDistro?: string }] {
-    const localGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-    return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
-  }
-
-  private getAgentLaunchPlatformForRepo(repo: Repo): NodeJS.Platform {
-    const projectRuntime = repo.connectionId
-      ? undefined
-      : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-    return getAgentLaunchPlatformForRepo(repo, projectRuntime)
-  }
-
-  private getAgentLaunchPlatformForWorkspace(scope: TerminalWorkspaceLaunchScope): NodeJS.Platform {
-    if (scope.repo) {
-      return this.getAgentLaunchPlatformForRepo(scope.repo)
-    }
-    if (scope.connectionId) {
-      return isWindowsAbsolutePathLike(scope.path) ? 'win32' : 'linux'
-    }
-    return isWslUncPath(scope.path) ? 'linux' : process.platform
-  }
-
-  async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const options = this.getHostedReviewExecutionOptions(repo)
-    return options
-      ? getRepoSlug(repo.path, repo.connectionId ?? null, options)
-      : getRepoSlug(repo.path, repo.connectionId ?? null)
-  }
-
-  async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const options = this.getHostedReviewExecutionOptions(repo)
-    return options
-      ? getRepoUpstream(repo.path, repo.connectionId ?? null, options)
-      : getRepoUpstream(repo.path, repo.connectionId ?? null)
-  }
-
-  // Why: repos added before fork detection existed have no stored `upstream`, so
-  // their avatar/badge would never self-correct. Resolve it once at startup for
-  // local git repos; SSH repos resolve lazily when their settings open (their
-  // connection may not be up yet). Sequential to respect the gh rate limit;
-  // failures leave `upstream` unset so the next launch retries.
-  private async backfillForkUpstreams(): Promise<void> {
-    try {
-      const store = this.requireStore()
-      let changed = false
-      for (const repo of store.getRepos()) {
-        if (repo.upstream !== undefined || repo.kind === 'folder' || repo.connectionId) {
-          continue
-        }
-        let upstream: GitHubOwnerRepo | null
-        try {
-          upstream = await getRepoUpstream(repo.path, null)
-        } catch {
-          continue
-        }
-        const repoIcon =
-          upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
-            ? await detectGitHubAvatarIcon(repo.path, null, upstream)
-            : null
-        // Why: settings can change the repo while the probes above are pending, so
-        // re-read it — a stale snapshot must not clobber a user-chosen icon or an
-        // upstream another path already resolved.
-        const current = store.getRepos().find((candidate) => candidate.id === repo.id)
-        if (!current || current.upstream !== undefined) {
-          continue
-        }
-        const updates: Partial<Repo> = { upstream: upstream ?? null }
-        // Only migrate the auto-detected origin avatar; never touch a chosen icon.
-        if (
-          repoIcon &&
-          current.repoIcon?.type === 'image' &&
-          current.repoIcon.source === 'github'
-        ) {
-          updates.repoIcon = repoIcon
-        }
-        store.updateRepo(repo.id, updates)
-        changed = true
-      }
-      if (changed) {
-        this.notifyReposChanged()
-      }
-    } catch {
-      // Best-effort startup backfill; never disrupt launch.
-    }
-  }
-
-  async listRepoWorkItems(
-    repoSelector: string,
-    limit?: number,
-    query?: string,
-    page?: number,
-    noCache?: boolean
-  ): Promise<ListWorkItemsResult<MainWorkItem>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listWorkItems(
-      repo.path,
-      limit,
-      query,
-      page,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      noCache,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listRepoIssues(
-    repoSelector: string,
-    limit?: number
-  ): Promise<Awaited<ReturnType<typeof listGitHubIssues>>['items']> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const result = await listGitHubIssues(
-      repo.path,
-      limit,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-    return result.items
-  }
-
-  async getRepoWorkItem(
-    repoSelector: string,
-    number: number,
-    type?: 'issue' | 'pr'
-  ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    // Why: open-by-number must pin the same source the list and start-point use,
-    // else a fork and its upstream sharing a PR number resolve to different PRs.
-    return getWorkItem(
-      repo.path,
-      number,
-      type,
-      repo.connectionId ?? null,
-      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
-      repo.issueSourcePreference
-    )
-  }
-
-  async getRepoWorkItemByOwnerRepo(
-    repoSelector: string,
-    ownerRepo: { owner: string; repo: string; host?: string },
-    number: number,
-    type: 'issue' | 'pr'
-  ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getWorkItemByOwnerRepo(
-      repo.path,
-      ownerRepo,
-      number,
-      type,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoWorkItemDetails(
-    repoSelector: string,
-    number: number,
-    type?: 'issue' | 'pr'
-  ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getWorkItemDetails(
-      repo.path,
-      number,
-      type,
-      repo.connectionId ?? null,
-      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
-      repo.issueSourcePreference
-    )
-  }
-
-  async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return countWorkItems(
-      repo.path,
-      query,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listRepoLabels(repoSelector: string): Promise<Awaited<ReturnType<typeof listLabels>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listRepoAssignableUsers(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listAssignableUsers(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  getGitHubRateLimit(options?: {
-    force?: boolean
-  }): Promise<Awaited<ReturnType<typeof getRateLimit>>> {
-    return getRateLimit(options)
-  }
-
-  async getRepoPRForBranch(
-    repoSelector: string,
-    branch: string,
-    linkedPRNumber?: number | null,
-    fallbackPRNumber?: number | null,
-    acceptMergedFallbackPR?: boolean,
-    currentHeadOid?: string | null
-  ): Promise<PRRefreshOutcome> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const options: GitHubPRBranchLookupOptions = this.getHostedReviewExecutionOptions(repo) ?? {}
-    const lookupOptions = { ...options }
-    if (acceptMergedFallbackPR === true) {
-      lookupOptions.acceptMergedFallbackPR = true
-    }
-    if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
-      lookupOptions.currentHeadOid = currentHeadOid.trim()
-    }
-    const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
-      Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
-    // Why: return the full classified outcome (not PRInfo|null) so a runtime gh
-    // auth/network failure crosses the RPC as `upstream-error` instead of
-    // collapsing to `null`, which the renderer would otherwise cache as a false
-    // accepted "no PR found" (design success criterion 1).
-    return getPRForBranchOutcome(
-      repo.path,
-      branch,
-      linkedPRNumber ?? null,
-      repo.connectionId ?? null,
-      linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      ...lookupOptionArgs
-    )
-  }
-
-  async getHostedReviewForBranch(args: {
-    repoSelector: string
-    branch: string
-    currentHeadOid?: string | null
-    active?: boolean
-    linkedGitHubPR?: number | null
-    fallbackGitHubPR?: number | null
-    linkedGitLabMR?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
-  }): Promise<HostedReviewInfo | null> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const review = await getHostedReviewForBranchFromRepo({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      branch: args.branch,
-      currentHeadOid: args.currentHeadOid ?? null,
-      ...(args.active === true ? { active: true } : {}),
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      ...executionOptions
-    })
-    if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
-      this.stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: review.number, prUrl: review.url }
-      })
-    }
-    return review
-  }
-
-  async getHostedReviewCreationEligibility(
-    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & {
-      repoSelector: string
-      worktreeSelector?: string
-    }
-  ): Promise<HostedReviewCreationEligibility> {
-    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    return getHostedReviewCreationEligibilityFromRepo({
-      repoPath,
-      connectionId: repo.connectionId ?? null,
-      branch: args.branch,
-      base: args.base ?? null,
-      hasUncommittedChanges: args.hasUncommittedChanges,
-      hasUpstream: args.hasUpstream,
-      ahead: args.ahead,
-      behind: args.behind,
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      ...executionOptions
-    })
-  }
-
-  async createHostedReview(
-    args: CreateHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
-  ): Promise<CreateHostedReviewResult> {
-    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const input = {
-      provider: args.provider,
-      base: args.base,
-      head: args.head,
-      title: args.title,
-      body: args.body,
-      draft: args.draft,
-      ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
-    }
-    const result = executionOptions
-      ? await createHostedReviewFromRepo(
-          repoPath,
-          input,
-          repo.connectionId ?? null,
-          executionOptions
-        )
-      : await createHostedReviewFromRepo(repoPath, input, repo.connectionId ?? null)
-    if (result.ok && this.stats && !this.stats.hasCountedPR(result.url)) {
-      this.stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: result.number, prUrl: result.url }
-      })
-    }
-    return result
-  }
-
-  async createStackedHostedReview(
-    args: CreateStackedHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
-  ): Promise<CreateStackedHostedReviewResult> {
-    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
-    const result = await createStackedHostedReviewFromRepo(
-      repoPath,
-      {
-        provider: args.provider,
-        base: args.base,
-        head: args.head,
-        title: args.title,
-        body: args.body,
-        draft: args.draft,
-        ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
-      },
-      repo.connectionId ?? null,
-      executionOptions ?? {}
-    )
-    if (result.ok && this.stats && !this.stats.hasCountedPR(result.url)) {
-      this.stats.record({
-        type: 'pr_created',
-        at: Date.now(),
-        repoId: repo.id,
-        meta: { prNumber: result.number, prUrl: result.url }
-      })
-    }
-    return result
-  }
-
-  async listGitLabRepoWorkItems(
-    repoSelector: string,
-    state?: MRListState,
-    page?: number,
-    perPage?: number,
-    query?: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabWorkItems>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabWorkItems(
-      repo.path,
-      state ?? 'opened',
-      page ?? 1,
-      perPage ?? 20,
-      repo.issueSourcePreference,
-      query,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitLabRepoMRs(
-    repoSelector: string,
-    state?: MRListState,
-    page?: number,
-    perPage?: number,
-    query?: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabMergeRequests>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabMergeRequests(
-      repo.path,
-      normalizeGitLabMRListState(state),
-      normalizeGitLabPositiveInteger(page, 1, 10_000),
-      normalizeGitLabPositiveInteger(perPage, 20, 100),
-      repo.issueSourcePreference,
-      query,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitLabRepoIssues(
-    repoSelector: string,
-    state?: GitLabIssueListState,
-    assignee?: string,
-    limit?: number,
-    page?: number
-  ): Promise<{
-    items: GitLabWorkItem[]
-    totalPages: number
-    error?: Awaited<ReturnType<typeof listGitLabIssues>>['error']
-  }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
-    // Why: page is after localGitOptions; never spread optional args before it (#13538).
-    const result = await listGitLabIssues(
-      repo.path,
-      normalized.limit,
-      repo.issueSourcePreference,
-      normalized.state,
-      normalized.assignee,
-      repo.connectionId ?? null,
-      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
-      normalized.page
-    )
-    // Why: web runtime mirrors the desktop preload contract, where GitLab
-    // issue rows share the GitLabWorkItem shape with MRs on TaskPage.
-    const items: GitLabWorkItem[] = result.items.map((issue) => ({
-      id: `gitlab-issue-${repo.id}-${issue.number}`,
-      type: 'issue' as const,
-      number: issue.number,
-      title: issue.title,
-      state: issue.state,
-      url: issue.url,
-      labels: issue.labels,
-      updatedAt: issue.updatedAt ?? '',
-      author: issue.author ?? null,
-      repoId: repo.id
-    }))
-    return {
-      items,
-      totalPages: result.totalPages,
-      ...(result.error ? { error: result.error } : {})
-    }
-  }
-
-  async listGitLabRepoTodos(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabTodos>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabTodos(
-      repo.path,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async diagnoseGitLabAuth(): Promise<Awaited<ReturnType<typeof diagnoseGitLabAuthClient>>> {
-    return diagnoseGitLabAuthClient()
-  }
-
-  async getGitLabRateLimit(options?: {
-    force?: boolean
-    host?: string | null
-  }): Promise<Awaited<ReturnType<typeof getGitLabRateLimit>>> {
-    return getGitLabRateLimit(options)
-  }
-
-  async listGitLabRepoLabels(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabLabels>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async createGitLabRepoIssue(
-    repoSelector: string,
-    title: string,
-    body: string
-  ): Promise<Awaited<ReturnType<typeof createGitLabIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return createGitLabIssue(
-      repo.path,
-      title,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoIssue(
-    repoSelector: string,
-    number: number,
-    updates: GitLabIssueUpdate,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabIssue(
-      repo.path,
-      number,
-      updates,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoIssueComment(
-    repoSelector: string,
-    number: number,
-    body: string,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabIssueComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabIssueComment(
-      repo.path,
-      number,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoMRComment(
-    repoSelector: string,
-    iid: number,
-    body: string,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabMRComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabMRComment(
-      repo.path,
-      iid,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoMRInlineComment(
-    repoSelector: string,
-    iid: number,
-    input: GitLabMRInlineCommentInput,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabMRInlineComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabMRInlineComment(
-      repo.path,
-      iid,
-      input,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async resolveGitLabRepoMRDiscussion(
-    repoSelector: string,
-    iid: number,
-    discussionId: string,
-    resolved: boolean,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof resolveGitLabMRDiscussion>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return resolveGitLabMRDiscussion(
-      repo.path,
-      iid,
-      discussionId,
-      resolved,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoJobTrace(
-    repoSelector: string,
-    jobId: number,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof getGitLabJobTrace>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getGitLabJobTrace(
-      repo.path,
-      jobId,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async retryGitLabRepoJob(
-    repoSelector: string,
-    jobId: number,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof retryGitLabJob>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return retryGitLabJob(
-      repo.path,
-      jobId,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async mergeGitLabRepoMR(
-    repoSelector: string,
-    iid: number,
-    method?: 'merge' | 'squash' | 'rebase',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof mergeGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return mergeGitLabMR(
-      repo.path,
-      iid,
-      method ?? 'merge',
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoMRState(
-    repoSelector: string,
-    iid: number,
-    state: 'opened' | 'closed',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof closeGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return state === 'closed'
-      ? closeGitLabMR(
-          repo.path,
-          iid,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          projectRef,
-          ...this.getLocalGitExecutionOptionArgs(repo)
-        )
-      : reopenGitLabMR(
-          repo.path,
-          iid,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          projectRef,
-          ...this.getLocalGitExecutionOptionArgs(repo)
-        )
-  }
-
-  async updateGitLabRepoMR(
-    repoSelector: string,
-    iid: number,
-    updates: GitLabMRUpdate,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabMR(
-      repo.path,
-      iid,
-      updates,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoMRReviewers(
-    repoSelector: string,
-    iid: number,
-    reviewerIds: number[],
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabMRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabMRReviewers(
-      repo.path,
-      iid,
-      reviewerIds,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoWorkItemDetails(
-    repoSelector: string,
-    iid: number,
-    type: 'issue' | 'mr',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getGitLabWorkItemDetails(
-      repo.path,
-      iid,
-      type,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoWorkItemByPath(
-    repoSelector: string,
-    projectRef: GitLabProjectRef,
-    iid: number,
-    type: 'issue' | 'mr'
-  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemByProjectRef>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const result = await getGitLabWorkItemByProjectRef(
-      repo.path,
-      projectRef,
-      iid,
-      type,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-    // Why: remote pasted-URL lookups should update GitLab recents exactly
-    // like the desktop IPC path, but only after a successful lookup.
-    if (result && this.store?.updateSettings) {
-      const store = this.store
-      recordGitLabProjectRecent(
-        {
-          getSettings: () => store.getSettings(),
-          updateSettings: (updates) => store.updateSettings?.(updates)
-        },
-        projectRef.host,
-        projectRef.path
-      )
-    }
-    return result
-  }
-
-  async getRepoIssue(
-    repoSelector: string,
-    number: number
-  ): Promise<Awaited<ReturnType<typeof getIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getIssue(
-      repo.path,
-      number,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoPRChecks(
-    repoSelector: string,
-    prNumber: number,
-    headSha?: string,
-    prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean }
-  ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getPRChecks(
-      repo.path,
-      prNumber,
-      headSha,
-      prRepo ?? null,
-      options,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async rerunRepoPRChecks(
-    repoSelector: string,
-    prNumber: number,
-    options?: {
-      headSha?: string
-      failedOnly?: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }
-  ): Promise<Awaited<ReturnType<typeof rerunPRChecks>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return rerunPRChecks(
-      repo.path,
-      prNumber,
-      options,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoPRCheckDetails(
-    repoSelector: string,
-    args: {
-      checkRunId?: number
-      workflowRunId?: number
-      checkName?: string
-      url?: string | null
-      prRepo?: GitHubOwnerRepo | null
-    },
-    signal?: AbortSignal
-  ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0] ?? {}
-    return getPRCheckDetails(
-      repo.path,
-      { ...args, prRepo: args.prRepo ?? null },
-      repo.connectionId ?? null,
-      localGitOptions,
-      signal
-    )
-  }
-
-  async getRepoPRComments(
-    repoSelector: string,
-    prNumber: number,
-    prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean }
-  ): Promise<Awaited<ReturnType<typeof getPRComments>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getPRComments(
-      repo.path,
-      prNumber,
-      { ...options, prRepo: prRepo ?? null },
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async setRepoPRCommentReaction(
-    repoSelector: string,
-    reactionSubjectId: string,
-    content: GitHubReactionContent,
-    reacted: boolean,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof setPRCommentReaction>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return setPRCommentReaction(
-      repo.path,
-      reactionSubjectId,
-      content,
-      reacted,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getRepoPRFileContents(
-    repoSelector: string,
-    args: {
-      prNumber: number
-      prRepo?: GitHubOwnerRepo | null
-      path: string
-      oldPath?: string
-      status: GitHubPRFile['status']
-      headSha: string
-      baseSha: string
-    }
-  ): Promise<Awaited<ReturnType<typeof getPRFileContents>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getPRFileContents({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      localGitOptions: this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...args
-    })
-  }
-
-  async resolveRepoReviewThread(
-    repoSelector: string,
-    threadId: string,
-    resolve: boolean,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof resolveReviewThread>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return resolveReviewThread(
-      repo.path,
-      threadId,
-      resolve,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async setRepoPRFileViewed(
-    repoSelector: string,
-    args: {
-      prRepo?: GitHubOwnerRepo | null
-      pullRequestId: string
-      path: string
-      viewed: boolean
-    }
-  ): Promise<Awaited<ReturnType<typeof setPRFileViewed>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return setPRFileViewed({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      localGitOptions: this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...args
-    })
-  }
-
-  async updateRepoPRTitle(
-    repoSelector: string,
-    prNumber: number,
-    title: string,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof updatePRTitle>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updatePRTitle(
-      repo.path,
-      prNumber,
-      title,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateRepoPRDetails(
-    repoSelector: string,
-    prNumber: number,
-    updates: { title?: string; body?: string },
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof updatePRDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updatePRDetails(
-      repo.path,
-      prNumber,
-      updates,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async mergeRepoPR(
-    repoSelector: string,
-    prNumber: number,
-    method?: 'merge' | 'squash' | 'rebase',
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof mergePR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return mergePR(
-      repo.path,
-      prNumber,
-      method,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async setRepoPRAutoMerge(
-    repoSelector: string,
-    prNumber: number,
-    enabled: boolean,
-    method?: 'merge' | 'squash' | 'rebase',
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return setPRAutoMerge(
-      repo.path,
-      prNumber,
-      enabled,
-      method,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async markRepoPRReadyForReview(
-    repoSelector: string,
-    prNumber: number,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof markPRReadyForReview>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return markPRReadyForReview(
-      repo.path,
-      prNumber,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateRepoPRState(
-    repoSelector: string,
-    prNumber: number,
-    updates: GitHubPullRequestStateUpdate,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof updatePRState>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updatePRState(
-      repo.path,
-      prNumber,
-      updates,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async requestRepoPRReviewers(
-    repoSelector: string,
-    prNumber: number,
-    reviewers: string[],
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof requestPRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return requestPRReviewers(
-      repo.path,
-      prNumber,
-      reviewers,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async removeRepoPRReviewers(
-    repoSelector: string,
-    prNumber: number,
-    reviewers: string[],
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof removePRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return removePRReviewers(
-      repo.path,
-      prNumber,
-      reviewers,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async createRepoIssue(
-    repoSelector: string,
-    title: string,
-    body: string,
-    fields?: GitHubCreateIssueFields
-  ): Promise<Awaited<ReturnType<typeof createIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return createIssue(
-      repo.path,
-      title,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      fields,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateRepoIssue(
-    repoSelector: string,
-    number: number,
-    updates: GitHubIssueUpdate
-  ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateIssue(
-      repo.path,
-      number,
-      updates,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addRepoIssueComment(
-    repoSelector: string,
-    number: number,
-    body: string,
-    prRepo?: GitHubOwnerRepo | null
-  ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addIssueComment(
-      repo.path,
-      number,
-      body,
-      repo.connectionId ?? null,
-      prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addRepoPRReviewComment(
-    repoSelector: string,
-    args: Omit<GitHubPRReviewCommentInput, 'repoPath'>
-  ): Promise<Awaited<ReturnType<typeof addPRReviewComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addPRReviewComment({
-      repoPath: repo.path,
-      connectionId: repo.connectionId ?? null,
-      localGitOptions: this.getLocalGitExecutionOptionArgs(repo)[0],
-      ...args
-    })
-  }
-
-  async addRepoPRReviewCommentReply(
-    repoSelector: string,
-    args: {
-      prNumber: number
-      commentId: number
-      body: string
-      threadId?: string
-      path?: string
-      line?: number
-      prRepo?: GitHubOwnerRepo | null
-    }
-  ): Promise<Awaited<ReturnType<typeof addPRReviewCommentReply>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addPRReviewCommentReply(
-      repo.path,
-      args.prNumber,
-      args.commentId,
-      args.body,
-      args.threadId,
-      args.path,
-      args.line,
-      repo.connectionId ?? null,
-      args.prRepo ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitHubProjects(
-    args?: ListAccessibleProjectsArgs
-  ): Promise<Awaited<ReturnType<typeof listAccessibleProjects>>> {
-    return listAccessibleProjects(args)
-  }
-
-  async listGitHubLabelsBySlug(
-    args: ListLabelsBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof listLabelsBySlug>>> {
-    return listLabelsBySlug(args)
-  }
-
-  async listGitHubAssignableUsersBySlug(
-    args: ListAssignableUsersBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof listAssignableUsersBySlug>>> {
-    return listAssignableUsersBySlug(args)
-  }
-
-  async listGitHubIssueTypesBySlug(
-    args: ListIssueTypesBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof listIssueTypesBySlug>>> {
-    return listIssueTypesBySlug(args)
-  }
-
-  async resolveGitHubProjectRef(
-    args: ResolveProjectRefArgs
-  ): Promise<Awaited<ReturnType<typeof resolveProjectRef>>> {
-    return resolveProjectRef(args)
-  }
-
-  async listGitHubProjectViews(
-    args: ListProjectViewsArgs
-  ): Promise<Awaited<ReturnType<typeof listProjectViews>>> {
-    return listProjectViews(args)
-  }
-
-  async getGitHubProjectViewTable(
-    args: GetProjectViewTableArgs
-  ): Promise<Awaited<ReturnType<typeof getProjectViewTable>>> {
-    return getProjectViewTable(args)
-  }
-
-  async getGitHubProjectWorkItemDetailsBySlug(
-    args: ProjectWorkItemDetailsBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof getWorkItemDetailsBySlug>>> {
-    return getWorkItemDetailsBySlug(args)
-  }
-
-  async updateGitHubProjectItemField(
-    args: UpdateProjectItemFieldArgs
-  ): Promise<Awaited<ReturnType<typeof updateProjectItemFieldValue>>> {
-    return updateProjectItemFieldValue(args)
-  }
-
-  async clearGitHubProjectItemField(
-    args: ClearProjectItemFieldArgs
-  ): Promise<Awaited<ReturnType<typeof clearProjectItemFieldValue>>> {
-    return clearProjectItemFieldValue(args)
-  }
-
-  async updateGitHubIssueBySlug(
-    args: UpdateIssueBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updateIssueBySlug>>> {
-    return updateIssueBySlug(args)
-  }
-
-  async updateGitHubPullRequestBySlug(
-    args: UpdatePullRequestBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updatePullRequestBySlug>>> {
-    return updatePullRequestBySlug(args)
-  }
-
-  async updateGitHubIssueTypeBySlug(
-    args: UpdateIssueTypeBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updateIssueTypeBySlug>>> {
-    return updateIssueTypeBySlug(args)
-  }
-
-  async addGitHubIssueCommentBySlug(
-    args: AddIssueCommentBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof addIssueCommentBySlug>>> {
-    return addIssueCommentBySlug(args)
-  }
-
-  async updateGitHubIssueCommentBySlug(
-    args: UpdateIssueCommentBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof updateIssueCommentBySlug>>> {
-    return updateIssueCommentBySlug(args)
-  }
-
-  async deleteGitHubIssueCommentBySlug(
-    args: DeleteIssueCommentBySlugArgs
-  ): Promise<Awaited<ReturnType<typeof deleteIssueCommentBySlug>>> {
-    return deleteIssueCommentBySlug(args)
-  }
-
-  private getSetupHookTrustPayload(
-    repo: Repo,
-    scriptContentValue: string | undefined
-  ): { contentHash: string; scriptContent: string } | undefined {
-    const scriptContent = scriptContentValue?.trim()
-    if (!scriptContent || repo.hookSettings?.commandSourcePolicy === 'local-only') {
-      return undefined
-    }
-    return {
-      contentHash: createHash('sha256').update(scriptContent).digest('hex'),
-      scriptContent
-    }
-  }
-
-  private getSharedSetupHookTrustPayload(
-    repo: Repo,
-    sharedSetupScript: string | undefined
-  ): { contentHash: string; scriptContent: string } | undefined {
-    if (repo.hookSettings?.commandSourcePolicy === 'local-only') {
-      return undefined
-    }
-    return this.getSetupHookTrustPayload(repo, sharedSetupScript)
-  }
-
-  async getRepoHooks(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
-        return {
-          hasHooksFile: Boolean(hooks),
-          hooks,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: hooks ? 'orca.yaml' : null,
-          setupTrust: this.getSharedSetupHookTrustPayload(
-            repo,
-            getDefaultTabCommandTrustContent(hooks)
-          )
-        }
-      } catch {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-    }
-    const hasFile = hasHooksFile(repo.path)
-    const hooks = getEffectiveHooks(repo)
-    const sharedHooks = hasFile ? loadHooks(repo.path) : null
-    const setupRunPolicy = getEffectiveSetupRunPolicy(repo)
-    return {
-      hasHooksFile: hasFile,
-      hooks,
-      setupRunPolicy,
-      source: hasFile ? 'orca.yaml' : hooks ? 'legacy' : null,
-      setupTrust: this.getSharedSetupHookTrustPayload(
-        repo,
-        getDefaultTabCommandTrustContent(sharedHooks)
-      )
-    }
-  }
-
-  async checkRepoHooks(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-    }
-
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      // Why: callers cache "no hooks" as authoritative, so an unreadable repo must fail
-      // closed with an error status (mirrors the hooks:check IPC handler) instead of
-      // pinning a false "no setup script" verdict until the client remounts.
-      if (!fsProvider) {
-        return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-      }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        if (result.isBinary) {
-          return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-        }
-        return {
-          status: 'ok' as const,
-          hasHooks: true,
-          hooks: parseOrcaYaml(result.content),
-          mayNeedUpdate: false
-        }
-      } catch (error) {
-        return {
-          status: isENOENT(error) ? ('ok' as const) : ('error' as const),
-          hasHooks: false,
-          hooks: null,
-          mayNeedUpdate: false
-        }
-      }
-    }
-
-    const has = hasHooksFile(repo.path)
-    const hooks = has ? loadHooks(repo.path) : null
-    return {
-      status: 'ok' as const,
-      hasHooks: has,
-      hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
-    }
-  }
-
-  async inspectRepoSetupScriptImports(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return []
-    }
-
-    return inspectSetupScriptImportCandidates(async (relativePath) => {
-      const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (repo.connectionId) {
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
-        if (!fsProvider) {
-          return null
-        }
-        try {
-          const result = await fsProvider.readFile(filePath)
-          return result.isBinary ? null : result.content
-        } catch {
-          return null
-        }
-      }
-
-      try {
-        return await readFile(filePath, 'utf-8')
-      } catch (error) {
-        if (!isENOENT(error)) {
-          console.warn('[runtime] Failed to inspect setup script import candidate:', error)
-        }
-        return null
-      }
-    })
-  }
-
-  async readRepoIssueCommand(repoSelector: string) {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return {
-        localContent: null,
-        sharedContent: null,
-        effectiveContent: null,
-        localFilePath: '',
-        source: 'none' as const
-      }
-    }
-
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          localContent: null,
-          sharedContent: null,
-          effectiveContent: null,
-          localFilePath: issueCommandPath,
-          source: 'none' as const
-        }
-      }
-      const localContent = await this.readRemoteIssueCommandOverride(fsProvider, issueCommandPath)
-      const sharedContent = await this.readRemoteSharedIssueCommand(fsProvider, repo.path)
-      const effectiveContent = localContent ?? sharedContent
-      return {
-        localContent,
-        sharedContent,
-        effectiveContent,
-        localFilePath: issueCommandPath,
-        source: localContent
-          ? ('local' as const)
-          : sharedContent
-            ? ('shared' as const)
-            : ('none' as const)
-      }
-    }
-
-    return readIssueCommand(repo.path)
-  }
-
-  private async readRemoteIssueCommandOverride(
-    fsProvider: IFilesystemProvider,
-    issueCommandPath: string
-  ): Promise<string | null> {
-    try {
-      const result = await fsProvider.readFile(issueCommandPath)
-      if (result.isBinary) {
-        return null
-      }
-      return result.content.trim() || null
-    } catch {
-      return null
-    }
-  }
-
-  private async readRemoteSharedIssueCommand(
-    fsProvider: IFilesystemProvider,
-    repoPath: string
-  ): Promise<string | null> {
-    try {
-      const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
-      if (result.isBinary) {
-        return null
-      }
-      return parseOrcaYaml(result.content)?.issueCommand?.trim() || null
-    } catch {
-      return null
-    }
-  }
-
-  async writeRepoIssueCommand(repoSelector: string, content: string): Promise<{ ok: true }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    if (isFolderRepo(repo)) {
-      return { ok: true }
-    }
-
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return { ok: true }
-      }
-      const trimmed = content.trim()
-      if (!trimmed) {
-        await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
-          if (!isENOENT(error)) {
-            throw error
-          }
-        })
-        return { ok: true }
-      }
-      await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-      await this.ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
-      await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
-      return { ok: true }
-    }
-
-    writeIssueCommand(repo.path, content)
-    return { ok: true }
-  }
-
-  private async ensureRemoteOrcaDirIgnored(
-    fsProvider: IFilesystemProvider,
-    repoPath: string,
-    options: { required?: boolean } = {}
-  ): Promise<void> {
-    const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
-    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
-    try {
-      result = await fsProvider.readFile(gitignorePath)
-    } catch (error) {
-      if (!isENOENT(error)) {
-        if (options.required) {
-          throw error
-        }
-        console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
-        return
-      }
-      try {
-        await fsProvider.writeFile(gitignorePath, '.orca\n')
-      } catch (writeError) {
-        if (options.required) {
-          throw writeError
-        }
-        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
-      }
-      return
-    }
-    if (result.isBinary) {
-      if (options.required) {
-        throw new Error('Remote .gitignore is binary; cannot verify .orca is ignored')
-      }
-      return
-    }
-    if (/^\.orca\/?$/m.test(result.content)) {
-      return
-    }
-    const separator = result.content.endsWith('\n') ? '' : '\n'
-    try {
-      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
-    } catch (writeError) {
-      if (options.required) {
-        throw writeError
-      }
-      console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
-    }
-  }
-
-  async listManagedWorktrees(
-    repoSelector?: string,
-    limit = DEFAULT_WORKTREE_LIST_LIMIT,
-    sourceDefaultsSupported = true
-  ): Promise<RuntimeWorktreeListResult> {
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new Error('invalid_limit')
-    }
-    const resolved = await this.listResolvedWorktrees()
-    const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
-    const settings = this.store?.getSettings()
-    const visibilityDefaults = sourceDefaultsSupported
-      ? settings?.worktreeVisibilityDefaults
-      : settings?.worktreeVisibilityDefaults
-        ? { external: settings.worktreeVisibilityDefaults.external }
-        : undefined
-    const visibilitySettings = settings
-      ? { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
-      : undefined
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
-      resolved,
-      visibilityDefaults
-    )
-    const worktrees = resolved.filter((worktree) => {
-      if (repoId && worktree.repoId !== repoId) {
-        return false
-      }
-      return this.isRuntimeWorktreeVisible(
-        worktree,
-        visibilitySourceMatchersByRepoId.get(worktree.repoId),
-        visibilitySettings
-      )
-    })
-    return {
-      worktrees: worktrees.slice(0, limit),
-      totalCount: worktrees.length,
-      truncated: worktrees.length > limit
-    }
-  }
-
-  /** Keyed by repo id on the wire even though one repo is requested: the caller asked by selector
-   *  and needs to know which repo answered.
-   *
-   *  The tier watermark rides alongside the names rather than being expanded into them — expanding
-   *  it would put 552 strings per spent tier on the wire, which is what compaction exists to
-   *  avoid. A client predating the field reads the names only and under-retires, degrading to the
-   *  pre-retirement behavior for compacted tiers instead of breaking. */
-  async listRetiredWorktreeNames(repoSelector: string): Promise<{
-    retiredNamesByRepo: Record<string, readonly string[]>
-    retiredNameTiersByRepo: Record<string, number>
-  }> {
-    const store = this.store
-    if (!store) {
-      return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
-    }
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const settings = store.getSettings()
-    const registry: RetiredNameRegistry = await getRetiredNameRegistryForRepo(
-      store,
-      repo,
-      store.getRepos(),
-      settings
-    )
-    return {
-      retiredNamesByRepo: { [repo.id]: registry.names },
-      retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
-    }
-  }
-
-  async listDetectedManagedWorktrees(
-    repoSelector: string,
-    connectionId?: string | null,
-    sourceDefaultsSupported = true
-  ): Promise<DetectedWorktreeListResult> {
-    return this.listDetectedWorktreesForResolvedRepo(
-      await this.resolveRepoSelectorForConnection(repoSelector, connectionId),
-      sourceDefaultsSupported
-    )
-  }
-
-  private async listDetectedWorktreesForResolvedRepo(
-    repo: Repo,
-    sourceDefaultsSupported = true
-  ): Promise<DetectedWorktreeListResult> {
-    const store = this.requireStore()
-    const settings = store.getSettings()
-    const visibilityDefaults = sourceDefaultsSupported
-      ? settings.worktreeVisibilityDefaults
-      : settings.worktreeVisibilityDefaults
-        ? { external: settings.worktreeVisibilityDefaults.external }
-        : undefined
-    const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
-    if (isFolderRepo(repo)) {
-      const worktrees = listRuntimeFolderWorkspaces(store, repo)
-      const metaById = store.getAllWorktreeMeta()
-      const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-      const matcher = createWorktreeVisibilitySourceMatcher(
-        [repo.path, ...worktrees.map((worktree) => worktree.path)],
-        resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-        resolveConfiguredWorktreeBasePaths(repo)
-      )
-      const detected = worktrees.map((worktree) =>
-        this.toRuntimeDetectedWorktree(
-          repo,
-          worktree,
-          matcher,
-          visibilitySettings,
-          getRepoOwnedWorktreeMeta(repo, worktree.id, metaById, repoOwnerCount) ?? null
-        )
-      )
-      return {
-        repoId: repo.id,
-        authoritative: true,
-        source: 'git',
-        worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
-      }
-    }
-    let scan: RuntimeWorktreeScanResult
-    try {
-      scan = await this.listRepoWorktreesForResolution(repo)
-    } catch {
-      scan = { ok: false, worktrees: [] }
-    }
-    if (scan.ok) {
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
-    }
-    const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
-      [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
-      resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-      resolveConfiguredWorktreeBasePaths(repo)
-    )
-    const expectedHostId = getRepoExecutionHostId(repo)
-    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-    const metaById = store.getAllWorktreeMeta()
-    const detected = scan.worktrees.map((gitWorktree) => {
-      const worktreeId = `${repo.id}::${gitWorktree.path}`
-      // A host-qualified row is exact; the locator-keyed one is only trustworthy when this repo owns it.
-      const meta =
-        readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
-        getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
-      const worktree = {
-        ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-        hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
-      }
-      const detectedWorktree = this.toRuntimeDetectedWorktree(
-        repo,
-        worktree,
-        worktreeVisibilitySourceMatcher,
-        visibilitySettings,
-        meta ?? null
-      )
-      if (scan.ok) {
-        return detectedWorktree
-      }
-      return applyMetadataFallbackVisibility(detectedWorktree)
-    })
-    return {
-      repoId: repo.id,
-      authoritative: scan.ok,
-      source: scan.ok ? 'git' : 'metadata-fallback',
-      worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
-    }
-  }
-
-  async teardownMissingManagedWorktreeTerminals(
-    repoSelector: string,
-    knownWorktreeIds: readonly string[],
-    connectionId?: string | null
-  ): Promise<{ stoppedWorktreeIds: string[] }> {
-    const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
-    // Why: killing PTYs must be proven against the host right now — a cached scan
-    // (30s TTL) can still list a directory git already dropped, and the renderer
-    // purges its state either way, so a stale miss strands those processes for good.
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    // Why: rescanning by `id:` would re-resolve the already-resolved repo, and a
-    // duplicate id across hosts makes that second lookup throw selector_ambiguous
-    // even though the caller's selector was unique — losing the sweep entirely.
-    const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
-    if (!detected.authoritative) {
-      return { stoppedWorktreeIds: [] }
-    }
-    return stopMissingWorktreeTerminals(
-      repo,
-      knownWorktreeIds,
-      detected.worktrees.map((worktree) => worktree.id),
-      {
-        runtime: this,
-        getLocalProvider: () => this.getLocalProvider(),
-        getSshProvider: (connectionId) => this.getSshProviderFn?.(connectionId),
-        onPtyStopped: this.onPtyStopped ?? undefined
-      }
-    )
-  }
-
-  private resolveRepoSelectorForConnection(
-    repoSelector: string,
-    connectionId?: string | null
-  ): Promise<Repo> {
-    if (connectionId === undefined) {
-      return this.resolveRepoSelector(repoSelector)
-    }
-    // Why: an explicit connection identity only *narrows* the selector; it must not
-    // change the grammar. Matching the selector as a bare repo id would make
-    // `path:`/`name:` selectors resolve to repo_not_found on this path alone.
-    const wanted = connectionId?.trim() || null
-    const matches = this.selectReposBySelector(repoSelector).filter(
-      (repo) => (repo.connectionId?.trim() || null) === wanted
-    )
-    if (matches.length !== 1) {
-      throw new Error(matches.length > 1 ? 'selector_ambiguous' : 'repo_not_found')
-    }
-    return Promise.resolve(matches[0])
-  }
-
-  private isRuntimeWorktreeVisible(
-    worktree: Worktree,
-    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
-    settings?: ReturnType<RuntimeStore['getSettings']>
-  ): boolean {
-    const repo = this.store?.getRepo(worktree.repoId)
-    if (!repo || !this.store) {
-      return true
-    }
-    return this.toRuntimeDetectedWorktree(repo, worktree, worktreeVisibilitySourceMatcher, settings)
-      .visible
-  }
-
-  private buildRuntimeVisibilitySourceMatchersByRepoId(
-    worktrees: readonly Worktree[],
-    visibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
-  ): Map<string, WorktreeVisibilitySourceMatcher> {
-    const checkoutPathsByRepoId = new Map<string, string[]>()
-    for (const worktree of worktrees) {
-      const checkoutPaths = checkoutPathsByRepoId.get(worktree.repoId) ?? []
-      checkoutPaths.push(worktree.path)
-      checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
-    }
-    return new Map(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => checkoutPathsByRepoId.has(repo.id))
-        .map((repo) => [
-          repo.id,
-          createWorktreeVisibilitySourceMatcher(
-            [repo.path, ...(checkoutPathsByRepoId.get(repo.id) ?? [])],
-            resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
-            resolveConfiguredWorktreeBasePaths(repo)
-          )
-        ])
-    )
-  }
-
-  private toRuntimeDetectedWorktree(
-    repo: Repo,
-    worktree: Worktree,
-    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
-    providedSettings?: ReturnType<RuntimeStore['getSettings']>,
-    providedMeta?: WorktreeMeta | null
-  ): DetectedWorktree {
-    const settings = providedSettings ?? this.store?.getSettings()
-    if (!settings) {
-      return {
-        ...worktree,
-        ownership: 'unknown-legacy',
-        selectedCheckout: false,
-        visible: true
-      }
-    }
-    return toDetectedWorktree({
-      repo,
-      worktree,
-      meta:
-        providedMeta === undefined
-          ? this.store?.getWorktreeMeta(worktree.id)
-          : (providedMeta ?? undefined),
-      settings,
-      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
-      worktreeVisibilitySourceMatcher
-    })
+  get showRepo() {
+    return this.repoGitCommands.showRepo
+  }
+  get setRepoBaseRef() {
+    return this.repoGitCommands.setRepoBaseRef
+  }
+  get updateRepo() {
+    return this.repoGitCommands.updateRepo
+  }
+  get removeProject() {
+    return this.repoGitCommands.removeProject
+  }
+  get inspectTerminalProcess() {
+    return this.repoGitCommands.inspectTerminalProcess
+  }
+  get reorderRepos() {
+    return this.repoGitCommands.reorderRepos
+  }
+  get searchRepoRefs() {
+    return this.repoGitCommands.searchRepoRefs
+  }
+  get getRepoBaseRefDefault() {
+    return this.repoGitCommands.getRepoBaseRefDefault
+  }
+  get getRepoSlug() {
+    return this.repoGitCommands.getRepoSlug
+  }
+  get getRepoUpstream() {
+    return this.repoGitCommands.getRepoUpstream
+  }
+  get listRepoWorkItems() {
+    return this.repoGitCommands.listRepoWorkItems
+  }
+  get listRepoIssues() {
+    return this.repoGitCommands.listRepoIssues
+  }
+  get getRepoWorkItem() {
+    return this.repoGitCommands.getRepoWorkItem
+  }
+  get getRepoWorkItemDetails() {
+    return this.repoGitCommands.getRepoWorkItemDetails
+  }
+  get countRepoWorkItems() {
+    return this.repoGitCommands.countRepoWorkItems
+  }
+  get listRepoLabels() {
+    return this.repoGitCommands.listRepoLabels
+  }
+  get listRepoAssignableUsers() {
+    return this.repoGitCommands.listRepoAssignableUsers
+  }
+  get getGitHubRateLimit() {
+    return this.repoGitCommands.getGitHubRateLimit
+  }
+  get getRepoPRForBranch() {
+    return this.repoGitCommands.getRepoPRForBranch
+  }
+  get getHostedReviewForBranch() {
+    return this.repoGitCommands.getHostedReviewForBranch
+  }
+  get createHostedReview() {
+    return this.repoGitCommands.createHostedReview
+  }
+  get createStackedHostedReview() {
+    return this.repoGitCommands.createStackedHostedReview
+  }
+  get listGitLabRepoWorkItems() {
+    return this.repoGitCommands.listGitLabRepoWorkItems
+  }
+  get listGitLabRepoMRs() {
+    return this.repoGitCommands.listGitLabRepoMRs
+  }
+  get listGitLabRepoIssues() {
+    return this.repoGitCommands.listGitLabRepoIssues
+  }
+  get listGitLabRepoTodos() {
+    return this.repoGitCommands.listGitLabRepoTodos
+  }
+  get diagnoseGitLabAuth() {
+    return this.repoGitCommands.diagnoseGitLabAuth
+  }
+  get getGitLabRateLimit() {
+    return this.repoGitCommands.getGitLabRateLimit
+  }
+  get listGitLabRepoLabels() {
+    return this.repoGitCommands.listGitLabRepoLabels
+  }
+  get createGitLabRepoIssue() {
+    return this.repoGitCommands.createGitLabRepoIssue
+  }
+  get updateGitLabRepoIssue() {
+    return this.repoGitCommands.updateGitLabRepoIssue
+  }
+  get addGitLabRepoIssueComment() {
+    return this.repoGitCommands.addGitLabRepoIssueComment
+  }
+  get addGitLabRepoMRComment() {
+    return this.repoGitCommands.addGitLabRepoMRComment
+  }
+  get addGitLabRepoMRInlineComment() {
+    return this.repoGitCommands.addGitLabRepoMRInlineComment
+  }
+  get getGitLabRepoJobTrace() {
+    return this.repoGitCommands.getGitLabRepoJobTrace
+  }
+  get retryGitLabRepoJob() {
+    return this.repoGitCommands.retryGitLabRepoJob
+  }
+  get mergeGitLabRepoMR() {
+    return this.repoGitCommands.mergeGitLabRepoMR
+  }
+  get updateGitLabRepoMRState() {
+    return this.repoGitCommands.updateGitLabRepoMRState
+  }
+  get updateGitLabRepoMR() {
+    return this.repoGitCommands.updateGitLabRepoMR
+  }
+  get updateGitLabRepoMRReviewers() {
+    return this.repoGitCommands.updateGitLabRepoMRReviewers
+  }
+  get getGitLabRepoWorkItemDetails() {
+    return this.repoGitCommands.getGitLabRepoWorkItemDetails
+  }
+  get getGitLabRepoWorkItemByPath() {
+    return this.repoGitCommands.getGitLabRepoWorkItemByPath
+  }
+  get getRepoIssue() {
+    return this.repoGitCommands.getRepoIssue
+  }
+  get getRepoPRChecks() {
+    return this.repoGitCommands.getRepoPRChecks
+  }
+  get rerunRepoPRChecks() {
+    return this.repoGitCommands.rerunRepoPRChecks
+  }
+  get getRepoPRCheckDetails() {
+    return this.repoGitCommands.getRepoPRCheckDetails
+  }
+  get getRepoPRComments() {
+    return this.repoGitCommands.getRepoPRComments
+  }
+  get setRepoPRCommentReaction() {
+    return this.repoGitCommands.setRepoPRCommentReaction
+  }
+  get getRepoPRFileContents() {
+    return this.repoGitCommands.getRepoPRFileContents
+  }
+  get resolveRepoReviewThread() {
+    return this.repoGitCommands.resolveRepoReviewThread
+  }
+  get setRepoPRFileViewed() {
+    return this.repoGitCommands.setRepoPRFileViewed
+  }
+  get updateRepoPRTitle() {
+    return this.repoGitCommands.updateRepoPRTitle
+  }
+  get updateRepoPRDetails() {
+    return this.repoGitCommands.updateRepoPRDetails
+  }
+  get mergeRepoPR() {
+    return this.repoGitCommands.mergeRepoPR
+  }
+  get setRepoPRAutoMerge() {
+    return this.repoGitCommands.setRepoPRAutoMerge
+  }
+  get markRepoPRReadyForReview() {
+    return this.repoGitCommands.markRepoPRReadyForReview
+  }
+  get updateRepoPRState() {
+    return this.repoGitCommands.updateRepoPRState
+  }
+  get requestRepoPRReviewers() {
+    return this.repoGitCommands.requestRepoPRReviewers
+  }
+  get removeRepoPRReviewers() {
+    return this.repoGitCommands.removeRepoPRReviewers
+  }
+  get createRepoIssue() {
+    return this.repoGitCommands.createRepoIssue
+  }
+  get updateRepoIssue() {
+    return this.repoGitCommands.updateRepoIssue
+  }
+  get addRepoIssueComment() {
+    return this.repoGitCommands.addRepoIssueComment
+  }
+  get addRepoPRReviewComment() {
+    return this.repoGitCommands.addRepoPRReviewComment
+  }
+  get addRepoPRReviewCommentReply() {
+    return this.repoGitCommands.addRepoPRReviewCommentReply
+  }
+  get listGitHubProjects() {
+    return this.repoGitCommands.listGitHubProjects
+  }
+  get listGitHubLabelsBySlug() {
+    return this.repoGitCommands.listGitHubLabelsBySlug
+  }
+  get listGitHubIssueTypesBySlug() {
+    return this.repoGitCommands.listGitHubIssueTypesBySlug
+  }
+  get resolveGitHubProjectRef() {
+    return this.repoGitCommands.resolveGitHubProjectRef
+  }
+  get listGitHubProjectViews() {
+    return this.repoGitCommands.listGitHubProjectViews
+  }
+  get getGitHubProjectViewTable() {
+    return this.repoGitCommands.getGitHubProjectViewTable
+  }
+  get updateGitHubProjectItemField() {
+    return this.repoGitCommands.updateGitHubProjectItemField
+  }
+  get clearGitHubProjectItemField() {
+    return this.repoGitCommands.clearGitHubProjectItemField
+  }
+  get updateGitHubIssueBySlug() {
+    return this.repoGitCommands.updateGitHubIssueBySlug
+  }
+  get updateGitHubIssueTypeBySlug() {
+    return this.repoGitCommands.updateGitHubIssueTypeBySlug
+  }
+  get addGitHubIssueCommentBySlug() {
+    return this.repoGitCommands.addGitHubIssueCommentBySlug
+  }
+  get getRepoHooks() {
+    return this.repoGitCommands.getRepoHooks
+  }
+  get checkRepoHooks() {
+    return this.repoGitCommands.checkRepoHooks
+  }
+  get readRepoIssueCommand() {
+    return this.repoGitCommands.readRepoIssueCommand
+  }
+  get writeRepoIssueCommand() {
+    return this.repoGitCommands.writeRepoIssueCommand
+  }
+  get listManagedWorktrees() {
+    return this.repoGitCommands.listManagedWorktrees
   }
 
   async showManagedWorktree(worktreeSelector: string) {
@@ -30619,7 +26371,10 @@ export class OrcaRuntimeService {
     ptyIds: Iterable<string>,
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   ): string[] {
-    return [...new Set([...ptyIds].flatMap((ptyId) => terminalHandlesByPtyId[ptyId] ?? []))].sort()
+    return this.clientEventPublishingCommands.getRecordedTerminalSleepHandles(
+      ptyIds,
+      terminalHandlesByPtyId
+    )
   }
 
   private commitWorktreeTerminalSleepPtys(args: {
@@ -30671,196 +26426,35 @@ export class OrcaRuntimeService {
   }
 
   markRendererReloading(windowId: number): RuntimeRendererReloadFence | null {
-    if (
-      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      this.headlessGraphFallbackAvailable
-    ) {
-      this.attachWindow(windowId)
-      const revision = this.graphReloadLifecycle.getActiveRevision()
-      return this.authoritativeWindowId === windowId && revision !== null
-        ? { revision, recovery: 'headless' }
-        : null
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      return null
-    }
-    if (this.graphStatus === 'reloading') {
-      return {
-        revision: this.graphReloadLifecycle.begin(windowId),
-        recovery: this.shouldRestoreHeadlessGraph(windowId) ? 'headless' : 'reloading'
-      }
-    }
-    if (this.graphStatus !== 'ready') {
-      return null
-    }
-    return { revision: this.beginGraphReload(windowId), recovery: 'renderer' }
+    return this.orchestrationGraphReloadCommands.markRendererReloading(windowId)
   }
 
-  private beginGraphReload(windowId: number): number {
-    // Why: the rebuilt graph decides whether an incarnation survived; do not stale proven process identities before that comparison.
-    this.rendererGraphEpoch += 1
-    this.graphStatus = 'reloading'
-    const revision = this.graphReloadLifecycle.begin(windowId)
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.rememberDetachedPreAllocatedLeaves()
-    const retainedHandles = new Set([
-      ...this.handleByPtyId.values(),
-      ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
-    ])
-    for (const handle of this.waitersByHandle.keys()) {
-      if (!retainedHandles.has(handle)) {
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
-      }
-    }
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.refreshWritableFlags()
-    return revision
+  private handleGraphReloadTimeout = (windowId: number): void => {
+    this.orchestrationGraphReloadCommands.handleGraphReloadTimeout(windowId)
   }
 
   markRendererReloadCancelled(windowId: number, fence: RuntimeRendererReloadFence): boolean {
-    if (
-      windowId !== this.authoritativeWindowId ||
-      this.graphStatus !== 'reloading' ||
-      !this.graphReloadLifecycle.settle(fence.revision, 'cancelled')
-    ) {
-      return false
-    }
-    if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {
-      this.restoreHeadlessGraphAuthority()
-      return false
-    }
-    if (fence.recovery === 'renderer') {
-      const restoresPublishedInventory =
-        this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch - 1
-      this.graphStatus = 'ready'
-      this.setTerminalSideEffectConsumerAvailable(true)
-      for (const leaf of this.leaves.values()) {
-        this.adoptPreAllocatedHandle(leaf)
-      }
-      this.reconcilePtyIncarnationHandles()
-      this.refreshWritableFlags()
-      if (restoresPublishedInventory) {
-        this.markSessionTabsInventoryPublished()
-      }
-      return true
-    }
-    this.graphReloadLifecycle.begin(windowId)
-    return false
+    return this.orchestrationGraphReloadCommands.markRendererReloadCancelled(windowId, fence)
   }
 
   markGraphReady(windowId: number): void {
-    if (windowId !== this.authoritativeWindowId) {
-      return
-    }
-    this.graphReloadLifecycle.settleActive('success')
-    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
-      this.headlessGraphFallbackAvailable = false
-      this.pendingHeadlessPromotionWindowId = null
-    }
-    this.graphStatus = 'ready'
-    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
-    this.refreshWritableFlags()
+    this.orchestrationGraphReloadCommands.markGraphReady(windowId)
   }
 
   markGraphReloadFailed(
     windowId: number,
-    _reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
+    reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
   ): void {
-    if (windowId !== this.authoritativeWindowId) {
-      return
-    }
-    if (this.graphStatus === 'ready') {
-      this.beginGraphReload(windowId)
-    }
-    this.graphReloadLifecycle.settleActive('failure')
-    this.transitionGraphReloadToTerminalState(windowId)
+    this.orchestrationGraphReloadCommands.markGraphReloadFailed(windowId, reason)
   }
 
   markGraphUnavailable(windowId: number): void {
-    if (
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      windowId === this.pendingHeadlessPromotionWindowId
-    ) {
-      this.pendingHeadlessPromotionWindowId = null
-      return
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      return
-    }
-    this.graphReloadLifecycle.settleActive('cancelled')
-    if (this.shouldRestoreHeadlessGraph(windowId)) {
-      this.pendingHeadlessPromotionWindowId = null
-      this.restoreHeadlessGraphAuthority()
-      return
-    }
-    // Why: once the authoritative renderer graph disappears, fail closed for live-terminal ops instead of guessing from old state.
-    if (this.graphStatus !== 'unavailable') {
-      this.rendererGraphEpoch += 1
-    }
-    this.graphStatus = 'unavailable'
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.authoritativeWindowId = null
-    this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
-    this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.clearPtyIncarnationHandles()
-    // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
-    this.rejectAllWaiters('terminal_handle_stale')
-  }
-
-  private handleGraphReloadTimeout(windowId: number): void {
-    if (windowId !== this.authoritativeWindowId || this.graphStatus !== 'reloading') {
-      return
-    }
-    this.transitionGraphReloadToTerminalState(windowId)
-  }
-
-  private transitionGraphReloadToTerminalState(windowId: number): void {
-    if (this.shouldRestoreHeadlessGraph(windowId)) {
-      this.restoreHeadlessGraphAuthority()
-      return
-    }
-    this.graphStatus = 'unavailable'
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
-    this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
-    this.refreshWritableFlags()
-  }
-
-  private shouldRestoreHeadlessGraph(windowId: number): boolean {
-    return windowId !== HEADLESS_RUNTIME_WINDOW_ID && this.headlessGraphFallbackAvailable
-  }
-
-  private restoreHeadlessGraphAuthority(): void {
-    this.rendererGraphEpoch += 1
-    this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
-    this.graphStatus = 'ready'
-    this.rendererGeneration = null
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.tabs.clear()
-    this.leaves.clear()
-    this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
-    this.refreshWritableFlags()
-    this.markSessionTabsInventoryPublished()
+    this.orchestrationGraphReloadCommands.markGraphUnavailable(windowId)
   }
 
   private assertGraphReady(): void {
-    if (this.graphStatus !== 'ready') {
+    const status = this.graphStatus
+    if (status !== 'ready') {
       throw new Error('runtime_unavailable')
     }
   }
@@ -31591,11 +27185,7 @@ export class OrcaRuntimeService {
   }
 
   private getOrchestrationDbIfAvailable(): OrchestrationDb | null {
-    try {
-      return this._orchestrationDb ?? this.getOrchestrationDb()
-    } catch {
-      return this._orchestrationDb
-    }
+    return this.orchestrationCommands.getOrchestrationDbIfAvailable()
   }
 
   async hydrateInferredWorktreeLineage(): Promise<void> {
@@ -33057,249 +28647,6 @@ export class OrcaRuntimeService {
     return changedWorktreeIds
   }
 
-  private mergePreservedHeadlessMobileSessionTabs(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    existing: RuntimeMobileSessionTabsSnapshot | undefined
-  ): RuntimeMobileSessionTabsSnapshot {
-    if (!existing) {
-      return snapshot
-    }
-    const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
-    if (preservedTabs.length === 0) {
-      return snapshot
-    }
-    const preservedActiveTab = preservedTabs.find(
-      (tab) => tab.id === existing.activeTabId && tab.isActive
-    )
-    const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
-    const normalizedPreservedTabs = preservedTabs.map((tab) =>
-      hasIncomingActiveTab && !preservedActiveTab ? { ...tab, isActive: false } : tab
-    )
-    // Why: an omitting renderer frame predates the runtime-owned structured
-    // publication, so it cannot revoke that publication's focus intent.
-    const normalizedIncomingTabs = preservedActiveTab
-      ? snapshot.tabs.map((tab) => (tab.isActive ? { ...tab, isActive: false } : tab))
-      : snapshot.tabs
-    const tabs = this.mergeMobileSessionSnapshotTabs(
-      normalizedIncomingTabs,
-      normalizedPreservedTabs
-    )
-    if (tabs.length === snapshot.tabs.length) {
-      return snapshot
-    }
-    const activeTab =
-      preservedActiveTab ??
-      normalizedIncomingTabs.find((tab) => tab.id === snapshot.activeTabId) ??
-      tabs.find((tab) => tab.id === existing.activeTabId) ??
-      tabs.find((tab) => tab.isActive) ??
-      tabs[0] ??
-      null
-    const terminalTabs = tabs.filter(
-      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-    )
-    const tabGroups = this.mergeMobileSessionTabGroups(
-      snapshot.worktree,
-      snapshot.tabGroups ?? existing.tabGroups ?? [],
-      terminalTabs,
-      activeTab?.type === 'terminal' ? activeTab : null
-    )
-    return {
-      ...snapshot,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
-        snapshot,
-        normalizedPreservedTabs
-      ),
-      snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
-      activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
-      activeTabId: activeTab?.id ?? null,
-      activeTabType: activeTab?.type ?? null,
-      tabGroups: this.mergeStructuredAgentSessionTabGroups(
-        tabGroups,
-        existing.tabGroups ?? [],
-        normalizedPreservedTabs,
-        activeTab?.id ?? null
-      ),
-      tabs
-    }
-  }
-
-  private mergeStructuredAgentSessionTabGroups(
-    groups: readonly RuntimeMobileSessionTabGroup[],
-    existingGroups: readonly RuntimeMobileSessionTabGroup[],
-    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[],
-    activeTabId: string | null
-  ): RuntimeMobileSessionTabGroup[] {
-    const structuredTabs = preservedTabs.filter((tab) => tab.type === 'agent-session')
-    if (structuredTabs.length === 0) {
-      return [...groups]
-    }
-    const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
-    for (const tab of structuredTabs) {
-      const priorGroupId = existingGroups.find((group) => group.tabOrder.includes(tab.id))?.id
-      const target = next.find((group) => group.id === priorGroupId) ?? next[0]
-      if (target && !target.tabOrder.includes(tab.id)) {
-        target.tabOrder.push(tab.id)
-      }
-      if (target && tab.id === activeTabId) {
-        target.activeTabId = tab.id
-      }
-    }
-    return next
-  }
-
-  private buildPreservedHeadlessMobileSessionSnapshot(
-    existing: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsSnapshot | null {
-    const tabs = this.collectPreservedHeadlessMobileSessionTabs(existing)
-    if (tabs.length === 0) {
-      return null
-    }
-    const activeTab =
-      tabs.find((tab) => tab.id === existing.activeTabId) ??
-      tabs.find((tab) => tab.isActive) ??
-      tabs[0] ??
-      null
-    const terminalTabs = tabs.filter(
-      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-    )
-    return {
-      ...existing,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
-      // Why: mint a fresh version or clients' same-epoch gate drops the prune frame.
-      snapshotVersion: existing.snapshotVersion + 1,
-      activeGroupId:
-        existing.activeGroupId ?? this.getHeadlessMobileSessionGroupId(existing.worktree),
-      activeTabId: activeTab?.id ?? null,
-      activeTabType: activeTab?.type ?? null,
-      tabGroups: this.mergeMobileSessionTabGroups(
-        existing.worktree,
-        existing.tabGroups ?? [],
-        terminalTabs,
-        activeTab?.type === 'terminal' ? activeTab : null
-      ),
-      tabs
-    }
-  }
-
-  // Why: the accepted-revision no-op gate must not fossilize preserved runtime
-  // tabs. A stored merged snapshot's tabs absent from the accepted renderer
-  // publication exist only via preservation; if any such tab no longer
-  // passes the preservation predicate (binding removed from the live PTY table
-  // and persisted session, or browser page closed), the stored snapshot is stale.
-  private storedMobileSnapshotHasStalePreservedTab(
-    existing: RuntimeMobileSessionTabsSnapshot,
-    rendererTabIdentityKeys: ReadonlySet<string>
-  ): boolean {
-    return existing.tabs.some(
-      (tab) =>
-        !this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
-          rendererTabIdentityKeys.has(id)
-        ) && !this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
-    )
-  }
-
-  private collectPreservedHeadlessMobileSessionTabs(
-    existing: RuntimeMobileSessionTabsSnapshot,
-    incoming?: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionSnapshotTab[] {
-    const incomingIds = new Set(
-      incoming?.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
-    )
-    return existing.tabs.filter((tab) => {
-      if (this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id))) {
-        return false
-      }
-      return this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
-    })
-  }
-
-  private shouldPreserveHeadlessMobileSessionTab(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionSnapshotTab
-  ): boolean {
-    if (tab.type === 'agent-session') {
-      return true
-    }
-    if (tab.type === 'browser') {
-      const liveClientPage =
-        typeof tab.browserPageId === 'string'
-          ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
-          : undefined
-      if (
-        liveClientPage?.workspaceId === snapshot.worktree &&
-        tab.placement?.kind === 'client' &&
-        sameRuntimeBrowserPlacement(liveClientPage.placement, tab.placement)
-      ) {
-        return true
-      }
-      // Why: headless offscreen browser tabs exist only server-side, so a renderer-graph merge must keep them, not prune as "not in the graph".
-      if (!this.offscreenBrowserBackend) {
-        return false
-      }
-      // Why: in a renderer-based merged snapshot the browser entries can also
-      // be renderer-owned, so only pages the offscreen bridge still lists are
-      // runtime-owned and preservable; a pure renderer epoch preserves none.
-      return (
-        this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
-        (snapshot.publicationEpoch.includes(':headless-merge:') &&
-          typeof tab.browserPageId === 'string' &&
-          this.getLiveBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId))
-      )
-    }
-    if (tab.type !== 'terminal') {
-      return false
-    }
-    // Why: a merged renderer snapshot carries BOTH renderer-owned and
-    // runtime-owned tabs, so the epoch alone must not preserve every terminal —
-    // that resurrects renderer tabs the renderer already closed. Broad
-    // preservation applies only to genuinely headless-built snapshots; in a
-    // renderer-based one, only tabs with a live-or-persisted serve/SSH binding
-    // are runtime-owned and preservable.
-    return (
-      this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
-      this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
-      this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(snapshot.worktree, tab)
-    )
-  }
-
-  private isHeadlessMobileSessionPublication(publicationEpoch: string): boolean {
-    return (
-      publicationEpoch.startsWith('headless:') ||
-      publicationEpoch.startsWith('headless-hydrated:') ||
-      publicationEpoch.includes(':headless-merge:')
-    )
-  }
-
-  // Why: `:headless-merge:` only marks that runtime tabs were merged in — the
-  // BASE epoch still says who published the snapshot. A renderer-based merged
-  // snapshot must not be classified as headless-built, or its renderer tabs
-  // read as runtime-owned.
-  private isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
-    const base = publicationEpoch.split(':headless-merge:')[0]
-    return base.startsWith('headless:') || base.startsWith('headless-hydrated:')
-  }
-
-  private getMergedMobileSessionPublicationEpoch(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
-  ): string {
-    // Why: preserved snapshots can merge repeatedly; strip the prior merge suffix first so the publication epoch stays idempotent.
-    const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
-    const signature = createHash('sha1')
-      .update(
-        preservedTabs
-          .map((tab) =>
-            tab.type === 'terminal'
-              ? `${tab.id}:${tab.parentTabId}:${tab.ptyId ?? ''}:${tab.leafId}`
-              : tab.id
-          )
-          .join('|')
-      )
-      .digest('hex')
-      .slice(0, 12)
-    return `${normalizedPublicationEpoch}:headless-merge:${signature}`
-  }
-
   private readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
     hasLivePlacement: (browserPageId) =>
@@ -33421,22 +28768,6 @@ export class OrcaRuntimeService {
     }
   }
 
-  private notifyMobileSessionTabSnapshots(): void {
-    if (this.mobileSessionTabListeners.size === 0) {
-      return
-    }
-    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
-      const result = this.toMobileSessionTabsResult(snapshot)
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
-      }
-    }
-  }
-
   private getMobileSessionTabsForWorktree(
     worktreeId: string,
     clientNavigationId?: string
@@ -33460,22 +28791,6 @@ export class OrcaRuntimeService {
       this.toMobileSessionTabsResult(snapshot),
       clientNavigationId
     )
-  }
-
-  private emitMobileSessionTabsSnapshotToClient(
-    projected: RuntimeMobileSessionTabsResult,
-    clientNavigationId: string,
-    follow = false
-  ): void {
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      if (subscription.clientNavigationId === clientNavigationId) {
-        subscription.listener(
-          follow ? { ...projected, navigationIntent: 'follow' } : projected,
-          changeSequence
-        )
-      }
-    }
   }
 
   private async resolveMobileMarkdownWorktreeId(
@@ -33872,106 +29187,13 @@ export class OrcaRuntimeService {
     pty: RuntimePtyWorktreeRecord | null,
     options: { preserveQuestionUnderShellTitle?: boolean } = {}
   ): AgentStatusEntry | null {
-    if (!status || !pty) {
-      return status
-    }
-    // Why: pending a human answer is hook-only evidence an idle title cannot renew. A title
-    // reads `permission` only from a vendor glyph or a synthesized `<Agent> - action required`
-    // label, and SYNTHETIC_AGENT_TITLE_PROFILES has no Claude entry (OpenCode opts out), so
-    // `titleConfirmsState` below is unreachable for them. Timestamps can't arbitrate either:
-    // lastAgentStatusRichInvalidatedAtEpochMs moves only on a status-CLASS change while
-    // lastOscTitleEpochMs moves on EVERY write, so Claude's one same-class repaint ~123ms
-    // after PermissionRequest pushed title evidence past a still-current hook and published
-    // `done` — retiring the card while the user was still being asked.
-    // Only under an `idle` title: idle is the ABSENCE of activity evidence, but a `working`
-    // title (agent resumed) or a null/shell/identity-only one (agent released the pane)
-    // contradicts the hook and must still retire the row and its stale question (#11761).
-    // Both names: Claude's PermissionRequest normalizes to `waiting`, not `blocked`.
-    if (
-      (status.state === 'waiting' || status.state === 'blocked') &&
-      pty.lastAgentStatus === 'idle' &&
-      Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    ) {
-      return status
-    }
-    if (
-      options.preserveQuestionUnderShellTitle &&
-      status.interactivePrompt != null &&
-      terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)
-    ) {
-      return status
-    }
-    const richStatusCanOwnTitleInterval =
-      pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
-      status.updatedAt > pty.lastAgentStatusRichInvalidatedAtEpochMs
-    const titleEvidenceAt = pty.lastOscTitleEpochMs
-    if (titleEvidenceAt === null) {
-      return richStatusCanOwnTitleInterval ? status : null
-    }
-    const buildTitleOnlyStatus = (
-      state: AgentStatusEntry['state'],
-      updatedAt: number,
-      stateStartedAt: number
-    ): AgentStatusEntry => ({
-      state,
-      prompt: '',
-      updatedAt,
-      stateStartedAt,
-      paneKey: status.paneKey,
-      stateHistory: [],
-      ...(status.agentType ? { agentType: status.agentType } : {}),
-      ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
-      ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
-      ...(status.tabId ? { tabId: status.tabId } : {}),
-      ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-      ...(status.providerSession ? { providerSession: status.providerSession } : {})
-    })
-    const titleConfirmsState =
-      (pty.lastAgentStatus === 'working' && status.state === 'working') ||
-      (pty.lastAgentStatus === 'permission' &&
-        (status.state === 'blocked' || status.state === 'waiting'))
-    if (!titleConfirmsState) {
-      if (richStatusCanOwnTitleInterval && status.updatedAt >= titleEvidenceAt) {
-        return status
-      }
-      if (
-        pty.lastAgentStatus === null &&
-        !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)
-      ) {
-        return status
-      }
-      const titleState =
-        pty.lastAgentStatus === 'working'
-          ? 'working'
-          : pty.lastAgentStatus === 'permission'
-            ? 'blocked'
-            : 'done'
-      return buildTitleOnlyStatus(
-        titleState,
-        titleEvidenceAt,
-        pty.lastAgentStatusStartedAtEpochMs ?? titleEvidenceAt
-      )
-    }
-    const richStatusIsFresh = Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    const richStatusOwnsCurrentState = richStatusIsFresh && richStatusCanOwnTitleInterval
-    // Fresh explicit evidence from this title interval owns acknowledgement identity.
-    const stateStartedAt = richStatusOwnsCurrentState
-      ? status.stateStartedAt
-      : (pty.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt)
-    if (richStatusOwnsCurrentState) {
-      pty.lastAgentStatusStartedAtEpochMs = stateStartedAt
-    }
-    const updatedAt = Math.max(status.updatedAt, titleEvidenceAt)
-    if (!richStatusOwnsCurrentState) {
-      return buildTitleOnlyStatus(status.state, updatedAt, stateStartedAt)
-    }
-    if (updatedAt === status.updatedAt && stateStartedAt === status.stateStartedAt) {
-      return status
-    }
-    return { ...status, updatedAt, stateStartedAt }
+    return this.hookAgentRowResolutionCommands.renewMobileAgentStatusFromPtyTitle(
+      status,
+      pty,
+      options
+    )
   }
 
-  /** Mobile-friendly status entry for a PTY, aligning agentType and titles with the active owner. */
   private buildPtyMobileAgentStatus(
     pty: RuntimePtyWorktreeRecord | null,
     tab: RuntimeMobileSessionTerminalTab,
@@ -33979,172 +29201,23 @@ export class OrcaRuntimeService {
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    const paneKey = this.getMobileTerminalPaneKey(tab)
-    // Why: neither the OSC-retained row nor a title-derived status can carry a
-    // provider session — only the hook payload does, and headless serve has no
-    // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
-    // transcript to address and sits on the empty state forever.
-    const hookRow = this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
-    // Why: the hook row is evidence in its own right. Returning early on a missing
-    // PTY status/retained row put this check ahead of the only headless carrier, so
-    // an agent that reported its session but never emitted a recognized title got no
-    // `agentStatus` at all — exactly the hook-only case the fallback exists for.
-    if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
-      return {}
-    }
-    const providerSession = hookRow.providerSession
-      ? { providerSession: hookRow.providerSession }
-      : {}
-    const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
-    const trackerOnlyTitle = this.getUnpersistedTrackedTitleForPty(
-      pty?.ptyId ?? leaf?.ptyId ?? null
+    return this.hookAgentRowResolutionCommands.buildPtyMobileAgentStatus(
+      pty,
+      tab,
+      terminalHandle,
+      retained,
+      getHookRowsForPane
     )
-    const ptyTitle = pty
-      ? getLatestAgentCandidateTitle(
-          { title: pty.title, updatedAt: pty.titleUpdatedAt },
-          { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
-        )
-      : leaf
-        ? getLatestAgentCandidateTitle(
-            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
-          )
-        : null
-    const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-    const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
-    if (nonAgentTitle) {
-      // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
-      const hasLiveHookSignal =
-        retained?.payload.interactivePrompt != null ||
-        retained?.payload.toolName != null ||
-        // Why: a pending question is never inherited across hook events (unlike
-        // `toolName`), so it proves the agent is parked on a selector right now.
-        hookRow.live?.payload.interactivePrompt != null ||
-        // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
-        // agentType is the only live signal a hook-only pane can offer — and an agent
-        // that reports over HTTP need never set a title this gate would recognize.
-        // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
-        // this branch publishes `done`. It only keeps the transcript addressable.
-        (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
-      if (!hasLiveHookSignal) {
-        return {}
-      }
-    }
-    // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
-    const ownerAgent =
-      resolvePaneAgentOwner({
-        launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
-        hookAgent: retained?.payload.agentType ?? hookRow.agentType
-      }) ??
-      pty?.foregroundAgent ??
-      null
-    const terminalTitle = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
-      ownerAgent
-    )
-    // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
-    const liveRow = retained ?? this.resolveHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
-    if (liveRow) {
-      const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
-        {
-          ...liveRow.payload,
-          paneKey,
-          updatedAt: liveRow.updatedAt,
-          stateStartedAt: liveRow.stateStartedAt,
-          stateHistory: [],
-          ...(terminalHandle ? { terminalHandle } : {}),
-          ...((pty?.worktreeId ?? liveRow.worktreeId)
-            ? { worktreeId: pty?.worktreeId ?? liveRow.worktreeId }
-            : {}),
-          tabId: tab.parentTabId,
-          terminalTitle,
-          ...providerSession
-        },
-        ownerAgent
-      )
-      // A live question outranks only the shell title that currently obscures it.
-      const renewedStatus = this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty, {
-        preserveQuestionUnderShellTitle: true
-      })
-      if (renewedStatus) {
-        return { agentStatus: renewedStatus }
-      }
-    }
-    // Last resort: the pane's hook evidence is identity only (resume rows, stale
-    // rows, or a row the freshness gate rejected). `done` is the honest
-    // projection — and it is what retires the card once the agent exits.
-    // Why not lastOutputAt: this state is title-derived, so it must be dated by
-    // its evidence. Stamping it with the byte stream made the frame advance on
-    // every output byte, so a paired client's live status could never outrank it.
-    const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
-    const agentType = ownerAgent ?? undefined
-    return {
-      agentStatus: {
-        state:
-          pty?.lastAgentStatus === 'working'
-            ? 'working'
-            : pty?.lastAgentStatus === 'permission'
-              ? 'blocked'
-              : 'done',
-        prompt: '',
-        updatedAt: evidenceAt,
-        stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
-        paneKey,
-        ...(terminalHandle ? { terminalHandle } : {}),
-        ...(agentType ? { agentType } : {}),
-        ...(pty?.worktreeId ? { worktreeId: pty.worktreeId } : {}),
-        tabId: tab.parentTabId,
-        terminalTitle,
-        stateHistory: [],
-        ...providerSession
-      }
-    }
   }
 
-  /** Live hook status to publish for a pane with no retained OSC row, or null when the
-   *  pane's hook evidence only proves identity.
-   *
-   *  Why the freshness rule: `pty.lastAgentStatus` is title-derived and refreshed live,
-   *  so an unconditional hook precedence would let a 29-minute-old `done` erase a pane
-   *  that is visibly working. A pending `interactivePrompt` outranks title evidence at
-   *  any age — the agent is parked on a selector until it answers — and it is also the
-   *  only signal allowed to survive the #1437 non-agent-title suppression. */
   private resolveHookLiveAgentRow(
     live: HookLiveAgentRow | null,
     pty: RuntimePtyWorktreeRecord | null,
     nonAgentTitle: boolean
   ): HookLiveAgentRow | null {
-    if (!live) {
-      return null
-    }
-    if (live.payload.interactivePrompt != null) {
-      return live
-    }
-    // Why only this stamp: it is the sole wall-clock date on the pane's live title,
-    // so it is the only one comparable to a hook `receivedAt`. The sibling
-    // `titleUpdatedAt`/`lastOscTitleAt`/`paneTitleUpdatedAt` fields are observation
-    // sequence numbers, and comparing them here can only ever misfire.
-    return !nonAgentTitle && live.updatedAt >= (pty?.lastOscTitleEpochMs ?? 0) ? live : null
+    return this.hookAgentRowResolutionCommands.resolveHookLiveAgentRow(live, pty, nonAgentTitle)
   }
 
-  /** Hook-reported identity for this pane, newest wins per field.
-   *
-   *  `providerSession` is deliberately unbounded: it is resume identity, not live
-   *  state, it stays correct until the pane relaunches (which overwrites the row
-   *  under the same paneKey), and it is only ever read once an agent is already
-   *  established. Bounding it would blank mobile native chat on an idle session.
-   *
-   *  `agentType` is bounded by the same staleness window the retained OSC path uses,
-   *  because it is the signal that claims an agent owns the pane at all. A user who
-   *  exits the agent leaves `pty.lastAgentStatus` behind forever, so an unbounded
-   *  read would keep offering native chat for what is now a plain shell.
-   *
-   *  `live` is the newest fresh row's status fields — bounded like `agentType` because
-   *  it asserts liveness, and unlike `agentType` it excludes `providerSessionOnly` rows
-   *  with no Pi exception: those carry resume identity, and their status-shaped fields
-   *  are documented transport placeholders that must never reach a client. It also drops
-   *  `restoredUnconfirmed` rows, which `isFreshNonDoneAgentStatus` already treats as
-   *  never-fresh; they still count as `agentType` identity evidence. */
   private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
     providerSession: AgentProviderSessionMetadata | null
     providerSessionAgentType: string | null
@@ -34153,82 +29226,19 @@ export class OrcaRuntimeService {
     agentIsLive: boolean
     live: HookLiveAgentRow | null
   } {
-    let session: AgentStatusIpcPayload | null = null
-    let agent: AgentStatusIpcPayload | null = null
-    let live: AgentStatusIpcPayload | null = null
-    const agentTypeFreshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
-    // Why pane key only: the sibling `terminalHandle` arm this used to carry never
-    // matched. `toAgentStatusIpcPayload` does not emit the field on the hook path
-    // (only the renderer's own store stamps it, and headless serve has no renderer),
-    // and because it is optional TypeScript could not flag the dead comparison.
-    for (const entry of rows) {
-      if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
-        session = entry
-      }
-      if (
-        entry.agentType &&
-        (entry.providerSessionOnly !== true ||
-          (entry.agentType === 'pi' && entry.providerSession != null)) &&
-        entry.receivedAt >= agentTypeFreshAfter &&
-        (!agent || entry.receivedAt > agent.receivedAt)
-      ) {
-        agent = entry
-      }
-      if (
-        entry.providerSessionOnly !== true &&
-        // Why: a row hydrated from last-status.json describes a turn that may have ended
-        // while no receiver was up (#12346), so its `receivedAt` cannot prove liveness —
-        // publishing it would resurrect a zombie question card across a restart.
-        entry.restoredUnconfirmed !== true &&
-        entry.receivedAt >= agentTypeFreshAfter &&
-        (!live || entry.receivedAt > live.receivedAt)
-      ) {
-        live = entry
-      }
-    }
-    return {
-      providerSession: session?.providerSession ?? null,
-      providerSessionAgentType: session?.agentType ?? null,
-      providerSessionReceivedAt: session?.receivedAt ?? null,
-      agentType: agent?.agentType ?? null,
-      // A fresh completed row still projects its terminal `done` status, but it is
-      // past-tense identity evidence and must not outrank process or launch facts.
-      agentIsLive: agent != null && agent.state !== 'done',
-      live: live
-        ? {
-            payload: pickParsedAgentStatusPayload(live),
-            updatedAt: live.receivedAt,
-            stateStartedAt: live.stateStartedAt ?? live.receivedAt,
-            ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
-          }
-        : null
-    }
+    return this.hookAgentRowResolutionCommands.getHookAgentRowForPane(rows)
   }
 
-  /** Retained OSC 9999 hook row for this mobile tab if still fresh; looked up by pane identity, then PTY ownership (legacy `pane:N` ids can drift). */
   private getFreshRetainedAgentStatusForMobileTab(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
     tab: RuntimeMobileSessionTerminalTab
   ): RuntimeAgentRowSnapshot | null {
-    let retained = this.latestAgentStatusByPaneKey.get(paneKey) ?? null
-    if (!retained) {
-      const ptyId = pty?.ptyId ?? tab.ptyId ?? null
-      if (ptyId) {
-        for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
-          if (snapshot.ptyId !== ptyId) {
-            continue
-          }
-          if (!retained || snapshot.updatedAt > retained.updatedAt) {
-            retained = snapshot
-          }
-        }
-      }
-    }
-    if (!retained || Date.now() - retained.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-      return null
-    }
-    return retained
+    return this.hookAgentRowResolutionCommands.getFreshRetainedAgentStatusForMobileTab(
+      paneKey,
+      pty,
+      tab
+    )
   }
 
   private findPtyForMobileTerminalTab(
@@ -34236,54 +29246,25 @@ export class OrcaRuntimeService {
     tab: RuntimeMobileSessionTerminalTab,
     options: { allowWorktreeOnlyMatch?: boolean } = {}
   ): RuntimePtyWorktreeRecord | null {
-    const snapshotPtyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
-    const paneKey = this.getMobileTerminalPaneKey(tab)
-    if (snapshotPtyId) {
-      const pty = this.ptysById.get(snapshotPtyId)
-      if (!pty) {
-        return null
-      }
-      // Why: persisted PTY ids can collide with unrelated provider ids after restart; only a matching spawn-time pane identity is safe to expose.
-      if (this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
-        return pty
-      }
-      if (
-        options.allowWorktreeOnlyMatch === true &&
-        pty.worktreeId === worktreeId &&
-        pty.tabId === null &&
-        pty.paneKey === null
-      ) {
-        return pty
-      }
-      return null
-    }
-    const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
-    if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
-      paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
-    }
-    for (const pty of this.ptysById.values()) {
-      if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
-        return pty
-      }
-    }
-    return null
+    return this.hookAgentRowResolutionCommands.findPtyForMobileTerminalTab(worktreeId, tab, options)
   }
 
   private getMobileTerminalPaneKey(tab: RuntimeMobileSessionTerminalTab): string {
-    if (isTerminalLeafId(tab.leafId)) {
-      return makePaneKey(tab.parentTabId, tab.leafId)
-    }
-    const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
-    return `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+    return this.hookAgentRowResolutionCommands.getMobileTerminalPaneKey(tab)
   }
 
   private mobileTerminalTabMatchesPty(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab,
     pty: RuntimePtyWorktreeRecord,
-    paneKey = this.getMobileTerminalPaneKey(tab)
+    paneKey = this.hookAgentRowResolutionCommands.getMobileTerminalPaneKey(tab)
   ): boolean {
-    return pty.worktreeId === worktreeId && pty.tabId === tab.parentTabId && pty.paneKey === paneKey
+    return this.hookAgentRowResolutionCommands.mobileTerminalTabMatchesPty(
+      worktreeId,
+      tab,
+      pty,
+      paneKey
+    )
   }
 
   // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
@@ -34327,168 +29308,24 @@ export class OrcaRuntimeService {
   private buildAgentOrchestrationByPaneKey():
     | Record<string, AgentStatusOrchestrationContext>
     | undefined {
-    const db = this.getOrchestrationDbIfAvailable()
-    if (!db) {
-      return undefined
-    }
-    // Why: this runs on every 16ms graph publish (title/status churn). With no
-    // dispatch rows — the overwhelming majority who never orchestrate — the
-    // per-terminal query fan-out below can only ever yield an empty result, so
-    // skip it wholesale via the DB's cached emptiness probe. Optional call so
-    // partial test-injected DBs without the probe fall through to the scan.
-    if (db.hasAnyDispatchContexts?.() === false) {
-      return undefined
-    }
-    const contexts: Record<string, AgentStatusOrchestrationContext> = {}
-    const queriedHandles = new Set<string>()
-    for (const leaf of this.leaves.values()) {
-      if (!leaf.ptyId) {
-        continue
-      }
-      const handle = this.issueHandle(leaf)
-      queriedHandles.add(handle)
-      const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
-      if (context) {
-        contexts[this.makeRuntimePaneKey(leaf)] = context
-      }
-    }
-    for (const pty of this.ptysById.values()) {
-      if (!pty.paneKey || contexts[pty.paneKey]) {
-        continue
-      }
-      const handle = this.issuePtyHandle(pty)
-      if (queriedHandles.has(handle)) {
-        continue
-      }
-      queriedHandles.add(handle)
-      const context = this.getAgentStatusOrchestrationContextForHandle(handle, db)
-      if (context) {
-        contexts[pty.paneKey] = context
-      }
-    }
-    return Object.keys(contexts).length > 0 ? contexts : undefined
+    return this.hookAgentRowResolutionCommands.buildAgentOrchestrationByPaneKey()
   }
 
   private getAgentStatusOrchestrationContextForHandle(
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): AgentStatusOrchestrationContext | undefined {
-    // Why: active dispatch is authoritative for reused terminals; settled context stale-groups later work once its row is gone.
-    const dispatch =
-      db?.getActiveDispatchForTerminal?.(handle) ??
-      this.getRecentSettledDispatchForTerminal(handle, db)
-    if (!dispatch) {
-      return undefined
-    }
-    const task = db?.getTask?.(dispatch.task_id, dispatch.run_id)
-    const display =
-      typeof task?.spec === 'string'
-        ? buildOrchestrationTaskDisplayMetadata({
-            spec: task.spec,
-            taskTitle: task.task_title,
-            displayName: task.display_name
-          })
-        : { taskTitle: '', displayName: '' }
-    const owningRun =
-      task?.run_id && task.run_id === dispatch.run_id ? db?.getRun?.(dispatch.run_id) : undefined
-    const runCoordinatorHandle = owningRun?.coordinator_handle ?? undefined
-    const legacyActiveRun =
-      owningRun?.legacy === 1 && (dispatch.status === 'pending' || dispatch.status === 'dispatched')
-        ? db?.getActiveCoordinatorRun?.()
-        : undefined
-    // Why: legacy coordinator runs have no durable task ownership, so fail closed across worktrees.
-    const handleWorktreeId = legacyActiveRun ? this.getWorktreeIdForTerminalHandle(handle) : null
-    const legacyCoordinatorWorktreeId = legacyActiveRun
-      ? this.getWorktreeIdForTerminalHandle(legacyActiveRun.coordinator_handle)
-      : null
-    const scopedLegacyActiveRun =
-      legacyActiveRun &&
-      handleWorktreeId &&
-      legacyCoordinatorWorktreeId &&
-      runtimeWorktreeIdsEqual(legacyCoordinatorWorktreeId, handleWorktreeId)
-        ? legacyActiveRun
-        : undefined
-    const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
-    const orchestrationRunId = owningRun?.legacy === 0 ? owningRun.id : scopedLegacyActiveRun?.id
-    const creatorPaneKey = task?.created_by_pane_key
-    const creatorPaneHandle = creatorPaneKey
-      ? this.getTerminalHandleForPaneKey(creatorPaneKey)
-      : null
-    const creatorAuthority = creatorPaneHandle
-      ? this.getOrchestrationDispatchAuthority(creatorPaneHandle)
-      : null
-    const storedCreatorPane = creatorPaneKey ? parsePaneKey(creatorPaneKey) : null
-    const currentCreatorPane = creatorAuthority?.paneKey
-      ? parsePaneKey(creatorAuthority.paneKey)
-      : null
-    const sameCreatorPane = Boolean(
-      creatorPaneKey &&
-      creatorAuthority?.paneKey &&
-      (creatorPaneKey === creatorAuthority.paneKey ||
-        (storedCreatorPane &&
-          currentCreatorPane &&
-          storedCreatorPane.leafId === currentCreatorPane.leafId))
+    return this.hookAgentRowResolutionCommands.getAgentStatusOrchestrationContextForHandle(
+      handle,
+      db
     )
-    const paneRun = creatorPaneKey ? db?.getCurrentRunForPane?.(creatorPaneKey) : undefined
-    const sameRunCreatorDispatch = Boolean(
-      task?.creator_dispatch_id &&
-      task.creator_dispatch_run_id === owningRun?.id &&
-      task.creator_dispatch_pane_key &&
-      task.creator_dispatch_process_incarnation === task.created_by_process_incarnation &&
-      parsePaneKey(task.creator_dispatch_pane_key)?.leafId === storedCreatorPane?.leafId
-    )
-    const currentCreatorHandle =
-      owningRun?.legacy === 0 &&
-      task?.created_by_run_generation === owningRun.consumer_generation &&
-      task.created_by_process_incarnation === creatorAuthority?.processIncarnation &&
-      sameCreatorPane &&
-      (paneRun
-        ? paneRun.id === owningRun.id &&
-          paneRun.consumer_generation === task.created_by_run_generation
-        : sameRunCreatorDispatch)
-        ? (creatorPaneHandle ?? undefined)
-        : undefined
-    const parentTerminalHandle =
-      currentCreatorHandle ??
-      (coordinatorHandle && coordinatorHandle !== handle ? coordinatorHandle : undefined)
-    const parentPaneKey = parentTerminalHandle
-      ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
-      : undefined
-
-    return {
-      taskId: dispatch.task_id,
-      dispatchId: dispatch.id,
-      dispatchStatus: dispatch.status,
-      ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
-      ...(display.displayName ? { displayName: display.displayName } : {}),
-      ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
-      ...(parentPaneKey ? { parentPaneKey } : {}),
-      ...(coordinatorHandle ? { coordinatorHandle } : {}),
-      ...(orchestrationRunId ? { orchestrationRunId } : {})
-    }
   }
 
   private getRecentSettledDispatchForTerminal(
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): ReturnType<OrchestrationDb['getLatestDispatchForTerminal']> {
-    const dispatch = db?.getLatestDispatchForTerminal?.(handle)
-    if (
-      !dispatch?.completed_at ||
-      dispatch.status === 'pending' ||
-      dispatch.status === 'dispatched'
-    ) {
-      return undefined
-    }
-    const completedAtMs = Date.parse(
-      dispatch.completed_at.includes('T')
-        ? dispatch.completed_at
-        : `${dispatch.completed_at.replace(' ', 'T')}Z`
-    )
-    if (!Number.isFinite(completedAtMs)) {
-      return undefined
-    }
-    return Date.now() - completedAtMs <= AGENT_STATUS_STALE_AFTER_MS ? dispatch : undefined
+    return this.hookAgentRowResolutionCommands.getRecentSettledDispatchForTerminal(handle, db)
   }
 
   // Why: public because automation completion watching runs in main but the
@@ -34510,64 +29347,15 @@ export class OrcaRuntimeService {
   }
 
   private getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
-    const parsed = parsePaneKey(paneKey)
-    let leafPty: RuntimePtyWorktreeRecord | null = null
-    if (parsed) {
-      const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
-      const pty = leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-      if (pty?.connected) {
-        return pty
-      }
-      leafPty = pty ?? null
-      for (const candidate of this.leaves.values()) {
-        if (candidate.leafId !== parsed.leafId || !candidate.ptyId) {
-          continue
-        }
-        const remintedPty = this.ptysById.get(candidate.ptyId)
-        if (remintedPty?.connected) {
-          return remintedPty
-        }
-        leafPty ??= remintedPty ?? null
-      }
-    }
-    let newestMatch: RuntimePtyWorktreeRecord | null = null
-    for (const pty of this.ptysById.values()) {
-      const ptyPane = parsePaneKey(pty.paneKey ?? '')
-      if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
-        if (pty.connected) {
-          return pty
-        }
-        newestMatch = pty
-      }
-    }
-    return leafPty ?? newestMatch
+    return this.hookAgentRowResolutionCommands.getPtyRecordForPaneKey(paneKey)
   }
 
   private getPaneKeyForTerminalHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
-    if (livePty?.pty.paneKey) {
-      return livePty.pty.paneKey
-    }
-    const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
-    }
-    if (!isTerminalLeafId(record.leafId)) {
-      return null
-    }
-    return makePaneKey(record.tabId, record.leafId)
+    return this.hookAgentRowResolutionCommands.getPaneKeyForTerminalHandle(handle)
   }
 
   private getWorktreeIdForTerminalHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
-    if (livePty?.pty.worktreeId) {
-      return livePty.pty.worktreeId
-    }
-    const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
-    }
-    return record.worktreeId
+    return this.hookAgentRowResolutionCommands.getWorktreeIdForTerminalHandle(handle)
   }
 
   private setPtyManagementTitleFromObservedTitle(
@@ -34818,33 +29606,7 @@ export class OrcaRuntimeService {
   >()
 
   private writeOrchestrationPointerPty(ptyId: string, data: string): boolean | Promise<boolean> {
-    try {
-      if (data === '\r') {
-        const admitted = this.orchestrationPointerAdmissionByPtyId.get(ptyId)
-        this.orchestrationPointerAdmissionByPtyId.delete(ptyId)
-        if (admitted) {
-          // Throws when the lease moved under the in-flight pointer, withholding the submit.
-          agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-        }
-      } else {
-        const admission = agentSessionPtyWriteGate.admit(ptyId)
-        if (!admission.admitted) {
-          this.orchestrationPointerAdmissionByPtyId.delete(ptyId)
-          // Preserve the controller's own refusal reporting for internal deliveries.
-          return this.ptyController?.write(ptyId, data) ?? false
-        }
-        this.orchestrationPointerAdmissionByPtyId.set(ptyId, {
-          sessionId: admission.sessionId,
-          runtimeFence: admission.runtimeFence
-        })
-      }
-      if (this.ptyController?.writeWithSettlement) {
-        return this.ptyController.writeWithSettlement(ptyId, data).catch(() => false)
-      }
-      return this.ptyController?.write(ptyId, data) ?? false
-    } catch {
-      return false
-    }
+    return this.orchestrationCommands.writeOrchestrationPointerPty(ptyId, data)
   }
 
   private retireOrchestrationMailboxDeliveryForPty(ptyId: string): void {
@@ -35774,69 +30536,140 @@ export class OrcaRuntimeService {
   }
 
   // ── Linear integration ──
-  linearConnect: RuntimeLinearCommands['linearConnect'] = this.linearCommands.linearConnect.bind(this.linearCommands)
-  linearDisconnect: RuntimeLinearCommands['linearDisconnect'] = this.linearCommands.linearDisconnect.bind(this.linearCommands)
-  linearSelectWorkspace: RuntimeLinearCommands['linearSelectWorkspace'] = this.linearCommands.linearSelectWorkspace.bind(this.linearCommands)
-  linearStatus: RuntimeLinearCommands['linearStatus'] = this.linearCommands.linearStatus.bind(this.linearCommands)
-  linearTestConnection: RuntimeLinearCommands['linearTestConnection'] = this.linearCommands.linearTestConnection.bind(this.linearCommands)
-  linearSearchIssues: RuntimeLinearCommands['linearSearchIssues'] = this.linearCommands.linearSearchIssues.bind(this.linearCommands)
-  linearSearchForAgents: RuntimeLinearCommands['linearSearchForAgents'] = this.linearCommands.linearSearchForAgents.bind(this.linearCommands)
-  linearIssueContext: RuntimeLinearCommands['linearIssueContext'] = this.linearCommands.linearIssueContext.bind(this.linearCommands)
-  linearTeamListForAgents: RuntimeLinearCommands['linearTeamListForAgents'] = this.linearCommands.linearTeamListForAgents.bind(this.linearCommands)
-  linearTeamMembersForAgents: RuntimeLinearCommands['linearTeamMembersForAgents'] = this.linearCommands.linearTeamMembersForAgents.bind(this.linearCommands)
-  linearTeamStatesForAgents: RuntimeLinearCommands['linearTeamStatesForAgents'] = this.linearCommands.linearTeamStatesForAgents.bind(this.linearCommands)
-  linearTeamLabelsForAgents: RuntimeLinearCommands['linearTeamLabelsForAgents'] = this.linearCommands.linearTeamLabelsForAgents.bind(this.linearCommands)
-  linearProjectListForAgents: RuntimeLinearCommands['linearProjectListForAgents'] = this.linearCommands.linearProjectListForAgents.bind(this.linearCommands)
-  linearIssueListForAgents: RuntimeLinearCommands['linearIssueListForAgents'] = this.linearCommands.linearIssueListForAgents.bind(this.linearCommands)
-  linearMcpIssueList: RuntimeLinearCommands['linearMcpIssueList'] = this.linearCommands.linearMcpIssueList.bind(this.linearCommands)
-  linearResolveCurrentIssue: RuntimeLinearCommands['linearResolveCurrentIssue'] = this.linearCommands.linearResolveCurrentIssue.bind(this.linearCommands)
-  linearListIssues: RuntimeLinearCommands['linearListIssues'] = this.linearCommands.linearListIssues.bind(this.linearCommands)
-  linearCreateIssue: RuntimeLinearCommands['linearCreateIssue'] = this.linearCommands.linearCreateIssue.bind(this.linearCommands)
-  linearGetIssue: RuntimeLinearCommands['linearGetIssue'] = this.linearCommands.linearGetIssue.bind(this.linearCommands)
-  linearUpdateIssue: RuntimeLinearCommands['linearUpdateIssue'] = this.linearCommands.linearUpdateIssue.bind(this.linearCommands)
-  linearAddIssueComment: RuntimeLinearCommands['linearAddIssueComment'] = this.linearCommands.linearAddIssueComment.bind(this.linearCommands)
-  linearIssueSetState: RuntimeLinearCommands['linearIssueSetState'] = this.linearCommands.linearIssueSetState.bind(this.linearCommands)
-  linearIssueRelationWrite: RuntimeLinearCommands['linearIssueRelationWrite'] = this.linearCommands.linearIssueRelationWrite.bind(this.linearCommands)
-  linearSaveIssue: RuntimeLinearCommands['linearSaveIssue'] = this.linearCommands.linearSaveIssue.bind(this.linearCommands)
-  linearIssueUpdateTask: RuntimeLinearCommands['linearIssueUpdateTask'] = this.linearCommands.linearIssueUpdateTask.bind(this.linearCommands)
-  linearIssueAddComment: RuntimeLinearCommands['linearIssueAddComment'] = this.linearCommands.linearIssueAddComment.bind(this.linearCommands)
-  linearIssueAttachLink: RuntimeLinearCommands['linearIssueAttachLink'] = this.linearCommands.linearIssueAttachLink.bind(this.linearCommands)
-  linearIssueCreate: RuntimeLinearCommands['linearIssueCreate'] = this.linearCommands.linearIssueCreate.bind(this.linearCommands)
-  linearIssueComments: RuntimeLinearCommands['linearIssueComments'] = this.linearCommands.linearIssueComments.bind(this.linearCommands)
-  linearListTeams: RuntimeLinearCommands['linearListTeams'] = this.linearCommands.linearListTeams.bind(this.linearCommands)
-  linearListProjects: RuntimeLinearCommands['linearListProjects'] = this.linearCommands.linearListProjects.bind(this.linearCommands)
-  linearCreateProject: RuntimeLinearCommands['linearCreateProject'] = this.linearCommands.linearCreateProject.bind(this.linearCommands)
-  linearGetProject: RuntimeLinearCommands['linearGetProject'] = this.linearCommands.linearGetProject.bind(this.linearCommands)
-  linearListProjectIssues: RuntimeLinearCommands['linearListProjectIssues'] = this.linearCommands.linearListProjectIssues.bind(this.linearCommands)
-  linearListCustomViews: RuntimeLinearCommands['linearListCustomViews'] = this.linearCommands.linearListCustomViews.bind(this.linearCommands)
-  linearGetCustomView: RuntimeLinearCommands['linearGetCustomView'] = this.linearCommands.linearGetCustomView.bind(this.linearCommands)
-  linearListCustomViewIssues: RuntimeLinearCommands['linearListCustomViewIssues'] = this.linearCommands.linearListCustomViewIssues.bind(this.linearCommands)
-  linearListCustomViewProjects: RuntimeLinearCommands['linearListCustomViewProjects'] = this.linearCommands.linearListCustomViewProjects.bind(this.linearCommands)
-  linearTeamStates: RuntimeLinearCommands['linearTeamStates'] = this.linearCommands.linearTeamStates.bind(this.linearCommands)
-  linearTeamLabels: RuntimeLinearCommands['linearTeamLabels'] = this.linearCommands.linearTeamLabels.bind(this.linearCommands)
-  linearTeamMembers: RuntimeLinearCommands['linearTeamMembers'] = this.linearCommands.linearTeamMembers.bind(this.linearCommands)
-  jiraConnect: RuntimeLinearCommands['jiraConnect'] = this.linearCommands.jiraConnect.bind(this.linearCommands)
-  jiraDisconnect: RuntimeLinearCommands['jiraDisconnect'] = this.linearCommands.jiraDisconnect.bind(this.linearCommands)
-  jiraSelectSite: RuntimeLinearCommands['jiraSelectSite'] = this.linearCommands.jiraSelectSite.bind(this.linearCommands)
-  jiraStatus: RuntimeLinearCommands['jiraStatus'] = this.linearCommands.jiraStatus.bind(this.linearCommands)
-  jiraReadStatus: RuntimeLinearCommands['jiraReadStatus'] = this.linearCommands.jiraReadStatus.bind(this.linearCommands)
-  jiraTestConnection: RuntimeLinearCommands['jiraTestConnection'] = this.linearCommands.jiraTestConnection.bind(this.linearCommands)
-  jiraSearchIssues: RuntimeLinearCommands['jiraSearchIssues'] = this.linearCommands.jiraSearchIssues.bind(this.linearCommands)
-  jiraListIssues: RuntimeLinearCommands['jiraListIssues'] = this.linearCommands.jiraListIssues.bind(this.linearCommands)
-  jiraCreateIssue: RuntimeLinearCommands['jiraCreateIssue'] = this.linearCommands.jiraCreateIssue.bind(this.linearCommands)
-  jiraGetIssue: RuntimeLinearCommands['jiraGetIssue'] = this.linearCommands.jiraGetIssue.bind(this.linearCommands)
-  jiraLookupIssueSummary: RuntimeLinearCommands['jiraLookupIssueSummary'] = this.linearCommands.jiraLookupIssueSummary.bind(this.linearCommands)
-  jiraUpdateIssue: RuntimeLinearCommands['jiraUpdateIssue'] = this.linearCommands.jiraUpdateIssue.bind(this.linearCommands)
-  jiraAddIssueComment: RuntimeLinearCommands['jiraAddIssueComment'] = this.linearCommands.jiraAddIssueComment.bind(this.linearCommands)
-  jiraIssueComments: RuntimeLinearCommands['jiraIssueComments'] = this.linearCommands.jiraIssueComments.bind(this.linearCommands)
-  jiraListProjects: RuntimeLinearCommands['jiraListProjects'] = this.linearCommands.jiraListProjects.bind(this.linearCommands)
-  jiraListIssueTypes: RuntimeLinearCommands['jiraListIssueTypes'] = this.linearCommands.jiraListIssueTypes.bind(this.linearCommands)
-  jiraListCreateFields: RuntimeLinearCommands['jiraListCreateFields'] = this.linearCommands.jiraListCreateFields.bind(this.linearCommands)
-  jiraListPriorities: RuntimeLinearCommands['jiraListPriorities'] = this.linearCommands.jiraListPriorities.bind(this.linearCommands)
-  jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers'] = this.linearCommands.jiraListAssignableUsers.bind(this.linearCommands)
-  jiraListTransitions: RuntimeLinearCommands['jiraListTransitions'] = this.linearCommands.jiraListTransitions.bind(this.linearCommands)
-  jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder'] = this.linearCommands.jiraGetProjectStatusOrder.bind(this.linearCommands)
-
+  linearConnect: RuntimeLinearCommands['linearConnect'] = this.linearCommands.linearConnect.bind(
+    this.linearCommands
+  )
+  linearDisconnect: RuntimeLinearCommands['linearDisconnect'] =
+    this.linearCommands.linearDisconnect.bind(this.linearCommands)
+  linearSelectWorkspace: RuntimeLinearCommands['linearSelectWorkspace'] =
+    this.linearCommands.linearSelectWorkspace.bind(this.linearCommands)
+  linearStatus: RuntimeLinearCommands['linearStatus'] = this.linearCommands.linearStatus.bind(
+    this.linearCommands
+  )
+  linearTestConnection: RuntimeLinearCommands['linearTestConnection'] =
+    this.linearCommands.linearTestConnection.bind(this.linearCommands)
+  linearSearchIssues: RuntimeLinearCommands['linearSearchIssues'] =
+    this.linearCommands.linearSearchIssues.bind(this.linearCommands)
+  linearSearchForAgents: RuntimeLinearCommands['linearSearchForAgents'] =
+    this.linearCommands.linearSearchForAgents.bind(this.linearCommands)
+  linearIssueContext: RuntimeLinearCommands['linearIssueContext'] =
+    this.linearCommands.linearIssueContext.bind(this.linearCommands)
+  linearTeamListForAgents: RuntimeLinearCommands['linearTeamListForAgents'] =
+    this.linearCommands.linearTeamListForAgents.bind(this.linearCommands)
+  linearTeamMembersForAgents: RuntimeLinearCommands['linearTeamMembersForAgents'] =
+    this.linearCommands.linearTeamMembersForAgents.bind(this.linearCommands)
+  linearTeamStatesForAgents: RuntimeLinearCommands['linearTeamStatesForAgents'] =
+    this.linearCommands.linearTeamStatesForAgents.bind(this.linearCommands)
+  linearTeamLabelsForAgents: RuntimeLinearCommands['linearTeamLabelsForAgents'] =
+    this.linearCommands.linearTeamLabelsForAgents.bind(this.linearCommands)
+  linearProjectListForAgents: RuntimeLinearCommands['linearProjectListForAgents'] =
+    this.linearCommands.linearProjectListForAgents.bind(this.linearCommands)
+  linearIssueListForAgents: RuntimeLinearCommands['linearIssueListForAgents'] =
+    this.linearCommands.linearIssueListForAgents.bind(this.linearCommands)
+  linearMcpIssueList: RuntimeLinearCommands['linearMcpIssueList'] =
+    this.linearCommands.linearMcpIssueList.bind(this.linearCommands)
+  linearResolveCurrentIssue: RuntimeLinearCommands['linearResolveCurrentIssue'] =
+    this.linearCommands.linearResolveCurrentIssue.bind(this.linearCommands)
+  linearListIssues: RuntimeLinearCommands['linearListIssues'] =
+    this.linearCommands.linearListIssues.bind(this.linearCommands)
+  linearCreateIssue: RuntimeLinearCommands['linearCreateIssue'] =
+    this.linearCommands.linearCreateIssue.bind(this.linearCommands)
+  linearGetIssue: RuntimeLinearCommands['linearGetIssue'] = this.linearCommands.linearGetIssue.bind(
+    this.linearCommands
+  )
+  linearUpdateIssue: RuntimeLinearCommands['linearUpdateIssue'] =
+    this.linearCommands.linearUpdateIssue.bind(this.linearCommands)
+  linearAddIssueComment: RuntimeLinearCommands['linearAddIssueComment'] =
+    this.linearCommands.linearAddIssueComment.bind(this.linearCommands)
+  linearIssueSetState: RuntimeLinearCommands['linearIssueSetState'] =
+    this.linearCommands.linearIssueSetState.bind(this.linearCommands)
+  linearIssueRelationWrite: RuntimeLinearCommands['linearIssueRelationWrite'] =
+    this.linearCommands.linearIssueRelationWrite.bind(this.linearCommands)
+  linearSaveIssue: RuntimeLinearCommands['linearSaveIssue'] =
+    this.linearCommands.linearSaveIssue.bind(this.linearCommands)
+  linearIssueUpdateTask: RuntimeLinearCommands['linearIssueUpdateTask'] =
+    this.linearCommands.linearIssueUpdateTask.bind(this.linearCommands)
+  linearIssueAddComment: RuntimeLinearCommands['linearIssueAddComment'] =
+    this.linearCommands.linearIssueAddComment.bind(this.linearCommands)
+  linearIssueAttachLink: RuntimeLinearCommands['linearIssueAttachLink'] =
+    this.linearCommands.linearIssueAttachLink.bind(this.linearCommands)
+  linearIssueCreate: RuntimeLinearCommands['linearIssueCreate'] =
+    this.linearCommands.linearIssueCreate.bind(this.linearCommands)
+  linearIssueComments: RuntimeLinearCommands['linearIssueComments'] =
+    this.linearCommands.linearIssueComments.bind(this.linearCommands)
+  linearListTeams: RuntimeLinearCommands['linearListTeams'] =
+    this.linearCommands.linearListTeams.bind(this.linearCommands)
+  linearListProjects: RuntimeLinearCommands['linearListProjects'] =
+    this.linearCommands.linearListProjects.bind(this.linearCommands)
+  linearCreateProject: RuntimeLinearCommands['linearCreateProject'] =
+    this.linearCommands.linearCreateProject.bind(this.linearCommands)
+  linearGetProject: RuntimeLinearCommands['linearGetProject'] =
+    this.linearCommands.linearGetProject.bind(this.linearCommands)
+  linearListProjectIssues: RuntimeLinearCommands['linearListProjectIssues'] =
+    this.linearCommands.linearListProjectIssues.bind(this.linearCommands)
+  linearListCustomViews: RuntimeLinearCommands['linearListCustomViews'] =
+    this.linearCommands.linearListCustomViews.bind(this.linearCommands)
+  linearGetCustomView: RuntimeLinearCommands['linearGetCustomView'] =
+    this.linearCommands.linearGetCustomView.bind(this.linearCommands)
+  linearListCustomViewIssues: RuntimeLinearCommands['linearListCustomViewIssues'] =
+    this.linearCommands.linearListCustomViewIssues.bind(this.linearCommands)
+  linearListCustomViewProjects: RuntimeLinearCommands['linearListCustomViewProjects'] =
+    this.linearCommands.linearListCustomViewProjects.bind(this.linearCommands)
+  linearTeamStates: RuntimeLinearCommands['linearTeamStates'] =
+    this.linearCommands.linearTeamStates.bind(this.linearCommands)
+  linearTeamLabels: RuntimeLinearCommands['linearTeamLabels'] =
+    this.linearCommands.linearTeamLabels.bind(this.linearCommands)
+  linearTeamMembers: RuntimeLinearCommands['linearTeamMembers'] =
+    this.linearCommands.linearTeamMembers.bind(this.linearCommands)
+  jiraConnect: RuntimeLinearCommands['jiraConnect'] = this.linearCommands.jiraConnect.bind(
+    this.linearCommands
+  )
+  jiraDisconnect: RuntimeLinearCommands['jiraDisconnect'] = this.linearCommands.jiraDisconnect.bind(
+    this.linearCommands
+  )
+  jiraSelectSite: RuntimeLinearCommands['jiraSelectSite'] = this.linearCommands.jiraSelectSite.bind(
+    this.linearCommands
+  )
+  jiraStatus: RuntimeLinearCommands['jiraStatus'] = this.linearCommands.jiraStatus.bind(
+    this.linearCommands
+  )
+  jiraReadStatus: RuntimeLinearCommands['jiraReadStatus'] = this.linearCommands.jiraReadStatus.bind(
+    this.linearCommands
+  )
+  jiraTestConnection: RuntimeLinearCommands['jiraTestConnection'] =
+    this.linearCommands.jiraTestConnection.bind(this.linearCommands)
+  jiraSearchIssues: RuntimeLinearCommands['jiraSearchIssues'] =
+    this.linearCommands.jiraSearchIssues.bind(this.linearCommands)
+  jiraListIssues: RuntimeLinearCommands['jiraListIssues'] = this.linearCommands.jiraListIssues.bind(
+    this.linearCommands
+  )
+  jiraCreateIssue: RuntimeLinearCommands['jiraCreateIssue'] =
+    this.linearCommands.jiraCreateIssue.bind(this.linearCommands)
+  jiraGetIssue: RuntimeLinearCommands['jiraGetIssue'] = this.linearCommands.jiraGetIssue.bind(
+    this.linearCommands
+  )
+  jiraLookupIssueSummary: RuntimeLinearCommands['jiraLookupIssueSummary'] =
+    this.linearCommands.jiraLookupIssueSummary.bind(this.linearCommands)
+  jiraUpdateIssue: RuntimeLinearCommands['jiraUpdateIssue'] =
+    this.linearCommands.jiraUpdateIssue.bind(this.linearCommands)
+  jiraAddIssueComment: RuntimeLinearCommands['jiraAddIssueComment'] =
+    this.linearCommands.jiraAddIssueComment.bind(this.linearCommands)
+  jiraIssueComments: RuntimeLinearCommands['jiraIssueComments'] =
+    this.linearCommands.jiraIssueComments.bind(this.linearCommands)
+  jiraListProjects: RuntimeLinearCommands['jiraListProjects'] =
+    this.linearCommands.jiraListProjects.bind(this.linearCommands)
+  jiraListIssueTypes: RuntimeLinearCommands['jiraListIssueTypes'] =
+    this.linearCommands.jiraListIssueTypes.bind(this.linearCommands)
+  jiraListCreateFields: RuntimeLinearCommands['jiraListCreateFields'] =
+    this.linearCommands.jiraListCreateFields.bind(this.linearCommands)
+  jiraListPriorities: RuntimeLinearCommands['jiraListPriorities'] =
+    this.linearCommands.jiraListPriorities.bind(this.linearCommands)
+  jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers'] =
+    this.linearCommands.jiraListAssignableUsers.bind(this.linearCommands)
+  jiraListTransitions: RuntimeLinearCommands['jiraListTransitions'] =
+    this.linearCommands.jiraListTransitions.bind(this.linearCommands)
+  jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder'] =
+    this.linearCommands.jiraGetProjectStatusOrder.bind(this.linearCommands)
 
   // ── Browser automation ──
 
@@ -35872,6 +30705,21 @@ export class OrcaRuntimeService {
       this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId)
   })
 
+  private readonly browserScreencastCommands = new RuntimeBrowserScreencastCommands({
+    browserCommands: this.browserCommands,
+    activeBrowserScreencastsByConnection: this.activeBrowserScreencastsByConnection,
+    activeBrowserScreencastsByPage: this.activeBrowserScreencastsByPage,
+    browserRemoteViewerPages: this.browserRemoteViewerPages,
+    currentBrowserDriver: this.currentBrowserDriver,
+    getBrowserDriver: (browserPageId) => this.getBrowserDriver(browserPageId),
+    setBrowserDriver: (browserPageId, next) => this.setBrowserDriver(browserPageId, next),
+    publishBrowserRemoteViewers: (browserPageId) => this.publishBrowserRemoteViewers(browserPageId),
+    registerSubscriptionCleanup: (subscriptionId, cleanup, connectionId) =>
+      this.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId),
+    cleanupSubscription: (subscriptionId) => this.cleanupSubscription(subscriptionId),
+    notifier: this.notifier
+  })
+
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
     getEmulatorBridge: () => this.emulatorBridge,
     resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector),
@@ -35882,414 +30730,249 @@ export class OrcaRuntimeService {
   })
 
   browserSnapshot: RuntimeBrowserCommands['browserSnapshot'] =
-    this.browserCommands.browserSnapshot.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSnapshot.bind(this.browserScreencastCommands)
 
-  browserClick: RuntimeBrowserCommands['browserClick'] = this.browserCommands.browserClick.bind(
-    this.browserCommands
-  )
+  browserClick: RuntimeBrowserCommands['browserClick'] =
+    this.browserScreencastCommands.browserClick.bind(this.browserScreencastCommands)
 
-  browserGoto: RuntimeBrowserCommands['browserGoto'] = this.browserCommands.browserGoto.bind(
-    this.browserCommands
-  )
+  browserGoto: RuntimeBrowserCommands['browserGoto'] =
+    this.browserScreencastCommands.browserGoto.bind(this.browserScreencastCommands)
 
-  browserFill: RuntimeBrowserCommands['browserFill'] = this.browserCommands.browserFill.bind(
-    this.browserCommands
-  )
+  browserFill: RuntimeBrowserCommands['browserFill'] =
+    this.browserScreencastCommands.browserFill.bind(this.browserScreencastCommands)
 
-  browserType: RuntimeBrowserCommands['browserType'] = this.browserCommands.browserType.bind(
-    this.browserCommands
-  )
+  browserType: RuntimeBrowserCommands['browserType'] =
+    this.browserScreencastCommands.browserType.bind(this.browserScreencastCommands)
 
-  browserSelect: RuntimeBrowserCommands['browserSelect'] = this.browserCommands.browserSelect.bind(
-    this.browserCommands
-  )
+  browserSelect: RuntimeBrowserCommands['browserSelect'] =
+    this.browserScreencastCommands.browserSelect.bind(this.browserScreencastCommands)
 
-  browserScroll: RuntimeBrowserCommands['browserScroll'] = this.browserCommands.browserScroll.bind(
-    this.browserCommands
-  )
+  browserScroll: RuntimeBrowserCommands['browserScroll'] =
+    this.browserScreencastCommands.browserScroll.bind(this.browserScreencastCommands)
 
-  browserBack: RuntimeBrowserCommands['browserBack'] = this.browserCommands.browserBack.bind(
-    this.browserCommands
-  )
+  browserBack: RuntimeBrowserCommands['browserBack'] =
+    this.browserScreencastCommands.browserBack.bind(this.browserScreencastCommands)
 
-  browserReload: RuntimeBrowserCommands['browserReload'] = this.browserCommands.browserReload.bind(
-    this.browserCommands
-  )
+  browserReload: RuntimeBrowserCommands['browserReload'] =
+    this.browserScreencastCommands.browserReload.bind(this.browserScreencastCommands)
 
   browserScreenshot: RuntimeBrowserCommands['browserScreenshot'] =
-    this.browserCommands.browserScreenshot.bind(this.browserCommands)
+    this.browserScreencastCommands.browserScreenshot.bind(this.browserScreencastCommands)
 
-  async browserScreencast(
-    params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
-    options: {
-      connectionId?: string
-      pairedDeviceId?: string
-      clientKind?: 'mobile' | 'runtime'
-      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-      signal?: AbortSignal
-      emit: (result: BrowserScreencastResult) => void
-    }
-  ): Promise<void> {
-    if (!options.sendBinary) {
-      throw new BrowserError(
-        'browser_error',
-        'Browser screencast requires a binary streaming transport.'
-      )
-    }
+  browserScreencast: RuntimeBrowserCommands['browserScreencast'] =
+    this.browserScreencastCommands.browserScreencast.bind(this.browserScreencastCommands)
 
-    const connectionKey = options.connectionId ?? 'local'
-    const drivesAsMobile = screencastSubscriberDrivesAsMobile(options.clientKind)
-    let existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
-    while (existingStream) {
-      existingStream.cancel()
-      await existingStream.done
-      existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
-    }
-    if (options.signal?.aborted) {
-      throw new BrowserError('browser_error', 'Browser screencast was cancelled.')
-    }
-
-    let screencast: Awaited<ReturnType<RuntimeBrowserCommands['browserScreencast']>> | null = null
-    let registeredSubscriptionId: string | null = null
-    let activeBrowserPageId: string | null = null
-    let activePageStream: BrowserScreencastSubscriber | null = null
-    let ended = false
-    let cancelledBeforeStart = false
-    let readyEmitted = false
-    let resolveActiveDone!: () => void
-    const activeDone = new Promise<void>((resolve) => {
-      resolveActiveDone = resolve
-    })
-    const end = (emitEnd: boolean): void => {
-      if (ended) {
-        return
-      }
-      ended = true
-      screencast?.session.stop()
-      if (emitEnd && screencast) {
-        options.emit({ type: 'end', subscriptionId: screencast.subscriptionId })
-      }
-    }
-    const cancel = (emitEnd = false): void => {
-      if (!screencast) {
-        cancelledBeforeStart = true
-        return
-      }
-      end(emitEnd)
-    }
-    const abortScreencast = (): void => cancel()
-    const sendBinaryAfterReady = (bytes: Uint8Array<ArrayBufferLike>): boolean | void => {
-      if (!readyEmitted) {
-        // Why: clients learn the owning subscription from ready, so CDP frames must stay unacked until the JSON ready event is delivered.
-        return false
-      }
-      return options.sendBinary?.(bytes)
-    }
-
-    // Why: a phone can rotate before the first stream reaches ready (no subscriptionId yet), so a same-socket replacement cancels and waits here instead of racing.
-    this.activeBrowserScreencastsByConnection.set(connectionKey, {
-      cancel,
-      done: activeDone,
-      connectionKey
-    })
-    options.signal?.addEventListener('abort', abortScreencast, { once: true })
-    try {
-      screencast = await this.browserCommands.browserScreencast(params, {
-        sendBinary: sendBinaryAfterReady,
-        emit: options.emit,
-        pairedDeviceId: options.pairedDeviceId
-      })
-      if (cancelledBeforeStart || options.signal?.aborted) {
-        end(false)
-        await screencast.session.done
-        return
-      }
-      activeBrowserPageId = screencast.ready.browserPageId
-      activePageStream = {
-        cancel,
-        done: activeDone,
-        connectionKey,
-        drivesAsMobile
-      }
-      const pageStreams =
-        this.activeBrowserScreencastsByPage.get(activeBrowserPageId) ??
-        new Set<BrowserScreencastSubscriber>()
-      pageStreams.add(activePageStream)
-      this.activeBrowserScreencastsByPage.set(activeBrowserPageId, pageStreams)
-      this.publishBrowserRemoteViewers(activeBrowserPageId)
-      if (drivesAsMobile) {
-        this.setBrowserDriver(activeBrowserPageId, { kind: 'mobile', clientId: connectionKey })
-      }
-
-      // Why: screencast frames are connection-scoped; tie Page.stopScreencast to the exact socket so dropped connections don't leave Chromium streaming.
-      this.registerSubscriptionCleanup(
-        screencast.subscriptionId,
-        () => end(true),
-        options.connectionId
-      )
-      registeredSubscriptionId = screencast.subscriptionId
-      options.emit(screencast.ready)
-      readyEmitted = true
-      // Why: a joining subscriber's viewport snapshot is captured before this gate opens, and
-      // on a static page Chromium emits nothing after it — without the replay the pane stays blank.
-      screencast.flushPendingFrame()
-      await screencast.session.done
-      end(true)
-      this.cleanupSubscription(screencast.subscriptionId)
-    } finally {
-      options.signal?.removeEventListener('abort', abortScreencast)
-      if (!ended) {
-        end(false)
-      }
-      if (registeredSubscriptionId) {
-        this.cleanupSubscription(registeredSubscriptionId)
-      }
-      const active = this.activeBrowserScreencastsByConnection.get(connectionKey)
-      if (active?.done === activeDone) {
-        this.activeBrowserScreencastsByConnection.delete(connectionKey)
-      }
-      if (activeBrowserPageId) {
-        const pageStreams = this.activeBrowserScreencastsByPage.get(activeBrowserPageId)
-        if (activePageStream && pageStreams) {
-          pageStreams.delete(activePageStream)
-          if (pageStreams.size === 0) {
-            this.activeBrowserScreencastsByPage.delete(activeBrowserPageId)
-          }
-        }
-        this.publishBrowserRemoteViewers(activeBrowserPageId)
-        const driver = this.getBrowserDriver(activeBrowserPageId)
-        if (driver.kind === 'mobile' && driver.clientId === connectionKey) {
-          this.setBrowserDriver(
-            activeBrowserPageId,
-            resolveBrowserDriverAfterMobileRelease(pageStreams ?? [])
-          )
-        }
-      }
-      resolveActiveDone()
-    }
-  }
-
-  browserEval: RuntimeBrowserCommands['browserEval'] = this.browserCommands.browserEval.bind(
-    this.browserCommands
-  )
+  browserEval: RuntimeBrowserCommands['browserEval'] =
+    this.browserScreencastCommands.browserEval.bind(this.browserCommands)
 
   browserTabList: RuntimeBrowserCommands['browserTabList'] =
-    this.browserCommands.browserTabList.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabList.bind(this.browserCommands)
   browserProceedCertificate: RuntimeBrowserCommands['browserProceedCertificate'] =
-    this.browserCommands.browserProceedCertificate.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProceedCertificate.bind(this.browserCommands)
 
   browserTabShow: RuntimeBrowserCommands['browserTabShow'] =
-    this.browserCommands.browserTabShow.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabShow.bind(this.browserCommands)
 
   browserTabCurrent: RuntimeBrowserCommands['browserTabCurrent'] =
-    this.browserCommands.browserTabCurrent.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabCurrent.bind(this.browserCommands)
 
   browserTabSwitch: RuntimeBrowserCommands['browserTabSwitch'] =
-    this.browserCommands.browserTabSwitch.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabSwitch.bind(this.browserCommands)
 
-  browserHover: RuntimeBrowserCommands['browserHover'] = this.browserCommands.browserHover.bind(
-    this.browserCommands
-  )
+  browserHover: RuntimeBrowserCommands['browserHover'] =
+    this.browserScreencastCommands.browserHover.bind(this.browserCommands)
 
-  browserDrag: RuntimeBrowserCommands['browserDrag'] = this.browserCommands.browserDrag.bind(
-    this.browserCommands
-  )
+  browserDrag: RuntimeBrowserCommands['browserDrag'] =
+    this.browserScreencastCommands.browserDrag.bind(this.browserCommands)
 
-  browserUpload: RuntimeBrowserCommands['browserUpload'] = this.browserCommands.browserUpload.bind(
-    this.browserCommands
-  )
+  browserUpload: RuntimeBrowserCommands['browserUpload'] =
+    this.browserScreencastCommands.browserUpload.bind(this.browserCommands)
 
-  browserWait: RuntimeBrowserCommands['browserWait'] = this.browserCommands.browserWait.bind(
-    this.browserCommands
-  )
+  browserWait: RuntimeBrowserCommands['browserWait'] =
+    this.browserScreencastCommands.browserWait.bind(this.browserCommands)
 
-  browserCheck: RuntimeBrowserCommands['browserCheck'] = this.browserCommands.browserCheck.bind(
-    this.browserCommands
-  )
+  browserCheck: RuntimeBrowserCommands['browserCheck'] =
+    this.browserScreencastCommands.browserCheck.bind(this.browserCommands)
 
-  browserFocus: RuntimeBrowserCommands['browserFocus'] = this.browserCommands.browserFocus.bind(
-    this.browserCommands
-  )
+  browserFocus: RuntimeBrowserCommands['browserFocus'] =
+    this.browserScreencastCommands.browserFocus.bind(this.browserCommands)
 
-  browserClear: RuntimeBrowserCommands['browserClear'] = this.browserCommands.browserClear.bind(
-    this.browserCommands
-  )
+  browserClear: RuntimeBrowserCommands['browserClear'] =
+    this.browserScreencastCommands.browserClear.bind(this.browserCommands)
 
   browserSelectAll: RuntimeBrowserCommands['browserSelectAll'] =
-    this.browserCommands.browserSelectAll.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSelectAll.bind(this.browserCommands)
 
   browserKeypress: RuntimeBrowserCommands['browserKeypress'] =
-    this.browserCommands.browserKeypress.bind(this.browserCommands)
+    this.browserScreencastCommands.browserKeypress.bind(this.browserCommands)
 
-  browserPdf: RuntimeBrowserCommands['browserPdf'] = this.browserCommands.browserPdf.bind(
+  browserPdf: RuntimeBrowserCommands['browserPdf'] = this.browserScreencastCommands.browserPdf.bind(
     this.browserCommands
   )
 
   browserFullScreenshot: RuntimeBrowserCommands['browserFullScreenshot'] =
-    this.browserCommands.browserFullScreenshot.bind(this.browserCommands)
+    this.browserScreencastCommands.browserFullScreenshot.bind(this.browserCommands)
 
   browserCookieGet: RuntimeBrowserCommands['browserCookieGet'] =
-    this.browserCommands.browserCookieGet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCookieGet.bind(this.browserCommands)
 
   browserCookieSet: RuntimeBrowserCommands['browserCookieSet'] =
-    this.browserCommands.browserCookieSet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCookieSet.bind(this.browserCommands)
 
   browserCookieDelete: RuntimeBrowserCommands['browserCookieDelete'] =
-    this.browserCommands.browserCookieDelete.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCookieDelete.bind(this.browserCommands)
 
   browserSetViewport: RuntimeBrowserCommands['browserSetViewport'] =
-    this.browserCommands.browserSetViewport.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetViewport.bind(this.browserCommands)
 
   browserSetGeolocation: RuntimeBrowserCommands['browserSetGeolocation'] =
-    this.browserCommands.browserSetGeolocation.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetGeolocation.bind(this.browserCommands)
 
   browserInterceptEnable: RuntimeBrowserCommands['browserInterceptEnable'] =
-    this.browserCommands.browserInterceptEnable.bind(this.browserCommands)
+    this.browserScreencastCommands.browserInterceptEnable.bind(this.browserCommands)
 
   browserInterceptDisable: RuntimeBrowserCommands['browserInterceptDisable'] =
-    this.browserCommands.browserInterceptDisable.bind(this.browserCommands)
+    this.browserScreencastCommands.browserInterceptDisable.bind(this.browserCommands)
 
   browserInterceptList: RuntimeBrowserCommands['browserInterceptList'] =
-    this.browserCommands.browserInterceptList.bind(this.browserCommands)
+    this.browserScreencastCommands.browserInterceptList.bind(this.browserCommands)
 
   browserCaptureStart: RuntimeBrowserCommands['browserCaptureStart'] =
-    this.browserCommands.browserCaptureStart.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCaptureStart.bind(this.browserCommands)
 
   browserCaptureStop: RuntimeBrowserCommands['browserCaptureStop'] =
-    this.browserCommands.browserCaptureStop.bind(this.browserCommands)
+    this.browserScreencastCommands.browserCaptureStop.bind(this.browserCommands)
 
   browserConsoleLog: RuntimeBrowserCommands['browserConsoleLog'] =
-    this.browserCommands.browserConsoleLog.bind(this.browserCommands)
+    this.browserScreencastCommands.browserConsoleLog.bind(this.browserCommands)
 
   browserNetworkLog: RuntimeBrowserCommands['browserNetworkLog'] =
-    this.browserCommands.browserNetworkLog.bind(this.browserCommands)
+    this.browserScreencastCommands.browserNetworkLog.bind(this.browserCommands)
 
   browserDblclick: RuntimeBrowserCommands['browserDblclick'] =
-    this.browserCommands.browserDblclick.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDblclick.bind(this.browserCommands)
 
   browserForward: RuntimeBrowserCommands['browserForward'] =
-    this.browserCommands.browserForward.bind(this.browserCommands)
+    this.browserScreencastCommands.browserForward.bind(this.browserCommands)
 
   browserScrollIntoView: RuntimeBrowserCommands['browserScrollIntoView'] =
-    this.browserCommands.browserScrollIntoView.bind(this.browserCommands)
+    this.browserScreencastCommands.browserScrollIntoView.bind(this.browserCommands)
 
-  browserGet: RuntimeBrowserCommands['browserGet'] = this.browserCommands.browserGet.bind(
+  browserGet: RuntimeBrowserCommands['browserGet'] = this.browserScreencastCommands.browserGet.bind(
     this.browserCommands
   )
 
-  browserIs: RuntimeBrowserCommands['browserIs'] = this.browserCommands.browserIs.bind(
+  browserIs: RuntimeBrowserCommands['browserIs'] = this.browserScreencastCommands.browserIs.bind(
     this.browserCommands
   )
 
   browserKeyboardInsertText: RuntimeBrowserCommands['browserKeyboardInsertText'] =
-    this.browserCommands.browserKeyboardInsertText.bind(this.browserCommands)
+    this.browserScreencastCommands.browserKeyboardInsertText.bind(this.browserCommands)
 
   browserMouseMove: RuntimeBrowserCommands['browserMouseMove'] =
-    this.browserCommands.browserMouseMove.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseMove.bind(this.browserCommands)
 
   browserMouseDown: RuntimeBrowserCommands['browserMouseDown'] =
-    this.browserCommands.browserMouseDown.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseDown.bind(this.browserCommands)
 
   browserMouseClick: RuntimeBrowserCommands['browserMouseClick'] =
-    this.browserCommands.browserMouseClick.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseClick.bind(this.browserCommands)
 
   browserMouseUp: RuntimeBrowserCommands['browserMouseUp'] =
-    this.browserCommands.browserMouseUp.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseUp.bind(this.browserCommands)
 
   browserMouseWheel: RuntimeBrowserCommands['browserMouseWheel'] =
-    this.browserCommands.browserMouseWheel.bind(this.browserCommands)
+    this.browserScreencastCommands.browserMouseWheel.bind(this.browserCommands)
 
-  browserFind: RuntimeBrowserCommands['browserFind'] = this.browserCommands.browserFind.bind(
-    this.browserCommands
-  )
+  browserFind: RuntimeBrowserCommands['browserFind'] =
+    this.browserScreencastCommands.browserFind.bind(this.browserCommands)
 
   browserSetDevice: RuntimeBrowserCommands['browserSetDevice'] =
-    this.browserCommands.browserSetDevice.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetDevice.bind(this.browserCommands)
 
   browserSetOffline: RuntimeBrowserCommands['browserSetOffline'] =
-    this.browserCommands.browserSetOffline.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetOffline.bind(this.browserCommands)
 
   browserSetHeaders: RuntimeBrowserCommands['browserSetHeaders'] =
-    this.browserCommands.browserSetHeaders.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetHeaders.bind(this.browserCommands)
 
   browserSetCredentials: RuntimeBrowserCommands['browserSetCredentials'] =
-    this.browserCommands.browserSetCredentials.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetCredentials.bind(this.browserCommands)
 
   browserSetMedia: RuntimeBrowserCommands['browserSetMedia'] =
-    this.browserCommands.browserSetMedia.bind(this.browserCommands)
+    this.browserScreencastCommands.browserSetMedia.bind(this.browserCommands)
 
   browserClipboardRead: RuntimeBrowserCommands['browserClipboardRead'] =
-    this.browserCommands.browserClipboardRead.bind(this.browserCommands)
+    this.browserScreencastCommands.browserClipboardRead.bind(this.browserCommands)
 
   browserClipboardWrite: RuntimeBrowserCommands['browserClipboardWrite'] =
-    this.browserCommands.browserClipboardWrite.bind(this.browserCommands)
+    this.browserScreencastCommands.browserClipboardWrite.bind(this.browserCommands)
 
   browserDialogAccept: RuntimeBrowserCommands['browserDialogAccept'] =
-    this.browserCommands.browserDialogAccept.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDialogAccept.bind(this.browserCommands)
 
   browserDialogDismiss: RuntimeBrowserCommands['browserDialogDismiss'] =
-    this.browserCommands.browserDialogDismiss.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDialogDismiss.bind(this.browserCommands)
 
   browserStorageLocalGet: RuntimeBrowserCommands['browserStorageLocalGet'] =
-    this.browserCommands.browserStorageLocalGet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageLocalGet.bind(this.browserCommands)
 
   browserStorageLocalSet: RuntimeBrowserCommands['browserStorageLocalSet'] =
-    this.browserCommands.browserStorageLocalSet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageLocalSet.bind(this.browserCommands)
 
   browserStorageLocalClear: RuntimeBrowserCommands['browserStorageLocalClear'] =
-    this.browserCommands.browserStorageLocalClear.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageLocalClear.bind(this.browserCommands)
 
   browserStorageSessionGet: RuntimeBrowserCommands['browserStorageSessionGet'] =
-    this.browserCommands.browserStorageSessionGet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageSessionGet.bind(this.browserCommands)
 
   browserStorageSessionSet: RuntimeBrowserCommands['browserStorageSessionSet'] =
-    this.browserCommands.browserStorageSessionSet.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageSessionSet.bind(this.browserCommands)
 
   browserStorageSessionClear: RuntimeBrowserCommands['browserStorageSessionClear'] =
-    this.browserCommands.browserStorageSessionClear.bind(this.browserCommands)
+    this.browserScreencastCommands.browserStorageSessionClear.bind(this.browserCommands)
 
   browserDownload: RuntimeBrowserCommands['browserDownload'] =
-    this.browserCommands.browserDownload.bind(this.browserCommands)
+    this.browserScreencastCommands.browserDownload.bind(this.browserCommands)
 
   browserHighlight: RuntimeBrowserCommands['browserHighlight'] =
-    this.browserCommands.browserHighlight.bind(this.browserCommands)
+    this.browserScreencastCommands.browserHighlight.bind(this.browserCommands)
 
-  browserExec: RuntimeBrowserCommands['browserExec'] = this.browserCommands.browserExec.bind(
-    this.browserCommands
-  )
+  browserExec: RuntimeBrowserCommands['browserExec'] =
+    this.browserScreencastCommands.browserExec.bind(this.browserCommands)
 
   browserTabCreate: RuntimeBrowserCommands['browserTabCreate'] =
-    this.browserCommands.browserTabCreate.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabCreate.bind(this.browserCommands)
 
   browserTabSetProfile: RuntimeBrowserCommands['browserTabSetProfile'] =
-    this.browserCommands.browserTabSetProfile.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabSetProfile.bind(this.browserCommands)
 
   browserTabProfileShow: RuntimeBrowserCommands['browserTabProfileShow'] =
-    this.browserCommands.browserTabProfileShow.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabProfileShow.bind(this.browserCommands)
 
   browserTabProfileClone: RuntimeBrowserCommands['browserTabProfileClone'] =
-    this.browserCommands.browserTabProfileClone.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabProfileClone.bind(this.browserCommands)
 
   browserProfileList: RuntimeBrowserCommands['browserProfileList'] =
-    this.browserCommands.browserProfileList.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileList.bind(this.browserCommands)
 
   browserProfileCreate: RuntimeBrowserCommands['browserProfileCreate'] =
-    this.browserCommands.browserProfileCreate.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileCreate.bind(this.browserCommands)
 
   browserProfileDelete: RuntimeBrowserCommands['browserProfileDelete'] =
-    this.browserCommands.browserProfileDelete.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileDelete.bind(this.browserCommands)
 
   browserProfileDetectBrowsers: RuntimeBrowserCommands['browserProfileDetectBrowsers'] =
-    this.browserCommands.browserProfileDetectBrowsers.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileDetectBrowsers.bind(this.browserCommands)
 
   browserProfileImportFromBrowser: RuntimeBrowserCommands['browserProfileImportFromBrowser'] =
-    this.browserCommands.browserProfileImportFromBrowser.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileImportFromBrowser.bind(this.browserCommands)
 
   browserProfileClearDefaultCookies: RuntimeBrowserCommands['browserProfileClearDefaultCookies'] =
-    this.browserCommands.browserProfileClearDefaultCookies.bind(this.browserCommands)
+    this.browserScreencastCommands.browserProfileClearDefaultCookies.bind(this.browserCommands)
 
   browserTabClose: RuntimeBrowserCommands['browserTabClose'] =
-    this.browserCommands.browserTabClose.bind(this.browserCommands)
+    this.browserScreencastCommands.browserTabClose.bind(this.browserCommands)
 
   // Emulator bindings (delegated to dedicated commands for surface separation).
   emulatorTap: RuntimeEmulatorCommands['emulatorTap'] = this.emulatorCommands.emulatorTap.bind(
@@ -36352,14 +31035,247 @@ export class OrcaRuntimeService {
     const win = getRuntimeDesktopSurface().findWindowById(this.authoritativeWindowId)
     return win && !win.isDestroyed() ? win : null
   }
+
+  private readonly snapshotValueComparison: RuntimeMobileSnapshotValueComparisonCommands
+  private readonly mobileSnapshotMerge: RuntimeMobileSnapshotMergeCommands
+  private readonly mobileTabSnapshots: RuntimeMobileSessionTabSnapshotCommands
+
+  // eslint-disable @typescript-eslint/no-explicit-any -- Delegation methods use any to forward arbitrary arguments
+  // Delegation methods for RuntimeMobileSnapshotValueComparisonCommands:
+
+  headlessMobileSnapshotContentUnchanged() {
+    return (this.snapshotValueComparison as any).headlessMobileSnapshotContentUnchanged(
+      ...(arguments as any)
+    )
+  }
+
+  mobileSnapshotValueEqual() {
+    return (this.snapshotValueComparison as any).mobileSnapshotValueEqual(...(arguments as any))
+  }
+
+  reconcileHeadlessMobileSessionBrowserTabs() {
+    return (this.snapshotValueComparison as any).reconcileHeadlessMobileSessionBrowserTabs(
+      ...(arguments as any)
+    )
+  }
+
+  appendBrowserTabOrder() {
+    return (this.snapshotValueComparison as any).appendBrowserTabOrder(...(arguments as any))
+  }
+
+  collectBrowserGroupAssignment() {
+    return (this.snapshotValueComparison as any).collectBrowserGroupAssignment(
+      ...(arguments as any)
+    )
+  }
+
+  isServeOwnedPtyId() {
+    return (this.snapshotValueComparison as any).isServeOwnedPtyId(...(arguments as any))
+  }
+
+  isSshOwnedPtyId() {
+    return (this.snapshotValueComparison as any).isSshOwnedPtyId(...(arguments as any))
+  }
+
+  workspaceSessionHasRuntimeOwnedPtyCandidate() {
+    return (this.snapshotValueComparison as any).workspaceSessionHasRuntimeOwnedPtyCandidate(
+      ...(arguments as any)
+    )
+  }
+
+  workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate() {
+    return (
+      this.snapshotValueComparison as any
+    ).workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(...(arguments as any))
+  }
+
+  getRecentExpiredSshLease() {
+    return (this.snapshotValueComparison as any).getRecentExpiredSshLease(...(arguments as any))
+  }
+
+  hasRecentExpiredSshLeasePane() {
+    return (this.snapshotValueComparison as any).hasRecentExpiredSshLeasePane(...(arguments as any))
+  }
+
+  isServeOrSshOwnedPtyId() {
+    return (this.snapshotValueComparison as any).isServeOrSshOwnedPtyId(...(arguments as any))
+  }
+
+  hasServeOrSshOwnedBinding() {
+    return (this.snapshotValueComparison as any).hasServeOrSshOwnedBinding(...(arguments as any))
+  }
+
+  hasLiveOrPersistedServeOrSshOwnedPtyBinding() {
+    return (this.snapshotValueComparison as any).hasLiveOrPersistedServeOrSshOwnedPtyBinding(
+      ...(arguments as any)
+    )
+  }
+
+  hasLiveRuntimeSessionOwnedPtyBinding() {
+    return (this.snapshotValueComparison as any).hasLiveRuntimeSessionOwnedPtyBinding(
+      ...(arguments as any)
+    )
+  }
+
+  clearRuntimeSessionOwnershipForMobileTab() {
+    return (this.snapshotValueComparison as any).clearRuntimeSessionOwnershipForMobileTab(
+      ...(arguments as any)
+    )
+  }
+
+  getMobileTerminalLeafPtyIds() {
+    return (this.snapshotValueComparison as any).getMobileTerminalLeafPtyIds(...(arguments as any))
+  }
+
+  clearRuntimeSessionOwnershipForMobileTerminalLeaf() {
+    return (this.snapshotValueComparison as any).clearRuntimeSessionOwnershipForMobileTerminalLeaf(
+      ...(arguments as any)
+    )
+  }
+
+  persistedParentStillBindsMobileTerminalLeaf() {
+    return (this.snapshotValueComparison as any).persistedParentStillBindsMobileTerminalLeaf(
+      ...(arguments as any)
+    )
+  }
+
+  releaseRuntimeSessionOwnershipForRendererRetiredTabs() {
+    return (
+      this.snapshotValueComparison as any
+    ).releaseRuntimeSessionOwnershipForRendererRetiredTabs(...(arguments as any))
+  }
+
+  isRuntimeOwnedHeadlessMobileTab() {
+    return (this.snapshotValueComparison as any).isRuntimeOwnedHeadlessMobileTab(
+      ...(arguments as any)
+    )
+  }
+
+  mergeMobileSessionSnapshotTabs() {
+    return (this.snapshotValueComparison as any).mergeMobileSessionSnapshotTabs(
+      ...(arguments as any)
+    )
+  }
+
+  mergeMobileSessionTabGroups() {
+    return (this.snapshotValueComparison as any).mergeMobileSessionTabGroups(...(arguments as any))
+  }
+
+  // Delegation methods for RuntimeMobileSnapshotMergeCommands:
+
+  mergePreservedHeadlessMobileSessionTabs() {
+    return (this.mobileSnapshotMerge as any).mergePreservedHeadlessMobileSessionTabs(
+      ...(arguments as any)
+    )
+  }
+
+  buildPreservedHeadlessMobileSessionSnapshot() {
+    return (this.mobileSnapshotMerge as any).buildPreservedHeadlessMobileSessionSnapshot(
+      ...(arguments as any)
+    )
+  }
+
+  storedMobileSnapshotHasStalePreservedTab() {
+    return (this.mobileSnapshotMerge as any).storedMobileSnapshotHasStalePreservedTab(
+      ...(arguments as any)
+    )
+  }
+
+  notifyMobileSessionTabSnapshots() {
+    return (this.mobileSnapshotMerge as any).notifyMobileSessionTabSnapshots(...(arguments as any))
+  }
+
+  emitMobileSessionTabsSnapshotToClient() {
+    return (this.mobileSnapshotMerge as any).emitMobileSessionTabsSnapshotToClient(
+      ...(arguments as any)
+    )
+  }
+
+  // Delegation methods for RuntimeMobileSessionTabSnapshotCommands:
+
+  touchMobileSessionSnapshotsForPty() {
+    return (this.mobileTabSnapshots as any).touchMobileSessionSnapshotsForPty(...(arguments as any))
+  }
+
+  getMobileSessionWorktreeIdsForPty() {
+    return (this.mobileTabSnapshots as any).getMobileSessionWorktreeIdsForPty(...(arguments as any))
+  }
+
+  touchMobileSessionTabsForWorktree() {
+    return (this.mobileTabSnapshots as any).touchMobileSessionTabsForWorktree(...(arguments as any))
+  }
+
+  touchMobileSessionTabsForPane() {
+    return (this.mobileTabSnapshots as any).touchMobileSessionTabsForPane(...(arguments as any))
+  }
+
+  buildHeadlessMobileSessionTerminalTabs() {
+    return (this.mobileTabSnapshots as any).buildHeadlessMobileSessionTerminalTabs(
+      ...(arguments as any)
+    )
+  }
+
+  buildHeadlessMobileSessionBrowserTabs() {
+    return (this.mobileTabSnapshots as any).buildHeadlessMobileSessionBrowserTabs(
+      ...(arguments as any)
+    )
+  }
+
+  buildHeadlessMobileSessionTabGroups() {
+    return (this.mobileTabSnapshots as any).buildHeadlessMobileSessionTabGroups(
+      ...(arguments as any)
+    )
+  }
+
+  buildMaterializedHeadlessParentLayout() {
+    return (this.mobileTabSnapshots as any).buildMaterializedHeadlessParentLayout(
+      ...(arguments as any)
+    )
+  }
+
+  removePersistedHeadlessTerminalTab() {
+    return (this.mobileTabSnapshots as any).removePersistedHeadlessTerminalTab(
+      ...(arguments as any)
+    )
+  }
+
+  persistHeadlessTerminalTabOrder() {
+    return (this.mobileTabSnapshots as any).persistHeadlessTerminalTabOrder(...(arguments as any))
+  }
+
+  emitMobileSessionTabsSnapshot() {
+    return (this.mobileTabSnapshots as any).emitMobileSessionTabsSnapshot(...(arguments as any))
+  }
+
+  projectMobileSessionTabsForClient() {
+    return (this.mobileTabSnapshots as any).projectMobileSessionTabsForClient(...(arguments as any))
+  }
+
+  withClientHostedPagesHold() {
+    return (this.mobileTabSnapshots as any).withClientHostedPagesHold(...(arguments as any))
+  }
+
+  private getHeadlessMobileSessionGroupId() {
+    return (this.mobileTabSnapshots as any).getHeadlessMobileSessionGroupId(...(arguments as any))
+  }
+
+  // eslint-enable @typescript-eslint/no-explicit-any
 }
+
+// Re-export shims for WP7 batch extraction (runtime-browser-screencast.ts)
+export { reclaimBrowserForDesktop }
+export { publishBrowserRemoteViewers }
+export { getBrowserRemoteViewerPages }
+export { setBrowserDriver }
+export { getBrowserDriver }
+export { getAllBrowserDrivers }
+export { persistClientHostedBrowserPagesForWorktree }
+export { rehydrateClientHostedBrowserPages }
 
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  DEFAULT_REPO_SEARCH_REFS_LIMIT,
   DEFAULT_TERMINAL_LIST_LIMIT,
   DEFAULT_TERMINAL_READ_LIMIT,
-  DEFAULT_WORKTREE_LIST_LIMIT,
   DEFAULT_WORKTREE_PS_LIMIT,
   DISCONNECTED_PTY_RECORD_MAX,
   DRIFT_PROBE_SUBJECT_LIMIT,
@@ -36372,7 +31288,6 @@ import {
   REMOTE_FETCH_CACHE_MAX,
   REMOTE_FETCH_TIMEOUT_MS,
   RESOLVED_WORKTREE_CACHE_TTL_MS,
-  TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS,
@@ -36416,7 +31331,6 @@ import {
   findRuntimeWorktreeSummaryByPath,
   getExplicitWorktreeIdSelector,
   getLatestAgentCandidateTitle,
-  getLatestAgentCandidateTitleInfo,
   getLatestLeafTitle,
   getLatestPtyTitle,
   getLeafWorktreeStatus,
@@ -36455,12 +31369,12 @@ import {
   terminalReadLimit,
   terminalTitleBlocksExplicitAgentStatus,
   waitForWorktreeTerminalMutation,
-  withTimeoutResult,
+  withTimeoutResult
 } from './runtime-tail-projection'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,
-  TerminalTailWaitState,
+  TerminalTailWaitState
 } from './runtime-tail-projection'
 
 export {
