@@ -2699,16 +2699,6 @@ export class OrcaRuntimeService {
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
-  private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
-  private orchestrationTerminalHistoryRecoveryTimer: ReturnType<typeof setTimeout> | null = null
-  private orchestrationTerminalHistoryRecoveryInFlight: Promise<void> | null = null
-  private orchestrationTerminalRecoveryRowId = 0
-  private orchestrationFederationRelayGeneration = 0
-  private readonly orchestrationFederationSyncs = new Map<
-    string,
-    { db: OrchestrationDb; promise: Promise<void> }
-  >()
-  private readonly orchestrationFederationWarnings = new Set<string>()
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
@@ -3923,7 +3913,9 @@ export class OrcaRuntimeService {
       listTerminals: () => Array.from(this.ptysById.values()),
       getTerminalStatus: (ptyId) => {
         const pty = this.ptysById.get(ptyId)
-        if (!pty) return 'exited'
+        if (!pty) {
+          return 'exited'
+        }
         return pty.connected ? 'live' : 'disconnected'
       },
       isTerminalAlive: (ptyId) => {
@@ -3941,7 +3933,6 @@ export class OrcaRuntimeService {
         this.getMobileSessionTabsForWorktree(worktreeId, clientNavigationId),
       publishMobileLayout: async () => {
         // Layout updates are handled through notifyMobileSessionTabsChanged
-        return Promise.resolve()
       },
       scheduleMobileSessionTabsChanged: (worktreeId) =>
         this.scheduleMobileSessionTabsChanged(worktreeId),
@@ -3977,9 +3968,8 @@ export class OrcaRuntimeService {
     }
 
     this.agentStatusFacade = {
-      reportAgentStatus: async (handle) => {
+      reportAgentStatus: async () => {
         // Agent status is reported through terminal agent status binding
-        return Promise.resolve()
       },
       publishAgentStatusUpdate: () => {
         // Published through terminalAgentStatusBinding
@@ -17739,10 +17729,6 @@ export class OrcaRuntimeService {
     return buildVisibleSnapshotReadFallback(read, projection.lines, opts.limit, projection.draft)
   }
 
-  // Why a cache: leaf-branch sends may arrive per keystroke; one proven-absent
-  // verdict per ptyId serves the burst instead of a probe round-trip each call.
-  private readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
-  private readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
   private controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
       return this.ptyController?.hasPty?.(ptyId) === true
