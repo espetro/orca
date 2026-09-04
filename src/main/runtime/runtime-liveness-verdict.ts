@@ -30,11 +30,7 @@ export type OrcaRuntimeLivenessVerdictApi = {
   getOrCreatePtyWorktreeRecord(ptyId: string): unknown
   getLeavesForPty(ptyId: string): unknown[]
   adoptPreAllocatedHandle(leaf: unknown): void
-  recordPtyWorktree(
-    ptyId: string,
-    worktreeId: string,
-    opts: Record<string, unknown>
-  ): unknown
+  recordPtyWorktree(ptyId: string, worktreeId: string, opts: Record<string, unknown>): unknown
   ensurePtyBackedMobileSurfaceForRendererTab(worktreeId: string, tabId: string): void
   readonly graphStatus: string
   readonly spawnPublishedPtys: Set<string>
@@ -172,17 +168,18 @@ export function onPtySpawned(
   if (options.awaitsRegistration !== false) {
     runtime.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
   }
-  const pty = runtime.getOrCreatePtyWorktreeRecord(ptyId)
+  const pty = runtime.getOrCreatePtyWorktreeRecord(ptyId) as PtyRecord | null | undefined
   if (pty) {
     if (incarnationId) {
-      ;(pty as any).incarnationId = incarnationId
+      pty.incarnationId = incarnationId
     }
-    ;(pty as any).connected = true
-    ;(pty as any).disconnectedAt = null
+    pty.connected = true
+    pty.disconnectedAt = null
   }
   for (const leaf of runtime.getLeavesForPty(ptyId)) {
-    ;(leaf as any).connected = true
-    ;(leaf as any).writable = runtime.graphStatus === 'ready'
+    const leafRecord = leaf as LeafRecord
+    leafRecord.connected = true
+    leafRecord.writable = runtime.graphStatus === 'ready'
     runtime.adoptPreAllocatedHandle(leaf)
   }
 }
@@ -191,16 +188,18 @@ export function registerPty(
   ptyId: string,
   worktreeId: string,
   connectionId: string | null = null,
-  binding: {
-    tabId: string
-    leafId: string
-    incarnationId?: PtyIncarnationId
-    agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
-    providerReattachLaunchIdentity?: {
-      incarnationId: PtyIncarnationId
-      launchAgent: TuiAgent
-    }
-  } | undefined,
+  binding:
+    | {
+        tabId: string
+        leafId: string
+        incarnationId?: PtyIncarnationId
+        agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
+        providerReattachLaunchIdentity?: {
+          incarnationId: PtyIncarnationId
+          launchAgent: TuiAgent
+        }
+      }
+    | undefined,
   isWsl: boolean | undefined,
   runtime: OrcaRuntimeLivenessVerdictApi,
   helpers: {
@@ -215,7 +214,9 @@ export function registerPty(
   runtime.spawnPublishedPtys.add(ptyId)
 
   const paneKey =
-    binding && helpers.isValidTerminalTabId(binding.tabId) && helpers.isTerminalLeafId(binding.leafId)
+    binding &&
+    helpers.isValidTerminalTabId(binding.tabId) &&
+    helpers.isTerminalLeafId(binding.leafId)
       ? helpers.makePaneKey(binding.tabId, binding.leafId)
       : null
   const pty = runtime.recordPtyWorktree(ptyId, worktreeId, {
