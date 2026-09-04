@@ -616,10 +616,7 @@ import {
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
-import {
-  persistClientHostedBrowserPages,
-  rehydrateClientHostedBrowserPages
-} from './client-hosted-browser-page-persistence'
+import { rehydrateClientHostedBrowserPages } from './client-hosted-browser-page-persistence'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
 import {
@@ -3936,28 +3933,7 @@ export class OrcaRuntimeService {
    * explicit, and so constructing a runtime stays free of persistence reads.
    */
   rehydrateClientHostedBrowserPages(): void {
-    if (!this.store?.getWorkspaceSession) {
-      return
-    }
-    try {
-      const registry = getRuntimeBrowserPageRegistry(this)
-      const liveRepoIds = new Set((this.store.getRepos?.() ?? []).map((repo) => repo.id))
-      rehydrateClientHostedBrowserPages(registry, {
-        listWorkspaceSessions: () => this.listWorkspaceSessionPartitions(),
-        // Why the same discriminant hydration uses: session keys are `${repoId}::${path}` and are
-        // not pruned when a repo leaves this client's view, so a row whose repo is gone would
-        // surface a tab with no live workspace behind it. Unparseable keys are left alone.
-        isKnownWorktree: (worktreeId) => {
-          const ownerRepoId = splitWorktreeIdForFilesystem(worktreeId)?.repoId
-          return !ownerRepoId || liveRepoIds.has(ownerRepoId)
-        }
-      })
-      for (const page of registry.listPages()) {
-        this.persistedClientHostedBrowserWorktreeIds.add(page.workspaceId)
-      }
-    } catch (error) {
-      console.warn('[browser-host-lease] client page rehydration failed:', error)
-    }
+    rehydrateClientHostedBrowserPages(this)
   }
 
   /**
@@ -3968,24 +3944,7 @@ export class OrcaRuntimeService {
    * read for every one of those.
    */
   private persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
-    const registry = getRuntimeBrowserPageRegistry(this)
-    const hasPages = registry.listPages(worktreeId).length > 0
-    if (!hasPages && !this.persistedClientHostedBrowserWorktreeIds.has(worktreeId)) {
-      return
-    }
-    if (hasPages) {
-      this.persistedClientHostedBrowserWorktreeIds.add(worktreeId)
-    } else {
-      this.persistedClientHostedBrowserWorktreeIds.delete(worktreeId)
-    }
-    persistClientHostedBrowserPages(
-      {
-        getWorkspaceSession: (id) => this.getWorkspaceSessionForWorktree(id),
-        setWorkspaceSession: (id, session) => this.setWorkspaceSessionForWorktree(id, session)
-      },
-      registry,
-      worktreeId
-    )
+    persistClientHostedBrowserPagesForWorktree(this, worktreeId)
   }
 
   private listWorkspaceSessionPartitions(): WorkspaceSessionState[] {
@@ -14379,58 +14338,28 @@ export class OrcaRuntimeService {
   }
 
   getAllBrowserDrivers(): Map<string, RuntimeBrowserDriverState> {
-    return new Map(this.currentBrowserDriver)
+    return getAllBrowserDrivers(this)
   }
 
   private getBrowserDriver(browserPageId: string): RuntimeBrowserDriverState {
-    return this.currentBrowserDriver.get(browserPageId) ?? { kind: 'idle' }
+    return getBrowserDriver(this, browserPageId)
   }
 
   private setBrowserDriver(browserPageId: string, next: RuntimeBrowserDriverState): void {
-    const prev = this.getBrowserDriver(browserPageId)
-    if (prev.kind === next.kind) {
-      if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
-        return
-      }
-      if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
-        return
-      }
-    }
-    if (next.kind === 'idle') {
-      this.currentBrowserDriver.delete(browserPageId)
-    } else {
-      this.currentBrowserDriver.set(browserPageId, next)
-    }
-    this.notifier?.browserDriverChanged?.(browserPageId, next)
+    setBrowserDriver(this, browserPageId, next)
   }
 
   getBrowserRemoteViewerPages(): string[] {
-    return Array.from(this.browserRemoteViewerPages)
+    return getBrowserRemoteViewerPages(this)
   }
 
   /** Republishes from the live subscriber set, so every add and remove has one settling point. */
   private publishBrowserRemoteViewers(browserPageId: string): void {
-    const watched = (this.activeBrowserScreencastsByPage.get(browserPageId)?.size ?? 0) > 0
-    if (this.browserRemoteViewerPages.has(browserPageId) === watched) {
-      return
-    }
-    if (watched) {
-      this.browserRemoteViewerPages.add(browserPageId)
-    } else {
-      this.browserRemoteViewerPages.delete(browserPageId)
-    }
-    this.notifier?.browserRemoteViewersChanged?.(browserPageId, watched)
+    publishBrowserRemoteViewers(this, browserPageId)
   }
 
   reclaimBrowserForDesktop(browserPageId: string): boolean {
-    this.setBrowserDriver(browserPageId, { kind: 'desktop' })
-    for (const stream of this.activeBrowserScreencastsByPage.get(browserPageId) ?? []) {
-      // Why: take-back revokes the phone's control, not a co-viewing desktop/web client's stream.
-      if (stream.drivesAsMobile) {
-        stream.cancel(true)
-      }
-    }
-    return true
+    return reclaimBrowserForDesktop(this, browserPageId)
   }
 
   onClientDisconnected(clientId: string): void {
@@ -32362,6 +32291,16 @@ export class OrcaRuntimeService {
   // eslint-enable @typescript-eslint/no-explicit-any
 }
 
+// Re-export shims for WP7 batch extraction (runtime-browser-screencast.ts)
+export { reclaimBrowserForDesktop }
+export { publishBrowserRemoteViewers }
+export { getBrowserRemoteViewerPages }
+export { setBrowserDriver }
+export { getBrowserDriver }
+export { getAllBrowserDrivers }
+export { persistClientHostedBrowserPagesForWorktree }
+export { rehydrateClientHostedBrowserPages }
+
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
   DEFAULT_TERMINAL_LIST_LIMIT,
@@ -32481,3 +32420,87 @@ export {
   projectTerminalTailLines
 } from './runtime-tail-projection'
 export type { TerminalTailWaitState } from './runtime-tail-projection'
+
+// Re-exports from runtime-pty-lifecycle (batch-2: WP1 pty_lifecycle cluster)
+export { isTerminalRunningSettledPromptAgent } from './runtime-pty-lifecycle'
+export { hasTerminalsForWorktree } from './runtime-pty-lifecycle'
+export { stopExactTerminalsForWorktree } from './runtime-pty-lifecycle'
+export { getLivePtyIdsForWorktree } from './runtime-pty-lifecycle'
+export { stopTerminalsForWorktree } from './runtime-pty-lifecycle'
+export { hasLiveShellForRendererTab } from './runtime-pty-lifecycle'
+export { deliverPendingStartupCommandToBareRendererPty } from './runtime-pty-lifecycle'
+export { resolveTerminalSplitSourceAuthority } from './runtime-pty-lifecycle'
+export { getWorktreePs } from './runtime-pty-lifecycle'
+export { isPtyKnownExited } from './runtime-pty-lifecycle'
+export { getTerminalAgentStatus } from './runtime-pty-lifecycle'
+export { isTerminalRunningAgent } from './runtime-pty-lifecycle'
+export { getPtyAgent } from './runtime-pty-lifecycle'
+export { getAgentPromptActivity } from './runtime-pty-lifecycle'
+export { serializeAgentPromptSubmission } from './runtime-pty-lifecycle'
+export { getPtyWriteHostPlatform } from './runtime-pty-lifecycle'
+export { getExactWorkerProviderSession } from './runtime-pty-lifecycle'
+export { getLiveTerminalPaneKey } from './runtime-pty-lifecycle'
+export { listTerminals } from './runtime-pty-lifecycle'
+export { buildTerminalSummary } from './runtime-pty-lifecycle'
+export { getTerminalOrchestrationCliCommand } from './runtime-pty-lifecycle'
+export { resolveTerminalContext } from './runtime-pty-lifecycle'
+export { resolveTerminalCwd } from './runtime-pty-lifecycle'
+export { getOrchestrationDispatchAuthority } from './runtime-pty-lifecycle'
+export { getTerminalProcessIncarnation } from './runtime-pty-lifecycle'
+export { visibleSnapshotPreview } from './runtime-pty-lifecycle'
+export { serializeHeadlessTerminalBuffer } from './runtime-pty-lifecycle'
+export { serializeRendererTerminalBuffer } from './runtime-pty-lifecycle'
+export { synchronizePtyOutputSequenceFromProvider } from './runtime-pty-lifecycle'
+export { getTerminalSideEffectSnapshot } from './runtime-pty-lifecycle'
+export { notePtyDataGap } from './runtime-pty-lifecycle'
+export { primeWaitBlockedBaselineFromSeededTail } from './runtime-pty-lifecycle'
+export { onPtyData } from './runtime-pty-lifecycle'
+export { emitTerminalSideEffectBatch } from './runtime-pty-lifecycle'
+export { resolveTerminalSideEffectAttribution } from './runtime-pty-lifecycle'
+export { restoreAgentPromptLifecycleByteOrder } from './runtime-pty-lifecycle'
+export { emitTerminalAgentStatusEvents } from './runtime-pty-lifecycle'
+export { recordAgentPromptLifecycleState } from './runtime-pty-lifecycle'
+export { runWaitBlockedCheck } from './runtime-pty-lifecycle'
+export { recordAgentPromptPermissionObservation } from './runtime-pty-lifecycle'
+export { applySeededAgentStatus } from './runtime-pty-lifecycle'
+export { noteTerminalSpawnCommand } from './runtime-pty-lifecycle'
+export { acceptPtyIncarnationForExit } from './runtime-pty-lifecycle'
+export { createStructuredAgentSessionHandoffTransport } from './runtime-pty-lifecycle'
+export { closeStructuredTuiOwner } from './runtime-pty-lifecycle'
+export { waitForStructuredTuiProof } from './runtime-pty-lifecycle'
+export { waitForStructuredTuiIdleOrExit } from './runtime-pty-lifecycle'
+export { structuredTuiStatus } from './runtime-pty-lifecycle'
+export { waitForStructuredTuiPtyExit } from './runtime-pty-lifecycle'
+export { getPtyIdsForExplicitTabClose } from './runtime-pty-lifecycle'
+export { waitForAdoptedStructuredTuiProof } from './runtime-pty-lifecycle'
+export { withVisibleSnapshotFallback } from './runtime-pty-lifecycle'
+export { isTerminalAlternateScreen } from './runtime-pty-lifecycle'
+export { readVisibleTerminalState } from './runtime-pty-lifecycle'
+export { getPtyOutputSequence } from './runtime-pty-lifecycle'
+export { refreshStructuredTuiOwnerBinding } from './runtime-pty-lifecycle'
+export { getPtyExecutionHostMetadata } from './runtime-pty-lifecycle'
+export { getOrCreatePtyWorktreeRecord } from './runtime-pty-lifecycle'
+export { findLiveRegisteredPtyForRendererTab } from './runtime-pty-lifecycle'
+export { preparePtyExecutionContext } from './runtime-pty-lifecycle'
+export { replaceHeadlessTerminalAfterExecutionContextChange } from './runtime-pty-lifecycle'
+export { serializeProviderTerminalBuffer } from './runtime-pty-lifecycle'
+export { captureProviderTerminalBuffer } from './runtime-pty-lifecycle'
+export { createPtyHeadlessTerminalState } from './runtime-pty-lifecycle'
+export { restoreLivePairedRendererSessionOwnedMobileTerminals } from './runtime-pty-lifecycle'
+export { onPtyExit } from './runtime-pty-lifecycle'
+export { getPtyLifecycleGeneration } from './runtime-pty-lifecycle'
+export { retirePtyAgentLaunchAuthority } from './runtime-pty-lifecycle'
+export { getPtyLivenessVerdict } from './runtime-pty-lifecycle'
+export { collectPaneKeysForPty } from './runtime-pty-lifecycle'
+export { toMobileSessionTabsResult } from './runtime-pty-lifecycle'
+export { refreshPtyWorktreeRecordsWithControllerInventory } from './runtime-pty-lifecycle'
+export { rememberPtyLivenessVerdict } from './runtime-pty-lifecycle'
+export { isKnownUnattachedLocalDaemonPty } from './runtime-pty-lifecycle'
+export { adoptControllerTerminalHandle } from './runtime-pty-lifecycle'
+export { refreshFloatingWorkspacePtyLiveness } from './runtime-pty-lifecycle'
+export { pruneDisconnectedPtyRecords } from './runtime-pty-lifecycle'
+export { dropDisconnectedPtyRecord } from './runtime-pty-lifecycle'
+export { advancePtyLifecycleGeneration } from './runtime-pty-lifecycle'
+export { forgetPtyLivenessVerdict } from './runtime-pty-lifecycle'
+export { recordPtyWorktree } from './runtime-pty-lifecycle'
+export { reconcileLegacyWorkerTerminalsNow } from './runtime-pty-lifecycle'
