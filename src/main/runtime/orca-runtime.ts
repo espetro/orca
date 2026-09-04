@@ -344,7 +344,6 @@ import type {
   Worktree
 } from '../../shared/worktree/types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -353,7 +352,6 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import type {
   AgentProviderSessionMetadata,
@@ -740,15 +738,6 @@ import {
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
-} from '../local-worktree-filesystem'
-import {
-  removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
-  recoverLocalWindowsWorktreeRemoval
-} from '../local-worktree-removal-recovery'
-import {
   getBaseRefDefault,
   getDefaultRemote,
   getBranchConflictKind,
@@ -759,15 +748,7 @@ import {
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
-import {
-  listWorktrees,
-  listWorktreesStrict,
-  addWorktree,
-  addSparseWorktree,
-  assertWorktreeCleanForRemoval,
-  forceDeleteLocalBranch,
-  removeWorktree
-} from '../git/worktree'
+import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
@@ -778,21 +759,13 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultVoiceSettings } from '../../sh
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
-  createWorktreeSharedPaths,
-  findExistingWorktreeSymlinkPaths,
-  removeWorktreeLinkedPaths
+  createWorktreeSharedPaths
 } from '../ipc/worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import {
-  getWorktreeSharedLinkPaths,
-  resolveWorktreeSharedDirectories
-} from '../git/worktree-shared-directories'
+import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
-import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 import {
-  cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh,
   createRemoteWorktree,
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
@@ -818,34 +791,16 @@ import {
   computeWorktreePath,
   computeWorkspaceRoot,
   ensurePathWithinWorkspace,
-  formatWorktreeRemovalError,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
-  isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError,
   mergeWorktree,
   sanitizeWorktreeName,
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
 import { findCreatedWorktree } from '../ipc/created-worktree-reconciliation'
-import {
-  assertWorktreeDoesNotContainRegisteredWorktree,
-  canCleanupUnregisteredOrcaLeftoverDirectory,
-  canCleanupUnregisteredOrcaWorktreeDirectory,
-  canSafelyRemoveOrphanedWorktreeDirectory,
-  findRegisteredDeletableWorktree,
-  isDangerousWorktreeRemovalPath,
-  isWorktreePathMissing,
-  ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
-  stripOrcaProvenanceMetaUpdates,
-  UNREGISTERED_MISSING_WORKTREE_MESSAGE
-} from '../worktree-removal-safety'
-import {
-  hasWorktreeRemovalRepoOwnerOnOtherHost,
-  resolveWorktreeRemovalMetadata,
-  resolveWorktreeRemovalRepoOwner
-} from '../worktree-removal-repo-owner'
+import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
+import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../worktree-removal-repo-owner'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
@@ -854,7 +809,6 @@ import {
   drainBeforeWatcherRemoval,
   type WatcherRemovalDeadline
 } from '../ipc/watcher-removal-drain'
-import { withWorktreeSpan } from '../observability/instrumentation'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import {
@@ -1846,10 +1800,6 @@ const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
-// Why: long enough that a keystroke burst to a proven-dead leaf probes once,
-// short enough that a recreated session id regains writability quickly even if
-// its runtime record (which also invalidates the verdict) is late.
-const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
 
 function isClientDisconnectedError(error: unknown): boolean {
   return error instanceof Error && error.message === 'client_disconnected'
@@ -2101,86 +2051,11 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   ) as Partial<T>
 }
 
-async function isRuntimeWorktreePathMissing(
-  repo: Repo,
-  worktreePath: string,
-  localWorktreeGitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  if (!repo.connectionId) {
-    const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-    return isWorktreePathMissing(
-      toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-      access.statPath
-    )
-  }
-
-  const fsProvider = getSshFilesystemProvider(repo.connectionId)
-  if (!fsProvider) {
-    return false
-  }
-  return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
-}
-
-async function isLocalRuntimeGitRepository(
-  runtimeWorktreePath: string,
-  localWorktreeGitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  try {
-    await gitExecFileAsync(['status', '--short'], {
-      cwd: runtimeWorktreePath,
-      ...localWorktreeGitOptions
-    })
-    return true
-  } catch (error) {
-    return !gitStatusErrorMeansNotRepository(error)
-  }
-}
-
-function gitStatusErrorMeansNotRepository(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : typeof error === 'string'
-          ? error
-          : ''
-  const stderr =
-    error && typeof error === 'object' && 'stderr' in error
-      ? String((error as { stderr: unknown }).stderr)
-      : ''
-  return /not a git repository/i.test(`${message}\n${stderr}`)
-}
-
 type RuntimeWorktreeRemovalTarget = {
   id: string
   repoId: string
   path: string
   pushTarget?: GitPushTarget
-}
-
-type RuntimeWorktreeRemovalInFlight = {
-  optionsKey: string
-  promise: Promise<RemoveWorktreeResult & { warning?: string }>
-}
-
-type PreservedBranchCleanupTarget = {
-  worktreeId: string
-  hostId?: ExecutionHostId
-  branchName: string
-  head: string
-  pushTarget?: GitPushTarget
-}
-
-function getRuntimeWorktreeRemovalOptionsKey(
-  force: boolean,
-  runHooks: boolean,
-  allowUnverifiedPtyStop: boolean
-): string {
-  // Why: a forced retry must not coalesce onto the in-flight attempt that just
-  // failed the PTY gate — it would inherit that failure instead of retrying.
-  const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
@@ -10411,7 +10286,7 @@ export class OrcaRuntimeService {
   }
 
   beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    return beginPtyRegistration(ptyId, incarnationId, this as any)
+    return beginPtyRegistration(ptyId, incarnationId, this as unknown)
   }
 
   acceptPtyIncarnationForExit(ptyId: string, incarnationId: PtyIncarnationId): void {
@@ -10423,7 +10298,7 @@ export class OrcaRuntimeService {
   }
 
   cancelPendingPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    return cancelPendingPtyRegistration(ptyId, incarnationId, this as any)
+    return cancelPendingPtyRegistration(ptyId, incarnationId, this as unknown)
   }
 
   private assertPtyDidNotExitBeforeRegistration(
@@ -14370,7 +14245,9 @@ export class OrcaRuntimeService {
     }
   ): void {
     const pty = this.ptyExit_guardIncarnation(ptyId, exitIncarnationId)
-    if (!pty) return
+    if (!pty) {
+      return
+    }
 
     const { exitCause } = this.ptyExit_resolveExitCause(ptyId, exitCode, options?.cause)
 
@@ -14397,7 +14274,13 @@ export class OrcaRuntimeService {
 
     this.ptyExit_releaseLayout(ptyId)
 
-    this.ptyExit_settleDispatch(ptyId, exitCode, exitCause, preservesAbnormalSshSurface, exitedSurfaces)
+    this.ptyExit_settleDispatch(
+      ptyId,
+      exitCode,
+      exitCause,
+      preservesAbnormalSshSurface,
+      exitedSurfaces
+    )
 
     this.ptyExit_teardown(ptyId)
   }
@@ -14484,10 +14367,7 @@ export class OrcaRuntimeService {
     }
   }
 
-  private ptyExit_updateLivenessVerdict(
-    ptyId: string,
-    preservesAbnormalSshSurface: boolean
-  ): void {
+  private ptyExit_updateLivenessVerdict(ptyId: string, preservesAbnormalSshSurface: boolean): void {
     if (preservesAbnormalSshSurface) {
       if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
         this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
@@ -17529,11 +17409,11 @@ export class OrcaRuntimeService {
    * where it is known rather than reconstructed afterwards (STA-4603).
    */
   markPtyStopRequested(ptyId: string): void {
-    return markPtyStopRequested(ptyId, this as any)
+    return markPtyStopRequested(ptyId, this as unknown)
   }
 
   isPtyStopRequested(ptyId: string): boolean {
-    return isPtyStopRequested(ptyId, this as any)
+    return isPtyStopRequested(ptyId, this as unknown)
   }
 
   /** Null when nothing has been observed either way, so callers keep their own default. */
@@ -17829,7 +17709,7 @@ export class OrcaRuntimeService {
 
   /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
   private isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
-    return isLeafPtyProvenAbsent(ptyId, this as any)
+    return isLeafPtyProvenAbsent(ptyId, this as unknown)
   }
 
   async sendTerminal(
@@ -23111,13 +22991,7 @@ export class OrcaRuntimeService {
     expectedHead: string,
     hostId?: string
   ): Promise<ForceDeleteWorktreeBranchResult> {
-    return forceDeletePreservedBranchImpl(
-      this,
-      worktreeSelector,
-      branchName,
-      expectedHead,
-      hostId
-    )
+    return forceDeletePreservedBranchImpl(this, worktreeSelector, branchName, expectedHead, hostId)
   }
 
   async removeManagedWorktree(
@@ -31539,9 +31413,7 @@ export {
   appendNormalizedToMultilineTailBufferUnwindowed,
   projectTerminalTailLines
 } from './runtime-tail-projection'
-export type {
-  TerminalTailWaitState
-} from './runtime-tail-projection'
+export type { TerminalTailWaitState } from './runtime-tail-projection'
 
 // WP5: Mobile Session State re-exports
 export {
