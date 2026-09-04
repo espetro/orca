@@ -259,10 +259,12 @@ import type {
   OrchestrationWorkerServer
 } from './orchestration/environment-transport'
 import {
-  clearFederationAckCheckpoints,
-  releaseFederationAckCheckpoint
-} from './orchestration/federation-ack-checkpoints'
-import { syncFederatedDispatch } from './orchestration/federation-sync'
+  syncOrchestrationFederatedDispatch as federatedDispatchFn,
+  syncOrchestrationFederatedDispatchAfterCurrent as federatedDispatchAfterCurrentFn,
+  ensureOrchestrationFederationRelay as ensureFederationRelayFn,
+  stopOrchestrationFederationRelay as stopFederationRelayFn,
+  verifyOrchestrationCompatibilityCaller as verifyCompatibilityCallerFn
+} from './runtime-orchestration-federation'
 import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
 import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
 import { OrchestrationMailboxNotificationCoordinator } from './orchestration/mailbox-notification-coordinator'
@@ -27298,27 +27300,13 @@ export class OrcaRuntimeService {
     fallbackHead: string | undefined,
     pushTarget: GitPushTarget | undefined
   ): void {
-    if (result?.preservedBranch) {
-      const head = result.preservedBranch.head ?? fallbackHead
-      if (!head) {
-        throw new Error(
-          `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
-        )
-      }
-      this.preservedBranchCleanupByScope.set(
-        preservedBranchCleanupScopeKey({ worktreeId, hostId }),
-        {
-          worktreeId,
-          ...(hostId ? { hostId } : {}),
-          branchName: result.preservedBranch.branchName,
-          head,
-          ...(pushTarget ? { pushTarget } : {})
-        }
-      )
-      return
-    }
-    this.preservedBranchCleanupByScope.delete(
-      preservedBranchCleanupScopeKey({ worktreeId, hostId })
+    return rememberPreservedBranchCleanupTargetImpl(
+      this,
+      worktreeId,
+      hostId,
+      result,
+      fallbackHead,
+      pushTarget
     )
   }
 
@@ -27344,96 +27332,13 @@ export class OrcaRuntimeService {
     expectedHead: string,
     hostId?: string
   ): Promise<ForceDeleteWorktreeBranchResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
-    const normalizedHostId = parseExecutionHostId(hostId)?.id
-    const exactTarget = removalTarget
-      ? this.preservedBranchCleanupByScope.get(
-          preservedBranchCleanupScopeKey({ worktreeId: removalTarget.id, hostId: normalizedHostId })
-        )
-      : undefined
-    const legacyMatches =
-      removalTarget && !hostId
-        ? [...this.preservedBranchCleanupByScope.values()].filter(
-            (target) =>
-              target.worktreeId === removalTarget.id &&
-              target.branchName === branchName &&
-              target.head === expectedHead
-          )
-        : []
-    const cleanupTarget = exactTarget ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined)
-    if (
-      !removalTarget ||
-      !cleanupTarget ||
-      cleanupTarget.branchName !== branchName ||
-      cleanupTarget.head !== expectedHead
-    ) {
-      throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
-    }
-
-    const repoOwner = resolveWorktreeRemovalRepoOwner(
-      this.store,
-      removalTarget.repoId,
-      cleanupTarget.hostId
+    return forceDeletePreservedBranchImpl(
+      this,
+      worktreeSelector,
+      branchName,
+      expectedHead,
+      hostId
     )
-    if (repoOwner.kind === 'ambiguous') {
-      throw new Error(
-        `Workspace identity is ambiguous across hosts: ${removalTarget.id}. Retry with an explicit host.`
-      )
-    }
-    const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
-    if (!repo) {
-      throw new Error('repo_not_found')
-    }
-    if (isFolderRepo(repo)) {
-      throw new Error('Folder workspaces do not have local Git branches.')
-    }
-
-    if (repo.connectionId) {
-      const provider = requireSshGitProvider(repo.connectionId)
-      // Why: SSH must use the write-capable relay RPC; the shared exec-based
-      // helper routes through the read-only git.exec allowlist, which rejects
-      // the worktree/update-ref/config writes this delete needs.
-      await provider.forceDeletePreservedBranch(
-        repo.path,
-        cleanupTarget.branchName,
-        cleanupTarget.head
-      )
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
-        provider,
-        repo.path,
-        removalTarget.id,
-        cleanupTarget.pushTarget,
-        this.store
-      )
-    } else {
-      const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-      await (Object.keys(localWorktreeGitOptions).length > 0
-        ? forceDeleteLocalBranch(
-            repo.path,
-            cleanupTarget.branchName,
-            cleanupTarget.head,
-            (argv, cwd) => gitExecFileAsync(argv, { cwd, ...localWorktreeGitOptions })
-          )
-        : forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head))
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        removalTarget.id,
-        cleanupTarget.pushTarget,
-        this.store,
-        localWorktreeGitOptions
-      )
-    }
-
-    this.preservedBranchCleanupByScope.delete(
-      preservedBranchCleanupScopeKey({
-        worktreeId: removalTarget.id,
-        hostId: cleanupTarget.hostId
-      })
-    )
-    return { deleted: true }
   }
 
   async removeManagedWorktree(
