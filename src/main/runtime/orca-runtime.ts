@@ -616,7 +616,16 @@ import {
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
-import { rehydrateClientHostedBrowserPages } from './client-hosted-browser-page-persistence'
+import {
+  rehydrateClientHostedBrowserPages,
+  persistClientHostedBrowserPagesForWorktree,
+  getAllBrowserDrivers,
+  getBrowserDriver,
+  setBrowserDriver,
+  getBrowserRemoteViewerPages,
+  publishBrowserRemoteViewers,
+  reclaimBrowserForDesktop
+} from './runtime-browser-screencast'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
 import {
