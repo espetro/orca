@@ -216,33 +216,33 @@ export function registerPty(
     ...(isWsl !== undefined ? { isWsl } : {}),
     ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
     ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
-  })
+  }) as PtyRecord
   const agentLaunchAuthority = binding?.agentLaunchAuthority
   if (
     agentLaunchAuthority &&
     paneKey &&
     binding.incarnationId &&
-    (pty as any).incarnationId === binding.incarnationId &&
-    (pty as any).paneKey === paneKey &&
-    (pty as any).launchToken === null &&
+    pty.incarnationId === binding.incarnationId &&
+    pty.paneKey === paneKey &&
+    pty.launchToken === null &&
     agentLaunchAuthority.launchToken.length > 0 &&
     agentLaunchAuthority.launchToken.length <= 128 &&
     helpers.isTuiAgent(agentLaunchAuthority.launchAgent)
   ) {
-    ;(pty as any).launchToken = agentLaunchAuthority.launchToken
-    ;(pty as any).launchIncarnationId = binding.incarnationId
-    ;(pty as any).launchAgent = agentLaunchAuthority.launchAgent
+    pty.launchToken = agentLaunchAuthority.launchToken
+    pty.launchIncarnationId = binding.incarnationId
+    pty.launchAgent = agentLaunchAuthority.launchAgent
   }
   const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
   if (
     providerReattachLaunchIdentity &&
     paneKey &&
     binding.incarnationId === providerReattachLaunchIdentity.incarnationId &&
-    (pty as any).incarnationId === providerReattachLaunchIdentity.incarnationId &&
-    (pty as any).paneKey === paneKey &&
+    pty.incarnationId === providerReattachLaunchIdentity.incarnationId &&
+    pty.paneKey === paneKey &&
     helpers.isTuiAgent(providerReattachLaunchIdentity.launchAgent)
   ) {
-    ;(pty as any).launchAgent = providerReattachLaunchIdentity.launchAgent
+    pty.launchAgent = providerReattachLaunchIdentity.launchAgent
   }
   const pendingIncarnation = runtime.pendingPtyRegistrationIncarnations.get(ptyId)
   if (
