@@ -2823,9 +2823,6 @@ export class OrcaRuntimeService {
   // Why: consolidated store for all pty-keyed state. Fields are optional to support
   // lazy initialization and deletion on pty exit. Access via ptyRecordsById.get(ptyId)?.fieldName
   private ptyRecordsById = new Map<string, PtyRuntimeRecord>()
-  // Why: consolidated registry for terminal handles and leaves, managing bidirectional
-  // indices (handles ↔ leaves ↔ ptyIds). Enforces mutual-index invariant on removal.
-  private readonly handleRegistry = new TerminalHandleRegistry()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
@@ -3314,8 +3311,6 @@ export class OrcaRuntimeService {
   // canonical key is resolved at most once per repo+remote in the process.
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
-  private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
-  private preservedBranchCleanupByScope = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
