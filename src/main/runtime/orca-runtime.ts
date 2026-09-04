@@ -3916,6 +3916,80 @@ export class OrcaRuntimeService {
     this.mobileTabSnapshots = new RuntimeMobileSessionTabSnapshotCommands(
       mobileSessionTabSnapshotCommandsDeps
     )
+
+    // WP11: Initialize public facades for narrowed consumer access
+    this.terminalQueryFacade = {
+      getTerminalById: (ptyId) => this.ptysById.get(ptyId),
+      listTerminals: () => Array.from(this.ptysById.values()),
+      getTerminalStatus: (ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        if (!pty) return 'exited'
+        return pty.connected ? 'live' : 'disconnected'
+      },
+      isTerminalAlive: (ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return pty?.connected ?? false
+      },
+      getTerminalHandleForPtyId: (ptyId) => this.handleByPtyId.get(ptyId),
+      listTerminalHandles: () => Array.from(this.handles.keys())
+    }
+
+    this.mobilePublishFacade = {
+      publishMobileSessionTabs: async (worktreeId) =>
+        this.notifyMobileSessionTabsChanged(worktreeId),
+      notifyMobileSubscriber: async (worktreeId, clientNavigationId) =>
+        this.getMobileSessionTabsForWorktree(worktreeId, clientNavigationId),
+      publishMobileLayout: async () => {
+        // Layout updates are handled through notifyMobileSessionTabsChanged
+        return Promise.resolve()
+      },
+      scheduleMobileSessionTabsChanged: (worktreeId) =>
+        this.scheduleMobileSessionTabsChanged(worktreeId),
+      cancelScheduledMobileSessionTabsChanged: (worktreeId) =>
+        this.cancelScheduledMobileSessionTabsChanged(worktreeId)
+    }
+
+    this.worktreeQueryFacade = {
+      getWorktreeById: (worktreeId) => {
+        // Return worktree metadata from store if available
+        return this.store?.getWorktreeMeta?.(worktreeId)
+      },
+      listWorktrees: () => {
+        const repos = this.store?.getRepos?.() ?? []
+        return repos.flatMap((repo) => {
+          const worktrees = this.store?.getWorktreeMeta?.(repo.id)?.worktrees ?? []
+          return worktrees.map((wt) => wt.id)
+        })
+      },
+      getWorktreeStatus: () => 'ready',
+      resolveWorktreePath: (worktreeId) => {
+        const worktree = this.store?.getWorktreeMeta?.(worktreeId)
+        return worktree?.path
+      },
+      getRepositoryIdForWorktree: (worktreeId) => {
+        const worktree = this.store?.getWorktreeMeta?.(worktreeId)
+        return worktree?.repoId
+      },
+      getWorktreeBranch: (worktreeId) => {
+        const worktree = this.store?.getWorktreeMeta?.(worktreeId)
+        return worktree?.branch
+      }
+    }
+
+    this.agentStatusFacade = {
+      reportAgentStatus: async (handle) => {
+        // Agent status is reported through terminal agent status binding
+        return Promise.resolve()
+      },
+      publishAgentStatusUpdate: () => {
+        // Published through terminalAgentStatusBinding
+      },
+      notifyAgentStatusChanged: () => {
+        // Notifications sent through event listeners
+      },
+      getAgentStatus: (handle) => this.getTerminalAgentStatus(handle),
+      confirmAgentExit: (ptyId) => this.confirmPtyAgentExit(ptyId)
+    }
   }
 
   /**
