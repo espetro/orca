@@ -38,6 +38,8 @@ import { RuntimeHookAgentRowResolutionCommands } from './runtime-hook-agent-row-
 import type { RuntimeHookAgentRowResolutionCommandsDeps } from './runtime-hook-agent-row-resolution-commands-deps'
 import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import { RuntimeMobileSnapshotMergeCommands } from './runtime-mobile-snapshot-merge-commands'
+import { RuntimeMobileSessionTabSnapshotCommands } from './runtime-mobile-session-tab-snapshot-commands'
+import type { RuntimeMobileSessionTabSnapshotCommandsDeps } from './runtime-mobile-session-tab-snapshot-commands-deps'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
 import type {
@@ -316,13 +318,9 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import type { Tab, TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
-} from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
@@ -393,7 +391,6 @@ import {
 } from '../../shared/tab-activation-intent'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
-import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
 import {
   describeTerminalExitCause,
   isDeliberateTerminalExit,
@@ -664,10 +661,7 @@ import {
   SSH_PROVIDER_UNREGISTERED_REASON,
   type PtyLivenessVerdict
 } from '../../shared/pty-liveness-verdict'
-import {
-  advanceTerminalTopologyRevision,
-  hasHostAuthoritativeTerminalMembership
-} from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
@@ -3829,6 +3823,44 @@ export class OrcaRuntimeService {
         mobileSessionTabsChangeSequence.value = v
       }
     })
+    const mobileSessionTabSnapshotCommandsDeps: RuntimeMobileSessionTabSnapshotCommandsDeps = {
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      mobileSessionTabListeners: this.mobileSessionTabListeners,
+      mobileSessionTabsChangeSequence,
+      offscreenBrowserBackend: this.offscreenBrowserBackend,
+      agentBrowserBridge: this.agentBrowserBridge,
+      notifyMobileSessionTabsChanged: (worktreeId) =>
+        this.notifyMobileSessionTabsChanged(worktreeId),
+      scheduleMobileSessionTabsChanged: (worktreeId) =>
+        this.scheduleMobileSessionTabsChanged(worktreeId),
+      getTerminalWorktreeIdForPaneKey: (paneKey) => this.getTerminalWorktreeIdForPaneKey(paneKey),
+      getWorkspaceSessionForWorktree: (worktreeId) =>
+        this.getWorkspaceSessionForWorktree(worktreeId),
+      getWorkspaceSessionForHostId: (hostId) => this.getWorkspaceSessionForHostId(hostId),
+      tryGetWorkspaceSessionHostIdForWorktree: (worktreeId) =>
+        this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId),
+      setWorkspaceSession: (session, hostId) => this.setWorkspaceSession(session, hostId),
+      setWorkspaceSessionForWorktree: (worktreeId, session) =>
+        this.setWorkspaceSessionForWorktree(worktreeId, session),
+      canSetWorkspaceSession: () => this.canSetWorkspaceSession(),
+      flushOrThrow: this.flushOrThrow,
+      hasHostAuthoritativeTerminalMembership: (session, worktreeId) =>
+        this.hasHostAuthoritativeTerminalMembership(session, worktreeId),
+      terminalTopologyRevisionByRepoId: this.terminalTopologyRevisionByRepoId,
+      ptysById: this.ptysById,
+      parsePaneKey: (key) => parsePaneKey(key),
+      buildHeadlessTerminalSplitLayout: (layout, options) =>
+        this.buildHeadlessTerminalSplitLayout(layout, options),
+      getRuntimeInstance: () => this,
+      toMobileSessionTabsResult: (snapshot) => this.toMobileSessionTabsResult(snapshot),
+      projectMobileSessionTabsForClient: (result, clientNavigationId) =>
+        this.projectMobileSessionTabsForClient(result, clientNavigationId),
+      withClientHostedPagesHold: (result, clientNavigationId) =>
+        this.withClientHostedPagesHold(result, clientNavigationId)
+    }
+    this.mobileTabSnapshots = new RuntimeMobileSessionTabSnapshotCommands(
+      mobileSessionTabSnapshotCommandsDeps
+    )
   }
 
   /**
@@ -7152,821 +7184,6 @@ export class OrcaRuntimeService {
     if (args.notify !== false) {
       this.notifyMobileSessionTabsChanged(worktreeId)
     }
-  }
-
-  private touchMobileSessionSnapshotsForPty(
-    ptyId: string,
-    options: { immediate?: boolean } = {}
-  ): void {
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (!hasPtyBackedTab) {
-        continue
-      }
-      this.touchMobileSessionTabsForWorktree(worktreeId, options)
-    }
-  }
-
-  private getMobileSessionWorktreeIdsForPty(ptyId: string): string[] {
-    const worktreeIds: string[] = []
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (hasPtyBackedTab) {
-        worktreeIds.push(worktreeId)
-      }
-    }
-    return worktreeIds
-  }
-
-  /** Bump the snapshot version and emit, coalesced unless `immediate`.
-   *  Why the bump: clients gate mirrored snapshots on a strictly increasing
-   *  `snapshotVersion`, so a re-emit at the same version is silently dropped. */
-  touchMobileSessionTabsForWorktree(
-    worktreeId: string,
-    options: { immediate?: boolean } = {}
-  ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
-      return
-    }
-    this.mobileSessionTabsByWorktree.set(worktreeId, {
-      ...snapshot,
-      snapshotVersion: snapshot.snapshotVersion + 1
-    })
-    if (options.immediate) {
-      // Why: readiness/lifecycle changes are structural and must not wait
-      // behind the title/status coalescing window.
-      this.notifyMobileSessionTabsChanged(worktreeId)
-      return
-    }
-    // Why: title/status flips several times a second under spinner-in-title
-    // agents. Coalesce the emit instead of fanning out every version.
-    this.scheduleMobileSessionTabsChanged(worktreeId)
-  }
-
-  /** Republish the workspace snapshot after a pane's hook status changed.
-   *  Hook rows feed the headless `agentStatus` projection, which nothing else touches. */
-  touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void {
-    const resolved = worktreeId ?? this.getTerminalWorktreeIdForPaneKey(paneKey)
-    if (!resolved) {
-      return
-    }
-    this.touchMobileSessionTabsForWorktree(resolved)
-  }
-
-  private mobileSessionSnapshotHasSurface(
-    worktreeId: string,
-    parentTabId: string,
-    leafId: string
-  ): boolean {
-    return Boolean(
-      this.mobileSessionTabsByWorktree
-        .get(worktreeId)
-        ?.tabs.some(
-          (tab) =>
-            tab.type === 'terminal' && tab.parentTabId === parentTabId && tab.leafId === leafId
-        )
-    )
-  }
-
-  private isMobileSessionSurfaceMembershipAllowed(
-    worktreeId: string,
-    parentTabId: string,
-    leafId: string,
-    candidatePtyId: string | null | undefined
-  ): boolean {
-    const session = this.store?.getWorkspaceSession?.()
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    if (
-      !hasHostAuthoritativeTerminalMembership(session, worktreeId) &&
-      (session !== undefined || !this.terminalTopologyRevisionByRepoId.has(repoId))
-    ) {
-      return true
-    }
-    if (this.mobileSessionSnapshotHasSurface(worktreeId, parentTabId, leafId)) {
-      return true
-    }
-    if (!candidatePtyId) {
-      return false
-    }
-    const pty = this.ptysById.get(candidatePtyId)
-    const pane = parsePaneKey(pty?.paneKey ?? '')
-    return Boolean(
-      pty?.connected &&
-      pty.worktreeId === worktreeId &&
-      pty.tabId === parentTabId &&
-      pane?.leafId === leafId
-    )
-  }
-
-  private reconcileMobileSessionRetirementFences(
-    leaves: readonly RuntimeSyncedLeaf[]
-  ): RuntimeSyncedLeaf[] {
-    return leaves.filter((leaf) =>
-      this.isMobileSessionSurfaceMembershipAllowed(
-        leaf.worktreeId,
-        leaf.tabId,
-        leaf.leafId,
-        leaf.ptyId
-      )
-    )
-  }
-
-  private applyMobileSessionRetirementFences(
-    snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsSnapshot {
-    let next = snapshot
-    for (const tab of snapshot.tabs) {
-      if (
-        tab.type !== 'terminal' ||
-        this.isMobileSessionSurfaceMembershipAllowed(
-          snapshot.worktree,
-          tab.parentTabId,
-          tab.leafId,
-          tab.ptyId
-        )
-      ) {
-        continue
-      }
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot: next,
-        ptyId: tab.ptyId ?? '',
-        exactSurfaces: [{ parentTabId: tab.parentTabId, leafId: tab.leafId }],
-        exactOnly: true
-      })
-      if (retired) {
-        next = retired.snapshot
-      }
-    }
-    return next
-  }
-
-  /**
-   * Retires each surface in the session partition of the host that owns its worktree.
-   * Why: an SSH pane's durable surface lives in that connection's partition; retiring it
-   * against the local partition strands the real ghost and bumps a foreign host's epoch.
-   * Returns null when nothing may be published because persistence is unavailable or failed.
-   */
-  private persistTerminalSurfaceRetirements(
-    retiredSurfaces: readonly RetiredTerminalSurface[]
-  ): { accepted: RetiredTerminalSurface[]; unpersisted: RetiredTerminalSurface[] } | null {
-    const surfacesByHostId = new Map<ExecutionHostId, RetiredTerminalSurface[]>()
-    for (const surface of retiredSurfaces) {
-      const hostId =
-        this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? LOCAL_EXECUTION_HOST_ID
-      const bucket = surfacesByHostId.get(hostId)
-      if (bucket) {
-        bucket.push(surface)
-      } else {
-        surfacesByHostId.set(hostId, [surface])
-      }
-    }
-    const accepted: RetiredTerminalSurface[] = []
-    const unpersisted: RetiredTerminalSurface[] = []
-    const pendingWrites: { hostId: ExecutionHostId; session: WorkspaceSessionState }[] = []
-    for (const [hostId, surfaces] of surfacesByHostId) {
-      const session = this.store?.getWorkspaceSession?.(hostId)
-      if (!session) {
-        unpersisted.push(...surfaces)
-        continue
-      }
-      // Why: publishing absence before its host membership fence is durable lets a crash or
-      // stale renderer write resurrect the retired surface.
-      if (!this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
-        return null
-      }
-      let nextSession = session
-      const acceptedForHost: RetiredTerminalSurface[] = []
-      for (const surface of surfaces) {
-        const candidate = retireTerminalSurfaceFromPersistence(nextSession, surface)
-        if (candidate !== nextSession) {
-          acceptedForHost.push(surface)
-          nextSession = candidate
-        }
-      }
-      if (acceptedForHost.length === 0) {
-        continue
-      }
-      accepted.push(...acceptedForHost)
-      pendingWrites.push({ hostId, session: nextSession })
-    }
-    if (pendingWrites.length > 0) {
-      try {
-        for (const write of pendingWrites) {
-          this.store?.setWorkspaceSession?.(write.session, write.hostId)
-        }
-        this.store?.flushOrThrow?.()
-      } catch (error) {
-        console.error('[runtime] failed to persist terminal retirement:', error)
-        return null
-      }
-    }
-    return { accepted, unpersisted }
-  }
-
-  private retireMobileSessionSurfacesForPty(
-    ptyId: string,
-    incarnationId: string,
-    exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
-  ): void {
-    const retiredSurfaceByKey = new Map<string, RetiredTerminalSurface>()
-    for (const surface of exactSurfaces) {
-      retiredSurfaceByKey.set(`${surface.worktreeId}\0${surface.parentTabId}\0${surface.leafId}`, {
-        ...surface,
-        ptyId,
-        incarnationId
-      })
-    }
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot,
-        ptyId,
-        exactSurfaces: exactSurfaces.filter((surface) => surface.worktreeId === worktreeId)
-      })
-      if (!retired) {
-        continue
-      }
-      for (const surface of retired.retired) {
-        retiredSurfaceByKey.set(
-          `${surface.worktreeId}\0${surface.parentTabId}\0${surface.leafId}`,
-          { ...surface, incarnationId }
-        )
-      }
-    }
-    const retiredSurfaces = [...retiredSurfaceByKey.values()]
-    if (retiredSurfaces.length === 0) {
-      return
-    }
-    const persisted = this.persistTerminalSurfaceRetirements(retiredSurfaces)
-    if (!persisted) {
-      return
-    }
-    for (const surface of persisted.unpersisted) {
-      const repoId = getRepoIdFromWorktreeId(surface.worktreeId)
-      this.terminalTopologyRevisionByRepoId.set(
-        repoId,
-        (this.terminalTopologyRevisionByRepoId.get(repoId) ?? 0) + 1
-      )
-    }
-    // Why: one repo epoch can cover multiple exits, but only surfaces individually accepted by persistence may disappear.
-    const publishableRetiredSurfaces = [...persisted.accepted, ...persisted.unpersisted]
-    if (publishableRetiredSurfaces.length === 0) {
-      return
-    }
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot,
-        ptyId,
-        exactSurfaces: publishableRetiredSurfaces.filter(
-          (surface) => surface.worktreeId === worktreeId
-        ),
-        // Why: discovery is broad by PTY id, but publication may remove only surfaces whose durable retirement was accepted.
-        exactOnly: true
-      })
-      if (retired) {
-        this.mobileSessionTabsByWorktree.set(worktreeId, retired.snapshot)
-        this.notifyMobileSessionTabsChanged(worktreeId)
-      }
-    }
-  }
-
-  private buildHeadlessMobileSessionTerminalTabs(
-    worktreeId: string,
-    persistedTabs: readonly TerminalTab[],
-    session: WorkspaceSessionState
-  ): RuntimeMobileSessionTerminalTab[] {
-    return [...persistedTabs]
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
-      .flatMap((tab, index) => {
-        const layout = session.terminalLayoutsByTabId?.[tab.id]
-        const leafIds = this.collectPersistedTerminalLeafIds(layout)
-        if (leafIds.length === 0) {
-          leafIds.push(this.deriveHeadlessLegacyTerminalLeafId(tab.id))
-        }
-        return leafIds.flatMap((leafId) => {
-          const ptyId =
-            layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
-          const title =
-            tab.customTitle?.trim() ||
-            tab.generatedTitle?.trim() ||
-            tab.title?.trim() ||
-            tab.defaultTitle?.trim() ||
-            `Terminal ${index + 1}`
-          return [
-            {
-              type: 'terminal' as const,
-              id: `${tab.id}::${leafId}`,
-              parentTabId: tab.id,
-              leafId,
-              title,
-              ...(ptyId ? { ptyId } : {}),
-              ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-              ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
-              ...(layout ? { parentLayout: this.cloneTerminalLayoutSnapshot(layout) } : {}),
-              ...(tab.color != null ? { color: tab.color } : {}),
-              ...(tab.isPinned ? { isPinned: true } : {}),
-              ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
-              isActive: this.isPersistedTerminalLeafActive(
-                session,
-                worktreeId,
-                tab.id,
-                leafId,
-                layout
-              )
-            }
-          ]
-        })
-      })
-  }
-
-  // Why: headless serve backs browser panes with offscreen WebContents that live
-  // only in the BrowserManager, never in a renderer graph. Without surfacing them
-  // as session tabs, a session.tabs snapshot (e.g. on terminal open) prunes the
-  // paired browser tab and closing it fails with tab_not_found. Synthesize browser
-  // session tabs from the live bridge so they are first-class alongside terminals.
-  private buildHeadlessMobileSessionBrowserTabs(
-    worktreeId: string
-  ): RuntimeMobileSessionBrowserTab[] {
-    const serverTabs =
-      this.offscreenBrowserBackend && this.agentBrowserBridge?.tabList
-        ? this.agentBrowserBridge.tabList(worktreeId).tabs
-        : []
-    const publishedServerTabs = serverTabs.map((tab) => {
-      const persistedProps = this.getPersistedUnifiedSessionTabProps(worktreeId, tab.browserPageId)
-      return {
-        type: 'browser' as const,
-        // Why: an offscreen page has no separate workspace identity, so the page id
-        // is its own workspace id (matches the server's browserWorkspaceId fallback).
-        id: tab.browserPageId,
-        title: tab.title || tab.url || 'Browser',
-        browserWorkspaceId: tab.browserPageId,
-        browserPageId: tab.browserPageId,
-        url: tab.url || 'about:blank',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false,
-        loadError: tab.loadError ?? undefined,
-        certificateFailure: tab.certificateFailure ?? undefined,
-        ...(persistedProps ? { color: persistedProps.color } : {}),
-        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
-        isActive: tab.active === true
-      }
-    })
-    const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .map((page) => ({
-        type: 'browser' as const,
-        id: page.browserPageId,
-        title: page.title || page.url || 'Browser',
-        browserWorkspaceId: page.browserPageId,
-        browserPageId: page.browserPageId,
-        browserProfileId: page.browserProfileId,
-        executionHostKey: page.executionHostKey,
-        placement: page.placement,
-        url: page.url,
-        loading: page.loading,
-        canGoBack: page.canGoBack,
-        canGoForward: page.canGoForward,
-        isActive: page.active
-      }))
-    return [...publishedServerTabs, ...publishedClientTabs]
-  }
-
-  // Why: change detection for headless browser tabs. Compares the fields that
-  // actually vary (a JSON.stringify equality was order-sensitive and silently
-  // dropped `undefined` keys, so it only worked while both sides shared one
-  // construction path).
-  private headlessBrowserTabsUnchanged(
-    live: RuntimeMobileSessionBrowserTab[],
-    existing: RuntimeMobileSessionBrowserTab[]
-  ): boolean {
-    if (live.length !== existing.length) {
-      return false
-    }
-    return live.every((tab, index) => {
-      const prev = existing[index]
-      return (
-        tab.id === prev.id &&
-        tab.title === prev.title &&
-        tab.url === prev.url &&
-        tab.loading === prev.loading &&
-        tab.canGoBack === prev.canGoBack &&
-        tab.canGoForward === prev.canGoForward &&
-        tab.browserProfileId === prev.browserProfileId &&
-        tab.executionHostKey === prev.executionHostKey &&
-        ((tab.placement === undefined && prev.placement === undefined) ||
-          (tab.placement !== undefined &&
-            prev.placement !== undefined &&
-            sameRuntimeBrowserPlacement(tab.placement, prev.placement))) &&
-        tab.isActive === prev.isActive &&
-        (tab.isPinned ?? false) === (prev.isPinned ?? false) &&
-        (tab.color ?? null) === (prev.color ?? null) &&
-        this.browserLoadErrorsEqual(tab.loadError, prev.loadError) &&
-        this.browserCertificateFailuresEqual(tab.certificateFailure, prev.certificateFailure)
-      )
-    })
-  }
-
-  private browserLoadErrorsEqual(
-    a: RuntimeMobileSessionBrowserTab['loadError'],
-    b: RuntimeMobileSessionBrowserTab['loadError']
-  ): boolean {
-    const left = a ?? null
-    const right = b ?? null
-    if (left === right) {
-      return true
-    }
-    if (!left || !right) {
-      return false
-    }
-    return (
-      left.code === right.code &&
-      left.description === right.description &&
-      left.validatedUrl === right.validatedUrl
-    )
-  }
-
-  private browserCertificateFailuresEqual(
-    a: RuntimeMobileSessionBrowserTab['certificateFailure'],
-    b: RuntimeMobileSessionBrowserTab['certificateFailure']
-  ): boolean {
-    const left = a ?? null
-    const right = b ?? null
-    if (left === right) {
-      return true
-    }
-    if (!left || !right) {
-      return false
-    }
-    return (
-      left.challengeId === right.challengeId &&
-      left.browserPageId === right.browserPageId &&
-      left.errorCode === right.errorCode &&
-      left.error === right.error &&
-      left.origin === right.origin &&
-      left.displayHost === right.displayHost &&
-      left.canProceed === right.canProceed &&
-      left.observedAt === right.observedAt
-    )
-  }
-
-  private getPersistedUnifiedSessionTabProps(
-    worktreeId: string,
-    tabId: string
-  ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
-    return tab ? { color: tab.color, isPinned: tab.isPinned } : null
-  }
-
-  private collectPersistedTerminalLeafIds(layout: TerminalLayoutSnapshot | undefined): string[] {
-    if (!layout) {
-      return []
-    }
-    const leafIds = new Set<string>()
-    const visit = (node: TerminalLayoutSnapshot['root']): void => {
-      if (!node) {
-        return
-      }
-      if (node.type === 'leaf') {
-        if (isTerminalLeafId(node.leafId)) {
-          leafIds.add(node.leafId)
-        }
-        return
-      }
-      visit(node.first)
-      visit(node.second)
-    }
-    visit(layout.root)
-    if (layout.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
-      leafIds.add(layout.activeLeafId)
-    }
-    for (const leafId of Object.keys(layout.ptyIdsByLeafId ?? {})) {
-      if (isTerminalLeafId(leafId)) {
-        leafIds.add(leafId)
-      }
-    }
-    return [...leafIds]
-  }
-
-  private deriveHeadlessLegacyTerminalLeafId(tabId: string): string {
-    const hash = createHash('sha256').update(`headless-terminal-leaf:${tabId}`).digest('hex')
-    const variant = ((Number.parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16)
-    const leafId = [
-      hash.slice(0, 8),
-      hash.slice(8, 12),
-      `4${hash.slice(13, 16)}`,
-      `${variant}${hash.slice(17, 20)}`,
-      hash.slice(20, 32)
-    ].join('-')
-    if (!isTerminalLeafId(leafId)) {
-      return randomUUID()
-    }
-    return leafId
-  }
-
-  private cloneTerminalLayoutSnapshot(layout: TerminalLayoutSnapshot): TerminalLayoutSnapshot {
-    const cloned: TerminalLayoutSnapshot = {
-      root: layout.root,
-      activeLeafId: layout.activeLeafId,
-      expandedLeafId: layout.expandedLeafId
-    }
-    if (layout.ptyIdsByLeafId) {
-      cloned.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }
-    }
-    if (layout.buffersByLeafId) {
-      cloned.buffersByLeafId = { ...layout.buffersByLeafId }
-    }
-    if (layout.scrollbackRefsByLeafId) {
-      cloned.scrollbackRefsByLeafId = { ...layout.scrollbackRefsByLeafId }
-    }
-    if (layout.titlesByLeafId) {
-      cloned.titlesByLeafId = { ...layout.titlesByLeafId }
-    }
-    return cloned
-  }
-
-  private isPersistedTerminalLeafActive(
-    session: WorkspaceSessionState,
-    worktreeId: string,
-    tabId: string,
-    leafId: string,
-    layout: TerminalLayoutSnapshot | undefined
-  ): boolean {
-    const activeTabId = session.activeTabIdByWorktree?.[worktreeId] ?? session.activeTabId
-    return activeTabId === tabId && (!layout?.activeLeafId || layout.activeLeafId === leafId)
-  }
-
-  private pickHeadlessActiveTerminalTab(
-    tabs: readonly RuntimeMobileSessionTerminalTab[]
-  ): RuntimeMobileSessionTerminalTab | null {
-    return tabs.find((tab) => tab.isActive) ?? tabs.find((tab) => tab.parentTabId) ?? null
-  }
-
-  private collectHeadlessParentTabOrder(
-    tabs: readonly RuntimeMobileSessionTerminalTab[]
-  ): string[] {
-    const order: string[] = []
-    const seen = new Set<string>()
-    for (const tab of tabs) {
-      if (!seen.has(tab.parentTabId)) {
-        seen.add(tab.parentTabId)
-        order.push(tab.parentTabId)
-      }
-    }
-    return order
-  }
-
-  // Why: the group tab order must follow actual creation/insertion order across
-  // both terminals and browsers, not list terminals first. A terminal's top-level
-  // id is its parentTabId (split leaves share one); a browser's is its own id.
-  private collectHeadlessTopLevelTabOrder(
-    tabs: readonly RuntimeMobileSessionSnapshotTab[]
-  ): string[] {
-    const order: string[] = []
-    const seen = new Set<string>()
-    for (const tab of tabs) {
-      const topLevelId = tab.type === 'terminal' ? tab.parentTabId : tab.id
-      if (!seen.has(topLevelId)) {
-        seen.add(topLevelId)
-        order.push(topLevelId)
-      }
-    }
-    return order
-  }
-
-  private getHeadlessMobileSessionGroupId(worktreeId: string): string {
-    return `headless-terminals:${worktreeId}`
-  }
-
-  private buildHeadlessMobileSessionTabGroups(
-    worktreeId: string,
-    tabs: readonly RuntimeMobileSessionSnapshotTab[],
-    activeTab: RuntimeMobileSessionSnapshotTab | null,
-    existingGroups?: readonly RuntimeMobileSessionTabGroup[],
-    // Why: a new tab created via a specific group's "+" must land in THAT group,
-    // not the active one — otherwise every "+" in a split funnels to one group.
-    newTabAssignment?: { tabId: string; groupId: string }
-  ): RuntimeMobileSessionTabGroup[] {
-    // Why: order across terminals and browsers in their actual array order so a
-    // tab opened after a browser tab lands to its right, not regrouped before it.
-    const tabOrder = this.collectHeadlessTopLevelTabOrder(tabs)
-    const topLevelOf = (tab: RuntimeMobileSessionSnapshotTab): string =>
-      tab.type === 'terminal' ? tab.parentTabId : tab.id
-    const activeTopLevelId =
-      (activeTab ? topLevelOf(activeTab) : null) ??
-      existingGroups?.[0]?.activeTabId ??
-      (() => {
-        const active = tabs.find((tab) => tab.isActive)
-        return active ? topLevelOf(active) : null
-      })() ??
-      tabOrder[0] ??
-      null
-
-    // Why: when the user has split tabs into multiple groups, preserve that
-    // assignment across rebuilds instead of coalescing back to one group.
-    if (existingGroups && existingGroups.length > 1) {
-      return this.distributeHeadlessTabsAcrossGroups(
-        existingGroups,
-        tabOrder,
-        activeTopLevelId,
-        newTabAssignment
-      )
-    }
-
-    const groupId = existingGroups?.[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
-    return [
-      {
-        id: groupId,
-        activeTabId:
-          activeTopLevelId && tabOrder.includes(activeTopLevelId)
-            ? activeTopLevelId
-            : (tabOrder[0] ?? null),
-        tabOrder
-      }
-    ]
-  }
-
-  // Distribute live top-level tabs into the existing multi-group structure,
-  // keeping each tab in its group; tabs new since the last snapshot join the
-  // active group. Emptied groups are dropped so a closed split collapses.
-  private distributeHeadlessTabsAcrossGroups(
-    existingGroups: readonly RuntimeMobileSessionTabGroup[],
-    tabOrder: readonly string[],
-    activeTopLevelId: string | null,
-    newTabAssignment?: { tabId: string; groupId: string }
-  ): RuntimeMobileSessionTabGroup[] {
-    const groupIdByTabId = new Map<string, string>()
-    for (const group of existingGroups) {
-      for (const tabId of group.tabOrder) {
-        groupIdByTabId.set(tabId, group.id)
-      }
-    }
-    // Why: route a freshly-created tab to the group its "+" was clicked in,
-    // when that group still exists; otherwise fall through to the active group.
-    const hasTargetGroup =
-      newTabAssignment !== undefined &&
-      existingGroups.some((group) => group.id === newTabAssignment.groupId)
-    if (hasTargetGroup) {
-      groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
-    }
-    const activeGroupId =
-      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ?? existingGroups[0]!.id
-    const orderByGroup = new Map<string, string[]>(existingGroups.map((group) => [group.id, []]))
-    for (const tabId of tabOrder) {
-      const groupId = groupIdByTabId.get(tabId) ?? activeGroupId
-      orderByGroup.get(groupId)?.push(tabId)
-    }
-    return existingGroups
-      .map((group) => {
-        const nextOrder = orderByGroup.get(group.id) ?? []
-        return {
-          ...group,
-          tabOrder: nextOrder,
-          activeTabId:
-            activeTopLevelId && nextOrder.includes(activeTopLevelId)
-              ? activeTopLevelId
-              : group.activeTabId && nextOrder.includes(group.activeTabId)
-                ? group.activeTabId
-                : (nextOrder[0] ?? null)
-        }
-      })
-      .filter((group) => group.tabOrder.length > 0)
-  }
-
-  private buildMaterializedHeadlessParentLayout(
-    leafId: string,
-    ptyId: string,
-    existingLayout: TerminalLayoutSnapshot | undefined,
-    split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
-  ): TerminalLayoutSnapshot {
-    if (!existingLayout) {
-      return {
-        root: { type: 'leaf', leafId },
-        activeLeafId: leafId,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [leafId]: ptyId }
-      }
-    }
-    // Why: a split must insert the new leaf into the live layout tree with the
-    // requested direction, or the published snapshot keeps the old single-leaf
-    // root and the split renders with a fallback direction ("Split Right" lands
-    // as a top/bottom split). Reuse the persisted-split builder for parity.
-    if (split) {
-      return buildHeadlessTerminalSplitLayout(this.cloneTerminalLayoutSnapshot(existingLayout), {
-        leafId,
-        ptyId,
-        splitFromLeafId: split.splitFromLeafId,
-        direction: split.direction
-      })
-    }
-    return {
-      ...this.cloneTerminalLayoutSnapshot(existingLayout),
-      ptyIdsByLeafId: {
-        ...existingLayout.ptyIdsByLeafId,
-        [leafId]: ptyId
-      }
-    }
-  }
-
-  private removePersistedHeadlessTerminalTab(
-    worktreeId: string,
-    parentTabId: string,
-    options: { allowMissing?: boolean } = {}
-  ): string[] {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      throw new Error('workspace_session_unavailable')
-    }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId)
-    if (result.pinned) {
-      throw new Error('terminal_tab_pinned')
-    }
-    if (!result.closed) {
-      if (options.allowMissing) {
-        return []
-      }
-      throw new Error('tab_not_found')
-    }
-    this.setWorkspaceSessionForWorktree(
-      worktreeId,
-      advanceTerminalTopologyRevision(result.session, worktreeId)
-    )
-    return result.ptyIdsToKill
-  }
-
-  private persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return
-    }
-    const orderIndexByTabId = new Map(tabOrder.map((tabId, index) => [tabId, index]))
-    const tabs = session.tabsByWorktree[worktreeId] ?? []
-    const reordered = [...tabs]
-      .sort((a, b) => {
-        const aIndex = orderIndexByTabId.get(a.id) ?? Number.MAX_SAFE_INTEGER
-        const bIndex = orderIndexByTabId.get(b.id) ?? Number.MAX_SAFE_INTEGER
-        return aIndex - bIndex || a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
-      })
-      .map((tab, index) => ({
-        ...tab,
-        sortOrder: index
-      }))
-    this.setWorkspaceSessionForWorktree(worktreeId, {
-      ...session,
-      tabsByWorktree: {
-        ...session.tabsByWorktree,
-        [worktreeId]: reordered
-      }
-    })
-  }
-
-  private emitMobileSessionTabsSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void {
-    if (this.mobileSessionTabListeners.size === 0) {
-      return
-    }
-    const result = this.toMobileSessionTabsResult(snapshot)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
-  }
-
-  /**
-   * Answers one client's session-tabs question: whether this runtime has taken back *that* client's
-   * client-hosted pages yet, then that client's own tab selection.
-   *
-   * The hold is decided here and nowhere else, and it is set or cleared rather than only set, so a
-   * frame built for one client can never carry another client's answer.
-   */
-  private projectMobileSessionTabsForClient(
-    result: RuntimeMobileSessionTabsResult,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult {
-    return this.clientSessionTabSelections.project(
-      this.withClientHostedPagesHold(result, clientNavigationId),
-      clientNavigationId
-    )
-  }
-
-  private withClientHostedPagesHold(
-    result: RuntimeMobileSessionTabsResult,
-    clientNavigationId: string | undefined
-  ): RuntimeMobileSessionTabsResult {
-    return this.clientHostedPageReconciliation.holdFor(result, clientNavigationId, Date.now())
   }
 
   private async refreshMobileSessionPtyRecords(
@@ -33170,6 +32387,7 @@ export class OrcaRuntimeService {
 
   private readonly snapshotValueComparison: RuntimeMobileSnapshotValueComparisonCommands
   private readonly mobileSnapshotMerge: RuntimeMobileSnapshotMergeCommands
+  private readonly mobileTabSnapshots: RuntimeMobileSessionTabSnapshotCommands
 
   // eslint-disable @typescript-eslint/no-explicit-any -- Delegation methods use any to forward arbitrary arguments
   // Delegation methods for RuntimeMobileSnapshotValueComparisonCommands:
@@ -33320,6 +32538,74 @@ export class OrcaRuntimeService {
     return (this.mobileSnapshotMerge as any).emitMobileSessionTabsSnapshotToClient(
       ...(arguments as any)
     )
+  }
+
+  // Delegation methods for RuntimeMobileSessionTabSnapshotCommands:
+
+  touchMobileSessionSnapshotsForPty() {
+    return (this.mobileTabSnapshots as any).touchMobileSessionSnapshotsForPty(...(arguments as any))
+  }
+
+  getMobileSessionWorktreeIdsForPty() {
+    return (this.mobileTabSnapshots as any).getMobileSessionWorktreeIdsForPty(...(arguments as any))
+  }
+
+  touchMobileSessionTabsForWorktree() {
+    return (this.mobileTabSnapshots as any).touchMobileSessionTabsForWorktree(...(arguments as any))
+  }
+
+  touchMobileSessionTabsForPane() {
+    return (this.mobileTabSnapshots as any).touchMobileSessionTabsForPane(...(arguments as any))
+  }
+
+  buildHeadlessMobileSessionTerminalTabs() {
+    return (this.mobileTabSnapshots as any).buildHeadlessMobileSessionTerminalTabs(
+      ...(arguments as any)
+    )
+  }
+
+  buildHeadlessMobileSessionBrowserTabs() {
+    return (this.mobileTabSnapshots as any).buildHeadlessMobileSessionBrowserTabs(
+      ...(arguments as any)
+    )
+  }
+
+  buildHeadlessMobileSessionTabGroups() {
+    return (this.mobileTabSnapshots as any).buildHeadlessMobileSessionTabGroups(
+      ...(arguments as any)
+    )
+  }
+
+  buildMaterializedHeadlessParentLayout() {
+    return (this.mobileTabSnapshots as any).buildMaterializedHeadlessParentLayout(
+      ...(arguments as any)
+    )
+  }
+
+  removePersistedHeadlessTerminalTab() {
+    return (this.mobileTabSnapshots as any).removePersistedHeadlessTerminalTab(
+      ...(arguments as any)
+    )
+  }
+
+  persistHeadlessTerminalTabOrder() {
+    return (this.mobileTabSnapshots as any).persistHeadlessTerminalTabOrder(...(arguments as any))
+  }
+
+  emitMobileSessionTabsSnapshot() {
+    return (this.mobileTabSnapshots as any).emitMobileSessionTabsSnapshot(...(arguments as any))
+  }
+
+  projectMobileSessionTabsForClient() {
+    return (this.mobileTabSnapshots as any).projectMobileSessionTabsForClient(...(arguments as any))
+  }
+
+  withClientHostedPagesHold() {
+    return (this.mobileTabSnapshots as any).withClientHostedPagesHold(...(arguments as any))
+  }
+
+  private getHeadlessMobileSessionGroupId() {
+    return (this.mobileTabSnapshots as any).getHeadlessMobileSessionGroupId(...(arguments as any))
   }
 
   // eslint-enable @typescript-eslint/no-explicit-any

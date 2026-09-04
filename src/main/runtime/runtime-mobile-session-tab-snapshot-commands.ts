@@ -1,16 +1,29 @@
-import type { ExecutionHostId, LocalProjectRuntimeResolution } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { closeTerminalTabInWorkspaceSession, advanceTerminalTopologyRevision } from '../../shared/workspace-session-terminal-tab-close'
-import { retireTerminalSurfacesFromSnapshot, retireTerminalSurfaceFromPersistence, type RetiredTerminalSurface } from './mobile-session-terminal-retirement'
+import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import {
+  retireTerminalSurfacesFromSnapshot,
+  type RetiredTerminalSurface
+} from './mobile-session-terminal-retirement'
+import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
-import type { RuntimeMobileSessionBrowserTab, RuntimeMobileSessionSnapshotTab, RuntimeMobileSessionTabGroup, RuntimeMobileSessionTerminalTab, RuntimeMobileSessionTabsResult, RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionBrowserTab,
+  RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTabGroup,
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../shared/runtime-types'
 import { createHash, randomUUID } from 'node:crypto'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../shared/stable-pane-id'
 import type { RuntimeMobileSessionTabSnapshotCommandsDeps } from './runtime-mobile-session-tab-snapshot-commands-deps'
 
+/* eslint-disable max-lines -- Why: extracted mobile session tab snapshot commands facade consolidates tab building, reconciliation, and persistence logic. */
 export class RuntimeMobileSessionTabSnapshotCommands {
   constructor(private readonly deps: RuntimeMobileSessionTabSnapshotCommandsDeps) {}
 
@@ -43,7 +56,10 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     return worktreeIds
   }
 
-  touchMobileSessionTabsForWorktree(worktreeId: string, options: { immediate?: boolean } = {}): void {
+  touchMobileSessionTabsForWorktree(
+    worktreeId: string,
+    options: { immediate?: boolean } = {}
+  ): void {
     const snapshot = this.deps.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
@@ -67,7 +83,11 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     this.touchMobileSessionTabsForWorktree(resolved)
   }
 
-  private mobileSessionSnapshotHasSurface(worktreeId: string, parentTabId: string, leafId: string): boolean {
+  private mobileSessionSnapshotHasSurface(
+    worktreeId: string,
+    parentTabId: string,
+    leafId: string
+  ): boolean {
     return Boolean(
       this.deps.mobileSessionTabsByWorktree
         .get(worktreeId)
@@ -111,18 +131,21 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     )
   }
 
-  private reconcileMobileSessionRetirementFences(leaves: readonly any[]): any[] {
-    return leaves.filter((leaf) =>
-      this.isMobileSessionSurfaceMembershipAllowed(
-        leaf.worktreeId,
-        leaf.tabId,
-        leaf.leafId,
-        leaf.ptyId
+  private reconcileMobileSessionRetirementFences(leaves: readonly unknown[]): unknown[] {
+    return leaves.filter((leaf: unknown) => {
+      const leafAny = leaf as any // eslint-disable-line @typescript-eslint/no-explicit-any
+      return this.isMobileSessionSurfaceMembershipAllowed(
+        leafAny.worktreeId,
+        leafAny.tabId,
+        leafAny.leafId,
+        leafAny.ptyId
       )
-    )
+    })
   }
 
-  private applyMobileSessionRetirementFences(snapshot: RuntimeMobileSessionTabsSnapshot): RuntimeMobileSessionTabsSnapshot {
+  private applyMobileSessionRetirementFences(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
     let next = snapshot
     for (const tab of snapshot.tabs) {
       if (
@@ -154,7 +177,8 @@ export class RuntimeMobileSessionTabSnapshotCommands {
   ): { accepted: RetiredTerminalSurface[]; unpersisted: RetiredTerminalSurface[] } | null {
     const surfacesByHostId = new Map<ExecutionHostId, RetiredTerminalSurface[]>()
     for (const surface of retiredSurfaces) {
-      const hostId = this.deps.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? 'local'
+      const hostId =
+        this.deps.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? 'local'
       const bucket = surfacesByHostId.get(hostId)
       if (bucket) {
         bucket.push(surface)
@@ -427,11 +451,16 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     )
   }
 
-  private getPersistedUnifiedSessionTabProps(worktreeId: string, tabId: string): Pick<any, 'color' | 'isPinned'> | null {
+  private getPersistedUnifiedSessionTabProps(
+    worktreeId: string,
+    tabId: string
+  ): Pick<unknown, 'color' | 'isPinned'> | null {
     const tab =
-      this.deps.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
+      this.deps
+        .getWorkspaceSessionForWorktree(worktreeId)
+        ?.unifiedTabs?.[worktreeId]?.find(
+          (candidate) => candidate.id === tabId || candidate.entityId === tabId
+        ) ?? null
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
@@ -440,18 +469,19 @@ export class RuntimeMobileSessionTabSnapshotCommands {
       return []
     }
     const leafIds = new Set<string>()
-    const visit = (node: any): void => {
-      if (!node) {
+    const visit = (node: unknown): void => {
+      const nodeAny = node as any // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (!nodeAny) {
         return
       }
-      if (node.type === 'leaf') {
-        if (isTerminalLeafId(node.leafId)) {
-          leafIds.add(node.leafId)
+      if (nodeAny.type === 'leaf') {
+        if (isTerminalLeafId(nodeAny.leafId)) {
+          leafIds.add(nodeAny.leafId)
         }
         return
       }
-      visit(node.first)
-      visit(node.second)
+      visit(nodeAny.first)
+      visit(nodeAny.second)
     }
     visit(layout.root)
     if (layout.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
@@ -519,7 +549,9 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     return tabs.find((tab) => tab.isActive) ?? tabs.find((tab) => tab.parentTabId) ?? null
   }
 
-  private collectHeadlessParentTabOrder(tabs: readonly RuntimeMobileSessionTerminalTab[]): string[] {
+  private collectHeadlessParentTabOrder(
+    tabs: readonly RuntimeMobileSessionTerminalTab[]
+  ): string[] {
     const order: string[] = []
     const seen = new Set<string>()
     for (const tab of tabs) {
@@ -531,7 +563,9 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     return order
   }
 
-  private collectHeadlessTopLevelTabOrder(tabs: readonly RuntimeMobileSessionSnapshotTab[]): string[] {
+  private collectHeadlessTopLevelTabOrder(
+    tabs: readonly RuntimeMobileSessionSnapshotTab[]
+  ): string[] {
     const order: string[] = []
     const seen = new Set<string>()
     for (const tab of tabs) {
@@ -647,12 +681,15 @@ export class RuntimeMobileSessionTabSnapshotCommands {
       }
     }
     if (split) {
-      return this.deps.buildHeadlessTerminalSplitLayout(this.cloneTerminalLayoutSnapshot(existingLayout), {
-        leafId,
-        ptyId,
-        splitFromLeafId: split.splitFromLeafId,
-        direction: split.direction
-      })
+      return this.deps.buildHeadlessTerminalSplitLayout(
+        this.cloneTerminalLayoutSnapshot(existingLayout),
+        {
+          leafId,
+          ptyId,
+          splitFromLeafId: split.splitFromLeafId,
+          direction: split.direction
+        }
+      )
     }
     return {
       ...this.cloneTerminalLayoutSnapshot(existingLayout),
@@ -716,12 +753,17 @@ export class RuntimeMobileSessionTabSnapshotCommands {
   }
 
   emitMobileSessionTabsSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void {
-    const { mobileSessionTabListeners, mobileSessionTabsChangeSequence, toMobileSessionTabsResult, projectMobileSessionTabsForClient } = this.deps
+    const {
+      mobileSessionTabListeners,
+      mobileSessionTabsChangeSequence,
+      toMobileSessionTabsResult,
+      projectMobileSessionTabsForClient
+    } = this.deps
     if (mobileSessionTabListeners.size === 0) {
       return
     }
     const result = toMobileSessionTabsResult(snapshot)
-    const changeSequence = mobileSessionTabsChangeSequence + 1
+    const changeSequence = ++mobileSessionTabsChangeSequence.value
     for (const subscription of mobileSessionTabListeners) {
       subscription.listener(
         projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
