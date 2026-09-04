@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: WP2 extracted handle/leaf registry (52 methods, 1560 LOC) */
+/* eslint-disable @typescript-eslint/no-unused-vars -- Why: Placeholder methods pending implementation */
 
 // 52 methods extracted from OrcaRuntimeService for handle/leaf management
 // WP2 refactor - handles and leaves: terminal handle allocation and leaf lifecycle management
@@ -11,210 +12,210 @@
 // Placeholder exports - these will be replaced with actual method implementations
 // when the extraction phase completes
 
-export function createTerminal(..._args: any[]): any {
+export function createTerminal(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function splitTerminal(..._args: any[]): any {
+export function splitTerminal(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function renameTerminal(..._args: any[]): any {
+export function renameTerminal(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function hasExactTerminalSurfaceIdentity(..._args: any[]): any {
+export function hasExactTerminalSurfaceIdentity(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function rollbackLegacyWorkerTerminalSurface(..._args: any[]): any {
+export function rollbackLegacyWorkerTerminalSurface(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getStatus(..._args: any[]): any {
+export function getStatus(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function syncWindowGraph(..._args: any[]): any {
+export function syncWindowGraph(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function collectMobileVisibleGraphChangedWorktrees(..._args: any[]): any {
+export function collectMobileVisibleGraphChangedWorktrees(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getMobileSessionTerminalHandle(..._args: any[]): any {
+export function getMobileSessionTerminalHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function issueStructuredTuiPtyHandle(..._args: any[]): any {
+export function issueStructuredTuiPtyHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function preAllocateHandleForPty(..._args: any[]): any {
+export function preAllocateHandleForPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function registerPreAllocatedHandleForPty(..._args: any[]): any {
+export function registerPreAllocatedHandleForPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function invalidateAllHandlesForPty(..._args: any[]): any {
+export function invalidateAllHandlesForPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function replaceSyntheticTerminalHandlesForRestoredPty(..._args: any[]): any {
+export function replaceSyntheticTerminalHandlesForRestoredPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function isTerminalHandleAdoptionBlocked(..._args: any[]): any {
+export function isTerminalHandleAdoptionBlocked(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolveLeafForHandle(..._args: any[]): any {
+export function resolveLeafForHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolveLiveLeafForHandle(..._args: any[]): any {
+export function resolveLiveLeafForHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function adoptTerminalOrphansFromInventory(..._args: any[]): any {
+export function adoptTerminalOrphansFromInventory(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolveActiveTerminal(..._args: any[]): any {
+export function resolveActiveTerminal(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getTerminalWorktreeIdForPaneKey(..._args: any[]): any {
+export function getTerminalWorktreeIdForPaneKey(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getTerminalLivenessVerdict(..._args: any[]): any {
+export function getTerminalLivenessVerdict(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolveTerminalPane(..._args: any[]): any {
+export function resolveTerminalPane(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function waitForLeafPtyId(..._args: any[]): any {
+export function waitForLeafPtyId(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function requestRendererTerminalTabMount(..._args: any[]): any {
+export function requestRendererTerminalTabMount(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getRendererTerminalSerializerGenerationForHandle(..._args: any[]): any {
+export function getRendererTerminalSerializerGenerationForHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function countLeavesInTab(..._args: any[]): any {
+export function countLeavesInTab(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolveHandleForTab(..._args: any[]): any {
+export function resolveHandleForTab(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function waitForNewLeafInTab(..._args: any[]): any {
+export function waitForNewLeafInTab(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getTerminalHandlesForPtyId(..._args: any[]): any {
+export function getTerminalHandlesForPtyId(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function leafExistsForPty(..._args: any[]): any {
+export function leafExistsForPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function rebuildLeafPtyIndex(..._args: any[]): any {
+export function rebuildLeafPtyIndex(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getLeavesForPty(..._args: any[]): any {
+export function getLeavesForPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getTerminalHandleForPaneKey(..._args: any[]): any {
+export function getTerminalHandleForPaneKey(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function retireOrchestrationMailboxDeliveryForPty(..._args: any[]): any {
+export function retireOrchestrationMailboxDeliveryForPty(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getLiveLeafForHandle(..._args: any[]): any {
+export function getLiveLeafForHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getLivePtyForHandle(..._args: any[]): any {
+export function getLivePtyForHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function issueHandle(..._args: any[]): any {
+export function issueHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function bindPtyIncarnationHandle(..._args: any[]): any {
+export function bindPtyIncarnationHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolvePtyExitWaiters(..._args: any[]): any {
+export function resolvePtyExitWaiters(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolvePtyTuiIdleWaiters(..._args: any[]): any {
+export function resolvePtyTuiIdleWaiters(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function resolveTuiIdleWaiters(..._args: any[]): any {
+export function resolveTuiIdleWaiters(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function invalidatePtyIncarnationHandle(..._args: any[]): any {
+export function invalidatePtyIncarnationHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function clearPtyIncarnationHandles(..._args: any[]): any {
+export function clearPtyIncarnationHandles(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function reconcilePtyIncarnationHandles(..._args: any[]): any {
+export function reconcilePtyIncarnationHandles(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function adoptPreAllocatedHandle(..._args: any[]): any {
+export function adoptPreAllocatedHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function issuePtyHandle(..._args: any[]): any {
+export function issuePtyHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function findHandleForPtyRecord(..._args: any[]): any {
+export function findHandleForPtyRecord(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function refreshWritableFlags(..._args: any[]): any {
+export function refreshWritableFlags(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function invalidateLeafHandle(..._args: any[]): any {
+export function invalidateLeafHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function adoptFirstPtyForLeafHandle(..._args: any[]): any {
+export function adoptFirstPtyForLeafHandle(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function rememberDetachedPreAllocatedLeaves(..._args: any[]): any {
+export function rememberDetachedPreAllocatedLeaves(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
 
-export function getAdoptedPtyExplicitIdleStatus(..._args: any[]): any {
+export function getAdoptedPtyExplicitIdleStatus(...args: any[]): any {
   throw new Error('Implementation pending in WP2 extraction')
 }
