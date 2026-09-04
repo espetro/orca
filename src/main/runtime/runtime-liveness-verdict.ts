@@ -3,10 +3,21 @@ import type { TuiAgent } from '../../shared/agent-types'
 
 // Constants used by liveness verdict tracking
 const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
-const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
 
-// Simplified interface type for dependency injection to extracted functions
-export interface OrcaRuntimeLivenessVerdictApi {
+// Helper types for record structures
+type PtyRecord = {
+  incarnationId?: PtyIncarnationId
+  connected?: boolean
+  disconnectedAt?: unknown
+  launchToken?: string | null
+  launchIncarnationId?: PtyIncarnationId
+  launchAgent?: TuiAgent
+  paneKey?: string
+}
+type LeafRecord = { connected?: boolean; writable?: boolean; ptyId?: string }
+
+// Simplified type for dependency injection to extracted functions
+export type OrcaRuntimeLivenessVerdictApi = {
   readonly earlyExitedPtyIncarnations: Map<string, PtyIncarnationId | null>
   readonly pendingPtyRegistrationIncarnations: Map<string, PtyIncarnationId | null>
   readonly stopRequestedPtyIds: Set<string>
@@ -28,7 +39,7 @@ export interface OrcaRuntimeLivenessVerdictApi {
   readonly graphStatus: string
   readonly spawnPublishedPtys: Set<string>
   readonly pendingMobileTerminalCreatesByKey: Map<string, unknown>
-  readonly ptysById: Map<string, any>
+  readonly ptysById: Map<string, unknown>
   readonly handleByPtyId: Map<string, unknown>
   leafExistsForPty(ptyId: string): boolean
 }
