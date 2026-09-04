@@ -24,6 +24,7 @@ import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-comma
 import { RuntimeRepoGitCommandsFacade } from './runtime-repo-git-commands'
 import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
+import { RuntimeDisposalTree, type SubscriptionRegistration } from './runtime-disposal-tree'
 import {
   removeManagedWorktree as removeManagedWorktreeImpl,
   forceDeletePreservedBranch as forceDeletePreservedBranchImpl,
@@ -2696,6 +2697,7 @@ export class OrcaRuntimeService {
   private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
   private readonly clientEventPublishingCommands: RuntimeClientEventPublishingCommands
   private readonly hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
+  private readonly disposalTree: RuntimeDisposalTree
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3444,6 +3446,9 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.disposalTree = new RuntimeDisposalTree({
+      logger: console
+    })
     this.linearCommands = new RuntimeLinearCommands({
       store: this.store,
       showTerminal: (handle) => this.showTerminal(handle),
