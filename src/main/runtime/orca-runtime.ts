@@ -34,6 +34,8 @@ import { RuntimeTerminalAgentStatusBindingCommands } from './runtime-terminal-ag
 import type { RuntimeTerminalAgentStatusBindingCommandsDeps } from './runtime-terminal-agent-status-binding-commands-deps'
 import { RuntimeClientEventPublishingCommands } from './runtime-client-event-publishing-commands'
 import type { RuntimeClientEventPublishingCommandsDeps } from './runtime-client-event-publishing-commands-deps'
+import { RuntimeHookAgentRowResolutionCommands } from './runtime-hook-agent-row-resolution-commands'
+import type { RuntimeHookAgentRowResolutionCommandsDeps } from './runtime-hook-agent-row-resolution-commands-deps'
 import { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
@@ -491,7 +493,6 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../shared/setup-agent-sequencing'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
-import { FIRST_PANE_ID } from '../../shared/pane-key'
 import {
   isTerminalLeafId,
   makePaneKey,
@@ -2706,6 +2707,7 @@ export class OrcaRuntimeService {
   private readonly ptyTitleTrackingCommands: RuntimePtyTitleTrackingCommands
   private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
   private readonly clientEventPublishingCommands: RuntimeClientEventPublishingCommands
+  private readonly hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
@@ -3680,6 +3682,33 @@ export class OrcaRuntimeService {
     }
     this.clientEventPublishingCommands = new RuntimeClientEventPublishingCommands(
       clientEventPublishingCommandsDeps
+    )
+    const hookAgentRowResolutionCommandsDeps: RuntimeHookAgentRowResolutionCommandsDeps = {
+      ptysById: this.ptysById,
+      leaves: this.leaves,
+      latestAgentStatusByPaneKey: this.latestAgentStatusByPaneKey,
+      handles: this.handles,
+      tabs: this.tabs,
+      runtimeId: this.runtimeId,
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      getLivePtyForHandle: (handle) => this.getLivePtyForHandle(handle),
+      parsePaneKey,
+      isTerminalLeafId,
+      makePaneKey,
+      pickParsedAgentStatusPayload,
+      getUnpersistedTrackedTitleForPty: (ptyId) =>
+        this.ptyTitleTrackingCommands.getUnpersistedTrackedTitleForPty(ptyId),
+      getLatestAgentCandidateTitle,
+      getLatestPtyTitle,
+      classifyAgentTitle,
+      terminalTitleBlocksExplicitAgentStatus,
+      resolvePaneAgentOwner,
+      normalizeCompatibleAgentTitleForOwner,
+      normalizeCompatibleAgentStatusEntryForOwner,
+      orchestrationCommands: this.orchestrationCommands
+    }
+    this.hookAgentRowResolutionCommands = new RuntimeHookAgentRowResolutionCommands(
+      hookAgentRowResolutionCommandsDeps
     )
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
@@ -31379,106 +31408,13 @@ export class OrcaRuntimeService {
     pty: RuntimePtyWorktreeRecord | null,
     options: { preserveQuestionUnderShellTitle?: boolean } = {}
   ): AgentStatusEntry | null {
-    if (!status || !pty) {
-      return status
-    }
-    // Why: pending a human answer is hook-only evidence an idle title cannot renew. A title
-    // reads `permission` only from a vendor glyph or a synthesized `<Agent> - action required`
-    // label, and SYNTHETIC_AGENT_TITLE_PROFILES has no Claude entry (OpenCode opts out), so
-    // `titleConfirmsState` below is unreachable for them. Timestamps can't arbitrate either:
-    // lastAgentStatusRichInvalidatedAtEpochMs moves only on a status-CLASS change while
-    // lastOscTitleEpochMs moves on EVERY write, so Claude's one same-class repaint ~123ms
-    // after PermissionRequest pushed title evidence past a still-current hook and published
-    // `done` — retiring the card while the user was still being asked.
-    // Only under an `idle` title: idle is the ABSENCE of activity evidence, but a `working`
-    // title (agent resumed) or a null/shell/identity-only one (agent released the pane)
-    // contradicts the hook and must still retire the row and its stale question (#11761).
-    // Both names: Claude's PermissionRequest normalizes to `waiting`, not `blocked`.
-    if (
-      (status.state === 'waiting' || status.state === 'blocked') &&
-      pty.lastAgentStatus === 'idle' &&
-      Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    ) {
-      return status
-    }
-    if (
-      options.preserveQuestionUnderShellTitle &&
-      status.interactivePrompt != null &&
-      terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)
-    ) {
-      return status
-    }
-    const richStatusCanOwnTitleInterval =
-      pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
-      status.updatedAt > pty.lastAgentStatusRichInvalidatedAtEpochMs
-    const titleEvidenceAt = pty.lastOscTitleEpochMs
-    if (titleEvidenceAt === null) {
-      return richStatusCanOwnTitleInterval ? status : null
-    }
-    const buildTitleOnlyStatus = (
-      state: AgentStatusEntry['state'],
-      updatedAt: number,
-      stateStartedAt: number
-    ): AgentStatusEntry => ({
-      state,
-      prompt: '',
-      updatedAt,
-      stateStartedAt,
-      paneKey: status.paneKey,
-      stateHistory: [],
-      ...(status.agentType ? { agentType: status.agentType } : {}),
-      ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
-      ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
-      ...(status.tabId ? { tabId: status.tabId } : {}),
-      ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-      ...(status.providerSession ? { providerSession: status.providerSession } : {})
-    })
-    const titleConfirmsState =
-      (pty.lastAgentStatus === 'working' && status.state === 'working') ||
-      (pty.lastAgentStatus === 'permission' &&
-        (status.state === 'blocked' || status.state === 'waiting'))
-    if (!titleConfirmsState) {
-      if (richStatusCanOwnTitleInterval && status.updatedAt >= titleEvidenceAt) {
-        return status
-      }
-      if (
-        pty.lastAgentStatus === null &&
-        !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)
-      ) {
-        return status
-      }
-      const titleState =
-        pty.lastAgentStatus === 'working'
-          ? 'working'
-          : pty.lastAgentStatus === 'permission'
-            ? 'blocked'
-            : 'done'
-      return buildTitleOnlyStatus(
-        titleState,
-        titleEvidenceAt,
-        pty.lastAgentStatusStartedAtEpochMs ?? titleEvidenceAt
-      )
-    }
-    const richStatusIsFresh = Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
-    const richStatusOwnsCurrentState = richStatusIsFresh && richStatusCanOwnTitleInterval
-    // Fresh explicit evidence from this title interval owns acknowledgement identity.
-    const stateStartedAt = richStatusOwnsCurrentState
-      ? status.stateStartedAt
-      : (pty.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt)
-    if (richStatusOwnsCurrentState) {
-      pty.lastAgentStatusStartedAtEpochMs = stateStartedAt
-    }
-    const updatedAt = Math.max(status.updatedAt, titleEvidenceAt)
-    if (!richStatusOwnsCurrentState) {
-      return buildTitleOnlyStatus(status.state, updatedAt, stateStartedAt)
-    }
-    if (updatedAt === status.updatedAt && stateStartedAt === status.stateStartedAt) {
-      return status
-    }
-    return { ...status, updatedAt, stateStartedAt }
+    return this.hookAgentRowResolutionCommands.renewMobileAgentStatusFromPtyTitle(
+      status,
+      pty,
+      options
+    )
   }
 
-  /** Mobile-friendly status entry for a PTY, aligning agentType and titles with the active owner. */
   private buildPtyMobileAgentStatus(
     pty: RuntimePtyWorktreeRecord | null,
     tab: RuntimeMobileSessionTerminalTab,
@@ -31486,172 +31422,23 @@ export class OrcaRuntimeService {
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    const paneKey = this.getMobileTerminalPaneKey(tab)
-    // Why: neither the OSC-retained row nor a title-derived status can carry a
-    // provider session — only the hook payload does, and headless serve has no
-    // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
-    // transcript to address and sits on the empty state forever.
-    const hookRow = this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
-    // Why: the hook row is evidence in its own right. Returning early on a missing
-    // PTY status/retained row put this check ahead of the only headless carrier, so
-    // an agent that reported its session but never emitted a recognized title got no
-    // `agentStatus` at all — exactly the hook-only case the fallback exists for.
-    if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
-      return {}
-    }
-    const providerSession = hookRow.providerSession
-      ? { providerSession: hookRow.providerSession }
-      : {}
-    const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
-    const trackerOnlyTitle = this.getUnpersistedTrackedTitleForPty(
-      pty?.ptyId ?? leaf?.ptyId ?? null
+    return this.hookAgentRowResolutionCommands.buildPtyMobileAgentStatus(
+      pty,
+      tab,
+      terminalHandle,
+      retained,
+      getHookRowsForPane
     )
-    const ptyTitle = pty
-      ? getLatestAgentCandidateTitle(
-          { title: pty.title, updatedAt: pty.titleUpdatedAt },
-          { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
-        )
-      : leaf
-        ? getLatestAgentCandidateTitle(
-            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
-          )
-        : null
-    const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-    const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
-    if (nonAgentTitle) {
-      // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
-      const hasLiveHookSignal =
-        retained?.payload.interactivePrompt != null ||
-        retained?.payload.toolName != null ||
-        // Why: a pending question is never inherited across hook events (unlike
-        // `toolName`), so it proves the agent is parked on a selector right now.
-        hookRow.live?.payload.interactivePrompt != null ||
-        // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
-        // agentType is the only live signal a hook-only pane can offer — and an agent
-        // that reports over HTTP need never set a title this gate would recognize.
-        // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
-        // this branch publishes `done`. It only keeps the transcript addressable.
-        (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
-      if (!hasLiveHookSignal) {
-        return {}
-      }
-    }
-    // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
-    const ownerAgent =
-      resolvePaneAgentOwner({
-        launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
-        hookAgent: retained?.payload.agentType ?? hookRow.agentType
-      }) ??
-      pty?.foregroundAgent ??
-      null
-    const terminalTitle = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
-      ownerAgent
-    )
-    // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
-    const liveRow = retained ?? this.resolveHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
-    if (liveRow) {
-      const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
-        {
-          ...liveRow.payload,
-          paneKey,
-          updatedAt: liveRow.updatedAt,
-          stateStartedAt: liveRow.stateStartedAt,
-          stateHistory: [],
-          ...(terminalHandle ? { terminalHandle } : {}),
-          ...((pty?.worktreeId ?? liveRow.worktreeId)
-            ? { worktreeId: pty?.worktreeId ?? liveRow.worktreeId }
-            : {}),
-          tabId: tab.parentTabId,
-          terminalTitle,
-          ...providerSession
-        },
-        ownerAgent
-      )
-      // A live question outranks only the shell title that currently obscures it.
-      const renewedStatus = this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty, {
-        preserveQuestionUnderShellTitle: true
-      })
-      if (renewedStatus) {
-        return { agentStatus: renewedStatus }
-      }
-    }
-    // Last resort: the pane's hook evidence is identity only (resume rows, stale
-    // rows, or a row the freshness gate rejected). `done` is the honest
-    // projection — and it is what retires the card once the agent exits.
-    // Why not lastOutputAt: this state is title-derived, so it must be dated by
-    // its evidence. Stamping it with the byte stream made the frame advance on
-    // every output byte, so a paired client's live status could never outrank it.
-    const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
-    const agentType = ownerAgent ?? undefined
-    return {
-      agentStatus: {
-        state:
-          pty?.lastAgentStatus === 'working'
-            ? 'working'
-            : pty?.lastAgentStatus === 'permission'
-              ? 'blocked'
-              : 'done',
-        prompt: '',
-        updatedAt: evidenceAt,
-        stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
-        paneKey,
-        ...(terminalHandle ? { terminalHandle } : {}),
-        ...(agentType ? { agentType } : {}),
-        ...(pty?.worktreeId ? { worktreeId: pty.worktreeId } : {}),
-        tabId: tab.parentTabId,
-        terminalTitle,
-        stateHistory: [],
-        ...providerSession
-      }
-    }
   }
 
-  /** Live hook status to publish for a pane with no retained OSC row, or null when the
-   *  pane's hook evidence only proves identity.
-   *
-   *  Why the freshness rule: `pty.lastAgentStatus` is title-derived and refreshed live,
-   *  so an unconditional hook precedence would let a 29-minute-old `done` erase a pane
-   *  that is visibly working. A pending `interactivePrompt` outranks title evidence at
-   *  any age — the agent is parked on a selector until it answers — and it is also the
-   *  only signal allowed to survive the #1437 non-agent-title suppression. */
   private resolveHookLiveAgentRow(
     live: HookLiveAgentRow | null,
     pty: RuntimePtyWorktreeRecord | null,
     nonAgentTitle: boolean
   ): HookLiveAgentRow | null {
-    if (!live) {
-      return null
-    }
-    if (live.payload.interactivePrompt != null) {
-      return live
-    }
-    // Why only this stamp: it is the sole wall-clock date on the pane's live title,
-    // so it is the only one comparable to a hook `receivedAt`. The sibling
-    // `titleUpdatedAt`/`lastOscTitleAt`/`paneTitleUpdatedAt` fields are observation
-    // sequence numbers, and comparing them here can only ever misfire.
-    return !nonAgentTitle && live.updatedAt >= (pty?.lastOscTitleEpochMs ?? 0) ? live : null
+    return this.hookAgentRowResolutionCommands.resolveHookLiveAgentRow(live, pty, nonAgentTitle)
   }
 
-  /** Hook-reported identity for this pane, newest wins per field.
-   *
-   *  `providerSession` is deliberately unbounded: it is resume identity, not live
-   *  state, it stays correct until the pane relaunches (which overwrites the row
-   *  under the same paneKey), and it is only ever read once an agent is already
-   *  established. Bounding it would blank mobile native chat on an idle session.
-   *
-   *  `agentType` is bounded by the same staleness window the retained OSC path uses,
-   *  because it is the signal that claims an agent owns the pane at all. A user who
-   *  exits the agent leaves `pty.lastAgentStatus` behind forever, so an unbounded
-   *  read would keep offering native chat for what is now a plain shell.
-   *
-   *  `live` is the newest fresh row's status fields — bounded like `agentType` because
-   *  it asserts liveness, and unlike `agentType` it excludes `providerSessionOnly` rows
-   *  with no Pi exception: those carry resume identity, and their status-shaped fields
-   *  are documented transport placeholders that must never reach a client. It also drops
-   *  `restoredUnconfirmed` rows, which `isFreshNonDoneAgentStatus` already treats as
-   *  never-fresh; they still count as `agentType` identity evidence. */
   private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
     providerSession: AgentProviderSessionMetadata | null
     providerSessionAgentType: string | null
@@ -31660,82 +31447,19 @@ export class OrcaRuntimeService {
     agentIsLive: boolean
     live: HookLiveAgentRow | null
   } {
-    let session: AgentStatusIpcPayload | null = null
-    let agent: AgentStatusIpcPayload | null = null
-    let live: AgentStatusIpcPayload | null = null
-    const agentTypeFreshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
-    // Why pane key only: the sibling `terminalHandle` arm this used to carry never
-    // matched. `toAgentStatusIpcPayload` does not emit the field on the hook path
-    // (only the renderer's own store stamps it, and headless serve has no renderer),
-    // and because it is optional TypeScript could not flag the dead comparison.
-    for (const entry of rows) {
-      if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
-        session = entry
-      }
-      if (
-        entry.agentType &&
-        (entry.providerSessionOnly !== true ||
-          (entry.agentType === 'pi' && entry.providerSession != null)) &&
-        entry.receivedAt >= agentTypeFreshAfter &&
-        (!agent || entry.receivedAt > agent.receivedAt)
-      ) {
-        agent = entry
-      }
-      if (
-        entry.providerSessionOnly !== true &&
-        // Why: a row hydrated from last-status.json describes a turn that may have ended
-        // while no receiver was up (#12346), so its `receivedAt` cannot prove liveness —
-        // publishing it would resurrect a zombie question card across a restart.
-        entry.restoredUnconfirmed !== true &&
-        entry.receivedAt >= agentTypeFreshAfter &&
-        (!live || entry.receivedAt > live.receivedAt)
-      ) {
-        live = entry
-      }
-    }
-    return {
-      providerSession: session?.providerSession ?? null,
-      providerSessionAgentType: session?.agentType ?? null,
-      providerSessionReceivedAt: session?.receivedAt ?? null,
-      agentType: agent?.agentType ?? null,
-      // A fresh completed row still projects its terminal `done` status, but it is
-      // past-tense identity evidence and must not outrank process or launch facts.
-      agentIsLive: agent != null && agent.state !== 'done',
-      live: live
-        ? {
-            payload: pickParsedAgentStatusPayload(live),
-            updatedAt: live.receivedAt,
-            stateStartedAt: live.stateStartedAt ?? live.receivedAt,
-            ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
-          }
-        : null
-    }
+    return this.hookAgentRowResolutionCommands.getHookAgentRowForPane(rows)
   }
 
-  /** Retained OSC 9999 hook row for this mobile tab if still fresh; looked up by pane identity, then PTY ownership (legacy `pane:N` ids can drift). */
   private getFreshRetainedAgentStatusForMobileTab(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
     tab: RuntimeMobileSessionTerminalTab
   ): RuntimeAgentRowSnapshot | null {
-    let retained = this.latestAgentStatusByPaneKey.get(paneKey) ?? null
-    if (!retained) {
-      const ptyId = pty?.ptyId ?? tab.ptyId ?? null
-      if (ptyId) {
-        for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
-          if (snapshot.ptyId !== ptyId) {
-            continue
-          }
-          if (!retained || snapshot.updatedAt > retained.updatedAt) {
-            retained = snapshot
-          }
-        }
-      }
-    }
-    if (!retained || Date.now() - retained.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-      return null
-    }
-    return retained
+    return this.hookAgentRowResolutionCommands.getFreshRetainedAgentStatusForMobileTab(
+      paneKey,
+      pty,
+      tab
+    )
   }
 
   private findPtyForMobileTerminalTab(
@@ -31743,54 +31467,25 @@ export class OrcaRuntimeService {
     tab: RuntimeMobileSessionTerminalTab,
     options: { allowWorktreeOnlyMatch?: boolean } = {}
   ): RuntimePtyWorktreeRecord | null {
-    const snapshotPtyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
-    const paneKey = this.getMobileTerminalPaneKey(tab)
-    if (snapshotPtyId) {
-      const pty = this.ptysById.get(snapshotPtyId)
-      if (!pty) {
-        return null
-      }
-      // Why: persisted PTY ids can collide with unrelated provider ids after restart; only a matching spawn-time pane identity is safe to expose.
-      if (this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
-        return pty
-      }
-      if (
-        options.allowWorktreeOnlyMatch === true &&
-        pty.worktreeId === worktreeId &&
-        pty.tabId === null &&
-        pty.paneKey === null
-      ) {
-        return pty
-      }
-      return null
-    }
-    const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
-    if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
-      paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
-    }
-    for (const pty of this.ptysById.values()) {
-      if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
-        return pty
-      }
-    }
-    return null
+    return this.hookAgentRowResolutionCommands.findPtyForMobileTerminalTab(worktreeId, tab, options)
   }
 
   private getMobileTerminalPaneKey(tab: RuntimeMobileSessionTerminalTab): string {
-    if (isTerminalLeafId(tab.leafId)) {
-      return makePaneKey(tab.parentTabId, tab.leafId)
-    }
-    const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
-    return `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+    return this.hookAgentRowResolutionCommands.getMobileTerminalPaneKey(tab)
   }
 
   private mobileTerminalTabMatchesPty(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab,
     pty: RuntimePtyWorktreeRecord,
-    paneKey = this.getMobileTerminalPaneKey(tab)
+    paneKey = this.hookAgentRowResolutionCommands.getMobileTerminalPaneKey(tab)
   ): boolean {
-    return pty.worktreeId === worktreeId && pty.tabId === tab.parentTabId && pty.paneKey === paneKey
+    return this.hookAgentRowResolutionCommands.mobileTerminalTabMatchesPty(
+      worktreeId,
+      tab,
+      pty,
+      paneKey
+    )
   }
 
   // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
@@ -31834,37 +31529,24 @@ export class OrcaRuntimeService {
   private buildAgentOrchestrationByPaneKey():
     | Record<string, AgentStatusOrchestrationContext>
     | undefined {
-    return this.orchestrationCommands.buildAgentOrchestrationByPaneKey()
+    return this.hookAgentRowResolutionCommands.buildAgentOrchestrationByPaneKey()
   }
 
   private getAgentStatusOrchestrationContextForHandle(
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): AgentStatusOrchestrationContext | undefined {
-    return this.orchestrationCommands.getAgentStatusOrchestrationContextForHandle(handle, db)
+    return this.hookAgentRowResolutionCommands.getAgentStatusOrchestrationContextForHandle(
+      handle,
+      db
+    )
   }
 
   private getRecentSettledDispatchForTerminal(
     handle: string,
     db = this.getOrchestrationDbIfAvailable()
   ): ReturnType<OrchestrationDb['getLatestDispatchForTerminal']> {
-    const dispatch = db?.getLatestDispatchForTerminal?.(handle)
-    if (
-      !dispatch?.completed_at ||
-      dispatch.status === 'pending' ||
-      dispatch.status === 'dispatched'
-    ) {
-      return undefined
-    }
-    const completedAtMs = Date.parse(
-      dispatch.completed_at.includes('T')
-        ? dispatch.completed_at
-        : `${dispatch.completed_at.replace(' ', 'T')}Z`
-    )
-    if (!Number.isFinite(completedAtMs)) {
-      return undefined
-    }
-    return Date.now() - completedAtMs <= AGENT_STATUS_STALE_AFTER_MS ? dispatch : undefined
+    return this.hookAgentRowResolutionCommands.getRecentSettledDispatchForTerminal(handle, db)
   }
 
   // Why: public because automation completion watching runs in main but the
@@ -31886,64 +31568,15 @@ export class OrcaRuntimeService {
   }
 
   private getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
-    const parsed = parsePaneKey(paneKey)
-    let leafPty: RuntimePtyWorktreeRecord | null = null
-    if (parsed) {
-      const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
-      const pty = leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-      if (pty?.connected) {
-        return pty
-      }
-      leafPty = pty ?? null
-      for (const candidate of this.leaves.values()) {
-        if (candidate.leafId !== parsed.leafId || !candidate.ptyId) {
-          continue
-        }
-        const remintedPty = this.ptysById.get(candidate.ptyId)
-        if (remintedPty?.connected) {
-          return remintedPty
-        }
-        leafPty ??= remintedPty ?? null
-      }
-    }
-    let newestMatch: RuntimePtyWorktreeRecord | null = null
-    for (const pty of this.ptysById.values()) {
-      const ptyPane = parsePaneKey(pty.paneKey ?? '')
-      if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
-        if (pty.connected) {
-          return pty
-        }
-        newestMatch = pty
-      }
-    }
-    return leafPty ?? newestMatch
+    return this.hookAgentRowResolutionCommands.getPtyRecordForPaneKey(paneKey)
   }
 
   private getPaneKeyForTerminalHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
-    if (livePty?.pty.paneKey) {
-      return livePty.pty.paneKey
-    }
-    const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
-    }
-    if (!isTerminalLeafId(record.leafId)) {
-      return null
-    }
-    return makePaneKey(record.tabId, record.leafId)
+    return this.hookAgentRowResolutionCommands.getPaneKeyForTerminalHandle(handle)
   }
 
   private getWorktreeIdForTerminalHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
-    if (livePty?.pty.worktreeId) {
-      return livePty.pty.worktreeId
-    }
-    const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
-    }
-    return record.worktreeId
+    return this.hookAgentRowResolutionCommands.getWorktreeIdForTerminalHandle(handle)
   }
 
   private setPtyManagementTitleFromObservedTitle(
