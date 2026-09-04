@@ -1,0 +1,29 @@
+{
+  "target": "runtime-automation-commands.ts",
+  "className": "RuntimeAutomationCommands",
+  "methods": [
+    "listAutomations",
+    "underExternalProbePriority",
+    "listAutomationsForScope",
+    "fenceAutomationOwner",
+    "listAutomationRuns",
+    "automationOwnerPrecondition",
+    "showAutomation",
+    "createAutomation",
+    "automationChangeSelector",
+    "publishAutomationDefinitionChange",
+    "updateAutomation",
+    "deleteAutomation",
+    "runAutomationNow",
+    "resolveAutomationTarget",
+    "notifyAutomationsChanged"
+  ],
+  "deps": {
+    "store": { "kind": "direct", "from": "store" },
+    "automationService": { "kind": "lazy", "from": "automationService" },
+    "notifier": { "kind": "lazy", "from": "notifier" },
+    "emitClientEvent": { "kind": "callback", "from": "emitClientEvent" },
+    "showRepo": { "kind": "callback", "from": "showRepo" },
+    "showManagedWorktree": { "kind": "callback", "from": "showManagedWorktree" }
+  }
+}
