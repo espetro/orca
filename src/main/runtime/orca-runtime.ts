@@ -26,6 +26,8 @@ import { RuntimeSkillArtifactCommands } from './runtime-skill-artifact-commands'
 import { RuntimeSkillInstallCommands } from './runtime-skill-install-commands'
 import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
+import { RuntimeOrchestrationGraphReloadCommands } from './runtime-orchestration-graph-reload-commands'
+import type { RuntimeOrchestrationGraphReloadCommandsDeps } from './runtime-orchestration-graph-reload-commands-deps'
 import { RuntimeHeadlessSessionTabPersistenceCommands } from './runtime-headless-session-tab-persistence-commands'
 import type { RuntimeHeadlessSessionTabPersistenceDeps } from './runtime-headless-session-tab-persistence-commands-deps'
 import { RuntimePtyTitleTrackingCommands } from './runtime-pty-title-tracking-commands'
@@ -2698,6 +2700,7 @@ export class OrcaRuntimeService {
   private readonly projectWorktreeCommands: RuntimeProjectWorktreeCommands
   private readonly repoGitCommands: RuntimeRepoGitCommandsFacade
   private readonly orchestrationCommands: RuntimeOrchestrationCommands
+  private readonly orchestrationGraphReloadCommands: RuntimeOrchestrationGraphReloadCommands
   private readonly headlessSessionTabPersistenceCommands: RuntimeHeadlessSessionTabPersistenceCommands
   private readonly ptyTitleTrackingCommands: RuntimePtyTitleTrackingCommands
   private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
@@ -3538,6 +3541,62 @@ export class OrcaRuntimeService {
       handleByLeafKey: this.handleByLeafKey
     }
     this.orchestrationCommands = new RuntimeOrchestrationCommands(orchestrationDeps)
+    const orchestrationGraphReloadDeps: RuntimeOrchestrationGraphReloadCommandsDeps = {
+      store,
+      graphReloadLifecycle: this.graphReloadLifecycle,
+      getRendererGraphEpoch: () => this.rendererGraphEpoch,
+      setRendererGraphEpoch: (value) => {
+        this.rendererGraphEpoch = value
+      },
+      getGraphStatus: () => this.graphStatus,
+      setGraphStatus: (value) => {
+        this.graphStatus = value
+      },
+      getAuthoritativeWindowId: () => this.authoritativeWindowId,
+      setAuthoritativeWindowId: (value) => {
+        this.authoritativeWindowId = value
+      },
+      isHeadlessGraphFallbackAvailable: () => this.headlessGraphFallbackAvailable,
+      setHeadlessGraphFallbackAvailable: (value) => {
+        this.headlessGraphFallbackAvailable = value
+      },
+      getPendingHeadlessPromotionWindowId: () => this.pendingHeadlessPromotionWindowId,
+      setPendingHeadlessPromotionWindowId: (value) => {
+        this.pendingHeadlessPromotionWindowId = value
+      },
+      getRendererGeneration: () => this.rendererGeneration,
+      setRendererGeneration: (value) => {
+        this.rendererGeneration = value
+      },
+      getSessionTabsInventoryPublicationEpoch: () => this.sessionTabsInventoryPublicationEpoch,
+      setSessionTabsInventoryPublicationEpoch: (value) => {
+        this.sessionTabsInventoryPublicationEpoch = value
+      },
+      tabs: this.tabs,
+      leaves: this.leaves,
+      leavesByPtyId: this.leavesByPtyId,
+      handles: this.handles,
+      handleByLeafKey: this.handleByLeafKey,
+      handleByPtyId: this.handleByPtyId,
+      handleByPtyIncarnation: this.handleByPtyIncarnation,
+      detachedPreAllocatedLeaves: this.detachedPreAllocatedLeaves,
+      waitersByHandle: this.waitersByHandle,
+      ptysById: this.ptysById,
+      setTerminalSideEffectConsumerAvailable: (available) =>
+        this.setTerminalSideEffectConsumerAvailable(available),
+      rememberDetachedPreAllocatedLeaves: () => this.rememberDetachedPreAllocatedLeaves(),
+      refreshWritableFlags: () => this.refreshWritableFlags(),
+      adoptPreAllocatedHandle: (leaf) => this.adoptPreAllocatedHandle(leaf),
+      rejectWaitersForHandle: (handle, reason) => this.rejectWaitersForHandle(handle, reason),
+      rejectAllWaiters: (reason) => this.rejectAllWaiters(reason),
+      reconcilePtyIncarnationHandles: () => this.reconcilePtyIncarnationHandles(),
+      clearPtyIncarnationHandles: () => this.clearPtyIncarnationHandles(),
+      markSessionTabsInventoryPublished: () => this.markSessionTabsInventoryPublished(),
+      attachWindow: (windowId) => this.attachWindow(windowId)
+    }
+    this.orchestrationGraphReloadCommands = new RuntimeOrchestrationGraphReloadCommands(
+      orchestrationGraphReloadDeps
+    )
     const headlessSessionTabPersistenceDeps: RuntimeHeadlessSessionTabPersistenceDeps = {
       getWorkspaceSessionForWorktree: (worktreeId) =>
         this.getWorkspaceSessionForWorktree(worktreeId),
@@ -27464,196 +27523,35 @@ export class OrcaRuntimeService {
   }
 
   markRendererReloading(windowId: number): RuntimeRendererReloadFence | null {
-    if (
-      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      this.headlessGraphFallbackAvailable
-    ) {
-      this.attachWindow(windowId)
-      const revision = this.graphReloadLifecycle.getActiveRevision()
-      return this.authoritativeWindowId === windowId && revision !== null
-        ? { revision, recovery: 'headless' }
-        : null
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      return null
-    }
-    if (this.graphStatus === 'reloading') {
-      return {
-        revision: this.graphReloadLifecycle.begin(windowId),
-        recovery: this.shouldRestoreHeadlessGraph(windowId) ? 'headless' : 'reloading'
-      }
-    }
-    if (this.graphStatus !== 'ready') {
-      return null
-    }
-    return { revision: this.beginGraphReload(windowId), recovery: 'renderer' }
+    return this.orchestrationGraphReloadCommands.markRendererReloading(windowId)
   }
 
-  private beginGraphReload(windowId: number): number {
-    // Why: the rebuilt graph decides whether an incarnation survived; do not stale proven process identities before that comparison.
-    this.rendererGraphEpoch += 1
-    this.graphStatus = 'reloading'
-    const revision = this.graphReloadLifecycle.begin(windowId)
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.rememberDetachedPreAllocatedLeaves()
-    const retainedHandles = new Set([
-      ...this.handleByPtyId.values(),
-      ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
-    ])
-    for (const handle of this.waitersByHandle.keys()) {
-      if (!retainedHandles.has(handle)) {
-        this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
-      }
-    }
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.refreshWritableFlags()
-    return revision
+  private handleGraphReloadTimeout = (windowId: number): void => {
+    this.orchestrationGraphReloadCommands.handleGraphReloadTimeout(windowId)
   }
 
   markRendererReloadCancelled(windowId: number, fence: RuntimeRendererReloadFence): boolean {
-    if (
-      windowId !== this.authoritativeWindowId ||
-      this.graphStatus !== 'reloading' ||
-      !this.graphReloadLifecycle.settle(fence.revision, 'cancelled')
-    ) {
-      return false
-    }
-    if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {
-      this.restoreHeadlessGraphAuthority()
-      return false
-    }
-    if (fence.recovery === 'renderer') {
-      const restoresPublishedInventory =
-        this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch - 1
-      this.graphStatus = 'ready'
-      this.setTerminalSideEffectConsumerAvailable(true)
-      for (const leaf of this.leaves.values()) {
-        this.adoptPreAllocatedHandle(leaf)
-      }
-      this.reconcilePtyIncarnationHandles()
-      this.refreshWritableFlags()
-      if (restoresPublishedInventory) {
-        this.markSessionTabsInventoryPublished()
-      }
-      return true
-    }
-    this.graphReloadLifecycle.begin(windowId)
-    return false
+    return this.orchestrationGraphReloadCommands.markRendererReloadCancelled(windowId, fence)
   }
 
   markGraphReady(windowId: number): void {
-    if (windowId !== this.authoritativeWindowId) {
-      return
-    }
-    this.graphReloadLifecycle.settleActive('success')
-    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
-      this.headlessGraphFallbackAvailable = false
-      this.pendingHeadlessPromotionWindowId = null
-    }
-    this.graphStatus = 'ready'
-    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
-    this.refreshWritableFlags()
+    this.orchestrationGraphReloadCommands.markGraphReady(windowId)
   }
 
   markGraphReloadFailed(
     windowId: number,
-    _reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
+    reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
   ): void {
-    if (windowId !== this.authoritativeWindowId) {
-      return
-    }
-    if (this.graphStatus === 'ready') {
-      this.beginGraphReload(windowId)
-    }
-    this.graphReloadLifecycle.settleActive('failure')
-    this.transitionGraphReloadToTerminalState(windowId)
+    this.orchestrationGraphReloadCommands.markGraphReloadFailed(windowId, reason)
   }
 
   markGraphUnavailable(windowId: number): void {
-    if (
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      windowId === this.pendingHeadlessPromotionWindowId
-    ) {
-      this.pendingHeadlessPromotionWindowId = null
-      return
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      return
-    }
-    this.graphReloadLifecycle.settleActive('cancelled')
-    if (this.shouldRestoreHeadlessGraph(windowId)) {
-      this.pendingHeadlessPromotionWindowId = null
-      this.restoreHeadlessGraphAuthority()
-      return
-    }
-    // Why: once the authoritative renderer graph disappears, fail closed for live-terminal ops instead of guessing from old state.
-    if (this.graphStatus !== 'unavailable') {
-      this.rendererGraphEpoch += 1
-    }
-    this.graphStatus = 'unavailable'
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.authoritativeWindowId = null
-    this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
-    this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.clearPtyIncarnationHandles()
-    // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
-    this.rejectAllWaiters('terminal_handle_stale')
-  }
-
-  private handleGraphReloadTimeout(windowId: number): void {
-    if (windowId !== this.authoritativeWindowId || this.graphStatus !== 'reloading') {
-      return
-    }
-    this.transitionGraphReloadToTerminalState(windowId)
-  }
-
-  private transitionGraphReloadToTerminalState(windowId: number): void {
-    if (this.shouldRestoreHeadlessGraph(windowId)) {
-      this.restoreHeadlessGraphAuthority()
-      return
-    }
-    this.graphStatus = 'unavailable'
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
-    this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
-    this.refreshWritableFlags()
-  }
-
-  private shouldRestoreHeadlessGraph(windowId: number): boolean {
-    return windowId !== HEADLESS_RUNTIME_WINDOW_ID && this.headlessGraphFallbackAvailable
-  }
-
-  private restoreHeadlessGraphAuthority(): void {
-    this.rendererGraphEpoch += 1
-    this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
-    this.graphStatus = 'ready'
-    this.rendererGeneration = null
-    this.setTerminalSideEffectConsumerAvailable(false)
-    this.tabs.clear()
-    this.leaves.clear()
-    this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
-    this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
-    this.refreshWritableFlags()
-    this.markSessionTabsInventoryPublished()
+    this.orchestrationGraphReloadCommands.markGraphUnavailable(windowId)
   }
 
   private assertGraphReady(): void {
-    if (this.graphStatus !== 'ready') {
+    const status = this.graphStatus
+    if (status !== 'ready') {
       throw new Error('runtime_unavailable')
     }
   }
