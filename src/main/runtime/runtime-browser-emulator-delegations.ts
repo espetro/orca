@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from './orca-runtime'
+import type { RuntimeGitCommands } from './orca-runtime-git'
 import type { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 
 type BrowserOrEmulatorCommands = RuntimeBrowserScreencastForwarders | RuntimeEmulatorCommands
@@ -222,6 +223,59 @@ export function installLinearCommandDelegations(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic pass-through by design
     proto[method] = function (this: OrcaRuntimeService, ...args: any[]) {
       return (getLinearCommands(this)[method] as (...a: any[]) => unknown)(...args)
+    }
+  }
+}
+
+const GIT_METHOD_NAMES = [
+  'getRuntimeGitStatus',
+  'getRuntimeGitSubmoduleStatus',
+  'checkRuntimeGitIgnoredPaths',
+  'getRuntimeGitHistory',
+  'getRuntimeGitConflictOperation',
+  'abortRuntimeGitMerge',
+  'abortRuntimeGitRebase',
+  'checkoutRuntimeGitBranch',
+  'listRuntimeGitLocalBranches',
+  'getRuntimeGitDiff',
+  'getRuntimeGitBranchCompare',
+  'getRuntimeGitCommitCompare',
+  'getRuntimeGitUpstreamStatus',
+  'fetchRuntimeGit',
+  'syncRuntimeGitForkDefaultBranch',
+  'pullRuntimeGit',
+  'fastForwardRuntimeGit',
+  'rebaseRuntimeGitFromBase',
+  'pushRuntimeGit',
+  'getRuntimeGitBranchDiff',
+  'getRuntimeGitCommitDiff',
+  'commitRuntimeGit',
+  'generateRuntimeCommitMessage',
+  'discoverRuntimeCommitMessageModels',
+  'cancelRuntimeGenerateCommitMessage',
+  'generateRuntimePullRequestFields',
+  'cancelRuntimeGeneratePullRequestFields',
+  'stageRuntimeGitPath',
+  'unstageRuntimeGitPath',
+  'bulkStageRuntimeGitPaths',
+  'bulkUnstageRuntimeGitPaths',
+  'bulkDiscardRuntimeGitPaths',
+  'discardRuntimeGitPath',
+  'getRuntimeGitRemoteFileUrl',
+  'getRuntimeGitRemoteCommitUrl'
+] as const
+
+export function installGitCommandDelegations(
+  serviceClass: abstract new (...args: never[]) => OrcaRuntimeService,
+  getGitCommands: (service: OrcaRuntimeService) => RuntimeGitCommands
+): void {
+  const proto = serviceClass.prototype as unknown as Record<string, unknown>
+  for (const method of GIT_METHOD_NAMES) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic pass-through by design
+    proto[method] = function (this: OrcaRuntimeService, ...args: any[]) {
+      return (getGitCommands(this) as unknown as Record<string, (...a: any[]) => unknown>)[method](
+        ...args
+      )
     }
   }
 }

@@ -234,6 +234,7 @@ import { hasHostAuthoritativeTerminalMembership } from './workspace-session-term
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
 import {
   installBrowserEmulatorCommandDelegations,
+  installGitCommandDelegations,
   installLinearCommandDelegations
 } from './runtime-browser-emulator-delegations'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
@@ -2355,6 +2356,41 @@ export interface OrcaRuntimeService {
   jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers']
   jiraListTransitions: RuntimeLinearCommands['jiraListTransitions']
   jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder']
+  getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus']
+  getRuntimeGitSubmoduleStatus: RuntimeGitCommands['getRuntimeGitSubmoduleStatus']
+  checkRuntimeGitIgnoredPaths: RuntimeGitCommands['checkRuntimeGitIgnoredPaths']
+  getRuntimeGitHistory: RuntimeGitCommands['getRuntimeGitHistory']
+  getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation']
+  abortRuntimeGitMerge: RuntimeGitCommands['abortRuntimeGitMerge']
+  abortRuntimeGitRebase: RuntimeGitCommands['abortRuntimeGitRebase']
+  checkoutRuntimeGitBranch: RuntimeGitCommands['checkoutRuntimeGitBranch']
+  listRuntimeGitLocalBranches: RuntimeGitCommands['listRuntimeGitLocalBranches']
+  getRuntimeGitDiff: RuntimeGitCommands['getRuntimeGitDiff']
+  getRuntimeGitBranchCompare: RuntimeGitCommands['getRuntimeGitBranchCompare']
+  getRuntimeGitCommitCompare: RuntimeGitCommands['getRuntimeGitCommitCompare']
+  getRuntimeGitUpstreamStatus: RuntimeGitCommands['getRuntimeGitUpstreamStatus']
+  fetchRuntimeGit: RuntimeGitCommands['fetchRuntimeGit']
+  syncRuntimeGitForkDefaultBranch: RuntimeGitCommands['syncRuntimeGitForkDefaultBranch']
+  pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit']
+  fastForwardRuntimeGit: RuntimeGitCommands['fastForwardRuntimeGit']
+  rebaseRuntimeGitFromBase: RuntimeGitCommands['rebaseRuntimeGitFromBase']
+  pushRuntimeGit: RuntimeGitCommands['pushRuntimeGit']
+  getRuntimeGitBranchDiff: RuntimeGitCommands['getRuntimeGitBranchDiff']
+  getRuntimeGitCommitDiff: RuntimeGitCommands['getRuntimeGitCommitDiff']
+  commitRuntimeGit: RuntimeGitCommands['commitRuntimeGit']
+  generateRuntimeCommitMessage: RuntimeGitCommands['generateRuntimeCommitMessage']
+  discoverRuntimeCommitMessageModels: RuntimeGitCommands['discoverRuntimeCommitMessageModels']
+  cancelRuntimeGenerateCommitMessage: RuntimeGitCommands['cancelRuntimeGenerateCommitMessage']
+  generateRuntimePullRequestFields: RuntimeGitCommands['generateRuntimePullRequestFields']
+  cancelRuntimeGeneratePullRequestFields: RuntimeGitCommands['cancelRuntimeGeneratePullRequestFields']
+  stageRuntimeGitPath: RuntimeGitCommands['stageRuntimeGitPath']
+  unstageRuntimeGitPath: RuntimeGitCommands['unstageRuntimeGitPath']
+  bulkStageRuntimeGitPaths: RuntimeGitCommands['bulkStageRuntimeGitPaths']
+  bulkUnstageRuntimeGitPaths: RuntimeGitCommands['bulkUnstageRuntimeGitPaths']
+  bulkDiscardRuntimeGitPaths: RuntimeGitCommands['bulkDiscardRuntimeGitPaths']
+  discardRuntimeGitPath: RuntimeGitCommands['discardRuntimeGitPath']
+  getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl']
+  getRuntimeGitRemoteCommitUrl: RuntimeGitCommands['getRuntimeGitRemoteCommitUrl']
 }
 /* oxlint-enable typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging */
 
@@ -2369,6 +2405,7 @@ export class OrcaRuntimeService {
       OrcaRuntimeService,
       (service) => service.linearCommands as never
     )
+    installGitCommandDelegations(OrcaRuntimeService, (service) => service.gitCommands)
   }
 
   private readonly runtimeId = randomUUID()
@@ -7414,164 +7451,6 @@ export class OrcaRuntimeService {
         : null
     }
   })
-
-  getRuntimeGitStatus(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitStatus.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitSubmoduleStatus(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitSubmoduleStatus.apply(this.gitCommands, args as never)
-  }
-
-  checkRuntimeGitIgnoredPaths(...args: any[]): any {
-    return this.gitCommands.checkRuntimeGitIgnoredPaths.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitHistory(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitHistory.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitConflictOperation(...args: any[]): any {
-    return (this.gitCommands.getRuntimeGitConflictOperation as (...a: any[]) => any).apply(
-      this.gitCommands,
-      args
-    )
-  }
-
-  abortRuntimeGitMerge(...args: any[]): any {
-    return this.gitCommands.abortRuntimeGitMerge.apply(this.gitCommands, args as never)
-  }
-
-  abortRuntimeGitRebase(...args: any[]): any {
-    return this.gitCommands.abortRuntimeGitRebase.apply(this.gitCommands, args as never)
-  }
-
-  checkoutRuntimeGitBranch(...args: any[]): any {
-    return this.gitCommands.checkoutRuntimeGitBranch.apply(this.gitCommands, args as never)
-  }
-
-  listRuntimeGitLocalBranches(...args: any[]): any {
-    return this.gitCommands.listRuntimeGitLocalBranches.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitDiff(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitDiff.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitBranchCompare(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitBranchCompare.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitCommitCompare(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitCommitCompare.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitUpstreamStatus(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitUpstreamStatus.apply(this.gitCommands, args as never)
-  }
-
-  fetchRuntimeGit(...args: any[]): any {
-    return this.gitCommands.fetchRuntimeGit.apply(this.gitCommands, args as never)
-  }
-
-  syncRuntimeGitForkDefaultBranch(...args: any[]): any {
-    return (this.gitCommands.syncRuntimeGitForkDefaultBranch as (...a: any[]) => any).apply(
-      this.gitCommands,
-      args
-    )
-  }
-
-  pullRuntimeGit(...args: any[]): any {
-    return this.gitCommands.pullRuntimeGit.apply(this.gitCommands, args as never)
-  }
-
-  fastForwardRuntimeGit(...args: any[]): any {
-    return this.gitCommands.fastForwardRuntimeGit.apply(this.gitCommands, args as never)
-  }
-
-  rebaseRuntimeGitFromBase(...args: any[]): any {
-    return this.gitCommands.rebaseRuntimeGitFromBase.apply(this.gitCommands, args as never)
-  }
-
-  pushRuntimeGit(...args: any[]): any {
-    return this.gitCommands.pushRuntimeGit.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitBranchDiff(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitBranchDiff.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitCommitDiff(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitCommitDiff.apply(this.gitCommands, args as never)
-  }
-
-  commitRuntimeGit(...args: any[]): any {
-    return this.gitCommands.commitRuntimeGit.apply(this.gitCommands, args as never)
-  }
-
-  generateRuntimeCommitMessage(...args: any[]): any {
-    return this.gitCommands.generateRuntimeCommitMessage.apply(this.gitCommands, args as never)
-  }
-
-  discoverRuntimeCommitMessageModels(...args: any[]): any {
-    return (this.gitCommands.discoverRuntimeCommitMessageModels as (...a: any[]) => any).apply(
-      this.gitCommands,
-      args
-    )
-  }
-
-  cancelRuntimeGenerateCommitMessage(...args: any[]): any {
-    return (this.gitCommands.cancelRuntimeGenerateCommitMessage as (...a: any[]) => any).apply(
-      this.gitCommands,
-      args
-    )
-  }
-
-  generateRuntimePullRequestFields(...args: any[]): any {
-    return (this.gitCommands.generateRuntimePullRequestFields as (...a: any[]) => any).apply(
-      this.gitCommands,
-      args
-    )
-  }
-
-  cancelRuntimeGeneratePullRequestFields(...args: any[]): any {
-    return (this.gitCommands.cancelRuntimeGeneratePullRequestFields as (...a: any[]) => any).apply(
-      this.gitCommands,
-      args
-    )
-  }
-
-  stageRuntimeGitPath(...args: any[]): any {
-    return this.gitCommands.stageRuntimeGitPath.apply(this.gitCommands, args as never)
-  }
-
-  unstageRuntimeGitPath(...args: any[]): any {
-    return this.gitCommands.unstageRuntimeGitPath.apply(this.gitCommands, args as never)
-  }
-
-  bulkStageRuntimeGitPaths(...args: any[]): any {
-    return this.gitCommands.bulkStageRuntimeGitPaths.apply(this.gitCommands, args as never)
-  }
-
-  bulkUnstageRuntimeGitPaths(...args: any[]): any {
-    return this.gitCommands.bulkUnstageRuntimeGitPaths.apply(this.gitCommands, args as never)
-  }
-
-  bulkDiscardRuntimeGitPaths(...args: any[]): any {
-    return this.gitCommands.bulkDiscardRuntimeGitPaths.apply(this.gitCommands, args as never)
-  }
-
-  discardRuntimeGitPath(...args: any[]): any {
-    return this.gitCommands.discardRuntimeGitPath.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitRemoteFileUrl(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitRemoteFileUrl.apply(this.gitCommands, args as never)
-  }
-
-  getRuntimeGitRemoteCommitUrl(...args: any[]): any {
-    return this.gitCommands.getRuntimeGitRemoteCommitUrl.apply(this.gitCommands, args as never)
-  }
 
   /**
    * Installs the structured agent-session host on first use. Lazy for the same
