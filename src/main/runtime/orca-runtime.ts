@@ -533,7 +533,7 @@ import {
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
-import { isWindowsAbsolutePathLike, isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -542,10 +542,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../shared/workspace-scope'
-import {
-  projectResolvedWorktreeLineage,
-  sharesResolvedWorktreeLineageBoundary
-} from '../../shared/resolved-worktree-lineage'
+import { sharesResolvedWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import type {
   FolderWorkspacePathStatus,
@@ -715,25 +712,12 @@ import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import {
   getLocalProjectGitExecOptions,
-  getLocalProjectWorktreeGitOptions,
-  getLocalProjectWorktreeGitOptionsForRuntime,
-  resolveLocalProjectRuntimeForRepo,
-  resolveLocalProjectRuntimesForRepos
+  getLocalProjectWorktreeGitOptions
 } from '../project-runtime-git-options'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
-import {
-  scanLocalRepoWorktreesForResolution,
-  type RuntimeWorktreeScanResult
-} from './repo-worktree-resolution-scan'
-import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
-import {
-  listStoredWorktreeRowsForRepo,
-  resolveRepoWorktreeRows,
-  resolveScopedWorktreeIdRow,
-  type RepoWorktreeRowDeps
-} from './repo-worktree-row-resolution'
+import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
@@ -794,8 +778,7 @@ import {
   getWorktreePathSettings,
   mergeWorktree,
   sanitizeWorktreeName,
-  shouldSetDisplayName,
-  areWorktreePathsEqual
+  shouldSetDisplayName
 } from '../ipc/worktree-logic'
 import { findCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
@@ -860,11 +843,7 @@ import {
   getFolderWorkspacePathStatus,
   inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
-import {
-  getSshGitProvider,
-  getSshGitProviderGeneration,
-  requireSshGitProvider
-} from '../providers/ssh-git-dispatch'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -1665,22 +1644,6 @@ type WorktreeStartupFollowup = {
   prompt: string
 }
 
-function getAgentLaunchPlatformForRepo(
-  repo: Pick<Repo, 'connectionId' | 'path'>,
-  projectRuntime?: ProjectExecutionRuntimeResolution
-): NodeJS.Platform {
-  if (!repo.connectionId) {
-    if (projectRuntime?.status === 'repair-required') {
-      return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
-    }
-    if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-      return 'linux'
-    }
-    return process.platform
-  }
-  return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
-}
-
 // Why: long enough for a phone to reconnect and retry a create whose response
 // was lost, short enough that an intentional later re-resume forks fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
@@ -2260,7 +2223,7 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
-type ResolvedWorktree = Worktree & {
+export type ResolvedWorktree = Worktree & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
@@ -2337,35 +2300,6 @@ type WorktreeLineageResolution =
       warnings: WorktreeLineageWarning[]
     }
 
-type RuntimeWorktreeScanCache = {
-  generation: number
-  runtimeKey: string
-  result: RuntimeWorktreeScanResult
-  expiresAt: number
-  /**
-   * Git-admin state read as of the scan's start, written back once the probe settles. Never holds a
-   * pending promise: a wedged mount would otherwise poison every later refresh that awaits it.
-   * `null` means "cannot prove unchanged" (unreadable layout, still probing, probe timed out).
-   */
-  adminFingerprint: string | null
-  /** When the Git scan behind `result` actually ran, so reconciliation can be bounded. */
-  scannedAt: number
-}
-
-type RuntimeWorktreeScanInFlight = {
-  generation: number
-  runtimeKey: string
-  promise: Promise<RuntimeWorktreeScanRefresh>
-}
-
-type RuntimeWorktreeScanRefresh = {
-  result: RuntimeWorktreeScanResult
-  adminFingerprint: string | null
-  /** Still-running probe whose value the cache entry adopts if it settles; never awaited by a caller. */
-  adminFingerprintProbe: Promise<string | null> | null
-  scannedAt: number
-}
-
 type WorktreeLineageCandidate = {
   source: 'env-workspace' | 'cwd-context' | 'terminal-context' | 'orchestration-context'
   parent: ResolvedWorkspaceParent
@@ -2402,15 +2336,6 @@ class WorktreeIdRequiresFullPathError extends Error {
 type ResolvedWorktreeSnapshot = {
   worktrees: ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
-}
-
-type ResolvedWorktreeCache = ResolvedWorktreeSnapshot & {
-  expiresAt: number
-}
-
-type ResolvedWorktreeInFlight = {
-  generation: number
-  promise: Promise<ResolvedWorktreeSnapshot>
 }
 
 // Why: notificationSeq is the desktop-assigned monotonic sequence used for
@@ -2553,6 +2478,7 @@ export class OrcaRuntimeService {
   private readonly terminalAgentStatusBinding: RuntimeTerminalAgentStatusBindingCommands
   private readonly clientEventPublishingCommands: RuntimeClientEventPublishingCommands
   private readonly hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
+  private readonly resolvedWorktreeCache: RuntimeResolvedWorktreeCache
   private readonly disposalTree: RuntimeDisposalTree
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
@@ -2716,14 +2642,6 @@ export class OrcaRuntimeService {
   private agentBrowserBridge: AgentBrowserBridge | null = null
   private offscreenBrowserBackend: BrowserBackend | null = null
   private emulatorBridge: EmulatorBridge | null = null
-  private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
-  private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
-  private resolvedWorktreeGeneration = 0
-  private worktreeScanGenerations = new Map<string, number>()
-  private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
-  private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
-  /** Repos whose Git-admin probe has not settled yet; caps abandoned fs work at one per repo. */
-  private worktreeAdminFingerprintProbes = new Set<string>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
@@ -3179,14 +3097,6 @@ export class OrcaRuntimeService {
   private readonly getAgentProviderSessionRowsForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
-  private readonly attestAgentHookCompatibilityAuthorityFn:
-    | ((candidate: {
-        paneKey: string
-        launchTokenHash: string
-        connectionId: string | null
-        terminalProvenance: 'current_runtime' | 'restored'
-      }) => AgentHookAuthorityAttestation | null)
-    | null
   private readonly retireAgentHookCompatibilityAuthorityFn: ((paneKey: string) => void) | null
   private readonly reconcileAgentStatusForEndedProcessFn:
     | ((paneKeys: Iterable<string>) => void)
@@ -3297,6 +3207,12 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.resolvedWorktreeCache = new RuntimeResolvedWorktreeCache({
+      store: () => this.store as Store | null,
+      requireStore: () => this.requireStore(),
+      listFolderWorkspaces: (repo, repoOwnerCount) =>
+        listRuntimeFolderWorkspaces(this.requireStore(), repo, repoOwnerCount)
+    })
     this.automationCommands = new RuntimeAutomationCommands({
       store: this.store,
       automationService: () => this.automationService,
@@ -3636,8 +3552,6 @@ export class OrcaRuntimeService {
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
-    this.attestAgentHookCompatibilityAuthorityFn =
-      deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
@@ -16003,7 +15917,7 @@ export class OrcaRuntimeService {
     const explicitTargetWorktreeId = worktreeSelector
       ? this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
       : null
-    const initialResolvedWorktreeCache = this.resolvedWorktreeCache
+    const initialResolvedWorktreeCache = this.resolvedWorktreeCache.peekSnapshot()
     const cachedResolvedWorktrees =
       initialResolvedWorktreeCache && initialResolvedWorktreeCache.expiresAt > Date.now()
         ? initialResolvedWorktreeCache.worktrees
@@ -16022,7 +15936,7 @@ export class OrcaRuntimeService {
         ? await this.resolveWorktreeSelector(worktreeSelector)
         : (cachedExplicitTargetWorktree ?? parsedExplicitTargetWorktree)
     const targetWorktreeId = explicitTargetWorktreeId ?? targetWorktree?.id ?? null
-    const classificationResolvedWorktreeCache = this.resolvedWorktreeCache
+    const classificationResolvedWorktreeCache = this.resolvedWorktreeCache.peekSnapshot()
     const classificationResolvedWorktrees =
       targetWorktreeId &&
       classificationResolvedWorktreeCache &&
@@ -26575,10 +26489,9 @@ export class OrcaRuntimeService {
       )
     }
     const instanceByWorktreeId = new Map(
-      this.resolvedWorktreeCache?.worktrees.map((worktree) => [
-        worktree.id,
-        worktree.instanceId
-      ]) ?? [
+      this.resolvedWorktreeCache
+        .peekSnapshot()
+        ?.worktrees.map((worktree) => [worktree.id, worktree.instanceId]) ?? [
         [child.id, child.instanceId],
         [parent.id, parent.instanceId]
       ]
@@ -26993,392 +26906,60 @@ export class OrcaRuntimeService {
   }
 
   private buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null {
-    const parsed = splitWorktreeIdForFilesystem(worktreeId)
-    if (!parsed?.repoId || !parsed.worktreePath) {
-      return null
-    }
-    const repo = this.store?.getRepos().find((entry) => entry.id === parsed.repoId)
-    const git = {
-      path: parsed.worktreePath,
-      head: '',
-      branch: '',
-      isBare: false,
-      isMainWorktree: repo ? areWorktreePathsEqual(parsed.worktreePath, repo.path) : false
-    }
-    const meta = this.store?.getWorktreeMeta(worktreeId)
-    const merged = {
-      ...mergeWorktree(parsed.repoId, git, meta, repo?.displayName),
-      ...(repo ? { hostId: meta?.hostId ?? getRepoExecutionHostId(repo) } : {})
-    }
-    return {
-      ...merged,
-      id: worktreeId,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git,
-      displayName: merged.displayName,
-      comment: merged.comment
-    }
+    return this.resolvedWorktreeCache.buildResolvedWorktreeFromId(worktreeId)
   }
 
   private listKnownResolvedWorktreesForExplicitTarget(
     targetWorktreeId: string,
     targetWorktree: ResolvedWorktree | null
   ): ResolvedWorktree[] {
-    if (!this.store || !targetWorktree) {
-      return []
-    }
-    const target = splitWorktreeIdForFilesystem(targetWorktreeId)
-    if (!target?.repoId || !target.worktreePath) {
-      return []
-    }
-    const worktreeIds = new Set(
-      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return (
-          parsed?.repoId === target.repoId &&
-          Boolean(parsed.worktreePath) &&
-          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
-            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
-        )
-      })
+    return this.resolvedWorktreeCache.listKnownResolvedWorktreesForExplicitTarget(
+      targetWorktreeId,
+      targetWorktree
     )
-    worktreeIds.add(targetWorktreeId)
-
-    const resolved: ResolvedWorktree[] = []
-    for (const worktreeId of worktreeIds) {
-      const worktree =
-        worktreeId === targetWorktreeId
-          ? targetWorktree
-          : this.buildResolvedWorktreeFromId(worktreeId)
-      if (worktree) {
-        resolved.push(worktree)
-      }
-    }
-    return resolved
   }
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
   private hasFreshResolvedWorktreeCache(): boolean {
-    return Boolean(this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > Date.now())
+    return this.resolvedWorktreeCache.hasFreshResolvedWorktreeCache()
   }
 
   private async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
-    return (await this.listResolvedWorktreeSnapshot()).worktrees
+    return this.resolvedWorktreeCache.listResolvedWorktrees()
   }
 
   private async listResolvedWorktreeSnapshot(): Promise<ResolvedWorktreeSnapshot> {
-    if (!this.store) {
-      return { worktrees: [], platformByRepoId: new Map() }
-    }
-    const now = Date.now()
-    if (this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > now) {
-      return this.resolvedWorktreeCache
-    }
-    const generation = this.resolvedWorktreeGeneration
-    if (this.resolvedWorktreeInFlight?.generation === generation) {
-      return this.resolvedWorktreeInFlight.promise
-    }
-
-    const promise = this.computeResolvedWorktrees(generation)
-    this.resolvedWorktreeInFlight = { generation, promise }
-    try {
-      return await promise
-    } finally {
-      if (this.resolvedWorktreeInFlight?.promise === promise) {
-        this.resolvedWorktreeInFlight = null
-      }
-    }
-  }
-
-  private async computeResolvedWorktrees(generation: number): Promise<ResolvedWorktreeSnapshot> {
-    if (!this.store) {
-      return { worktrees: [], platformByRepoId: new Map() }
-    }
-    const metaById = this.store.getAllWorktreeMeta() ?? {}
-    const repos = this.store.getRepos()
-    const repoOwnerCounts = new Map<string, number>()
-    for (const repo of repos) {
-      repoOwnerCounts.set(repo.id, (repoOwnerCounts.get(repo.id) ?? 0) + 1)
-    }
-    const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
-    const platformByRepoId = new Map(
-      repos.map((repo) => [
-        repo.id,
-        getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
-      ])
-    )
-    const deps = this.repoWorktreeRowDeps()
-    const perRepoWorktrees = await Promise.all(
-      repos.map(
-        async (repo) =>
-          await resolveRepoWorktreeRows(
-            deps,
-            repo,
-            metaById,
-            projectRuntimeByRepoId,
-            repoOwnerCounts.get(repo.id) ?? 1
-          )
-      )
-    )
-    const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
-    const worktrees = perRepoWorktrees.flatMap((rows) =>
-      projectResolvedWorktreeLineage(rows, lineageById)
-    )
-    // Why: short TTL avoids shelling out on every frequent poll while still catching worktree changes made outside Orca.
-    // Why stamped on completion, not entry: a compute that spent longer than the TTL would otherwise publish an
-    // already-expired entry, so the very next poll recomputes and every caller repeats the same slow path.
-    if (generation === this.resolvedWorktreeGeneration) {
-      this.resolvedWorktreeCache = {
-        worktrees,
-        platformByRepoId,
-        expiresAt: Date.now() + RESOLVED_WORKTREE_CACHE_TTL_MS
-      }
-    }
-    return { worktrees, platformByRepoId }
-  }
-
-  /** Bind the runtime-owned scan cache and folder-workspace stamping into the row resolver. */
-  private repoWorktreeRowDeps(): RepoWorktreeRowDeps {
-    const store = this.requireStore()
-    return {
-      store,
-      scanRepo: (repo, projectRuntimeByRepoId) =>
-        this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
-      listFolderWorkspaces: (repo, repoOwnerCount) =>
-        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
-    }
+    return this.resolvedWorktreeCache.listResolvedWorktreeSnapshot()
   }
 
   private async resolveExplicitWorktreeIdScoped(
     worktreeId: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree | null> {
-    if (!this.store) {
-      return null
-    }
-    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+    return this.resolvedWorktreeCache.resolveExplicitWorktreeIdScoped(worktreeId, requiredHostId)
   }
 
   private async listRepoWorktreesForResolution(
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    const now = Date.now()
-    const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
-    const generation = this.worktreeScanGenerations.get(scanScopeKey) ?? 0
-    const projectRuntime = repo.connectionId
-      ? undefined
-      : projectRuntimeByRepoId
-        ? projectRuntimeByRepoId.get(repo.id)
-        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-    const runtimeKey = projectRuntime
-      ? projectRuntime.status === 'resolved'
-        ? projectRuntime.runtime.cacheKey
-        : projectRuntime.repair.cacheKey
-      : repo.connectionId
-        ? `ssh:${repo.connectionId}:${getSshGitProviderGeneration(repo.connectionId)}`
-        : 'local:default'
-    const cached = this.worktreeScanCache.get(scanScopeKey)
-    if (
-      cached?.generation === generation &&
-      cached.runtimeKey === runtimeKey &&
-      cached.expiresAt > now
-    ) {
-      return cached.result
-    }
-    const inFlight = this.worktreeScanInFlight.get(scanScopeKey)
-    if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
-      const refresh = await inFlight.promise
-      if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
-        return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
-      }
-      return refresh.result
-    }
-    const reusableCached =
-      cached?.generation === generation && cached.runtimeKey === runtimeKey ? cached : null
-    const promise = this.refreshRepoWorktreeScan(repo, projectRuntime, reusableCached)
-    this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
-    try {
-      const refresh = await promise
-      // Why: fence the caller as well as cache writeback, or an event refresh can consume a stale scan.
-      if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
-        return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
-      }
-      // Why: back off local spawn failures under resource pressure while disconnected SSH can recover on the next poll.
-      if (
-        (refresh.result.ok || !repo.connectionId) &&
-        this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise
-      ) {
-        const entry: RuntimeWorktreeScanCache = {
-          generation,
-          runtimeKey,
-          result: refresh.result,
-          expiresAt: Date.now() + resolveWorktreeScanCacheTtlMs(repo),
-          adminFingerprint: refresh.adminFingerprint,
-          scannedAt: refresh.scannedAt
-        }
-        this.worktreeScanCache.set(scanScopeKey, entry)
-        // Why a writeback instead of storing the promise: a probe that never settles must not be
-        // awaited by a later refresh. Identity check keeps a stale probe out of a newer entry.
-        void refresh.adminFingerprintProbe?.then((fingerprint) => {
-          if (this.worktreeScanCache.get(scanScopeKey) === entry) {
-            entry.adminFingerprint = fingerprint
-          }
-        })
-      }
-      return refresh.result
-    } finally {
-      if (this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise) {
-        this.worktreeScanInFlight.delete(scanScopeKey)
-      }
-    }
-  }
-
-  /**
-   * Refresh one repo's worktree rows, skipping the `git worktree list` subprocess when a cheap
-   * Git-admin fingerprint proves nothing changed since the cached scan.
-   */
-  private async refreshRepoWorktreeScan(
-    repo: Repo,
-    projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-    cached: RuntimeWorktreeScanCache | null
-  ): Promise<RuntimeWorktreeScanRefresh> {
-    const scannedAt = Date.now()
-    // SSH and WSL-routed repos run Git off-host, so a local admin-dir read cannot describe them.
-    const fingerprintCapable =
-      !repo.connectionId &&
-      // Why: a repo whose scan TTL already reaches the reconciliation interval can never reuse a
-      // fingerprint, so reading one would be pure work. Agent-scratch roots are that case today.
-      resolveWorktreeScanCacheTtlMs(repo) < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS &&
-      !getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
-    // Why issue it before the scan: a change landing while the scan runs must not be stamped as
-    // already-observed, or the next probe would mask it until the reconciliation deadline.
-    const probe = fingerprintCapable ? this.startRepoWorktreeAdminFingerprintProbe(repo) : null
-    const reusable =
-      cached?.result.ok === true &&
-      scannedAt - cached.scannedAt < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
-        ? cached
-        : null
-    if (probe && reusable) {
-      // Why await only here: this is the one branch whose decision needs the probe. A scan-bound
-      // caller must never wait on it, or every cold read pays filesystem latency it cannot use.
-      const probed = await withTimeoutResult(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
-      if (!probed.ok) {
-        // Why log: expiry and "fingerprint unavailable" both surface as `null`, so a wedged mount is
-        // otherwise indistinguishable from a repo that simply cannot be fingerprinted.
-        console.warn('[worktree-scan] admin fingerprint probe expired; running a full scan', {
-          repoId: repo.id,
-          timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
-        })
-      }
-      const current = probed.ok ? probed.value : null
-      if (current !== null && current === reusable.adminFingerprint) {
-        return {
-          result: reusable.result,
-          adminFingerprint: current,
-          adminFingerprintProbe: null,
-          scannedAt: reusable.scannedAt
-        }
-      }
-    }
-    const result = await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
-    return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
-  }
-
-  /**
-   * Read one repo's Git-admin fingerprint, unless that repo's previous read is still outstanding.
-   * Why the gate: `withTimeout` abandons a probe without cancelling it, and readdir/stat take no
-   * AbortSignal — on a wedged mount a fresh probe per refresh would pin every libuv fs thread.
-   */
-  private startRepoWorktreeAdminFingerprintProbe(repo: Repo): Promise<string | null> | null {
-    if (this.worktreeAdminFingerprintProbes.has(repo.id)) {
-      return null
-    }
-    this.worktreeAdminFingerprintProbes.add(repo.id)
-    return readRepoWorktreeAdminFingerprint(repo.path)
-      .catch(() => null)
-      .finally(() => {
-        this.worktreeAdminFingerprintProbes.delete(repo.id)
-      })
-  }
-
-  private async listRepoWorktreesForResolutionUncached(
-    repo: Repo,
-    projectRuntime: ProjectExecutionRuntimeResolution | undefined
-  ): Promise<RuntimeWorktreeScanResult> {
-    if (!repo.connectionId) {
-      return await scanLocalRepoWorktreesForResolution(
-        repo.path,
-        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-      )
-    }
-    const provider = getSshGitProvider(repo.connectionId)
-    if (!provider) {
-      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
-    }
-    try {
-      return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
-    } catch {
-      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
-    }
-  }
-
-  private listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
-    return this.store ? listStoredWorktreeRowsForRepo(this.requireStore(), repo) : []
+    return this.resolvedWorktreeCache.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
   }
 
   private async getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>> {
-    return new Map((await this.listResolvedWorktrees()).map((worktree) => [worktree.id, worktree]))
+    return this.resolvedWorktreeCache.getResolvedWorktreeMap()
   }
 
   private invalidateResolvedWorktreeCache(): void {
-    this.resolvedWorktreeGeneration += 1
-    this.resolvedWorktreeCache = null
+    return this.resolvedWorktreeCache.invalidateResolvedWorktreeCache()
   }
 
   private invalidateWorktreeScanCacheForRepo(repoId: string): void {
-    const prefix = `${repoId}\0`
-    const scopeKeys = new Set(
-      this.store
-        ?.getRepos()
-        .filter((repo) => repo.id === repoId)
-        .map((repo) => `${repoId}\0${getRepoExecutionHostId(repo)}`) ?? []
-    )
-    for (const keys of [
-      this.worktreeScanGenerations.keys(),
-      this.worktreeScanCache.keys(),
-      this.worktreeScanInFlight.keys()
-    ]) {
-      for (const key of keys) {
-        if (key.startsWith(prefix)) {
-          scopeKeys.add(key)
-        }
-      }
-    }
-    for (const key of scopeKeys) {
-      this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
-      this.worktreeScanInFlight.delete(key)
-    }
+    return this.resolvedWorktreeCache.invalidateWorktreeScanCacheForRepo(repoId)
   }
 
   private invalidateSshWorktreeScanCacheInternal(targetId: string): void {
-    const repos = this.store?.getRepos() ?? []
-    const affectedRepos = repos.filter((repo) => repo.connectionId === targetId)
-    const affectedScopeKeys = new Set(
-      affectedRepos.map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    )
-    for (const key of affectedScopeKeys) {
-      this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
-      this.worktreeScanInFlight.delete(key)
-    }
-    if (affectedScopeKeys.size > 0) {
-      this.resolvedWorktreeGeneration += 1
-      this.resolvedWorktreeCache = null
-    }
+    return this.resolvedWorktreeCache.invalidateSshWorktreeScanCacheInternal(targetId)
   }
 
   /** Invalidate the worktree cache and tell the renderer to re-list after an out-of-band branch change so the new name surfaces immediately. */
@@ -30993,7 +30574,6 @@ import {
   PTY_CONTROLLER_LIST_TIMEOUT_MS,
   REMOTE_FETCH_CACHE_MAX,
   REMOTE_FETCH_TIMEOUT_MS,
-  RESOLVED_WORKTREE_CACHE_TTL_MS,
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS,
@@ -31003,8 +30583,6 @@ import {
   WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS,
   WAIT_BLOCKED_KEYWORD_CARRY_CHARS,
   WAIT_BLOCKED_KEYWORD_PATTERN,
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
   WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS,
   addRuntimeWorkingTerminalEvidence,
   agentTitleProvesAgentPresence,
@@ -31061,7 +30639,6 @@ import {
   ptyTitleProvesAgentPresence,
   readTerminalTail,
   resolveTerminalSessionWorktreeId,
-  resolveWorktreeScanCacheTtlMs,
   restoredTerminalTailSeedAllowed,
   runtimePathsEqual,
   runtimeWorkingTerminalEvidenceMatchesSource,
@@ -31077,6 +30654,7 @@ import {
   waitForWorktreeTerminalMutation,
   withTimeoutResult
 } from './runtime-tail-projection'
+import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,

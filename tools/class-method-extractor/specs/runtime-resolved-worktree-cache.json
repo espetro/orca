@@ -1,0 +1,36 @@
+{
+  "target": "runtime-resolved-worktree-cache.ts",
+  "className": "RuntimeResolvedWorktreeCache",
+  "methods": [
+    "buildResolvedWorktreeFromId",
+    "listKnownResolvedWorktreesForExplicitTarget",
+    "hasFreshResolvedWorktreeCache",
+    "listResolvedWorktrees",
+    "listResolvedWorktreeSnapshot",
+    "computeResolvedWorktrees",
+    "repoWorktreeRowDeps",
+    "resolveExplicitWorktreeIdScoped",
+    "listRepoWorktreesForResolution",
+    "refreshRepoWorktreeScan",
+    "startRepoWorktreeAdminFingerprintProbe",
+    "listRepoWorktreesForResolutionUncached",
+    "listStoredWorktreesForResolution",
+    "getResolvedWorktreeMap",
+    "invalidateResolvedWorktreeCache",
+    "invalidateWorktreeScanCacheForRepo",
+    "invalidateSshWorktreeScanCacheInternal"
+  ],
+  "stateFields": [
+    "resolvedWorktreeCache",
+    "resolvedWorktreeInFlight",
+    "resolvedWorktreeGeneration",
+    "worktreeScanGenerations",
+    "worktreeScanCache",
+    "worktreeScanInFlight",
+    "worktreeAdminFingerprintProbes"
+  ],
+  "deps": {
+    "store": { "kind": "lazy", "from": "store" },
+    "requireStore": { "kind": "callback", "from": "requireStore" }
+  }
+}
