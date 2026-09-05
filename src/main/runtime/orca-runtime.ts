@@ -4,8 +4,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Why: delegation trampolines forward variadic args to extracted command facades; typing them precisely requires the facades to expose param tuples. */
 import { isShellProcess } from '../../shared/agent-detection'
 
-import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
-import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
 import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { RuntimeLinearCommands } from './runtime-linear-commands'
 import { RuntimeProjectWorktreeCommands } from './runtime-project-worktree-commands'
@@ -362,7 +360,6 @@ import {
 
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
-import { TASK_PROVIDERS } from '../../shared/task-providers'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
@@ -371,11 +368,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
-import {
-  haveSameDisabledTuiAgents,
-  isTuiAgentEnabled,
-  pickTuiAgent
-} from '../../shared/tui-agent-selection'
+import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -2457,6 +2450,7 @@ export class OrcaRuntimeService {
   private readonly hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
   private readonly managedBaseCommands: RuntimeManagedBaseCommands
   private readonly remoteDesktopCommands: RuntimeRemoteDesktopCommands
+  private readonly clientConnectionCommands: RuntimeClientConnectionCommands
   private readonly agentClusterFacade: RuntimeAgentClusterFacade
   private readonly mobileSessionFacade: RuntimeMobileSessionFacade
   private readonly ptyWorktrees: RuntimePtyWorktrees
@@ -3137,6 +3131,11 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.clientConnectionCommands = new RuntimeClientConnectionCommands({
+      store: this.store,
+      notifyReposChanged: (...args) => this.notifyReposChanged(...args),
+      reconcileManagedAgentHooks: (...args) => this.reconcileManagedAgentHooks(...args)
+    })
     this.remoteDesktopCommands = new RuntimeRemoteDesktopCommands({
       terminalClusterFacade: () => this.terminalClusterFacade,
       resolveDesktopRestoreTarget: (...args) => this.resolveDesktopRestoreTarget(...args),
@@ -4504,32 +4503,7 @@ export class OrcaRuntimeService {
     | 'artifactSharingEnabled'
     | 'agentSkillSharingEnabled'
   > {
-    if (!this.store?.getSettings) {
-      throw new Error('runtime_unavailable')
-    }
-    const settings = this.store.getSettings()
-    return {
-      worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
-      defaultTuiAgent: settings.defaultTuiAgent ?? null,
-      disabledTuiAgents: settings.disabledTuiAgents ?? [],
-      agentCmdOverrides: settings.agentCmdOverrides ?? {},
-      agentDefaultArgs: settings.agentDefaultArgs ?? {},
-      agentDefaultEnv: settings.agentDefaultEnv ?? {},
-      agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
-      defaultTaskSource: settings.defaultTaskSource ?? 'github',
-      defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
-      visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
-      defaultRepoSelection: settings.defaultRepoSelection ?? null,
-      defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
-      githubProjects: settings.githubProjects,
-      experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      compactWorktreeCards: settings.compactWorktreeCards === true,
-      minimaxGroupId: settings.minimaxGroupId ?? '',
-      minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
-      prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
-      artifactSharingEnabled: isArtifactSharingEnabled(settings),
-      agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings)
-    }
+    return this.clientConnectionCommands.getClientSettings()
   }
 
   private reconcileManagedAgentHooks(): Promise<void> {
@@ -4580,25 +4554,7 @@ export class OrcaRuntimeService {
       | 'prBotAuthorOverrides'
     >
   > {
-    if (!this.store?.getSettings || !this.store.updateSettings) {
-      throw new Error('runtime_unavailable')
-    }
-    const beforeSettings = this.store.getSettings()
-    const before = beforeSettings.agentStatusHooksEnabled !== false
-    this.store.updateSettings(updates, { notifyListeners: true })
-    const settings = this.store.getSettings()
-    if (updates.worktreeVisibilityDefaults !== undefined) {
-      this.notifyReposChanged()
-    }
-    if (
-      (typeof updates.agentStatusHooksEnabled === 'boolean' &&
-        before !== updates.agentStatusHooksEnabled) ||
-      (updates.disabledTuiAgents !== undefined &&
-        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
-    ) {
-      await this.reconcileManagedAgentHooks()
-    }
-    return this.getClientSettings()
+    return this.clientConnectionCommands.updateClientSettings(updates)
   }
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
@@ -13816,6 +13772,7 @@ import { RuntimeMobileSessionFacade } from './runtime-mobile-session-facade'
 import { RuntimeAgentClusterFacade } from './runtime-agent-cluster-facade'
 import { RuntimeManagedBaseCommands } from './runtime-managed-base-commands'
 import { RuntimeRemoteDesktopCommands } from './runtime-remote-desktop-commands'
+import { RuntimeClientConnectionCommands } from './runtime-client-connection-commands'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,
