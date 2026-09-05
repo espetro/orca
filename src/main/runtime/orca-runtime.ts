@@ -2421,6 +2421,8 @@ export interface OrcaRuntimeService {
   listRuntimeFiles: RuntimeFileCommands['listRuntimeFiles']
   listRuntimeMarkdownDocuments: RuntimeFileCommands['listRuntimeMarkdownDocuments']
   statRuntimeFile: RuntimeFileCommands['statRuntimeFile']
+  writeFileExplorerFileBase64: RuntimeFileCommands['writeFileExplorerFileBase64']
+  writeFileExplorerFileBase64Chunk: RuntimeFileCommands['writeFileExplorerFileBase64Chunk']
   headlessMobileSnapshotContentUnchanged: RuntimeMobileSessionFacade['headlessMobileSnapshotContentUnchanged']
   getMobileTerminalLeafPtyIds: RuntimeMobileSessionFacade['getMobileTerminalLeafPtyIds']
   clearRuntimeSessionOwnershipForMobileTerminalLeaf: RuntimeMobileSessionFacade['clearRuntimeSessionOwnershipForMobileTerminalLeaf']
@@ -7339,17 +7341,6 @@ export class OrcaRuntimeService {
       )
       throw error
     }
-  }
-
-  writeFileExplorerFileBase64(...args: any[]): any {
-    return this.fileCommands.writeFileExplorerFileBase64.apply(this.fileCommands, args as never)
-  }
-
-  writeFileExplorerFileBase64Chunk(...args: any[]): any {
-    return (this.fileCommands.writeFileExplorerFileBase64Chunk as (...a: any[]) => any).apply(
-      this.fileCommands,
-      args
-    )
   }
 
   private readonly gitCommands = new RuntimeGitCommands({

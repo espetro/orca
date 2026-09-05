@@ -310,7 +310,9 @@ const FILE_METHOD_NAMES = [
   'searchRuntimeFiles',
   'listRuntimeFiles',
   'listRuntimeMarkdownDocuments',
-  'statRuntimeFile'
+  'statRuntimeFile',
+  'writeFileExplorerFileBase64',
+  'writeFileExplorerFileBase64Chunk'
 ] as const
 
 export function installFileCommandDelegations(
