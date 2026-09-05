@@ -4392,11 +4392,8 @@ export class RuntimeManagedWorktrees {
     return { stopped }
   }
 
-  touchMobileSessionTabsForWorktree() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Delegation forwards arbitrary arguments
-    return (this.deps.mobileTabSnapshots() as any).touchMobileSessionTabsForWorktree(
-      ...(arguments as any)
-    )
+  touchMobileSessionTabsForWorktree(worktreeId: string, options?: { immediate?: boolean }): void {
+    return this.deps.mobileTabSnapshots().touchMobileSessionTabsForWorktree(worktreeId, options)
   }
 
   tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
