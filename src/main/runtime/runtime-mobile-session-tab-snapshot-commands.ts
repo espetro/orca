@@ -464,7 +464,7 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
-  private collectPersistedTerminalLeafIds(layout: TerminalLayoutSnapshot | undefined): string[] {
+  collectPersistedTerminalLeafIds(layout: TerminalLayoutSnapshot | undefined): string[] {
     if (!layout) {
       return []
     }
