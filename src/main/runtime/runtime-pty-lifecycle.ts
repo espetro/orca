@@ -85,7 +85,7 @@ export function getPtyAgent(runtime: OrcaRuntimeService, ptyId: string): any {
 }
 
 export function getAgentPromptActivity(runtime: OrcaRuntimeService, ptyId: string): any {
-  return runtime.getAgentPromptActivity(ptyId)
+  return runtime.getAgentPromptActivity(ptyId, ptyId)
 }
 
 export function serializeAgentPromptSubmission(
