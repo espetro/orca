@@ -1,0 +1,841 @@
+{
+  "target": "runtime-mobile-session-facade.ts",
+  "className": "RuntimeMobileSessionFacade",
+  "methods": [
+    "retireResolvedNativeChatLaunchDraftFromMobileSnapshot",
+    "publishRecoveredSshMobileSessionTabs",
+    "collectMobileVisibleGraphChangedWorktrees",
+    "listMobileSessionTabs",
+    "listAllMobileSessionTabs",
+    "listAllMobileSessionTabsWithChangeSequence",
+    "collectAllMobileSessionTabs",
+    "listAllMobileSessionTabsInventory",
+    "listAllMobileSessionTabsInventoryWithChangeSequence",
+    "getMobileSessionSnapshotTabIdentityKeys",
+    "publishPtyBackedMobileSessionTerminal",
+    "refreshMobileSessionPtyRecords",
+    "refreshMobileSessionPtyInventory",
+    "performMobileSessionPtyRecordsRefresh",
+    "activateMobileSessionTab",
+    "applyMobileSessionTabNavigation",
+    "shouldMaterializeHeadlessMobileSessionTab",
+    "shouldPersistHeadlessMobileSessionActivation",
+    "activateHeadlessMobileSessionTerminalTab",
+    "refuseUnattributedMobileSessionTabClose",
+    "republishMobileSessionTabsSnapshot",
+    "getMobileSessionTerminalHandle",
+    "isOffscreenMobileSessionBrowserTab",
+    "closeHeadlessMobileTerminalTab",
+    "moveMobileSessionTab",
+    "updateMobileSessionPaneLayout",
+    "setMobileSessionTabProps",
+    "moveHeadlessMobileSessionTab",
+    "splitHeadlessMobileSessionTabGroup",
+    "moveHeadlessMobileSessionTabToGroup",
+    "normalizeMobileSessionTabOrder",
+    "collectPublicMobileSessionTabIds",
+    "resolveMobileSessionHostTabId",
+    "readMobileMarkdownTab",
+    "saveMobileMarkdownTab",
+    "onMobileSessionTabsChanged",
+    "retainAgentRowSnapshot",
+    "clearAgentRowSnapshotsForPty",
+    "isMobileTerminalQueryReplyAuthority",
+    "withVisibleSnapshotFallback",
+    "visibleSnapshotPreview",
+    "parseVisibleSnapshot",
+    "readRendererVisibleSnapshotLines",
+    "getMobileNotificationListenerCount",
+    "dispatchMobileNotification",
+    "getMobileNotificationEpoch",
+    "dismissMobileNotification",
+    "listMobileSpeechModels",
+    "downloadMobileSpeechModel",
+    "deleteMobileSpeechModel",
+    "configureMobileDictation",
+    "startMobileDictation",
+    "feedMobileDictation",
+    "finishMobileDictation",
+    "cancelMobileDictation",
+    "cancelMobileDictationSession",
+    "cancelMobileDictationForConnection",
+    "cancelMobileDictationForClient",
+    "refreshAccountsForMobile",
+    "refreshAccountsForMobileSubscriber",
+    "ptyExit_notifyTabAndMobile",
+    "markMobileActor",
+    "beginMobileInputFloor",
+    "mobileTookFloor",
+    "updateMobileViewport",
+    "getMobileAutoRestoreFitMs",
+    "setMobileAutoRestoreFitMs",
+    "setMobileDisplayMode",
+    "getMobileDisplayMode",
+    "isMobileSubscriberActive",
+    "updateMobileSubscriberViewport",
+    "handleMobileSubscribe",
+    "handleMobileSubscribeInternal",
+    "handleMobileUnsubscribe",
+    "applyMobileDisplayMode",
+    "createMobileSessionTerminal",
+    "runCreateMobileSessionTerminal",
+    "resolveMobileSessionTerminalCommand",
+    "createRuntimeOwnedMobileSessionTerminal",
+    "waitForMobileTerminalSurface",
+    "findMobileTerminalSurface",
+    "findMobileTerminalSurfaceForPty",
+    "ensurePtyBackedMobileSurfaceForRendererTab",
+    "restoreLivePairedRendererSessionOwnedMobileTerminals",
+    "isReadyMobileTerminalSurface",
+    "replaceHeadlessTerminalFromRendererSnapshotForRecovery",
+    "syncMobileSessionTabs",
+    "notifyMobileSessionTabsRemoved",
+    "scheduleMobileSessionTabsChanged",
+    "cancelScheduledMobileSessionTabsChanged",
+    "flushScheduledMobileSessionTabsChanged",
+    "notifyMobileSessionTabsChangedNow",
+    "getMobileSessionTabsForWorktree",
+    "resolveMobileMarkdownWorktreeId",
+    "sanitizeMobileSessionTabGroups",
+    "pruneMobileSessionTabGroupLayout",
+    "toMobileSessionTabsResult",
+    "renewMobileAgentStatusFromPtyTitle",
+    "buildPtyMobileAgentStatus",
+    "getFreshRetainedAgentStatusForMobileTab",
+    "findPtyForMobileTerminalTab",
+    "getMobileTerminalPaneKey",
+    "mobileTerminalTabMatchesPty",
+    "headlessMobileSnapshotContentUnchanged",
+    "mobileSnapshotValueEqual",
+    "reconcileHeadlessMobileSessionBrowserTabs",
+    "clearRuntimeSessionOwnershipForMobileTab",
+    "getMobileTerminalLeafPtyIds",
+    "clearRuntimeSessionOwnershipForMobileTerminalLeaf",
+    "persistedParentStillBindsMobileTerminalLeaf",
+    "isRuntimeOwnedHeadlessMobileTab",
+    "mergeMobileSessionSnapshotTabs",
+    "mergeMobileSessionTabGroups",
+    "mergePreservedHeadlessMobileSessionTabs",
+    "buildPreservedHeadlessMobileSessionSnapshot",
+    "storedMobileSnapshotHasStalePreservedTab",
+    "notifyMobileSessionTabSnapshots",
+    "emitMobileSessionTabsSnapshotToClient",
+    "touchMobileSessionSnapshotsForPty",
+    "getMobileSessionWorktreeIdsForPty",
+    "touchMobileSessionTabsForWorktree",
+    "touchMobileSessionTabsForPane",
+    "buildHeadlessMobileSessionTerminalTabs",
+    "buildHeadlessMobileSessionBrowserTabs",
+    "buildHeadlessMobileSessionTabGroups",
+    "emitMobileSessionTabsSnapshot",
+    "projectMobileSessionTabsForClient",
+    "getHeadlessMobileSessionGroupId"
+  ],
+  "deps": {
+    "acceptedRendererMobileSnapshotByWorktree": {
+      "kind": "lazy",
+      "from": "acceptedRendererMobileSnapshotByWorktree"
+    },
+    "accountCommands": {
+      "kind": "lazy",
+      "from": "accountCommands"
+    },
+    "agentPromptExplicitStatusFloorByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptExplicitStatusFloorByPtyId"
+    },
+    "agentStatusOscProcessorsByPtyId": {
+      "kind": "lazy",
+      "from": "agentStatusOscProcessorsByPtyId"
+    },
+    "applyHeadlessSessionTabPropsToSnapshot": {
+      "kind": "lazy",
+      "from": "applyHeadlessSessionTabPropsToSnapshot"
+    },
+    "applyHeadlessTerminalPaneLayoutToSnapshot": {
+      "kind": "lazy",
+      "from": "applyHeadlessTerminalPaneLayoutToSnapshot"
+    },
+    "applyMobileSessionRetirementFences": {
+      "kind": "callback",
+      "from": "applyMobileSessionRetirementFences",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "applyNativeChatLaunchDraftResolutionFence": {
+      "kind": "callback",
+      "from": "applyNativeChatLaunchDraftResolutionFence"
+    },
+    "applyRemoteDesktopLayout": {
+      "kind": "callback",
+      "from": "applyRemoteDesktopLayout"
+    },
+    "assertSessionTabsInventoryRequestActive": {
+      "kind": "callback",
+      "from": "assertSessionTabsInventoryRequestActive"
+    },
+    "assertStableReadyGraph": {
+      "kind": "callback",
+      "from": "assertStableReadyGraph"
+    },
+    "authoritativeWindowId": {
+      "kind": "lazy",
+      "from": "authoritativeWindowId"
+    },
+    "buildMaterializedHeadlessParentLayout": {
+      "kind": "callback",
+      "from": "buildMaterializedHeadlessParentLayout",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "cancelAllPendingFitRestoreTimers": {
+      "kind": "callback",
+      "from": "cancelAllPendingFitRestoreTimers"
+    },
+    "captureReadyGraphEpoch": {
+      "kind": "callback",
+      "from": "captureReadyGraphEpoch"
+    },
+    "claudeAgentTeams": {
+      "kind": "lazy",
+      "from": "claudeAgentTeams"
+    },
+    "clearWaitBlockedCheckState": {
+      "kind": "callback",
+      "from": "clearWaitBlockedCheckState"
+    },
+    "clientEventPublishingCommands": {
+      "kind": "lazy",
+      "from": "clientEventPublishingCommands"
+    },
+    "clientSessionTabSelections": {
+      "kind": "lazy",
+      "from": "clientSessionTabSelections"
+    },
+    "collectReturnedSessionTabIds": {
+      "kind": "callback",
+      "from": "collectReturnedSessionTabIds"
+    },
+    "createTerminal": {
+      "kind": "callback",
+      "from": "createTerminal",
+      "explicitType": "(worktreeId: string, opts: any) => Promise<RuntimeTerminalCreate>"
+    },
+    "currentDriver": {
+      "kind": "lazy",
+      "from": "currentDriver"
+    },
+    "delayPtyBackedMobileSnapshotForForegroundAgent": {
+      "kind": "lazy",
+      "from": "delayPtyBackedMobileSnapshotForForegroundAgent"
+    },
+    "deliverPendingStartupCommandToBareRendererPty": {
+      "kind": "callback",
+      "from": "deliverPendingStartupCommandToBareRendererPty"
+    },
+    "detachedPreAllocatedLeaves": {
+      "kind": "lazy",
+      "from": "detachedPreAllocatedLeaves"
+    },
+    "disposeHeadlessTerminal": {
+      "kind": "callback",
+      "from": "disposeHeadlessTerminal"
+    },
+    "disposePtyTitleTracker": {
+      "kind": "lazy",
+      "from": "disposePtyTitleTracker"
+    },
+    "earlyExitedPtyIncarnations": {
+      "kind": "lazy",
+      "from": "earlyExitedPtyIncarnations"
+    },
+    "enqueueLayout": {
+      "kind": "callback",
+      "from": "enqueueLayout"
+    },
+    "findHandleForPtyRecord": {
+      "kind": "callback",
+      "from": "findHandleForPtyRecord"
+    },
+    "findLiveRegisteredPtyForRendererTab": {
+      "kind": "callback",
+      "from": "findLiveRegisteredPtyForRendererTab"
+    },
+    "forgetPtyLivenessVerdict": {
+      "kind": "callback",
+      "from": "forgetPtyLivenessVerdict"
+    },
+    "freshSubscribeGuard": {
+      "kind": "lazy",
+      "from": "freshSubscribeGuard"
+    },
+    "getAgentLaunchPlatformForWorkspace": {
+      "kind": "callback",
+      "from": "getAgentLaunchPlatformForWorkspace",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "getAgentProviderSessionRowsForPaneFn": {
+      "kind": "lazy",
+      "from": "getAgentProviderSessionRowsForPaneFn"
+    },
+    "getAgentProviderSessionSnapshotFn": {
+      "kind": "lazy",
+      "from": "getAgentProviderSessionSnapshotFn"
+    },
+    "getAgentStatusSnapshotFn": {
+      "kind": "lazy",
+      "from": "getAgentStatusSnapshotFn"
+    },
+    "getAuthoritativeSessionTabsInventoryEpoch": {
+      "kind": "callback",
+      "from": "getAuthoritativeSessionTabsInventoryEpoch"
+    },
+    "getAutoRestoreFitMs": {
+      "kind": "callback",
+      "from": "getAutoRestoreFitMs"
+    },
+    "getAvailableAuthoritativeWindow": {
+      "kind": "callback",
+      "from": "getAvailableAuthoritativeWindow"
+    },
+    "getDriver": {
+      "kind": "callback",
+      "from": "getDriver"
+    },
+    "getHookAgentRowForPane": {
+      "kind": "callback",
+      "from": "getHookAgentRowForPane"
+    },
+    "getKnownWorkspaceSessionWorktreeIds": {
+      "kind": "callback",
+      "from": "getKnownWorkspaceSessionWorktreeIds"
+    },
+    "getLeafKey": {
+      "kind": "callback",
+      "from": "getLeafKey"
+    },
+    "getLeavesForPty": {
+      "kind": "callback",
+      "from": "getLeavesForPty"
+    },
+    "getLiveBrowserTabsByPageId": {
+      "kind": "callback",
+      "from": "getLiveBrowserTabsByPageId"
+    },
+    "getLivePtyForHandle": {
+      "kind": "callback",
+      "from": "getLivePtyForHandle"
+    },
+    "getMobileSessionTopLevelTabId": {
+      "kind": "lazy",
+      "from": "getMobileSessionTopLevelTabId"
+    },
+    "getTerminalSize": {
+      "kind": "callback",
+      "from": "getTerminalSize"
+    },
+    "getUnpersistedTrackedTitleForPty": {
+      "kind": "lazy",
+      "from": "getUnpersistedTrackedTitleForPty"
+    },
+    "getValidatedExplicitWorktreeIdSelector": {
+      "kind": "callback",
+      "from": "getValidatedExplicitWorktreeIdSelector"
+    },
+    "getWorkspaceSessionHydrationTargets": {
+      "kind": "callback",
+      "from": "getWorkspaceSessionHydrationTargets"
+    },
+    "graphStatus": {
+      "kind": "lazy",
+      "from": "graphStatus"
+    },
+    "graphSyncCallbacks": {
+      "kind": "lazy",
+      "from": "graphSyncCallbacks"
+    },
+    "handleByLeafKey": {
+      "kind": "lazy",
+      "from": "handleByLeafKey"
+    },
+    "handleByPtyId": {
+      "kind": "lazy",
+      "from": "handleByPtyId"
+    },
+    "hasLiveShellForRendererTab": {
+      "kind": "callback",
+      "from": "hasLiveShellForRendererTab"
+    },
+    "hasRemoteDesktopLayoutState": {
+      "kind": "callback",
+      "from": "hasRemoteDesktopLayoutState"
+    },
+    "hasRemoteDesktopViewers": {
+      "kind": "callback",
+      "from": "hasRemoteDesktopViewers"
+    },
+    "hasServeOrSshOwnedBinding": {
+      "kind": "callback",
+      "from": "hasServeOrSshOwnedBinding",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "headlessHydrationState": {
+      "kind": "lazy",
+      "from": "headlessHydrationState"
+    },
+    "headlessSessionTabPersistenceCommands": {
+      "kind": "lazy",
+      "from": "headlessSessionTabPersistenceCommands"
+    },
+    "headlessTerminals": {
+      "kind": "lazy",
+      "from": "headlessTerminals"
+    },
+    "hookAgentRowResolutionCommands": {
+      "kind": "lazy",
+      "from": "hookAgentRowResolutionCommands"
+    },
+    "hydrateHeadlessMobileSessionTabsFromWorkspaceSession": {
+      "kind": "callback",
+      "from": "hydrateHeadlessMobileSessionTabsFromWorkspaceSession",
+      "explicitType": "(worktreeId?: string, options?: { force?: boolean; allowAttachedWindow?: boolean; onlyRuntimeOwnedTerminals?: boolean; runtimeOwnedTerminalCandidateKnown?: boolean }) => any"
+    },
+    "isDeliberatelyParkedPane": {
+      "kind": "callback",
+      "from": "isDeliberatelyParkedPane"
+    },
+    "isHeadlessBuiltMobileSessionPublicationBase": {
+      "kind": "callback",
+      "from": "isHeadlessBuiltMobileSessionPublicationBase",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "isHeadlessMobileSessionPublication": {
+      "kind": "callback",
+      "from": "isHeadlessMobileSessionPublication",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "isKnownUnattachedLocalDaemonPty": {
+      "kind": "callback",
+      "from": "isKnownUnattachedLocalDaemonPty"
+    },
+    "isMobileSessionSurfaceMembershipAllowed": {
+      "kind": "callback",
+      "from": "isMobileSessionSurfaceMembershipAllowed",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "isTerminalAlternateScreen": {
+      "kind": "callback",
+      "from": "isTerminalAlternateScreen"
+    },
+    "issuePtyHandle": {
+      "kind": "callback",
+      "from": "issuePtyHandle"
+    },
+    "lastRendererSizes": {
+      "kind": "lazy",
+      "from": "lastRendererSizes"
+    },
+    "latestAgentStatusByPaneKey": {
+      "kind": "lazy",
+      "from": "latestAgentStatusByPaneKey"
+    },
+    "layouts": {
+      "kind": "lazy",
+      "from": "layouts"
+    },
+    "leaves": {
+      "kind": "lazy",
+      "from": "leaves"
+    },
+    "legacyWorkerRecoveredPtys": {
+      "kind": "lazy",
+      "from": "legacyWorkerRecoveredPtys"
+    },
+    "listMobileFiles": {
+      "kind": "lazy",
+      "from": "listMobileFiles"
+    },
+    "listResolvedWorktrees": {
+      "kind": "callback",
+      "from": "listResolvedWorktrees"
+    },
+    "listRuntimeMarkdownDocuments": {
+      "kind": "lazy",
+      "from": "listRuntimeMarkdownDocuments"
+    },
+    "managedWorktrees": {
+      "kind": "lazy",
+      "from": "managedWorktrees"
+    },
+    "markWorkspaceTrustedForAgent": {
+      "kind": "callback",
+      "from": "markWorkspaceTrustedForAgent"
+    },
+    "mobileNotificationReplay": {
+      "kind": "lazy",
+      "from": "mobileNotificationReplay"
+    },
+    "mobileSessionTabListeners": {
+      "kind": "lazy",
+      "from": "mobileSessionTabListeners"
+    },
+    "mobileSessionTabsAgentStatusHeartbeat": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsAgentStatusHeartbeat"
+    },
+    "mobileSessionTabsByWorktree": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsByWorktree"
+    },
+    "mobileSessionTabsChangeSequence": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsChangeSequence"
+    },
+    "mobileSnapshotMerge": {
+      "kind": "lazy",
+      "from": "mobileSnapshotMerge"
+    },
+    "mobileSubscribers": {
+      "kind": "lazy",
+      "from": "mobileSubscribers"
+    },
+    "mobileTabSnapshots": {
+      "kind": "lazy",
+      "from": "mobileTabSnapshots"
+    },
+    "notificationListeners": {
+      "kind": "lazy",
+      "from": "notificationListeners"
+    },
+    "notifier": {
+      "kind": "lazy",
+      "from": "notifier"
+    },
+    "notifyFitOverrideListeners": {
+      "kind": "callback",
+      "from": "notifyFitOverrideListeners"
+    },
+    "notifyMobileSessionTabsChanged": {
+      "kind": "callback",
+      "from": "notifyMobileSessionTabsChanged"
+    },
+    "notifyRemoteTerminalViewPresenceChanged": {
+      "kind": "callback",
+      "from": "notifyRemoteTerminalViewPresenceChanged"
+    },
+    "notifyTerminalResize": {
+      "kind": "callback",
+      "from": "notifyTerminalResize"
+    },
+    "offscreenBrowserBackend": {
+      "kind": "lazy",
+      "from": "offscreenBrowserBackend"
+    },
+    "openMobileDiff": {
+      "kind": "lazy",
+      "from": "openMobileDiff"
+    },
+    "openMobileFile": {
+      "kind": "lazy",
+      "from": "openMobileFile"
+    },
+    "osc7ScanTailByPtyId": {
+      "kind": "lazy",
+      "from": "osc7ScanTailByPtyId"
+    },
+    "oscTitleScanTailByPtyId": {
+      "kind": "lazy",
+      "from": "oscTitleScanTailByPtyId"
+    },
+    "pairedRendererSessionOwnedPtyIds": {
+      "kind": "lazy",
+      "from": "pairedRendererSessionOwnedPtyIds"
+    },
+    "pendingMobileTerminalCreatesByKey": {
+      "kind": "lazy",
+      "from": "pendingMobileTerminalCreatesByKey"
+    },
+    "pendingPtyRegistrationIncarnations": {
+      "kind": "lazy",
+      "from": "pendingPtyRegistrationIncarnations"
+    },
+    "pendingRestoreTimers": {
+      "kind": "lazy",
+      "from": "pendingRestoreTimers"
+    },
+    "pendingSoftLeavers": {
+      "kind": "lazy",
+      "from": "pendingSoftLeavers"
+    },
+    "persistHeadlessSessionTabProps": {
+      "kind": "lazy",
+      "from": "persistHeadlessSessionTabProps"
+    },
+    "persistHeadlessTabGroups": {
+      "kind": "callback",
+      "from": "persistHeadlessTabGroups"
+    },
+    "persistHeadlessTerminalActiveLeaf": {
+      "kind": "callback",
+      "from": "persistHeadlessTerminalActiveLeaf"
+    },
+    "persistHeadlessTerminalPaneLayout": {
+      "kind": "lazy",
+      "from": "persistHeadlessTerminalPaneLayout"
+    },
+    "persistHeadlessTerminalTabOrder": {
+      "kind": "callback",
+      "from": "persistHeadlessTerminalTabOrder",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "pickEarliestRestoreTarget": {
+      "kind": "callback",
+      "from": "pickEarliestRestoreTarget"
+    },
+    "pickMostRecentActor": {
+      "kind": "callback",
+      "from": "pickMostRecentActor"
+    },
+    "providerBufferAcquisitionsByPtyId": {
+      "kind": "lazy",
+      "from": "providerBufferAcquisitionsByPtyId"
+    },
+    "providerModeSnapshotScansByPtyId": {
+      "kind": "lazy",
+      "from": "providerModeSnapshotScansByPtyId"
+    },
+    "providerModeTrackersByPtyId": {
+      "kind": "lazy",
+      "from": "providerModeTrackersByPtyId"
+    },
+    "providerSequenceInitializedPtys": {
+      "kind": "lazy",
+      "from": "providerSequenceInitializedPtys"
+    },
+    "providerSequenceOffsetByPtyId": {
+      "kind": "lazy",
+      "from": "providerSequenceOffsetByPtyId"
+    },
+    "providerSnapshotPreferredPtys": {
+      "kind": "lazy",
+      "from": "providerSnapshotPreferredPtys"
+    },
+    "providerSnapshotsWithLiveModeTransition": {
+      "kind": "lazy",
+      "from": "providerSnapshotsWithLiveModeTransition"
+    },
+    "providerVisibleRetryAtByPtyId": {
+      "kind": "lazy",
+      "from": "providerVisibleRetryAtByPtyId"
+    },
+    "providerVisibleStateByPtyId": {
+      "kind": "lazy",
+      "from": "providerVisibleStateByPtyId"
+    },
+    "pruneDisconnectedPtyTranscript": {
+      "kind": "callback",
+      "from": "pruneDisconnectedPtyTranscript"
+    },
+    "ptyController": {
+      "kind": "lazy",
+      "from": "ptyController"
+    },
+    "ptyDelayedForegroundSnapshotTitleObservations": {
+      "kind": "lazy",
+      "from": "ptyDelayedForegroundSnapshotTitleObservations"
+    },
+    "ptyOutputSequenceById": {
+      "kind": "lazy",
+      "from": "ptyOutputSequenceById"
+    },
+    "ptysById": {
+      "kind": "lazy",
+      "from": "ptysById"
+    },
+    "rawTerminalViewSubscriberCounts": {
+      "kind": "lazy",
+      "from": "rawTerminalViewSubscriberCounts"
+    },
+    "readMobileFile": {
+      "kind": "lazy",
+      "from": "readMobileFile"
+    },
+    "readProviderTerminalTailLines": {
+      "kind": "callback",
+      "from": "readProviderTerminalTailLines"
+    },
+    "readVisibleTerminalState": {
+      "kind": "callback",
+      "from": "readVisibleTerminalState"
+    },
+    "recentPtyOutputById": {
+      "kind": "lazy",
+      "from": "recentPtyOutputById"
+    },
+    "recentPtyPathCandidatesById": {
+      "kind": "lazy",
+      "from": "recentPtyPathCandidatesById"
+    },
+    "reconcileNativeChatLaunchDraftResolutionTombstones": {
+      "kind": "callback",
+      "from": "reconcileNativeChatLaunchDraftResolutionTombstones"
+    },
+    "recordPtyWorktree": {
+      "kind": "callback",
+      "from": "recordPtyWorktree"
+    },
+    "refreshPtyWorktreeRecordsWithControllerInventory": {
+      "kind": "callback",
+      "from": "refreshPtyWorktreeRecordsWithControllerInventory"
+    },
+    "releaseRuntimeSessionOwnershipForRendererRetiredTabs": {
+      "kind": "callback",
+      "from": "releaseRuntimeSessionOwnershipForRendererRetiredTabs",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "remoteDesktopHostReclaimTargets": {
+      "kind": "lazy",
+      "from": "remoteDesktopHostReclaimTargets"
+    },
+    "remoteDesktopOwners": {
+      "kind": "lazy",
+      "from": "remoteDesktopOwners"
+    },
+    "remoteDesktopViewerRevisions": {
+      "kind": "lazy",
+      "from": "remoteDesktopViewerRevisions"
+    },
+    "remoteDesktopViewers": {
+      "kind": "lazy",
+      "from": "remoteDesktopViewers"
+    },
+    "remoteTerminalViewSubscriberCounts": {
+      "kind": "lazy",
+      "from": "remoteTerminalViewSubscriberCounts"
+    },
+    "removePersistedHeadlessTerminalTab": {
+      "kind": "callback",
+      "from": "removePersistedHeadlessTerminalTab",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "rendererPublicationThrottle": {
+      "kind": "lazy",
+      "from": "rendererPublicationThrottle"
+    },
+    "resizeListeners": {
+      "kind": "lazy",
+      "from": "resizeListeners"
+    },
+    "resolveDesktopRestoreTarget": {
+      "kind": "callback",
+      "from": "resolveDesktopRestoreTarget"
+    },
+    "resolveExitWaiters": {
+      "kind": "callback",
+      "from": "resolveExitWaiters"
+    },
+    "resolvePtyExitWaiters": {
+      "kind": "callback",
+      "from": "resolvePtyExitWaiters"
+    },
+    "resolveTerminalWorkspaceLaunchScope": {
+      "kind": "callback",
+      "from": "resolveTerminalWorkspaceLaunchScope"
+    },
+    "resolveWorkspaceTerminalStartupCwd": {
+      "kind": "callback",
+      "from": "resolveWorkspaceTerminalStartupCwd"
+    },
+    "resolveWorktreeSelector": {
+      "kind": "callback",
+      "from": "resolveWorktreeSelector"
+    },
+    "retireMobileSessionSurfacesForPty": {
+      "kind": "callback",
+      "from": "retireMobileSessionSurfacesForPty",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "searchMobileFilePaths": {
+      "kind": "lazy",
+      "from": "searchMobileFilePaths"
+    },
+    "seedHeadlessTerminal": {
+      "kind": "callback",
+      "from": "seedHeadlessTerminal",
+      "explicitType": "(ptyId: string, data: string, size?: { cols: number; rows: number }, metadata?: { cwd?: string | null; oscLinks?: unknown[] }) => void"
+    },
+    "setDriver": {
+      "kind": "callback",
+      "from": "setDriver"
+    },
+    "setPairedRendererSessionOwnership": {
+      "kind": "callback",
+      "from": "setPairedRendererSessionOwnership"
+    },
+    "settleSessionTabsInventory": {
+      "kind": "callback",
+      "from": "settleSessionTabsInventory"
+    },
+    "setupCompletionTokenByPtyId": {
+      "kind": "lazy",
+      "from": "setupCompletionTokenByPtyId"
+    },
+    "shouldDelayPtyBackedMobileSnapshotForForegroundAgent": {
+      "kind": "lazy",
+      "from": "shouldDelayPtyBackedMobileSnapshotForForegroundAgent"
+    },
+    "snapshotValueComparison": {
+      "kind": "lazy",
+      "from": "snapshotValueComparison"
+    },
+    "store": {
+      "kind": "lazy",
+      "from": "store"
+    },
+    "tabs": {
+      "kind": "lazy",
+      "from": "tabs"
+    },
+    "terminalCwdByPtyId": {
+      "kind": "lazy",
+      "from": "terminalCwdByPtyId"
+    },
+    "terminalFileUriHostnameByPtyId": {
+      "kind": "lazy",
+      "from": "terminalFileUriHostnameByPtyId"
+    },
+    "terminalFitOverrides": {
+      "kind": "lazy",
+      "from": "terminalFitOverrides"
+    },
+    "terminalSpawnCommandsByPtyId": {
+      "kind": "lazy",
+      "from": "terminalSpawnCommandsByPtyId"
+    },
+    "trackHeadlessTerminalData": {
+      "kind": "callback",
+      "from": "trackHeadlessTerminalData",
+      "explicitType": "(ptyId: string, data: string, outputSequence: number, forwardQueryReplies?: boolean) => void"
+    },
+    "waitForSessionTabsInventoryPublication": {
+      "kind": "callback",
+      "from": "waitForSessionTabsInventoryPublication"
+    },
+    "withClientHostedPagesHold": {
+      "kind": "callback",
+      "from": "withClientHostedPagesHold",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "wslDistroByPtyId": {
+      "kind": "lazy",
+      "from": "wslDistroByPtyId"
+    }
+  },
+  "stateFields": [
+    "mobileDictation",
+    "mobileDisplayModes",
+    "mobileInputFloorClaims",
+    "mobileSessionTabsNotifyCoalescer",
+    "mobileTerminalCreateByMutationId",
+    "pendingMobileSessionPtyAggregateInventoryRefresh",
+    "pendingMobileSessionTabsChangeSequenceByWorktree"
+  ]
+}
