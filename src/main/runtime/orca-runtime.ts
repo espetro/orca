@@ -232,6 +232,7 @@ import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { hasHostAuthoritativeTerminalMembership } from './workspace-session-terminal-membership-authority'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
+import { installBrowserEmulatorCommandDelegations } from './runtime-browser-emulator-delegations'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
@@ -474,6 +475,7 @@ import type { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
+import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
@@ -2185,7 +2187,121 @@ export type ProviderSnapshotReadOptions = {
   visibleScreenOnly?: boolean
 }
 
+// Why: declaration merge gives RPC handlers typed browser*/emulator* methods installed on the prototype at module load.
+/* oxlint-disable typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging -- interface+class merge is the mechanism for prototype-installed delegations */
+export interface OrcaRuntimeService {
+  browserSnapshot: RuntimeBrowserCommands['browserSnapshot']
+  browserClick: RuntimeBrowserCommands['browserClick']
+  browserGoto: RuntimeBrowserCommands['browserGoto']
+  browserFill: RuntimeBrowserCommands['browserFill']
+  browserType: RuntimeBrowserCommands['browserType']
+  browserSelect: RuntimeBrowserCommands['browserSelect']
+  browserScroll: RuntimeBrowserCommands['browserScroll']
+  browserBack: RuntimeBrowserCommands['browserBack']
+  browserReload: RuntimeBrowserCommands['browserReload']
+  browserScreenshot: RuntimeBrowserCommands['browserScreenshot']
+  browserEval: RuntimeBrowserCommands['browserEval']
+  browserTabList: RuntimeBrowserCommands['browserTabList']
+  browserProceedCertificate: RuntimeBrowserCommands['browserProceedCertificate']
+  browserTabShow: RuntimeBrowserCommands['browserTabShow']
+  browserTabCurrent: RuntimeBrowserCommands['browserTabCurrent']
+  browserTabSwitch: RuntimeBrowserCommands['browserTabSwitch']
+  browserHover: RuntimeBrowserCommands['browserHover']
+  browserDrag: RuntimeBrowserCommands['browserDrag']
+  browserUpload: RuntimeBrowserCommands['browserUpload']
+  browserWait: RuntimeBrowserCommands['browserWait']
+  browserCheck: RuntimeBrowserCommands['browserCheck']
+  browserFocus: RuntimeBrowserCommands['browserFocus']
+  browserClear: RuntimeBrowserCommands['browserClear']
+  browserSelectAll: RuntimeBrowserCommands['browserSelectAll']
+  browserKeypress: RuntimeBrowserCommands['browserKeypress']
+  browserPdf: RuntimeBrowserCommands['browserPdf']
+  browserFullScreenshot: RuntimeBrowserCommands['browserFullScreenshot']
+  browserCookieGet: RuntimeBrowserCommands['browserCookieGet']
+  browserCookieSet: RuntimeBrowserCommands['browserCookieSet']
+  browserCookieDelete: RuntimeBrowserCommands['browserCookieDelete']
+  browserSetViewport: RuntimeBrowserCommands['browserSetViewport']
+  browserSetGeolocation: RuntimeBrowserCommands['browserSetGeolocation']
+  browserInterceptEnable: RuntimeBrowserCommands['browserInterceptEnable']
+  browserInterceptDisable: RuntimeBrowserCommands['browserInterceptDisable']
+  browserInterceptList: RuntimeBrowserCommands['browserInterceptList']
+  browserCaptureStart: RuntimeBrowserCommands['browserCaptureStart']
+  browserCaptureStop: RuntimeBrowserCommands['browserCaptureStop']
+  browserConsoleLog: RuntimeBrowserCommands['browserConsoleLog']
+  browserNetworkLog: RuntimeBrowserCommands['browserNetworkLog']
+  browserDblclick: RuntimeBrowserCommands['browserDblclick']
+  browserForward: RuntimeBrowserCommands['browserForward']
+  browserScrollIntoView: RuntimeBrowserCommands['browserScrollIntoView']
+  browserGet: RuntimeBrowserCommands['browserGet']
+  browserIs: RuntimeBrowserCommands['browserIs']
+  browserKeyboardInsertText: RuntimeBrowserCommands['browserKeyboardInsertText']
+  browserMouseMove: RuntimeBrowserCommands['browserMouseMove']
+  browserMouseDown: RuntimeBrowserCommands['browserMouseDown']
+  browserMouseClick: RuntimeBrowserCommands['browserMouseClick']
+  browserMouseUp: RuntimeBrowserCommands['browserMouseUp']
+  browserMouseWheel: RuntimeBrowserCommands['browserMouseWheel']
+  browserFind: RuntimeBrowserCommands['browserFind']
+  browserSetDevice: RuntimeBrowserCommands['browserSetDevice']
+  browserSetOffline: RuntimeBrowserCommands['browserSetOffline']
+  browserSetHeaders: RuntimeBrowserCommands['browserSetHeaders']
+  browserSetCredentials: RuntimeBrowserCommands['browserSetCredentials']
+  browserSetMedia: RuntimeBrowserCommands['browserSetMedia']
+  browserClipboardRead: RuntimeBrowserCommands['browserClipboardRead']
+  browserClipboardWrite: RuntimeBrowserCommands['browserClipboardWrite']
+  browserDialogAccept: RuntimeBrowserCommands['browserDialogAccept']
+  browserDialogDismiss: RuntimeBrowserCommands['browserDialogDismiss']
+  browserStorageLocalGet: RuntimeBrowserCommands['browserStorageLocalGet']
+  browserStorageLocalSet: RuntimeBrowserCommands['browserStorageLocalSet']
+  browserStorageLocalClear: RuntimeBrowserCommands['browserStorageLocalClear']
+  browserStorageSessionGet: RuntimeBrowserCommands['browserStorageSessionGet']
+  browserStorageSessionSet: RuntimeBrowserCommands['browserStorageSessionSet']
+  browserStorageSessionClear: RuntimeBrowserCommands['browserStorageSessionClear']
+  browserDownload: RuntimeBrowserCommands['browserDownload']
+  browserHighlight: RuntimeBrowserCommands['browserHighlight']
+  browserExec: RuntimeBrowserCommands['browserExec']
+  browserTabCreate: RuntimeBrowserCommands['browserTabCreate']
+  browserTabSetProfile: RuntimeBrowserCommands['browserTabSetProfile']
+  browserTabProfileShow: RuntimeBrowserCommands['browserTabProfileShow']
+  browserTabProfileClone: RuntimeBrowserCommands['browserTabProfileClone']
+  browserProfileList: RuntimeBrowserCommands['browserProfileList']
+  browserProfileCreate: RuntimeBrowserCommands['browserProfileCreate']
+  browserProfileDelete: RuntimeBrowserCommands['browserProfileDelete']
+  browserProfileDetectBrowsers: RuntimeBrowserCommands['browserProfileDetectBrowsers']
+  browserProfileImportFromBrowser: RuntimeBrowserCommands['browserProfileImportFromBrowser']
+  browserProfileClearDefaultCookies: RuntimeBrowserCommands['browserProfileClearDefaultCookies']
+  browserTabClose: RuntimeBrowserCommands['browserTabClose']
+  browserScreencast: RuntimeBrowserCommands['browserScreencast']
+  emulatorTap: RuntimeEmulatorCommands['emulatorTap']
+  emulatorType: RuntimeEmulatorCommands['emulatorType']
+  emulatorRotate: RuntimeEmulatorCommands['emulatorRotate']
+  emulatorExec: RuntimeEmulatorCommands['emulatorExec']
+  emulatorList: RuntimeEmulatorCommands['emulatorList']
+  emulatorShutdown: RuntimeEmulatorCommands['emulatorShutdown']
+  emulatorListSimulators: RuntimeEmulatorCommands['emulatorListSimulators']
+  emulatorAvailability: RuntimeEmulatorCommands['emulatorAvailability']
+  emulatorListDevices: RuntimeEmulatorCommands['emulatorListDevices']
+  emulatorInstall: RuntimeEmulatorCommands['emulatorInstall']
+  emulatorLaunch: RuntimeEmulatorCommands['emulatorLaunch']
+  emulatorPermissions: RuntimeEmulatorCommands['emulatorPermissions']
+  emulatorAx: RuntimeEmulatorCommands['emulatorAx']
+  emulatorUnregisterActive: RuntimeEmulatorCommands['emulatorUnregisterActive']
+  emulatorAttach: RuntimeEmulatorCommands['emulatorAttach']
+  emulatorGesture: RuntimeEmulatorCommands['emulatorGesture']
+  emulatorButton: RuntimeEmulatorCommands['emulatorButton']
+  emulatorLogcat: RuntimeEmulatorCommands['emulatorLogcat']
+  emulatorKill: RuntimeEmulatorCommands['emulatorKill']
+}
+/* oxlint-enable typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging */
+
 export class OrcaRuntimeService {
+  static {
+    installBrowserEmulatorCommandDelegations(
+      OrcaRuntimeService,
+      (service) => service.browserScreencastCommands as never,
+      (service) => service.emulatorCommands
+    )
+  }
+
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
@@ -14483,648 +14599,6 @@ export class OrcaRuntimeService {
     getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
     getSettings: () => this.requireStore().getSettings()
   })
-
-  browserSnapshot(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSnapshot as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserClick(...args: any[]): any {
-    return this.browserScreencastCommands.browserClick.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserGoto(...args: any[]): any {
-    return this.browserScreencastCommands.browserGoto.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserFill(...args: any[]): any {
-    return this.browserScreencastCommands.browserFill.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserType(...args: any[]): any {
-    return this.browserScreencastCommands.browserType.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserSelect(...args: any[]): any {
-    return this.browserScreencastCommands.browserSelect.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserScroll(...args: any[]): any {
-    return this.browserScreencastCommands.browserScroll.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserBack(...args: any[]): any {
-    return this.browserScreencastCommands.browserBack.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserReload(...args: any[]): any {
-    return this.browserScreencastCommands.browserReload.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserScreenshot(...args: any[]): any {
-    return (this.browserScreencastCommands.browserScreenshot as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserScreencast(...args: any[]): any {
-    return (this.browserScreencastCommands.browserScreencast as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserEval(...args: any[]): any {
-    return this.browserScreencastCommands.browserEval.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserTabList(...args: any[]): any {
-    return this.browserScreencastCommands.browserTabList.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserProceedCertificate(...args: any[]): any {
-    return (this.browserScreencastCommands.browserProceedCertificate as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserTabShow(...args: any[]): any {
-    return this.browserScreencastCommands.browserTabShow.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserTabCurrent(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabCurrent as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserTabSwitch(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabSwitch as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserHover(...args: any[]): any {
-    return this.browserScreencastCommands.browserHover.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserDrag(...args: any[]): any {
-    return this.browserScreencastCommands.browserDrag.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserUpload(...args: any[]): any {
-    return this.browserScreencastCommands.browserUpload.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserWait(...args: any[]): any {
-    return this.browserScreencastCommands.browserWait.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserCheck(...args: any[]): any {
-    return this.browserScreencastCommands.browserCheck.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserFocus(...args: any[]): any {
-    return this.browserScreencastCommands.browserFocus.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserClear(...args: any[]): any {
-    return this.browserScreencastCommands.browserClear.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserSelectAll(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSelectAll as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserKeypress(...args: any[]): any {
-    return (this.browserScreencastCommands.browserKeypress as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserPdf(...args: any[]): any {
-    return this.browserScreencastCommands.browserPdf.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserFullScreenshot(...args: any[]): any {
-    return (this.browserScreencastCommands.browserFullScreenshot as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserCookieGet(...args: any[]): any {
-    return (this.browserScreencastCommands.browserCookieGet as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserCookieSet(...args: any[]): any {
-    return (this.browserScreencastCommands.browserCookieSet as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserCookieDelete(...args: any[]): any {
-    return (this.browserScreencastCommands.browserCookieDelete as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserSetViewport(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetViewport as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserSetGeolocation(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetGeolocation as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserInterceptEnable(...args: any[]): any {
-    return (this.browserScreencastCommands.browserInterceptEnable as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserInterceptDisable(...args: any[]): any {
-    return (this.browserScreencastCommands.browserInterceptDisable as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserInterceptList(...args: any[]): any {
-    return (this.browserScreencastCommands.browserInterceptList as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserCaptureStart(...args: any[]): any {
-    return (this.browserScreencastCommands.browserCaptureStart as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserCaptureStop(...args: any[]): any {
-    return (this.browserScreencastCommands.browserCaptureStop as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserConsoleLog(...args: any[]): any {
-    return (this.browserScreencastCommands.browserConsoleLog as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserNetworkLog(...args: any[]): any {
-    return (this.browserScreencastCommands.browserNetworkLog as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserDblclick(...args: any[]): any {
-    return (this.browserScreencastCommands.browserDblclick as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserForward(...args: any[]): any {
-    return this.browserScreencastCommands.browserForward.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserScrollIntoView(...args: any[]): any {
-    return (this.browserScreencastCommands.browserScrollIntoView as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserGet(...args: any[]): any {
-    return this.browserScreencastCommands.browserGet.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserIs(...args: any[]): any {
-    return this.browserScreencastCommands.browserIs.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserKeyboardInsertText(...args: any[]): any {
-    return (this.browserScreencastCommands.browserKeyboardInsertText as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserMouseMove(...args: any[]): any {
-    return (this.browserScreencastCommands.browserMouseMove as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserMouseDown(...args: any[]): any {
-    return (this.browserScreencastCommands.browserMouseDown as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserMouseClick(...args: any[]): any {
-    return (this.browserScreencastCommands.browserMouseClick as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserMouseUp(...args: any[]): any {
-    return this.browserScreencastCommands.browserMouseUp.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserMouseWheel(...args: any[]): any {
-    return (this.browserScreencastCommands.browserMouseWheel as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserFind(...args: any[]): any {
-    return this.browserScreencastCommands.browserFind.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserSetDevice(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetDevice as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserSetOffline(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetOffline as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserSetHeaders(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetHeaders as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserSetCredentials(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetCredentials as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserSetMedia(...args: any[]): any {
-    return (this.browserScreencastCommands.browserSetMedia as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserClipboardRead(...args: any[]): any {
-    return (this.browserScreencastCommands.browserClipboardRead as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserClipboardWrite(...args: any[]): any {
-    return (this.browserScreencastCommands.browserClipboardWrite as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserDialogAccept(...args: any[]): any {
-    return (this.browserScreencastCommands.browserDialogAccept as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserDialogDismiss(...args: any[]): any {
-    return (this.browserScreencastCommands.browserDialogDismiss as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserStorageLocalGet(...args: any[]): any {
-    return (this.browserScreencastCommands.browserStorageLocalGet as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserStorageLocalSet(...args: any[]): any {
-    return (this.browserScreencastCommands.browserStorageLocalSet as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserStorageLocalClear(...args: any[]): any {
-    return (this.browserScreencastCommands.browserStorageLocalClear as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserStorageSessionGet(...args: any[]): any {
-    return (this.browserScreencastCommands.browserStorageSessionGet as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserStorageSessionSet(...args: any[]): any {
-    return (this.browserScreencastCommands.browserStorageSessionSet as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserStorageSessionClear(...args: any[]): any {
-    return (
-      this.browserScreencastCommands.browserStorageSessionClear as (...a: any[]) => any
-    ).apply(this.browserScreencastCommands, args)
-  }
-
-  browserDownload(...args: any[]): any {
-    return (this.browserScreencastCommands.browserDownload as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserHighlight(...args: any[]): any {
-    return (this.browserScreencastCommands.browserHighlight as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserExec(...args: any[]): any {
-    return this.browserScreencastCommands.browserExec.apply(
-      this.browserScreencastCommands,
-      args as never
-    )
-  }
-
-  browserTabCreate(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabCreate as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserTabSetProfile(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabSetProfile as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserTabProfileShow(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabProfileShow as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserTabProfileClone(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabProfileClone as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserProfileList(...args: any[]): any {
-    return (this.browserScreencastCommands.browserProfileList as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserProfileCreate(...args: any[]): any {
-    return (this.browserScreencastCommands.browserProfileCreate as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserProfileDelete(...args: any[]): any {
-    return (this.browserScreencastCommands.browserProfileDelete as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  browserProfileDetectBrowsers(...args: any[]): any {
-    return (
-      this.browserScreencastCommands.browserProfileDetectBrowsers as (...a: any[]) => any
-    ).apply(this.browserScreencastCommands, args)
-  }
-
-  browserProfileImportFromBrowser(...args: any[]): any {
-    return (
-      this.browserScreencastCommands.browserProfileImportFromBrowser as (...a: any[]) => any
-    ).apply(this.browserScreencastCommands, args)
-  }
-
-  browserProfileClearDefaultCookies(...args: any[]): any {
-    return (
-      this.browserScreencastCommands.browserProfileClearDefaultCookies as (...a: any[]) => any
-    ).apply(this.browserScreencastCommands, args)
-  }
-
-  browserTabClose(...args: any[]): any {
-    return (this.browserScreencastCommands.browserTabClose as (...a: any[]) => any).apply(
-      this.browserScreencastCommands,
-      args
-    )
-  }
-
-  // Emulator bindings (delegated to dedicated commands for surface separation).
-  emulatorTap(...args: any[]): any {
-    return this.emulatorCommands.emulatorTap.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorType(...args: any[]): any {
-    return this.emulatorCommands.emulatorType.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorRotate(...args: any[]): any {
-    return this.emulatorCommands.emulatorRotate.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorExec(...args: any[]): any {
-    return this.emulatorCommands.emulatorExec.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorList(...args: any[]): any {
-    return this.emulatorCommands.emulatorList.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorShutdown(...args: any[]): any {
-    return this.emulatorCommands.emulatorShutdown.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorListSimulators(...args: any[]): any {
-    return this.emulatorCommands.emulatorListSimulators.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorAvailability(...args: any[]): any {
-    return this.emulatorCommands.emulatorAvailability.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorListDevices(...args: any[]): any {
-    return this.emulatorCommands.emulatorListDevices.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorInstall(...args: any[]): any {
-    return this.emulatorCommands.emulatorInstall.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorLaunch(...args: any[]): any {
-    return this.emulatorCommands.emulatorLaunch.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorPermissions(...args: any[]): any {
-    return this.emulatorCommands.emulatorPermissions.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorAx(...args: any[]): any {
-    return this.emulatorCommands.emulatorAx.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorUnregisterActive(...args: any[]): any {
-    return (this.emulatorCommands.emulatorUnregisterActive as (...a: any[]) => any).apply(
-      this.emulatorCommands,
-      args
-    )
-  }
-  emulatorAttach(...args: any[]): any {
-    return this.emulatorCommands.emulatorAttach.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorGesture(...args: any[]): any {
-    return this.emulatorCommands.emulatorGesture.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorButton(...args: any[]): any {
-    return this.emulatorCommands.emulatorButton.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorLogcat(...args: any[]): any {
-    return this.emulatorCommands.emulatorLogcat.apply(this.emulatorCommands, args as never)
-  }
-
-  emulatorKill(...args: any[]): any {
-    return this.emulatorCommands.emulatorKill.apply(this.emulatorCommands, args as never)
-  }
 
   private getAuthoritativeWindow(): BrowserWindow {
     return this.terminalClusterFacade.getAuthoritativeWindow()

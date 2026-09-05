@@ -465,6 +465,14 @@ export class RuntimeBrowserScreencastCommands {
     ...args: Parameters<RuntimeBrowserCommands['browserProfileList']>
   ) => this.deps.browserCommands.browserProfileList(...args)
 
+  browserProfileDetectBrowsers: RuntimeBrowserCommands['browserProfileDetectBrowsers'] = (
+    ...args: Parameters<RuntimeBrowserCommands['browserProfileDetectBrowsers']>
+  ) => this.deps.browserCommands.browserProfileDetectBrowsers(...args)
+
+  browserTabClose: RuntimeBrowserCommands['browserTabClose'] = (
+    ...args: Parameters<RuntimeBrowserCommands['browserTabClose']>
+  ) => this.deps.browserCommands.browserTabClose(...args)
+
   browserProfileClearDefaultCookies: RuntimeBrowserCommands['browserProfileClearDefaultCookies'] = (
     ...args: Parameters<RuntimeBrowserCommands['browserProfileClearDefaultCookies']>
   ) => this.deps.browserCommands.browserProfileClearDefaultCookies(...args)
