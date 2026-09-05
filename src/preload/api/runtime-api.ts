@@ -76,7 +76,10 @@ export type RuntimeApi = {
     ) => () => void
   }
   runtimeEnvironments: {
-    list: () => Promise<PublicKnownRuntimeEnvironment[]>
+    list: () => Promise<{
+      environments: PublicKnownRuntimeEnvironment[]
+      activeEnvironmentId: string | null
+    }>
     addFromPairingCode: (args: {
       name: string
       pairingCode: string
@@ -87,6 +90,7 @@ export type RuntimeApi = {
       allowLoopback?: boolean
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
+    setActive: (args: { id: string }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
     disconnect: (args: {
       selector: string
