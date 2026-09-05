@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeFileCommands } from './orca-runtime-files'
+import type { RuntimeMobileSessionFacade } from './runtime-mobile-session-facade'
 import type { RuntimeGitCommands } from './orca-runtime-git'
 import type { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 
@@ -323,6 +324,43 @@ export function installFileCommandDelegations(
       return (getFileCommands(this) as unknown as Record<string, (...a: any[]) => unknown>)[method](
         ...args
       )
+    }
+  }
+}
+
+const MOBILE_TAB_SESSION_METHOD_NAMES = [
+  'mobileSnapshotValueEqual',
+  'reconcileHeadlessMobileSessionBrowserTabs',
+  'mergeMobileSessionSnapshotTabs',
+  'mergeMobileSessionTabGroups',
+  'storedMobileSnapshotHasStalePreservedTab',
+  'notifyMobileSessionTabSnapshots',
+  'emitMobileSessionTabsSnapshotToClient',
+  'getMobileSessionWorktreeIdsForPty',
+  'touchMobileSessionTabsForPane',
+  'headlessMobileSnapshotContentUnchanged',
+  'getMobileTerminalLeafPtyIds',
+  'clearRuntimeSessionOwnershipForMobileTerminalLeaf',
+  'persistedParentStillBindsMobileTerminalLeaf',
+  'isRuntimeOwnedHeadlessMobileTab',
+  'mergePreservedHeadlessMobileSessionTabs',
+  'buildPreservedHeadlessMobileSessionSnapshot',
+  'buildHeadlessMobileSessionTerminalTabs',
+  'buildHeadlessMobileSessionBrowserTabs',
+  'buildHeadlessMobileSessionTabGroups'
+] as const
+
+export function installMobileTabCommandDelegations(
+  serviceClass: abstract new (...args: never[]) => OrcaRuntimeService,
+  getMobileSession: (service: OrcaRuntimeService) => RuntimeMobileSessionFacade
+): void {
+  const proto = serviceClass.prototype as unknown as Record<string, unknown>
+  for (const method of MOBILE_TAB_SESSION_METHOD_NAMES) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic pass-through by design
+    proto[method] = function (this: OrcaRuntimeService, ...args: any[]) {
+      return (getMobileSession(this) as unknown as Record<string, (...a: any[]) => unknown>)[
+        method
+      ](...args)
     }
   }
 }

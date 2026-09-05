@@ -235,6 +235,7 @@ import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layo
 import {
   installBrowserEmulatorCommandDelegations,
   installFileCommandDelegations,
+  installMobileTabCommandDelegations,
   installGitCommandDelegations,
   installLinearCommandDelegations
 } from './runtime-browser-emulator-delegations'
@@ -2420,6 +2421,25 @@ export interface OrcaRuntimeService {
   listRuntimeFiles: RuntimeFileCommands['listRuntimeFiles']
   listRuntimeMarkdownDocuments: RuntimeFileCommands['listRuntimeMarkdownDocuments']
   statRuntimeFile: RuntimeFileCommands['statRuntimeFile']
+  headlessMobileSnapshotContentUnchanged: RuntimeMobileSessionFacade['headlessMobileSnapshotContentUnchanged']
+  getMobileTerminalLeafPtyIds: RuntimeMobileSessionFacade['getMobileTerminalLeafPtyIds']
+  clearRuntimeSessionOwnershipForMobileTerminalLeaf: RuntimeMobileSessionFacade['clearRuntimeSessionOwnershipForMobileTerminalLeaf']
+  persistedParentStillBindsMobileTerminalLeaf: RuntimeMobileSessionFacade['persistedParentStillBindsMobileTerminalLeaf']
+  isRuntimeOwnedHeadlessMobileTab: RuntimeMobileSessionFacade['isRuntimeOwnedHeadlessMobileTab']
+  mergePreservedHeadlessMobileSessionTabs: RuntimeMobileSessionFacade['mergePreservedHeadlessMobileSessionTabs']
+  buildPreservedHeadlessMobileSessionSnapshot: RuntimeMobileSessionFacade['buildPreservedHeadlessMobileSessionSnapshot']
+  buildHeadlessMobileSessionTerminalTabs: RuntimeMobileSessionFacade['buildHeadlessMobileSessionTerminalTabs']
+  buildHeadlessMobileSessionBrowserTabs: RuntimeMobileSessionFacade['buildHeadlessMobileSessionBrowserTabs']
+  buildHeadlessMobileSessionTabGroups: RuntimeMobileSessionFacade['buildHeadlessMobileSessionTabGroups']
+  mobileSnapshotValueEqual: RuntimeMobileSessionFacade['mobileSnapshotValueEqual']
+  reconcileHeadlessMobileSessionBrowserTabs: RuntimeMobileSessionFacade['reconcileHeadlessMobileSessionBrowserTabs']
+  mergeMobileSessionSnapshotTabs: RuntimeMobileSessionFacade['mergeMobileSessionSnapshotTabs']
+  mergeMobileSessionTabGroups: RuntimeMobileSessionFacade['mergeMobileSessionTabGroups']
+  storedMobileSnapshotHasStalePreservedTab: RuntimeMobileSessionFacade['storedMobileSnapshotHasStalePreservedTab']
+  notifyMobileSessionTabSnapshots: RuntimeMobileSessionFacade['notifyMobileSessionTabSnapshots']
+  emitMobileSessionTabsSnapshotToClient: RuntimeMobileSessionFacade['emitMobileSessionTabsSnapshotToClient']
+  getMobileSessionWorktreeIdsForPty: RuntimeMobileSessionFacade['getMobileSessionWorktreeIdsForPty']
+  touchMobileSessionTabsForPane: RuntimeMobileSessionFacade['touchMobileSessionTabsForPane']
 }
 /* oxlint-enable typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging */
 
@@ -2436,6 +2456,7 @@ export class OrcaRuntimeService {
     )
     installGitCommandDelegations(OrcaRuntimeService, (service) => service.gitCommands)
     installFileCommandDelegations(OrcaRuntimeService, (service) => service.fileCommands)
+    installMobileTabCommandDelegations(OrcaRuntimeService, (service) => service.mobileSessionFacade)
   }
 
   private readonly runtimeId = randomUUID()
@@ -14218,25 +14239,6 @@ export class OrcaRuntimeService {
   // eslint-disable @typescript-eslint/no-explicit-any -- Delegation methods use any to forward arbitrary arguments
   // Delegation methods for RuntimeMobileSnapshotValueComparisonCommands:
 
-  headlessMobileSnapshotContentUnchanged(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.headlessMobileSnapshotContentUnchanged as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
-  mobileSnapshotValueEqual(...args: any[]): any {
-    return (this.mobileSessionFacade.mobileSnapshotValueEqual as (...a: any[]) => any).apply(
-      this.mobileSessionFacade,
-      args
-    )
-  }
-
-  reconcileHeadlessMobileSessionBrowserTabs(...args: any[]): any {
-    return (
-      this.mobileSessionFacade.reconcileHeadlessMobileSessionBrowserTabs as (...a: any[]) => any
-    ).apply(this.mobileSessionFacade, args)
-  }
-
   collectBrowserGroupAssignment(persistedGroups: unknown, mergedBrowserOrder: unknown) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
     return (this as any).collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
@@ -14307,83 +14309,12 @@ export class OrcaRuntimeService {
     )
   }
 
-  getMobileTerminalLeafPtyIds(...args: any[]): any {
-    return (this.terminalClusterFacade.getMobileTerminalLeafPtyIds as (...a: any[]) => any).apply(
-      this.terminalClusterFacade,
-      args
-    )
-  }
-
-  clearRuntimeSessionOwnershipForMobileTerminalLeaf(...args: any[]): any {
-    return this.terminalClusterFacade.clearRuntimeSessionOwnershipForMobileTerminalLeaf.apply(
-      this.terminalClusterFacade,
-      args as never
-    )
-  }
-
-  persistedParentStillBindsMobileTerminalLeaf(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.persistedParentStillBindsMobileTerminalLeaf as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
   releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot: unknown, existing: unknown) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
     return (this as any).releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot, existing)
   }
 
-  isRuntimeOwnedHeadlessMobileTab(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.isRuntimeOwnedHeadlessMobileTab as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
-  mergeMobileSessionSnapshotTabs(...args: any[]): any {
-    return (this.mobileSessionFacade.mergeMobileSessionSnapshotTabs as (...a: any[]) => any).apply(
-      this.mobileSessionFacade,
-      args
-    )
-  }
-
-  mergeMobileSessionTabGroups(...args: any[]): any {
-    return (this.mobileSessionFacade.mergeMobileSessionTabGroups as (...a: any[]) => any).apply(
-      this.mobileSessionFacade,
-      args
-    )
-  }
-
   // Delegation methods for RuntimeMobileSnapshotMergeCommands:
-
-  mergePreservedHeadlessMobileSessionTabs(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.mergePreservedHeadlessMobileSessionTabs as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
-  buildPreservedHeadlessMobileSessionSnapshot(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.buildPreservedHeadlessMobileSessionSnapshot as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
-  storedMobileSnapshotHasStalePreservedTab(...args: any[]): any {
-    return (
-      this.mobileSessionFacade.storedMobileSnapshotHasStalePreservedTab as (...a: any[]) => any
-    ).apply(this.mobileSessionFacade, args)
-  }
-
-  notifyMobileSessionTabSnapshots(...args: any[]): any {
-    return (this.mobileSessionFacade.notifyMobileSessionTabSnapshots as (...a: any[]) => any).apply(
-      this.mobileSessionFacade,
-      args
-    )
-  }
-
-  emitMobileSessionTabsSnapshotToClient(...args: any[]): any {
-    return (
-      this.mobileSessionFacade.emitMobileSessionTabsSnapshotToClient as (...a: any[]) => any
-    ).apply(this.mobileSessionFacade, args)
-  }
 
   // Delegation methods for RuntimeMobileSessionTabSnapshotCommands:
 
@@ -14391,39 +14322,8 @@ export class OrcaRuntimeService {
     return this.terminalClusterFacade.touchMobileSessionSnapshotsForPty(ptyId, options)
   }
 
-  getMobileSessionWorktreeIdsForPty(...args: any[]): any {
-    return (
-      this.mobileSessionFacade.getMobileSessionWorktreeIdsForPty as (...a: any[]) => any
-    ).apply(this.mobileSessionFacade, args)
-  }
-
   touchMobileSessionTabsForWorktree(worktreeId: string, options?: { immediate?: boolean }) {
     return this.mobileSessionFacade.touchMobileSessionTabsForWorktree(worktreeId, options)
-  }
-
-  touchMobileSessionTabsForPane(...args: any[]): any {
-    return (this.mobileSessionFacade.touchMobileSessionTabsForPane as (...a: any[]) => any).apply(
-      this.mobileSessionFacade,
-      args
-    )
-  }
-
-  buildHeadlessMobileSessionTerminalTabs(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.buildHeadlessMobileSessionTerminalTabs as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
-  buildHeadlessMobileSessionBrowserTabs(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.buildHeadlessMobileSessionBrowserTabs as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
-  }
-
-  buildHeadlessMobileSessionTabGroups(...args: any[]): any {
-    return (
-      this.terminalClusterFacade.buildHeadlessMobileSessionTabGroups as (...a: any[]) => any
-    ).apply(this.terminalClusterFacade, args)
   }
 
   removePersistedHeadlessTerminalTab(
