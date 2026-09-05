@@ -1,0 +1,607 @@
+{
+  "target": "runtime-pty-worktrees.ts",
+  "className": "RuntimePtyWorktrees",
+  "methods": [
+    "acceptPtyDataBounded",
+    "acceptPtyIncarnationForExit",
+    "acquireWorktreeTerminalSpawn",
+    "adoptControllerTerminalHandle",
+    "adoptFirstPtyForLeafHandle",
+    "adoptPreAllocatedHandle",
+    "adoptTerminalOrphans",
+    "advancePtyLifecycleGeneration",
+    "armLegacyWorkerTerminalRecoveryRetry",
+    "assertLiveTerminalHandleTargetsPty",
+    "assertPtyDidNotExitBeforeRegistration",
+    "assertPtyRegistrationAllowed",
+    "beginPtyRegistration",
+    "bindPtyIncarnationHandle",
+    "bindTerminalWaiterAbort",
+    "buildPtyTerminalSummary",
+    "cancelLegacyWorkerTerminalRecoveryRetry",
+    "cancelMessageWaiters",
+    "cancelPendingPtyRegistration",
+    "clearPtyIncarnationHandles",
+    "collectPaneKeysForPty",
+    "controllerKnowsPtyIsLive",
+    "createPreAllocatedTerminalHandle",
+    "createPtyHeadlessTerminalState",
+    "dropDisconnectedPtyRecord",
+    "findHandleForPtyRecord",
+    "findLiveRegisteredPtyForRendererTab",
+    "forgetPtyLivenessVerdict",
+    "getAdoptedPtyExplicitIdleStatus",
+    "getLeavesForPty",
+    "getLegacyWorkerTerminalRecoveryPlan",
+    "getLiveLeafForHandle",
+    "getLivePtyForHandle",
+    "getLivePtyIdsForWorktree",
+    "getMobileSessionWorktreeIdsForPty",
+    "getMobileTerminalLeafPtyIds",
+    "getOrCreatePtyWorktreeRecord",
+    "getPrimaryLeafForPty",
+    "getPtyAgent",
+    "getPtyExecutionHostMetadata",
+    "getPtyIdsForExplicitTabClose",
+    "getPtyLifecycleGeneration",
+    "getPtyLivenessVerdict",
+    "getPtyOutputSequence",
+    "getPtyWriteHostPlatform",
+    "getRendererTerminalSerializerGenerationForHandle",
+    "getTerminalHandlesForPtyId",
+    "getTerminalLivenessVerdict",
+    "getTerminalOrphanAdoptionSnapshot",
+    "getTerminalProcessIncarnation",
+    "getWorktreeIdForTerminalHandle",
+    "inspectTerminalProcessIncarnationLiveness",
+    "invalidateAllHandlesForPty",
+    "invalidateLeafHandle",
+    "invalidatePtyIncarnationHandle",
+    "isKnownUnattachedLocalDaemonPty",
+    "isLeafPtyProvenAbsent",
+    "isPtyKnownExited",
+    "isPtyResizeDrivenRemotely",
+    "isPtyRunningAgent",
+    "isPtyStopRequested",
+    "isServeOrSshOwnedPtyId",
+    "isServeOwnedPtyId",
+    "isSshOwnedPtyId",
+    "isTerminalHandleAdoptionBlocked",
+    "issueHandle",
+    "issuePtyHandle",
+    "issueStructuredTuiPtyHandle",
+    "leafExistsForPty",
+    "markPtyLivenessLive",
+    "markPtyLivenessUnverifiable",
+    "markPtyStopRequested",
+    "notePtyDataGap",
+    "notifyPtyExitListeners",
+    "onPtyData",
+    "onPtyExit",
+    "onPtySpawned",
+    "persistLegacyWorkerTerminalRecoveryBatch",
+    "preAllocateHandleForPty",
+    "prepareLegacyWorkerTerminalRecovery",
+    "preparePtyExecutionContext",
+    "proveRecoveredStructuredTuiPtyProcess",
+    "pruneDisconnectedPtyRecords",
+    "pruneDisconnectedPtyTranscript",
+    "ptyExit_cleanupLeaves",
+    "ptyExit_collectExitPaneKeys",
+    "ptyExit_decideSshSurface",
+    "ptyExit_guardIncarnation",
+    "ptyExit_releaseLayout",
+    "ptyExit_resolveExitCause",
+    "ptyExit_settleDispatch",
+    "ptyExit_teardown",
+    "ptyExit_updateLivenessVerdict",
+    "readPtyTerminal",
+    "rebuildLeafPtyIndex",
+    "reconcileMissingLegacyWorkerTerminal",
+    "reconcilePtyIncarnationHandles",
+    "recordPtyWorktree",
+    "refreshFloatingWorkspacePtyLiveness",
+    "refreshPtyWorktreeRecordsFromController",
+    "refreshPtyWorktreeRecordsWithControllerInventory",
+    "registerPreAllocatedHandleForPty",
+    "registerPty",
+    "rejectAllWaiters",
+    "rejectWaitersForHandle",
+    "releaseRejectedPtyRegistrationFence",
+    "rememberPtyLivenessVerdict",
+    "removeMessageWaiter",
+    "removeWaiter",
+    "replaceSyntheticTerminalHandlesForRestoredPty",
+    "resetPtyModelAfterMigrationFailure",
+    "resolveExitWaiters",
+    "resolveHandleForTab",
+    "resolveLeafForHandle",
+    "resolveLiveLeafForHandle",
+    "resolveMessageWaiter",
+    "resolvePtyExitWaiters",
+    "resolveTerminalCwd",
+    "resolveTerminalFileUriHostname",
+    "resolveTuiIdleWaiters",
+    "resolveWaiter",
+    "retirePtyAgentLaunchAuthority",
+    "rollbackLegacyWorkerTerminalSurface",
+    "setPairedRendererSessionOwnership",
+    "setPtyController",
+    "stopExplicitlyClosedTabPtys",
+    "subscribeToPtyExit",
+    "synchronizePtyOutputSequenceFromProvider",
+    "touchMobileSessionSnapshotsForPty",
+    "updateLegacyWorkerTerminalRecoveryRetry",
+    "waitForAdoptedStructuredTuiProof",
+    "waitForLeafPtyId",
+    "waitForStructuredTuiPtyExit",
+    "waitForTerminalHandle"
+  ],
+  "deps": {
+    "adoptTerminalOrphansFromInventory": {
+      "kind": "callback",
+      "from": "adoptTerminalOrphansFromInventory"
+    },
+    "agentPromptExplicitStatusFloorByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptExplicitStatusFloorByPtyId"
+    },
+    "agentPromptLifecycleByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptLifecycleByPtyId"
+    },
+    "agentPromptPermissionSequenceByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptPermissionSequenceByPtyId"
+    },
+    "agentStatusOscProcessorsByPtyId": {
+      "kind": "lazy",
+      "from": "agentStatusOscProcessorsByPtyId"
+    },
+    "assertGraphReady": {
+      "kind": "callback",
+      "from": "assertGraphReady"
+    },
+    "cancelPendingDriverMutations": {
+      "kind": "callback",
+      "from": "cancelPendingDriverMutations"
+    },
+    "claudeAgentTeams": {
+      "kind": "lazy",
+      "from": "claudeAgentTeams"
+    },
+    "clearAgentRowSnapshotsForPty": {
+      "kind": "callback",
+      "from": "clearAgentRowSnapshotsForPty"
+    },
+    "clearWaitBlockedCheckState": {
+      "kind": "callback",
+      "from": "clearWaitBlockedCheckState"
+    },
+    "dataListeners": {
+      "kind": "lazy",
+      "from": "dataListeners"
+    },
+    "disposeHeadlessTerminal": {
+      "kind": "callback",
+      "from": "disposeHeadlessTerminal"
+    },
+    "disposePtyTitleTracker": {
+      "kind": "lazy",
+      "from": "disposePtyTitleTracker"
+    },
+    "earlyExitedPtyIncarnations": {
+      "kind": "lazy",
+      "from": "earlyExitedPtyIncarnations"
+    },
+    "emitTerminalAgentStatusEvents": {
+      "kind": "callback",
+      "from": "emitTerminalAgentStatusEvents"
+    },
+    "ensurePtyBackedMobileSurfaceForRendererTab": {
+      "kind": "callback",
+      "from": "ensurePtyBackedMobileSurfaceForRendererTab"
+    },
+    "failActiveDispatchOnExit": {
+      "kind": "callback",
+      "from": "failActiveDispatchOnExit"
+    },
+    "flushPendingTerminalSideEffectFacts": {
+      "kind": "callback",
+      "from": "flushPendingTerminalSideEffectFacts"
+    },
+    "flushWorkspaceSessionOrThrowAsync": {
+      "kind": "callback",
+      "from": "flushWorkspaceSessionOrThrowAsync"
+    },
+    "folderWorkspaceToResolvedWorktree": {
+      "kind": "callback",
+      "from": "folderWorkspaceToResolvedWorktree"
+    },
+    "freshSubscribeGuard": {
+      "kind": "lazy",
+      "from": "freshSubscribeGuard"
+    },
+    "getDriver": {
+      "kind": "callback",
+      "from": "getDriver"
+    },
+    "getLeafKey": {
+      "kind": "callback",
+      "from": "getLeafKey"
+    },
+    "getMobileSessionTabsForWorktree": {
+      "kind": "callback",
+      "from": "getMobileSessionTabsForWorktree"
+    },
+    "getMobileTerminalPaneKey": {
+      "kind": "callback",
+      "from": "getMobileTerminalPaneKey"
+    },
+    "getOrCreatePtyTitleTrackerEntry": {
+      "kind": "lazy",
+      "from": "getOrCreatePtyTitleTrackerEntry"
+    },
+    "getOrchestrationDb": {
+      "kind": "callback",
+      "from": "getOrchestrationDb"
+    },
+    "getRendererTerminalSerializerGeneration": {
+      "kind": "callback",
+      "from": "getRendererTerminalSerializerGeneration"
+    },
+    "getWorkspaceSessionHostIdForWorktree": {
+      "kind": "callback",
+      "from": "getWorkspaceSessionHostIdForWorktree"
+    },
+    "graphStatus": {
+      "kind": "lazy",
+      "from": "graphStatus"
+    },
+    "graphSyncCallbacks": {
+      "kind": "lazy",
+      "from": "graphSyncCallbacks"
+    },
+    "handleByLeafKey": {
+      "kind": "lazy",
+      "from": "handleByLeafKey"
+    },
+    "handleByPtyId": {
+      "kind": "lazy",
+      "from": "handleByPtyId"
+    },
+    "handleByPtyIncarnation": {
+      "kind": "lazy",
+      "from": "handleByPtyIncarnation"
+    },
+    "handles": {
+      "kind": "lazy",
+      "from": "handles"
+    },
+    "headlessTerminals": {
+      "kind": "lazy",
+      "from": "headlessTerminals"
+    },
+    "hydrateHeadlessMobileSessionTabsFromWorkspaceSession": {
+      "kind": "callback",
+      "from": "hydrateHeadlessMobileSessionTabsFromWorkspaceSession"
+    },
+    "intentionalHandlelessPtyStops": {
+      "kind": "lazy",
+      "from": "intentionalHandlelessPtyStops"
+    },
+    "isRecognizedForegroundAgentProcess": {
+      "kind": "callback",
+      "from": "isRecognizedForegroundAgentProcess"
+    },
+    "isRemoteDesktopResizeDriven": {
+      "kind": "callback",
+      "from": "isRemoteDesktopResizeDriven"
+    },
+    "layoutQueues": {
+      "kind": "lazy",
+      "from": "layoutQueues"
+    },
+    "layouts": {
+      "kind": "lazy",
+      "from": "layouts"
+    },
+    "leaves": {
+      "kind": "lazy",
+      "from": "leaves"
+    },
+    "leavesByPtyId": {
+      "kind": "lazy",
+      "from": "leavesByPtyId"
+    },
+    "legacyWorkerRecoveredPtys": {
+      "kind": "lazy",
+      "from": "legacyWorkerRecoveredPtys"
+    },
+    "legacyWorkerTerminalRecoveryRetries": {
+      "kind": "lazy",
+      "from": "legacyWorkerTerminalRecoveryRetries"
+    },
+    "makeRuntimePaneKey": {
+      "kind": "callback",
+      "from": "makeRuntimePaneKey"
+    },
+    "managedWorktrees": {
+      "kind": "lazy",
+      "from": "managedWorktrees"
+    },
+    "maybeHydrateHeadlessFromRenderer": {
+      "kind": "callback",
+      "from": "maybeHydrateHeadlessFromRenderer"
+    },
+    "messageWaitersByHandle": {
+      "kind": "lazy",
+      "from": "messageWaitersByHandle"
+    },
+    "mobileSessionTabsByWorktree": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsByWorktree"
+    },
+    "mobileTabSnapshots": {
+      "kind": "lazy",
+      "from": "mobileTabSnapshots"
+    },
+    "notifier": {
+      "kind": "lazy",
+      "from": "notifier"
+    },
+    "notifyMobileSessionTabsChanged": {
+      "kind": "callback",
+      "from": "notifyMobileSessionTabsChanged"
+    },
+    "osc7ScanTailByPtyId": {
+      "kind": "lazy",
+      "from": "osc7ScanTailByPtyId"
+    },
+    "oscTitleScanTailByPtyId": {
+      "kind": "lazy",
+      "from": "oscTitleScanTailByPtyId"
+    },
+    "pairedRendererSessionOwnedPtyIds": {
+      "kind": "lazy",
+      "from": "pairedRendererSessionOwnedPtyIds"
+    },
+    "pathFlavorForPty": {
+      "kind": "lazy",
+      "from": "pathFlavorForPty"
+    },
+    "pendingMobileTerminalCreatesByKey": {
+      "kind": "lazy",
+      "from": "pendingMobileTerminalCreatesByKey"
+    },
+    "pendingPtyRegistrationIncarnations": {
+      "kind": "lazy",
+      "from": "pendingPtyRegistrationIncarnations"
+    },
+    "processAgentStatusOscForPty": {
+      "kind": "callback",
+      "from": "processAgentStatusOscForPty"
+    },
+    "providerBufferAcquisitionsByPtyId": {
+      "kind": "lazy",
+      "from": "providerBufferAcquisitionsByPtyId"
+    },
+    "providerModeSnapshotScansByPtyId": {
+      "kind": "lazy",
+      "from": "providerModeSnapshotScansByPtyId"
+    },
+    "providerModeTrackersByPtyId": {
+      "kind": "lazy",
+      "from": "providerModeTrackersByPtyId"
+    },
+    "providerSequenceInitializedPtys": {
+      "kind": "lazy",
+      "from": "providerSequenceInitializedPtys"
+    },
+    "providerSequenceOffsetByPtyId": {
+      "kind": "lazy",
+      "from": "providerSequenceOffsetByPtyId"
+    },
+    "providerSnapshotPreferredPtys": {
+      "kind": "lazy",
+      "from": "providerSnapshotPreferredPtys"
+    },
+    "providerVisibleRetryAtByPtyId": {
+      "kind": "lazy",
+      "from": "providerVisibleRetryAtByPtyId"
+    },
+    "providerVisibleStateByPtyId": {
+      "kind": "lazy",
+      "from": "providerVisibleStateByPtyId"
+    },
+    "ptyExitListenersByPtyId": {
+      "kind": "lazy",
+      "from": "ptyExitListenersByPtyId"
+    },
+    "ptyExit_notifyTabAndMobile": {
+      "kind": "callback",
+      "from": "ptyExit_notifyTabAndMobile"
+    },
+    "ptyLifecycleGenerationById": {
+      "kind": "lazy",
+      "from": "ptyLifecycleGenerationById"
+    },
+    "ptyLivenessObservationSequence": {
+      "kind": "lazy",
+      "from": "ptyLivenessObservationSequence"
+    },
+    "ptyLivenessVerdictByPtyId": {
+      "kind": "lazy",
+      "from": "ptyLivenessVerdictByPtyId"
+    },
+    "ptyOutputSequenceById": {
+      "kind": "lazy",
+      "from": "ptyOutputSequenceById"
+    },
+    "ptysById": {
+      "kind": "lazy",
+      "from": "ptysById"
+    },
+    "recentPtyOutputById": {
+      "kind": "lazy",
+      "from": "recentPtyOutputById"
+    },
+    "recentPtyPathCandidatesById": {
+      "kind": "lazy",
+      "from": "recentPtyPathCandidatesById"
+    },
+    "reconcileAgentStatusForEndedProcessFn": {
+      "kind": "lazy",
+      "from": "reconcileAgentStatusForEndedProcessFn"
+    },
+    "reconcileLegacyWorkerTerminalsNow": {
+      "kind": "callback",
+      "from": "reconcileLegacyWorkerTerminalsNow"
+    },
+    "recordOsc7MetadataForPty": {
+      "kind": "lazy",
+      "from": "recordOsc7MetadataForPty"
+    },
+    "recordRecentPtyOutputForPathProvenance": {
+      "kind": "callback",
+      "from": "recordRecentPtyOutputForPathProvenance"
+    },
+    "refreshPtyForegroundAgent": {
+      "kind": "lazy",
+      "from": "refreshPtyForegroundAgent"
+    },
+    "rendererGraphEpoch": {
+      "kind": "lazy",
+      "from": "rendererGraphEpoch"
+    },
+    "replaceHeadlessTerminalAfterExecutionContextChange": {
+      "kind": "callback",
+      "from": "replaceHeadlessTerminalAfterExecutionContextChange"
+    },
+    "resetTrackedTerminalStateForProviderGeneration": {
+      "kind": "lazy",
+      "from": "resetTrackedTerminalStateForProviderGeneration"
+    },
+    "resolvePaneAgentIdentityField": {
+      "kind": "callback",
+      "from": "resolvePaneAgentIdentityField"
+    },
+    "resolveTerminalWorkspaceLaunchScope": {
+      "kind": "callback",
+      "from": "resolveTerminalWorkspaceLaunchScope"
+    },
+    "resolveWorktreeSelector": {
+      "kind": "callback",
+      "from": "resolveWorktreeSelector"
+    },
+    "restoreAgentPromptLifecycleByteOrder": {
+      "kind": "callback",
+      "from": "restoreAgentPromptLifecycleByteOrder"
+    },
+    "restoredOrchestrationAuthorityByPtyId": {
+      "kind": "lazy",
+      "from": "restoredOrchestrationAuthorityByPtyId"
+    },
+    "retireAgentHookCompatibilityAuthorityFn": {
+      "kind": "lazy",
+      "from": "retireAgentHookCompatibilityAuthorityFn"
+    },
+    "retireOrchestrationMailboxDeliveryForPty": {
+      "kind": "callback",
+      "from": "retireOrchestrationMailboxDeliveryForPty"
+    },
+    "runtimeId": {
+      "kind": "lazy",
+      "from": "runtimeId"
+    },
+    "scheduleWaitBlockedCheck": {
+      "kind": "callback",
+      "from": "scheduleWaitBlockedCheck"
+    },
+    "setupCompletionTokenByPtyId": {
+      "kind": "lazy",
+      "from": "setupCompletionTokenByPtyId"
+    },
+    "shouldAnswerQueriesForLiveChunk": {
+      "kind": "callback",
+      "from": "shouldAnswerQueriesForLiveChunk"
+    },
+    "snapshotValueComparison": {
+      "kind": "lazy",
+      "from": "snapshotValueComparison"
+    },
+    "spawnPublishedPtys": {
+      "kind": "lazy",
+      "from": "spawnPublishedPtys"
+    },
+    "stopRequestedPtyIds": {
+      "kind": "lazy",
+      "from": "stopRequestedPtyIds"
+    },
+    "store": {
+      "kind": "lazy",
+      "from": "store"
+    },
+    "subscriberDrivenProviderAttachInventoryWaiters": {
+      "kind": "lazy",
+      "from": "subscriberDrivenProviderAttachInventoryWaiters"
+    },
+    "subscriberDrivenProviderAttachesByPtyId": {
+      "kind": "lazy",
+      "from": "subscriberDrivenProviderAttachesByPtyId"
+    },
+    "syntheticTerminalHandles": {
+      "kind": "lazy",
+      "from": "syntheticTerminalHandles"
+    },
+    "tabs": {
+      "kind": "lazy",
+      "from": "tabs"
+    },
+    "terminalCwdByPtyId": {
+      "kind": "lazy",
+      "from": "terminalCwdByPtyId"
+    },
+    "terminalExecutionHostField": {
+      "kind": "callback",
+      "from": "terminalExecutionHostField"
+    },
+    "terminalFileUriHostnameByPtyId": {
+      "kind": "lazy",
+      "from": "terminalFileUriHostnameByPtyId"
+    },
+    "terminalSpawnCommandsByPtyId": {
+      "kind": "lazy",
+      "from": "terminalSpawnCommandsByPtyId"
+    },
+    "trackHeadlessTerminalData": {
+      "kind": "callback",
+      "from": "trackHeadlessTerminalData"
+    },
+    "tryGetWorkspaceSessionHostIdForWorktree": {
+      "kind": "callback",
+      "from": "tryGetWorkspaceSessionHostIdForWorktree"
+    },
+    "waitersByHandle": {
+      "kind": "lazy",
+      "from": "waitersByHandle"
+    },
+    "wslDistroByPtyId": {
+      "kind": "lazy",
+      "from": "wslDistroByPtyId"
+    },
+    "reconcileLegacyWorkerTerminals": {
+      "kind": "callback",
+      "from": "reconcileLegacyWorkerTerminals"
+    },
+    "nextPtyLifecycleGeneration": {
+      "kind": "lazy",
+      "from": "nextPtyLifecycleGeneration"
+    },
+    "ptyController": {
+      "kind": "lazy",
+      "from": "ptyController"
+    }
+  },
+  "stateFields": []
+}

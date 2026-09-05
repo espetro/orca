@@ -11,7 +11,6 @@ import {
   isShellProcess,
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
-import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import {
@@ -161,10 +160,7 @@ import {
   proveCodexTuiRollout,
   resolvePinnedCodexRolloutProof
 } from '../codex/codex-tui-rollout-proof'
-import {
-  PROCESS_START_TIME_TOLERANCE_MS,
-  probeAgentSessionProcessIdentity
-} from './agent-session-process-identity-probe'
+import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { waitForStructuredTuiExitProof } from './structured-tui-exit-proof'
 import { readStructuredTuiProcessIdentity } from './structured-tui-process-identity'
 import {
@@ -217,21 +213,13 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
-import {
-  classifyWorkerTerminalProcessIncarnation,
-  parseWorkerTerminalHostScope,
-  type WorkerTerminalHostScope
-} from './orchestration/worker-terminal-process-liveness'
+import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
 import { OrchestrationError } from './orchestration/orchestration-error'
-import {
-  planLegacyWorkerTerminalRecovery,
-  type LegacyWorkerTerminalRecoveryPlan
-} from './orchestration/orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
-import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
@@ -346,7 +334,6 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -367,8 +354,6 @@ import { getPublicSshState } from './public-ssh-state'
 import {
   describeTerminalExitCause,
   isDeliberateTerminalExit,
-  OPERATOR_CLOSE_EXIT_CAUSE,
-  resolveUnreportedExitCause,
   type TerminalExitCause
 } from '../../shared/terminal-exit-cause'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
@@ -459,7 +444,7 @@ import {
 } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
-import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
   applyTerminalQuickCommandMutation,
@@ -508,7 +493,6 @@ import {
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
-import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -562,7 +546,6 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
-import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type { AutomationService } from '../automations/service'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import {
@@ -608,16 +591,8 @@ import {
   mergeTerminalOrphanGroupLayout
 } from './terminal-orphan-topology'
 import { terminalOrphanExecutionOwnersEqual } from './terminal-orphan-owner'
-import {
-  retireTerminalSurfacesFromSnapshot,
-  type RetiredTerminalSurface
-} from './mobile-session-terminal-retirement'
-import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
-import {
-  SSH_EXIT_UNCONFIRMED_REASON,
-  SSH_PROVIDER_UNREGISTERED_REASON,
-  type PtyLivenessVerdict
-} from '../../shared/pty-liveness-verdict'
+import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
+import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
@@ -705,14 +680,13 @@ import {
   type WatcherRemovalDeadline
 } from '../ipc/watcher-removal-drain'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
-import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
+import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import {
   isNativeWindowsConptyPty,
   registerConptyDa1OverrideInstaller,
   shouldModelAnswerHiddenPtyQueries
 } from './terminal-model-query-authority'
 import {
-  getTerminalViewAttributes,
   getTerminalViewColorQueryReplyColors,
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
@@ -1108,7 +1082,6 @@ function isAgentSessionOperationOutcomeUnknown(error: unknown): boolean {
 }
 
 // Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.
-const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
 
 export type TrackedPtyLivenessVerdict = {
   verdict: PtyLivenessVerdict
@@ -1223,7 +1196,7 @@ export type RuntimeTerminalAgentStatusEvent = {
   payload: ParsedAgentStatusPayload
 }
 
-type RuntimePtyTitleTrackerEntry = {
+export type RuntimePtyTitleTrackerEntry = {
   tracker: TerminalTitleTracker
   // Why: onPtyData batches the mobile session-tab touch to once per chunk;
   // the stale-working-title timer fires between chunks and must touch
@@ -1641,8 +1614,9 @@ async function waitForAgentPromptDelay(delayMs: number, signal?: AbortSignal): P
 export const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
+export const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
-const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
+export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
 export const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 
 export function isClientDisconnectedError(error: unknown): boolean {
@@ -1819,7 +1793,7 @@ export type TerminalHandleRecord = {
   ptyGeneration: number
 }
 
-type PtyIncarnationHandleRecord = {
+export type PtyIncarnationHandleRecord = {
   handle: string
   incarnationId: string
   leafKey: string
@@ -1843,7 +1817,7 @@ export type LegacyWorkerTerminalRecoveryResult = {
   deferredDispatchIds: string[]
 }
 
-type LegacyWorkerTerminalRecoveryResolution = {
+export type LegacyWorkerTerminalRecoveryResolution = {
   candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   resolution: 'adopted' | 'exited'
 }
@@ -1870,7 +1844,7 @@ type OrchestrationCompatibilitySshAttachmentAuthority = Extract<
   { kind: 'ssh' }
 >
 
-type TerminalWaiter = {
+export type TerminalWaiter = {
   handle: string
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
@@ -1880,7 +1854,7 @@ type TerminalWaiter = {
   abortCleanup: (() => void) | null
 }
 
-type MessageWaiter = OrchestrationMessageWaiter & {
+export type MessageWaiter = OrchestrationMessageWaiter & {
   handle: string
   resolve: (result: MessageWaitResult) => void
   timeout: NodeJS.Timeout | null
@@ -2308,7 +2282,7 @@ export type ApplyLayoutResult =
   | { ok: true; state: PtyLayoutState }
   | { ok: false; reason: 'pty-exited' | 'resize-failed' }
 
-type LayoutQueueEntry = {
+export type LayoutQueueEntry = {
   running: Promise<ApplyLayoutResult> | null
   pending: {
     target: PtyLayoutTarget
@@ -2382,6 +2356,7 @@ export class OrcaRuntimeService {
   private readonly clientEventPublishingCommands: RuntimeClientEventPublishingCommands
   private readonly hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
   private readonly mobileSessionFacade: RuntimeMobileSessionFacade
+  private readonly ptyWorktrees: RuntimePtyWorktrees
   private readonly managedWorktrees: RuntimeManagedWorktrees
   private readonly resolvedWorktreeCache: RuntimeResolvedWorktreeCache
   private readonly disposalTree: RuntimeDisposalTree
@@ -3282,6 +3257,185 @@ export class OrcaRuntimeService {
       withClientHostedPagesHold: (...args: unknown[]) =>
         (this.withClientHostedPagesHold as (...a: unknown[]) => unknown)(...args),
       wslDistroByPtyId: () => this.wslDistroByPtyId
+    })
+
+    this.ptyWorktrees = new RuntimePtyWorktrees({
+      adoptTerminalOrphansFromInventory: (...args) =>
+        this.adoptTerminalOrphansFromInventory(...args),
+      agentPromptExplicitStatusFloorByPtyId: () => this.agentPromptExplicitStatusFloorByPtyId,
+      agentPromptLifecycleByPtyId: () => this.agentPromptLifecycleByPtyId,
+      agentPromptPermissionSequenceByPtyId: () => this.agentPromptPermissionSequenceByPtyId,
+      agentStatusOscProcessorsByPtyId: () => this.agentStatusOscProcessorsByPtyId,
+      assertGraphReady: (...args) => this.assertGraphReady(...args),
+      cancelPendingDriverMutations: (...args) => this.cancelPendingDriverMutations(...args),
+      claudeAgentTeams: () => this.claudeAgentTeams,
+      clearAgentRowSnapshotsForPty: (...args) => this.clearAgentRowSnapshotsForPty(...args),
+      clearWaitBlockedCheckState: (...args) => this.clearWaitBlockedCheckState(...args),
+      dataListeners: () => this.dataListeners,
+      disposeHeadlessTerminal: (...args) => this.disposeHeadlessTerminal(...args),
+      disposePtyTitleTracker: () => this.disposePtyTitleTracker,
+      earlyExitedPtyIncarnations: () => this.earlyExitedPtyIncarnations,
+      emitTerminalAgentStatusEvents: (...args) => this.emitTerminalAgentStatusEvents(...args),
+      ensurePtyBackedMobileSurfaceForRendererTab: (...args) =>
+        this.ensurePtyBackedMobileSurfaceForRendererTab(...args),
+      failActiveDispatchOnExit: (...args) => this.failActiveDispatchOnExit(...args),
+      flushPendingTerminalSideEffectFacts: (...args) =>
+        this.flushPendingTerminalSideEffectFacts(...args),
+      flushWorkspaceSessionOrThrowAsync: (...args) =>
+        this.flushWorkspaceSessionOrThrowAsync(...args),
+      folderWorkspaceToResolvedWorktree: (...args) =>
+        this.folderWorkspaceToResolvedWorktree(...args),
+      freshSubscribeGuard: () => this.freshSubscribeGuard,
+      getDriver: (...args) => this.getDriver(...args),
+      getLeafKey: (...args) => this.getLeafKey(...args),
+      getMobileSessionTabsForWorktree: (...args) => this.getMobileSessionTabsForWorktree(...args),
+      getMobileTerminalPaneKey: (...args) => this.getMobileTerminalPaneKey(...args),
+      getOrCreatePtyTitleTrackerEntry: () => this.getOrCreatePtyTitleTrackerEntry,
+      getOrchestrationDb: (...args) => this.getOrchestrationDb(...args),
+      getRendererTerminalSerializerGeneration: (...args) =>
+        this.getRendererTerminalSerializerGeneration(...args),
+      getWorkspaceSessionHostIdForWorktree: (...args) =>
+        this.getWorkspaceSessionHostIdForWorktree(...args),
+      graphStatus: () => this.graphStatus,
+      graphSyncCallbacks: () => this.graphSyncCallbacks,
+      handleByLeafKey: () => this.handleByLeafKey,
+      handleByPtyId: () => this.handleByPtyId,
+      handleByPtyIncarnation: () => this.handleByPtyIncarnation,
+      handles: () => this.handles,
+      headlessTerminals: () => this.headlessTerminals,
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
+      intentionalHandlelessPtyStops: () => this.intentionalHandlelessPtyStops,
+      isRecognizedForegroundAgentProcess: (...args) =>
+        this.isRecognizedForegroundAgentProcess(...args),
+      isRemoteDesktopResizeDriven: (...args) => this.isRemoteDesktopResizeDriven(...args),
+      layoutQueues: () => this.layoutQueues,
+      layouts: () => this.layouts,
+      leaves: () => this.leaves,
+      leavesByPtyId: () => this.leavesByPtyId,
+      legacyWorkerRecoveredPtys: () => this.legacyWorkerRecoveredPtys,
+      legacyWorkerTerminalRecoveryRetries: () => this.legacyWorkerTerminalRecoveryRetries,
+      makeRuntimePaneKey: (...args) => this.makeRuntimePaneKey(...args),
+      managedWorktrees: () => this.managedWorktrees,
+      maybeHydrateHeadlessFromRenderer: (...args) => this.maybeHydrateHeadlessFromRenderer(...args),
+      messageWaitersByHandle: () => this.messageWaitersByHandle,
+      mobileSessionTabsByWorktree: () => this.mobileSessionTabsByWorktree,
+      mobileTabSnapshots: () => this.mobileTabSnapshots,
+      notifier: () => this.notifier,
+      notifyMobileSessionTabsChanged: (...args) => this.notifyMobileSessionTabsChanged(...args),
+      osc7ScanTailByPtyId: () => this.osc7ScanTailByPtyId,
+      oscTitleScanTailByPtyId: () => this.oscTitleScanTailByPtyId,
+      pairedRendererSessionOwnedPtyIds: () => this.pairedRendererSessionOwnedPtyIds,
+      pathFlavorForPty: () => this.pathFlavorForPty,
+      pendingMobileTerminalCreatesByKey: () => this.pendingMobileTerminalCreatesByKey,
+      pendingPtyRegistrationIncarnations: () => this.pendingPtyRegistrationIncarnations,
+      processAgentStatusOscForPty: (...args) => this.processAgentStatusOscForPty(...args),
+      providerBufferAcquisitionsByPtyId: () => this.providerBufferAcquisitionsByPtyId,
+      providerModeSnapshotScansByPtyId: () => this.providerModeSnapshotScansByPtyId,
+      providerModeTrackersByPtyId: () => this.providerModeTrackersByPtyId,
+      providerSequenceInitializedPtys: () => this.providerSequenceInitializedPtys,
+      providerSequenceOffsetByPtyId: () => this.providerSequenceOffsetByPtyId,
+      providerSnapshotPreferredPtys: () => this.providerSnapshotPreferredPtys,
+      providerVisibleRetryAtByPtyId: () => this.providerVisibleRetryAtByPtyId,
+      providerVisibleStateByPtyId: () => this.providerVisibleStateByPtyId,
+      ptyExitListenersByPtyId: () => this.ptyExitListenersByPtyId,
+      ptyExit_notifyTabAndMobile: (...args) => this.ptyExit_notifyTabAndMobile(...args),
+      ptyLifecycleGenerationById: () => this.ptyLifecycleGenerationById,
+      ptyLivenessObservationSequence: () => this.ptyLivenessObservationSequence,
+      ptyLivenessVerdictByPtyId: () => this.ptyLivenessVerdictByPtyId,
+      ptyOutputSequenceById: () => this.ptyOutputSequenceById,
+      ptysById: () => this.ptysById,
+      recentPtyOutputById: () => this.recentPtyOutputById,
+      recentPtyPathCandidatesById: () => this.recentPtyPathCandidatesById,
+      reconcileAgentStatusForEndedProcessFn: () => this.reconcileAgentStatusForEndedProcessFn,
+      reconcileLegacyWorkerTerminalsNow: (...args) =>
+        this.reconcileLegacyWorkerTerminalsNow(...args),
+      recordOsc7MetadataForPty: () => this.recordOsc7MetadataForPty,
+      recordRecentPtyOutputForPathProvenance: (...args) =>
+        this.recordRecentPtyOutputForPathProvenance(...args),
+      refreshPtyForegroundAgent: () => this.refreshPtyForegroundAgent,
+      rendererGraphEpoch: () => this.rendererGraphEpoch,
+      replaceHeadlessTerminalAfterExecutionContextChange: (...args) =>
+        this.replaceHeadlessTerminalAfterExecutionContextChange(...args),
+      resetTrackedTerminalStateForProviderGeneration: () =>
+        this.resetTrackedTerminalStateForProviderGeneration,
+      resolvePaneAgentIdentityField: (...args) => this.resolvePaneAgentIdentityField(...args),
+      resolveTerminalWorkspaceLaunchScope: (...args) =>
+        this.resolveTerminalWorkspaceLaunchScope(...args),
+      resolveWorktreeSelector: (...args) => this.resolveWorktreeSelector(...args),
+      restoreAgentPromptLifecycleByteOrder: (...args) =>
+        this.restoreAgentPromptLifecycleByteOrder(...args),
+      restoredOrchestrationAuthorityByPtyId: () => this.restoredOrchestrationAuthorityByPtyId,
+      retireAgentHookCompatibilityAuthorityFn: () => this.retireAgentHookCompatibilityAuthorityFn,
+      retireOrchestrationMailboxDeliveryForPty: (...args) =>
+        this.retireOrchestrationMailboxDeliveryForPty(...args),
+      runtimeId: () => this.runtimeId,
+      scheduleWaitBlockedCheck: (...args) => this.scheduleWaitBlockedCheck(...args),
+      setupCompletionTokenByPtyId: () => this.setupCompletionTokenByPtyId,
+      shouldAnswerQueriesForLiveChunk: (...args) => this.shouldAnswerQueriesForLiveChunk(...args),
+      snapshotValueComparison: () => this.snapshotValueComparison,
+      spawnPublishedPtys: () => this.spawnPublishedPtys,
+      stopRequestedPtyIds: () => this.stopRequestedPtyIds,
+      store: () => this.store,
+      subscriberDrivenProviderAttachInventoryWaiters: () =>
+        this.subscriberDrivenProviderAttachInventoryWaiters,
+      subscriberDrivenProviderAttachesByPtyId: () => this.subscriberDrivenProviderAttachesByPtyId,
+      syntheticTerminalHandles: () => this.syntheticTerminalHandles,
+      tabs: () => this.tabs,
+      terminalCwdByPtyId: () => this.terminalCwdByPtyId,
+      terminalExecutionHostField: (...args) => this.terminalExecutionHostField(...args),
+      terminalFileUriHostnameByPtyId: () => this.terminalFileUriHostnameByPtyId,
+      terminalSpawnCommandsByPtyId: () => this.terminalSpawnCommandsByPtyId,
+      trackHeadlessTerminalData: (...args) => this.trackHeadlessTerminalData(...args),
+      tryGetWorkspaceSessionHostIdForWorktree: (...args) =>
+        this.tryGetWorkspaceSessionHostIdForWorktree(...args),
+      waitersByHandle: () => this.waitersByHandle,
+      wslDistroByPtyId: () => this.wslDistroByPtyId,
+      reconcileLegacyWorkerTerminals: (...args) => this.reconcileLegacyWorkerTerminals(...args),
+      nextPtyLifecycleGeneration: () => this.nextPtyLifecycleGeneration,
+      setNextPtyLifecycleGeneration: (value) => {
+        this.nextPtyLifecycleGeneration = value
+      },
+      setPtyLivenessObservationSequence: (value) => {
+        this.ptyLivenessObservationSequence = value
+      },
+      ptyController: () => this.ptyController,
+      livenessApi: () =>
+        // Why: the verdict helpers need earlyExited/pending maps plus the
+        // absence-probe caches, which now live on the facade itself.
+        ({
+          earlyExitedPtyIncarnations: this.earlyExitedPtyIncarnations,
+          pendingPtyRegistrationIncarnations: this.pendingPtyRegistrationIncarnations,
+          stopRequestedPtyIds: this.stopRequestedPtyIds,
+          provenAbsentLeafPtyVerdicts: this.ptyWorktrees.provenAbsentLeafPtyVerdicts,
+          leafPtyAbsenceProbes: this.ptyWorktrees.leafPtyAbsenceProbes,
+          ptyController: this.ptyController
+            ? {
+                probePtyLiveness: async (ptyId) =>
+                  Boolean(await this.ptyController?.probePtyLiveness?.(ptyId))
+              }
+            : undefined,
+          controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
+          forgetPtyLivenessVerdict: (ptyId, observedNoLaterThan) =>
+            this.forgetPtyLivenessVerdict(ptyId, observedNoLaterThan),
+          getOrCreatePtyWorktreeRecord: (ptyId) => this.getOrCreatePtyWorktreeRecord(ptyId),
+          getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
+          adoptPreAllocatedHandle: (leaf) =>
+            this.adoptPreAllocatedHandle(leaf as RuntimeLeafRecord),
+          recordPtyWorktree: (ptyId, worktreeId, opts) =>
+            this.recordPtyWorktree(ptyId, worktreeId, opts),
+          ensurePtyBackedMobileSurfaceForRendererTab: (worktreeId, tabId) =>
+            this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, tabId),
+          graphStatus: this.graphStatus,
+          spawnPublishedPtys: this.spawnPublishedPtys,
+          pendingMobileTerminalCreatesByKey: this.pendingMobileTerminalCreatesByKey,
+          ptysById: this.ptysById,
+          handleByPtyId: this.handleByPtyId,
+          leafExistsForPty: (ptyId) => this.leafExistsForPty(ptyId)
+        }),
+      setPtyControllerRef: (controller) => {
+        this.ptyController = controller
+      }
     })
     this.managedWorktrees = new RuntimeManagedWorktrees({
       _orchestrationDb: this._orchestrationDb,
@@ -4249,83 +4403,8 @@ export class OrcaRuntimeService {
     this.scheduleRestoredMessageRepoints()
   }
 
-  private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
-    try {
-      return planLegacyWorkerTerminalRecovery(
-        this.getOrchestrationDb().listLegacyWorkerTerminalRecoveryRows()
-      )
-    } catch (error) {
-      console.warn('[orchestration] failed to plan legacy worker terminal recovery', error)
-      return { blockedPanes: [], candidates: [], ambiguousDispatchIds: [] }
-    }
-  }
-
   prepareLegacyWorkerTerminalRecovery(): LegacyWorkerTerminalRecoveryPlan {
-    const plan = this.getLegacyWorkerTerminalRecoveryPlan()
-    const store = this.store
-    if (
-      !store?.getWorkspaceSession ||
-      !store.setWorkspaceSession ||
-      (!store.flushPendingOrThrowAsync && !store.flushOrThrow)
-    ) {
-      return plan
-    }
-    const sessions = new Map<
-      ExecutionHostId,
-      { current: WorkspaceSessionState; next: WorkspaceSessionState }
-    >()
-    const changedHostIds = new Set<ExecutionHostId>()
-    for (const blocked of plan.blockedPanes) {
-      let hostIds: ExecutionHostId[]
-      try {
-        hostIds = [this.getWorkspaceSessionHostIdForWorktree(blocked.worktreeId)]
-      } catch (error) {
-        console.warn('[orchestration] legacy worker resume fence owner is unavailable', {
-          worktreeId: blocked.worktreeId,
-          error
-        })
-        hostIds = store.getWorkspaceSessionHostIds?.() ?? [LOCAL_EXECUTION_HOST_ID]
-      }
-      for (const hostId of hostIds) {
-        let state = sessions.get(hostId)
-        if (!state) {
-          const current = store.getWorkspaceSession(hostId)
-          if (!current) {
-            continue
-          }
-          state = { current, next: structuredClone(current) }
-          sessions.set(hostId, state)
-        }
-        const record = state.next.sleepingAgentSessionsByPaneKey?.[blocked.paneKey]
-        if (
-          !record ||
-          !runtimeWorktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
-          record.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-        ) {
-          continue
-        }
-        state.next.sleepingAgentSessionsByPaneKey = {
-          ...state.next.sleepingAgentSessionsByPaneKey,
-          [blocked.paneKey]: {
-            ...record,
-            automaticResumeBlockedBy: 'legacy-orchestration-worker'
-          }
-        }
-        changedHostIds.add(hostId)
-      }
-    }
-    const changed = [...sessions].filter(([hostId]) => changedHostIds.has(hostId))
-    if (changed.length === 0) {
-      return plan
-    }
-    try {
-      for (const [hostId, state] of changed) {
-        store.setWorkspaceSession(state.next, hostId)
-      }
-    } catch (error) {
-      console.warn('[orchestration] failed to stage legacy worker resume fence', error)
-    }
-    return plan
+    return this.ptyWorktrees.prepareLegacyWorkerTerminalRecovery()
   }
 
   private async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
@@ -4443,142 +4522,19 @@ export class OrcaRuntimeService {
   private async persistLegacyWorkerTerminalRecoveryBatch(
     resolutions: readonly LegacyWorkerTerminalRecoveryResolution[]
   ): Promise<ReadonlySet<string>> {
-    const store = this.store
-    if (
-      !store?.getWorkspaceSession ||
-      !store.setWorkspaceSession ||
-      (!store.flushPendingOrThrowAsync && !store.flushOrThrow)
-    ) {
-      return new Set()
-    }
-    const originalSessions = new Map<ExecutionHostId, WorkspaceSessionState>()
-    const stagedSessions = new Map<ExecutionHostId, WorkspaceSessionState>()
-    const stagedDispatchIds = new Set<string>()
-    try {
-      for (const { candidate, resolution } of resolutions) {
-        const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(candidate.worktreeId)
-        const session = hostId ? store.getWorkspaceSession(hostId) : null
-        if (!hostId || !session) {
-          continue
-        }
-        originalSessions.set(hostId, originalSessions.get(hostId) ?? session)
-        let next =
-          resolution === 'exited'
-            ? retireTerminalSurfaceFromPersistence(session, {
-                worktreeId: candidate.worktreeId,
-                parentTabId: candidate.tabId,
-                leafId: candidate.leafId,
-                ptyId: candidate.ptyId,
-                incarnationId: candidate.incarnationId
-              })
-            : session
-        const record = next.sleepingAgentSessionsByPaneKey?.[candidate.paneKey]
-        if (record && runtimeWorktreeIdsEqual(record.worktreeId, candidate.worktreeId)) {
-          const sleepingAgentSessionsByPaneKey = { ...next.sleepingAgentSessionsByPaneKey }
-          delete sleepingAgentSessionsByPaneKey[candidate.paneKey]
-          next = { ...next, sleepingAgentSessionsByPaneKey }
-        }
-        if (next !== session) {
-          store.setWorkspaceSession(next, hostId)
-        }
-        stagedSessions.set(hostId, store.getWorkspaceSession(hostId))
-        stagedDispatchIds.add(candidate.dispatchId)
-      }
-      if (stagedDispatchIds.size > 0) {
-        await this.flushWorkspaceSessionOrThrowAsync()
-      }
-      return stagedDispatchIds
-    } catch (error) {
-      for (const [hostId, original] of originalSessions) {
-        const staged = stagedSessions.get(hostId)
-        const current = store.getWorkspaceSession(hostId)
-        if (!staged || !current) {
-          continue
-        }
-        const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(original, staged, current)
-        if (rolledBack !== current) {
-          store.setWorkspaceSession(rolledBack, hostId)
-        }
-      }
-      console.warn('[orchestration] failed to persist legacy worker recovery batch', {
-        dispatchIds: [...stagedDispatchIds],
-        error
-      })
-      return new Set()
-    }
+    return this.ptyWorktrees.persistLegacyWorkerTerminalRecoveryBatch(resolutions)
   }
 
   private reconcileMissingLegacyWorkerTerminal(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): boolean {
-    if (candidate.dispatchStatus !== 'pending' && candidate.dispatchStatus !== 'dispatched') {
-      return true
-    }
-    try {
-      this.getOrchestrationDb().reconcileMissingWorkerTerminal(
-        candidate.dispatchId,
-        'The assigned worker terminal is no longer live after orchestration recovery.'
-      )
-      return true
-    } catch (error) {
-      console.warn('[orchestration] failed to reconcile missing worker terminal', {
-        dispatchId: candidate.dispatchId,
-        error
-      })
-      return false
-    }
+    return this.ptyWorktrees.reconcileMissingLegacyWorkerTerminal(candidate)
   }
 
   private rollbackLegacyWorkerTerminalSurface(
     candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
   ): void {
-    const snapshot = this.mobileSessionTabsByWorktree.get(candidate.worktreeId)
-    if (snapshot) {
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot,
-        ptyId: candidate.ptyId,
-        exactSurfaces: [{ parentTabId: candidate.tabId, leafId: candidate.leafId }],
-        exactOnly: true
-      })
-      if (retired) {
-        this.mobileSessionTabsByWorktree.set(candidate.worktreeId, retired.snapshot)
-        this.notifyMobileSessionTabsChanged(candidate.worktreeId)
-      }
-    }
-
-    const leafKey = this.getLeafKey(candidate.tabId, candidate.leafId)
-    const leaf = this.leaves.get(leafKey)
-    const pty = this.ptysById.get(candidate.ptyId)
-    if (
-      leaf?.ptyId === candidate.ptyId &&
-      runtimeWorktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
-    ) {
-      this.leaves.delete(leafKey)
-      const surfaceHandle = this.handleByLeafKey.get(leafKey)
-      this.handleByLeafKey.delete(leafKey)
-      const handleRecord = surfaceHandle ? this.handles.get(surfaceHandle) : undefined
-      if (
-        surfaceHandle &&
-        handleRecord?.tabId === candidate.tabId &&
-        handleRecord.leafId === candidate.leafId &&
-        handleRecord.ptyId === candidate.ptyId
-      ) {
-        this.handles.delete(surfaceHandle)
-      }
-      this.rebuildLeafPtyIndex()
-      if (![...this.leaves.values()].some((entry) => entry.tabId === candidate.tabId)) {
-        this.tabs.delete(candidate.tabId)
-      }
-    }
-    if (pty?.tabId === candidate.tabId) {
-      pty.tabId = null
-      pty.paneKey = null
-    }
-    this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
-      candidate.paneKey,
-      'rolled_back',
-      candidate.ptyId
-    )
+    return this.ptyWorktrees.rollbackLegacyWorkerTerminalSurface(candidate)
   }
 
   private updateLegacyWorkerTerminalRecoveryRetry(
@@ -4586,68 +4542,15 @@ export class OrcaRuntimeService {
     deferredDispatchIds: ReadonlySet<string>,
     options: { connectionId?: string; materializeRenderer?: boolean }
   ): void {
-    const scopeKey = options.connectionId ? `ssh:${options.connectionId}` : 'local'
-    const hasDeferredWorker = plan.candidates.some((candidate) => {
-      const sshPty = parseAppSshPtyId(candidate.ptyId)
-      const inScope = options.connectionId
-        ? sshPty?.connectionId === options.connectionId
-        : sshPty === null
-      return inScope && deferredDispatchIds.has(candidate.dispatchId)
-    })
-    if (!hasDeferredWorker) {
-      this.cancelLegacyWorkerTerminalRecoveryRetry(scopeKey)
-      return
-    }
-    const existing = this.legacyWorkerTerminalRecoveryRetries.get(scopeKey)
-    const retry = existing ?? {
-      attempt: 0,
-      ...(options.connectionId ? { connectionId: options.connectionId } : {}),
-      materializeRenderer: options.materializeRenderer === true,
-      timer: null
-    }
-    retry.materializeRenderer ||= options.materializeRenderer === true
-    this.legacyWorkerTerminalRecoveryRetries.set(scopeKey, retry)
-    this.armLegacyWorkerTerminalRecoveryRetry(scopeKey, retry)
+    return this.ptyWorktrees.updateLegacyWorkerTerminalRecoveryRetry(
+      plan,
+      deferredDispatchIds,
+      options
+    )
   }
 
   private cancelLegacyWorkerTerminalRecoveryRetry(scopeKey: string): void {
-    const retry = this.legacyWorkerTerminalRecoveryRetries.get(scopeKey)
-    if (retry?.timer) {
-      clearTimeout(retry.timer)
-    }
-    this.legacyWorkerTerminalRecoveryRetries.delete(scopeKey)
-  }
-
-  private armLegacyWorkerTerminalRecoveryRetry(
-    scopeKey: string,
-    retry: {
-      attempt: number
-      connectionId?: string
-      materializeRenderer: boolean
-      timer: ReturnType<typeof setTimeout> | null
-    }
-  ): void {
-    if (retry.timer) {
-      return
-    }
-    const delayMs = Math.min(1_000 * 2 ** retry.attempt, 30_000)
-    retry.attempt += 1
-    retry.timer = setTimeout(() => {
-      retry.timer = null
-      void this.reconcileLegacyWorkerTerminals({
-        ...(retry.connectionId ? { connectionId: retry.connectionId } : {}),
-        materializeRenderer: retry.materializeRenderer
-      }).catch((error) => {
-        console.warn('[orchestration] worker terminal recovery retry failed', {
-          scope: scopeKey,
-          error
-        })
-        if (this.legacyWorkerTerminalRecoveryRetries.get(scopeKey) === retry) {
-          this.armLegacyWorkerTerminalRecoveryRetry(scopeKey, retry)
-        }
-      })
-    }, delayMs)
-    retry.timer.unref?.()
+    return this.ptyWorktrees.cancelLegacyWorkerTerminalRecoveryRetry(scopeKey)
   }
 
   private async reconcileLegacyWorkerTerminalsNow(options: {
@@ -5490,11 +5393,12 @@ export class OrcaRuntimeService {
     )
   }
 
+  isPtyKnownExited(ptyId: string): boolean {
+    return this.ptyWorktrees.isPtyKnownExited(ptyId)
+  }
+
   setPtyController(controller: RuntimePtyController | null): void {
-    // Why: CLI terminal writes must go through the main-owned PTY registry
-    // instead of tunneling back through renderer IPC, or live handles could
-    // drift from the process they are supposed to control during reloads.
-    this.ptyController = controller
+    return this.ptyWorktrees.setPtyController(controller)
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -6347,7 +6251,7 @@ export class OrcaRuntimeService {
           : mergedActiveTab.id
         : null
       const nextTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
-        ? this.appendBrowserTabOrder(
+        ? this.snapshotValueComparison.appendBrowserTabOrder(
             this.distributeHeadlessTabsAcrossGroups(
               persistedGroups.map((group) => ({
                 id: group.id,
@@ -6365,7 +6269,7 @@ export class OrcaRuntimeService {
             this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
           )
         : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroups
-          ? this.appendBrowserTabOrder(
+          ? this.snapshotValueComparison.appendBrowserTabOrder(
               this.mergeMobileSessionTabGroups(
                 entryWorktreeId,
                 existing.tabGroups,
@@ -8003,68 +7907,7 @@ export class OrcaRuntimeService {
     identity: NonNullable<AgentSessionRecord['lease']['ownerProcess']>,
     provider: 'codex' | 'claude' = 'codex'
   ): Promise<boolean> {
-    const listings = await this.ptyController?.listProcesses?.(pty.connectionId)
-    const listed = listings?.find(
-      (candidate) => candidate.id === pty.ptyId && candidate.incarnationId === pty.incarnationId
-    )
-    if (!listed?.rootProcessId || identity.processStartTimeMs === null) {
-      console.warn('[structured-tui-recovery] claimed PTY process mismatch', {
-        ptyId: pty.ptyId,
-        incarnationId: pty.incarnationId,
-        rootProcessId: listed?.rootProcessId ?? null,
-        mismatchedFields: [
-          ...(!listed?.rootProcessId ? ['root-process-id'] : []),
-          ...(identity.processStartTimeMs === null ? ['persisted-process-start-time'] : [])
-        ]
-      })
-      return false
-    }
-    try {
-      const observed = await readStructuredTuiProcessIdentity({
-        hostId: identity.hostId,
-        rootPid: listed.rootProcessId,
-        spawnToken: identity.spawnToken,
-        agent: provider
-      })
-      const matched = {
-        hostId: observed.hostId === identity.hostId,
-        pid: observed.pid === identity.pid,
-        processStartTime:
-          observed.processStartTimeMs !== null &&
-          Math.abs(observed.processStartTimeMs - identity.processStartTimeMs) <=
-            PROCESS_START_TIME_TOLERANCE_MS
-      }
-      if (!Object.values(matched).every(Boolean)) {
-        console.warn('[structured-tui-recovery] claimed PTY process mismatch', {
-          ptyId: pty.ptyId,
-          incarnationId: pty.incarnationId,
-          rootProcessId: listed.rootProcessId,
-          persisted: {
-            hostId: identity.hostId,
-            pid: identity.pid,
-            processStartTimeMs: identity.processStartTimeMs
-          },
-          observed: {
-            hostId: observed.hostId,
-            pid: observed.pid,
-            processStartTimeMs: observed.processStartTimeMs
-          },
-          mismatchedFields: Object.entries(matched)
-            .filter(([, matches]) => !matches)
-            .map(([field]) => field)
-        })
-      }
-      return Object.values(matched).every(Boolean)
-    } catch (error) {
-      console.warn('[structured-tui-recovery] claimed PTY process mismatch', {
-        ptyId: pty.ptyId,
-        incarnationId: pty.incarnationId,
-        rootProcessId: listed.rootProcessId,
-        mismatchedFields: [`${provider}-child-proof`],
-        error: error instanceof Error ? error.message : String(error)
-      })
-      return false
-    }
+    return this.ptyWorktrees.proveRecoveredStructuredTuiPtyProcess(pty, identity, provider)
   }
 
   private async closeStructuredTuiOwner(
@@ -8091,23 +7934,7 @@ export class OrcaRuntimeService {
     threadId: string
     codexHome: string
   }): Promise<{ transcriptPath: string; leafUuid?: never }> {
-    const assertPaneIdentity = (): void => {
-      const pty = this.ptysById.get(input.owner.terminal.ptyId)
-      if (!pty?.connected || pty.paneKey !== input.owner.terminal.paneKey) {
-        throw new Error('The adopted terminal lost its pane identity.')
-      }
-    }
-    assertPaneIdentity()
-    const transcriptPath = await resolvePinnedCodexRolloutProof(input.codexHome, input.threadId)
-    if (!transcriptPath) {
-      throw new Error('The agent terminal did not prove the expected Codex rollout.')
-    }
-    assertPaneIdentity()
-    const processProof = await probeAgentSessionProcessIdentity({ identity: input.owner.process })
-    if (processProof.outcome !== 'identity-matched' || processProof.matchedOn.length === 0) {
-      throw new Error('The resumed Codex process could not be re-proved.')
-    }
-    return { transcriptPath }
+    return this.ptyWorktrees.waitForAdoptedStructuredTuiProof(input)
   }
 
   private refreshStructuredTuiOwnerBinding(owner: StructuredTuiOwner): StructuredTuiOwner {
@@ -8123,36 +7950,11 @@ export class OrcaRuntimeService {
   }
 
   private issueStructuredTuiPtyHandle(pty: RuntimePtyWorktreeRecord): string {
-    const existingHandle = this.findHandleForPtyRecord(pty.ptyId)
-    if (existingHandle) {
-      this.handleByPtyId.set(pty.ptyId, existingHandle)
-      return existingHandle
-    }
-    const handle = `term_${randomUUID()}`
-    const syntheticId = `pty:${pty.ptyId}`
-    this.syntheticTerminalHandles.add(handle)
-    this.handles.set(handle, {
-      handle,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: pty.worktreeId,
-      tabId: syntheticId,
-      leafId: syntheticId,
-      ptyId: pty.ptyId,
-      ptyGeneration: 0
-    })
-    this.handleByPtyId.set(pty.ptyId, handle)
-    return handle
+    return this.ptyWorktrees.issueStructuredTuiPtyHandle(pty)
   }
 
   private async waitForStructuredTuiPtyExit(ptyId: string): Promise<void> {
-    const deadline = Date.now() + 5_000
-    while (this.ptysById.get(ptyId)?.connected === true) {
-      if (Date.now() >= deadline) {
-        throw new Error('terminal_handle_stale')
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
+    return this.ptyWorktrees.waitForStructuredTuiPtyExit(ptyId)
   }
 
   private async waitForStructuredTuiOwnerExit(owner: StructuredTuiOwner): Promise<void> {
@@ -8763,30 +8565,15 @@ export class OrcaRuntimeService {
   // env var) so they can self-identify in orchestration messages without an
   // extra RPC round-trip. Pre-allocating by ptyId lets issueHandle reuse it.
   preAllocateHandleForPty(ptyId: string): string {
-    const existing = this.handleByPtyId.get(ptyId)
-    if (existing) {
-      return existing
-    }
-    const handle = this.createPreAllocatedTerminalHandle()
-    this.handleByPtyId.set(ptyId, handle)
-    return handle
+    return this.ptyWorktrees.preAllocateHandleForPty(ptyId)
   }
 
   createPreAllocatedTerminalHandle(): string {
-    return `term_${randomUUID()}`
+    return this.ptyWorktrees.createPreAllocatedTerminalHandle()
   }
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
-    const retained = this.handleByPtyIncarnation.get(ptyId)
-    if (retained?.handle === handle) {
-      this.handleByPtyIncarnation.delete(ptyId)
-    } else {
-      this.invalidatePtyIncarnationHandle(ptyId)
-    }
-    this.handleByPtyId.set(ptyId, handle)
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      this.adoptPreAllocatedHandle(leaf)
-    }
+    return this.ptyWorktrees.registerPreAllocatedHandleForPty(ptyId, handle)
   }
 
   private adoptControllerTerminalHandle(
@@ -8795,129 +8582,7 @@ export class OrcaRuntimeService {
     incarnationId?: string,
     options: { exactRestoredSurface?: boolean } = {}
   ): void {
-    const trimmed = handle?.trim()
-    if (!trimmed || !trimmed.startsWith('term_')) {
-      return
-    }
-    const pty = this.ptysById.get(ptyId)
-    const changedIncarnation = Boolean(
-      incarnationId && pty?.incarnationId && incarnationId !== pty.incarnationId
-    )
-    if (changedIncarnation) {
-      const priorHandle = this.handleByPtyId.get(ptyId)
-      this.invalidateAllHandlesForPty(ptyId)
-      pty!.tabId = null
-      pty!.paneKey = null
-      // Reusing an exported handle would make stale client metadata name the replacement process.
-      if (priorHandle === trimmed) {
-        return
-      }
-    }
-    if (this.isTerminalHandleAdoptionBlocked(ptyId, trimmed)) {
-      if (
-        !options.exactRestoredSurface ||
-        !this.replaceSyntheticTerminalHandlesForRestoredPty(ptyId, trimmed) ||
-        this.isTerminalHandleAdoptionBlocked(ptyId, trimmed)
-      ) {
-        return
-      }
-    }
-    // Why: after an app/runtime restart, the live PTY child still has its
-    // original ORCA_TERMINAL_HANDLE, but the runtime's in-memory map is gone.
-    this.registerPreAllocatedHandleForPty(ptyId, trimmed)
-  }
-
-  private invalidateAllHandlesForPty(ptyId: string): void {
-    const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
-    const preallocatedHandle = this.handleByPtyId.get(ptyId)
-    this.invalidatePtyIncarnationHandle(ptyId)
-    this.handleByPtyId.delete(ptyId)
-    const invalidated = new Set<string>()
-    if (preallocatedHandle && preallocatedHandle !== incarnationHandle) {
-      invalidated.add(preallocatedHandle)
-    }
-    for (const [handle, record] of this.handles) {
-      if (record.ptyId === ptyId) {
-        invalidated.add(handle)
-        this.handles.delete(handle)
-      }
-    }
-    for (const handle of invalidated) {
-      this.handles.delete(handle)
-      this.syntheticTerminalHandles.delete(handle)
-      this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
-    }
-    for (const [leafKey, handle] of this.handleByLeafKey) {
-      if (invalidated.has(handle)) {
-        this.handleByLeafKey.delete(leafKey)
-      }
-    }
-  }
-
-  private replaceSyntheticTerminalHandlesForRestoredPty(
-    ptyId: string,
-    controllerHandle: string
-  ): boolean {
-    const boundHandles = new Set<string>()
-    const directHandle = this.handleByPtyId.get(ptyId)
-    if (directHandle) {
-      boundHandles.add(directHandle)
-    }
-    for (const [handle, record] of this.handles) {
-      if (record.ptyId === ptyId) {
-        boundHandles.add(handle)
-      } else if (handle === controllerHandle) {
-        return false
-      }
-    }
-    for (const [otherPtyId, handle] of this.handleByPtyId) {
-      if (otherPtyId !== ptyId && handle === controllerHandle) {
-        return false
-      }
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-      if (handle) {
-        boundHandles.add(handle)
-      }
-    }
-    if (
-      boundHandles.size === 0 ||
-      [...boundHandles].some(
-        (handle) => handle === controllerHandle || !this.syntheticTerminalHandles.has(handle)
-      )
-    ) {
-      return false
-    }
-    this.invalidateAllHandlesForPty(ptyId)
-    return true
-  }
-
-  // Why: adoption is best-effort restart recovery and must be first-wins.
-  // Re-keying a pty that already has a handle this session would strand
-  // waiters registered under the old handle, and provider-reported values
-  // are not trusted to be collision-free — a handle bound to a different
-  // pty must never be stolen by a later report.
-  private isTerminalHandleAdoptionBlocked(ptyId: string, handle: string): boolean {
-    if (this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId)) {
-      return true
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const issued = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-      if (issued && issued !== handle) {
-        return true
-      }
-    }
-    const existingRecord = this.handles.get(handle)
-    if (existingRecord && existingRecord.ptyId !== ptyId) {
-      return true
-    }
-    for (const [otherPtyId, otherHandle] of this.handleByPtyId) {
-      if (otherHandle === handle && otherPtyId !== ptyId) {
-        return true
-      }
-    }
-    return false
+    return this.ptyWorktrees.adoptControllerTerminalHandle(ptyId, handle, incarnationId, options)
   }
 
   onPtySpawned(
@@ -8925,25 +8590,7 @@ export class OrcaRuntimeService {
     incarnationId?: PtyIncarnationId,
     options: { awaitsRegistration?: boolean } = {}
   ): void {
-    this.forgetPtyLivenessVerdict(ptyId)
-    if (options.awaitsRegistration !== false) {
-      // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
-      this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
-    }
-    this.spawnPublishedPtys.add(ptyId)
-    const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
-    if (pty) {
-      if (incarnationId) {
-        pty.incarnationId = incarnationId
-      }
-      pty.connected = true
-      pty.disconnectedAt = null
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      leaf.connected = true
-      leaf.writable = this.graphStatus === 'ready'
-      this.adoptPreAllocatedHandle(leaf)
-    }
+    return this.ptyWorktrees.onPtySpawned(ptyId, incarnationId, options)
   }
 
   registerPty(
@@ -8962,125 +8609,37 @@ export class OrcaRuntimeService {
     },
     isWsl?: boolean
   ): void {
-    this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
-    this.forgetPtyLivenessVerdict(ptyId)
-    this.spawnPublishedPtys.add(ptyId)
-    // Why: record the renderer pane identity at spawn time so a stalled graph
-    // sync can't hide that a live PTY already backs a pending mobile create.
-    const paneKey =
-      binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
-        ? makePaneKey(binding.tabId, binding.leafId)
-        : null
-    const pty = this.recordPtyWorktree(ptyId, worktreeId, {
-      connected: true,
-      connectionId,
-      ...(binding && this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${binding.tabId}`)
-        ? { runtimeSessionOwned: true }
-        : {}),
-      ...(isWsl !== undefined ? { isWsl } : {}),
-      ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
-      ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
-    })
-    const agentLaunchAuthority = binding?.agentLaunchAuthority
-    if (
-      agentLaunchAuthority &&
-      paneKey &&
-      binding.incarnationId &&
-      pty.incarnationId === binding.incarnationId &&
-      pty.paneKey === paneKey &&
-      pty.launchToken === null &&
-      agentLaunchAuthority.launchToken.length > 0 &&
-      agentLaunchAuthority.launchToken.length <= 128 &&
-      isTuiAgent(agentLaunchAuthority.launchAgent)
-    ) {
-      pty.launchToken = agentLaunchAuthority.launchToken
-      pty.launchIncarnationId = binding.incarnationId
-      pty.launchAgent = agentLaunchAuthority.launchAgent
-    }
-    const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
-    if (
-      providerReattachLaunchIdentity &&
-      paneKey &&
-      binding.incarnationId === providerReattachLaunchIdentity.incarnationId &&
-      pty.incarnationId === providerReattachLaunchIdentity.incarnationId &&
-      pty.paneKey === paneKey &&
-      isTuiAgent(providerReattachLaunchIdentity.launchAgent)
-    ) {
-      // Why: daemon metadata owns the surviving process; its incarnation fence restores identity without minting renderer launch authority.
-      pty.launchAgent = providerReattachLaunchIdentity.launchAgent
-    }
-    const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    if (
-      pendingIncarnation === null ||
-      pendingIncarnation === undefined ||
-      binding?.incarnationId === undefined ||
-      pendingIncarnation === binding.incarnationId
-    ) {
-      this.pendingPtyRegistrationIncarnations.delete(ptyId)
-    }
-    // Why: the renderer's own PTY spawn is the reliable signal that the pending
-    // mobile create's tab is live; publish its surface main-side (#7587).
-    if (binding && paneKey) {
-      this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
-    }
+    return this.ptyWorktrees.registerPty(ptyId, worktreeId, connectionId, binding, isWsl)
   }
 
   assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    // Why: the controller must reject an early exit before persisting bindings or handles.
-    this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
+    return this.ptyWorktrees.assertPtyRegistrationAllowed(ptyId, incarnationId)
   }
 
   releaseRejectedPtyRegistrationFence(
     ptyId: string,
     candidateIncarnation?: PtyIncarnationId
   ): void {
-    if (!this.earlyExitedPtyIncarnations.has(ptyId)) {
-      return
-    }
-    const exitedIncarnation = this.earlyExitedPtyIncarnations.get(ptyId) ?? null
-    if (
-      exitedIncarnation === null ||
-      candidateIncarnation === undefined ||
-      exitedIncarnation === candidateIncarnation
-    ) {
-      // Why: the rejected spawn call was the fence's sole late publisher; retaining it leaks fresh PTY ids.
-      this.earlyExitedPtyIncarnations.delete(ptyId)
-      this.pendingPtyRegistrationIncarnations.delete(ptyId)
-    }
+    return this.ptyWorktrees.releaseRejectedPtyRegistrationFence(ptyId, candidateIncarnation)
   }
 
   beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    return beginPtyRegistration(ptyId, incarnationId, this as unknown)
+    return this.ptyWorktrees.beginPtyRegistration(ptyId, incarnationId)
   }
 
   acceptPtyIncarnationForExit(ptyId: string, incarnationId: PtyIncarnationId): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
-      pty.incarnationId = incarnationId
-    }
+    return this.ptyWorktrees.acceptPtyIncarnationForExit(ptyId, incarnationId)
   }
 
   cancelPendingPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
-    return cancelPendingPtyRegistration(ptyId, incarnationId, this as unknown)
+    return this.ptyWorktrees.cancelPendingPtyRegistration(ptyId, incarnationId)
   }
 
   private assertPtyDidNotExitBeforeRegistration(
     ptyId: string,
     candidateIncarnation?: PtyIncarnationId
   ): void {
-    if (this.earlyExitedPtyIncarnations.has(ptyId)) {
-      const exitedIncarnation = this.earlyExitedPtyIncarnations.get(ptyId) ?? null
-      const nextIncarnation = candidateIncarnation ?? null
-      if (
-        exitedIncarnation === null ||
-        nextIncarnation === null ||
-        exitedIncarnation === nextIncarnation
-      ) {
-        throw new Error('agent_session_exited_during_start')
-      }
-      this.earlyExitedPtyIncarnations.delete(ptyId)
-    }
+    return this.ptyWorktrees.assertPtyDidNotExitBeforeRegistration(ptyId, candidateIncarnation)
   }
 
   preparePtyExecutionContext(
@@ -9088,40 +8647,7 @@ export class OrcaRuntimeService {
     wslDistro: string | null,
     options: { resetIncarnation?: boolean; preserveExisting?: boolean } = {}
   ): boolean {
-    const pty = this.ptysById.get(ptyId)
-    const hadExistingContext = this.wslDistroByPtyId.has(ptyId) || pty !== undefined
-    if (options.preserveExisting && hadExistingContext) {
-      // Why: attach-time settings are only a fallback; a live PTY's recorded
-      // execution namespace remains authoritative until its provider replies.
-      return false
-    }
-
-    if (options.resetIncarnation) {
-      // Why: an explicit new lifecycle supersedes an unidentifiable exit from the reused PTY id.
-      this.earlyExitedPtyIncarnations.delete(ptyId)
-      this.disposeHeadlessTerminal(ptyId)
-      this.osc7ScanTailByPtyId.delete(ptyId)
-      this.terminalCwdByPtyId.delete(ptyId)
-      this.terminalFileUriHostnameByPtyId.delete(ptyId)
-      this.wslDistroByPtyId.delete(ptyId)
-    }
-
-    const previous = this.wslDistroByPtyId.get(ptyId) ?? null
-    if (wslDistro) {
-      this.wslDistroByPtyId.set(ptyId, wslDistro)
-    } else {
-      this.wslDistroByPtyId.delete(ptyId)
-    }
-    if (pty) {
-      pty.wslDistro = wslDistro
-    }
-    if (!options.resetIncarnation && previous !== wslDistro && this.headlessTerminals.has(ptyId)) {
-      // Why: bytes parsed with two distro namespaces would leave an internally
-      // inconsistent CWD; rebuild from the provider's authoritative snapshot.
-      this.terminalCwdByPtyId.delete(ptyId)
-      this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId)
-    }
-    return options.resetIncarnation === true || !hadExistingContext || previous !== wslDistro
+    return this.ptyWorktrees.preparePtyExecutionContext(ptyId, wslDistro, options)
   }
 
   /** Record the spawn launch command so the per-PTY Command Code detector can
@@ -9135,8 +8661,7 @@ export class OrcaRuntimeService {
   }
 
   resetPtyModelAfterMigrationFailure(ptyId: string): void {
-    this.providerSnapshotPreferredPtys.add(ptyId)
-    this.disposeHeadlessTerminal(ptyId)
+    return this.ptyWorktrees.resetPtyModelAfterMigrationFailure(ptyId)
   }
 
   /**
@@ -9151,22 +8676,14 @@ export class OrcaRuntimeService {
     transformed = false,
     sourceRanges?: readonly TerminalOutputSourceRange[]
   ): RuntimePtyDataAdmission {
-    let completion: Promise<void> | null = null
-    const sequence = this.onPtyData(
+    return this.ptyWorktrees.acceptPtyDataBounded(
       ptyId,
       data,
       at,
       sequenceChars,
       transformed,
-      (receipt) => {
-        completion = receipt
-      },
       sourceRanges
     )
-    if (!completion) {
-      throw new Error('PTY model admission receipt was not captured')
-    }
-    return Object.freeze({ sequence, completion })
   }
 
   onPtyData(
@@ -9178,250 +8695,15 @@ export class OrcaRuntimeService {
     captureModelReceipt?: (completion: Promise<void>) => void,
     sourceRanges?: readonly TerminalOutputSourceRange[]
   ): number {
-    const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
-    this.ptyOutputSequenceById.set(ptyId, outputSequence)
-    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
-    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
-      tracker.scan(data)
-    }
-    const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
-    const cwd = osc7Metadata.cwd
-    const cwdChanged = osc7Metadata.cwdChanged
-    const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
-    // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
-    // `Network: https://local.example.com:3001/`) so the workspace ports
-    // panel can surface them in place of the kernel bind address.
-    advertisedUrlWatcher.ingest(ptyId, data, at)
-    // Why: reply ownership is captured per chunk, here at ingestion — the
-    // same module state and tick as the hidden-gate drop sites — and rides
-    // the writeChain link. A mark/setting/subscriber flip before the queued
-    // emulator write runs must not change who answers (terminal-query-
-    // authority.md invariant 1).
-    const forwardQueryReplies = this.shouldAnswerQueriesForLiveChunk(ptyId)
-    // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
-    // MUST run before trackHeadlessTerminalData so the eager-state pattern
-    // (set headlessTerminals + writeChain head = seedPromise) is in place
-    // before the live byte's chain link is queued. Without this ordering,
-    // trackHeadlessTerminalData would lazy-create a fresh state at PTY dims
-    // that the later seed-resolve would overwrite, dropping the live byte.
-    // See docs/mobile-prefer-renderer-scrollback.md.
-    this.maybeHydrateHeadlessFromRenderer(ptyId)
-    // Our structure wins: OSC title/agent-status extraction runs through the
-    // shared per-PTY title tracker below (getOrCreatePtyTitleTrackerEntry →
-    // applyTrackedPtyTitle) in byte order, superseding main's inline
-    // extractLastOscTitleForPty block (#7880/#7852 title/status semantics are
-    // preserved via the tracker + detectAgentStatusFromTitle path).
-    const modelCompletion = this.trackHeadlessTerminalData(
+    return this.ptyWorktrees.onPtyData(
       ptyId,
       data,
-      outputSequence,
-      forwardQueryReplies
+      at,
+      sequenceChars,
+      transformed,
+      captureModelReceipt,
+      sourceRanges
     )
-    captureModelReceipt?.(modelCompletion)
-
-    const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
-    const ptyTailBefore = pty
-      ? {
-          lines: pty.tailBuffer,
-          transcriptLines: pty.tailTranscriptBuffer,
-          partialLine: pty.tailPartialLine,
-          pendingAnsi: pty.tailPendingAnsi,
-          redrawCursor: pty.tailRedrawCursor,
-          truncated: pty.tailTruncated,
-          linesTotal: pty.tailLinesTotal
-        }
-      : null
-    let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
-    if (pty) {
-      pty.connected = true
-      pty.disconnectedAt = null
-      pty.lastOutputAt = at
-      const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
-      pty.tailPendingAnsi = normalized.pendingAnsi
-      const nextTail = appendNormalizedToTailBuffer(
-        pty.tailBuffer,
-        pty.tailPartialLine,
-        normalized.text,
-        pty.tailRedrawCursor
-      )
-      ptyTailAfter = nextTail
-      const nextTranscript = appendCompletedTerminalTranscript(
-        pty.tailTranscriptBuffer,
-        pty.tailTranscriptChars,
-        nextTail.newlyCompletedLines,
-        nextTail.newCompleteLines
-      )
-      pty.tailBuffer = nextTail.lines
-      pty.tailTranscriptBuffer = nextTranscript.lines
-      pty.tailTranscriptChars = nextTranscript.characters
-      pty.tailPartialLine = nextTail.partialLine
-      pty.tailRedrawCursor = nextTail.redrawCursor
-      pty.tailTruncated = pty.tailTruncated || nextTail.truncated || nextTranscript.truncated
-      pty.tailLinesTotal += nextTail.newCompleteLines
-      pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
-      this.scheduleWaitBlockedCheck(ptyId, normalized.text, at)
-    }
-
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      this.recordPtyWorktree(ptyId, leaf.worktreeId, {
-        connected: true,
-        lastOutputAt: pty?.lastOutputAt ?? at,
-        preview: pty?.preview ?? leaf.preview,
-        tabId: leaf.tabId,
-        paneKey: this.makeRuntimePaneKey(leaf)
-      })
-      leaf.connected = true
-      leaf.writable = this.graphStatus === 'ready'
-      leaf.lastOutputAt = at
-      if (
-        pty &&
-        ptyTailBefore &&
-        ptyTailAfter &&
-        tailStateMatches(
-          leaf.tailBuffer,
-          leaf.tailTranscriptBuffer,
-          leaf.tailPartialLine,
-          leaf.tailPendingAnsi,
-          leaf.tailRedrawCursor,
-          leaf.tailTruncated,
-          leaf.tailLinesTotal,
-          ptyTailBefore
-        )
-      ) {
-        // Why: the leaf and PTY record usually mirror the same terminal. Reuse
-        // the PTY tail update instead of splitting large output twice.
-        leaf.tailBuffer = pty.tailBuffer
-        leaf.tailTranscriptBuffer = pty.tailTranscriptBuffer
-        leaf.tailTranscriptChars = pty.tailTranscriptChars
-        leaf.tailPartialLine = pty.tailPartialLine
-        leaf.tailPendingAnsi = pty.tailPendingAnsi
-        leaf.tailRedrawCursor = pty.tailRedrawCursor
-        leaf.tailTruncated = pty.tailTruncated
-        leaf.tailLinesTotal = pty.tailLinesTotal
-        leaf.preview = pty.preview
-        leaf.waitBlockedAt = pty.waitBlockedAt
-        // Why undefined on this branch: the PTY record's wait scan is throttled
-        // (scheduleWaitBlockedCheck), so pty.tailWaitState is never populated;
-        // copying it here intentionally invalidates the leaf cache and the
-        // mismatch branch below recomputes an exact state on its next chunk.
-        leaf.tailWaitState = pty.tailWaitState
-      } else {
-        const normalized = normalizeTerminalChunk(data, leaf.tailPendingAnsi)
-        leaf.tailPendingAnsi = normalized.pendingAnsi
-        const previousWaitState =
-          leaf.tailWaitState?.fromTail === true
-            ? leaf.tailWaitState
-            : computeTerminalTailWaitState(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-        const nextTail = appendNormalizedToTailBuffer(
-          leaf.tailBuffer,
-          leaf.tailPartialLine,
-          normalized.text,
-          leaf.tailRedrawCursor
-        )
-        const nextTranscript = appendCompletedTerminalTranscript(
-          leaf.tailTranscriptBuffer,
-          leaf.tailTranscriptChars,
-          nextTail.newlyCompletedLines,
-          nextTail.newCompleteLines
-        )
-        const nextWaitState = computeTerminalTailWaitState(
-          nextTail.lines,
-          nextTail.partialLine,
-          leaf.preview
-        )
-        if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
-          leaf.waitBlockedAt = at
-        }
-        leaf.tailWaitState = nextWaitState
-        leaf.tailBuffer = nextTail.lines
-        leaf.tailTranscriptBuffer = nextTranscript.lines
-        leaf.tailTranscriptChars = nextTranscript.characters
-        leaf.tailPartialLine = nextTail.partialLine
-        leaf.tailRedrawCursor = nextTail.redrawCursor
-        leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated || nextTranscript.truncated
-        leaf.tailLinesTotal += nextTail.newCompleteLines
-        leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
-      }
-    }
-
-    // Why: feed the chunk's OSC titles through the shared per-PTY tracker in
-    // byte order — the same ordering the renderer transport uses — so
-    // coalesced working→idle transitions reach tui-idle waiters and
-    // pending-message delivery instead of being masked by the chunk's last
-    // title (issue #1083). Uses the OSC 9999-stripped cleanData like the
-    // renderer, so pure status chunks don't perturb the stale-title probe.
-    const titleTrackerEntry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
-    const previousTitleScanTail = this.oscTitleScanTailByPtyId.get(ptyId)
-    const titleInput = previousTitleScanTail
-      ? `${previousTitleScanTail}${agentStatusChunk.cleanData}`
-      : agentStatusChunk.cleanData
-    const nextTitleScanTail = extractOscTitleScanTail(titleInput)
-    if (nextTitleScanTail.length > 0) {
-      this.oscTitleScanTailByPtyId.set(ptyId, nextTitleScanTail)
-    } else {
-      this.oscTitleScanTailByPtyId.delete(ptyId)
-    }
-    titleTrackerEntry.applyingChunk = true
-    titleTrackerEntry.chunkTouchedSessionTabs = false
-    let retainedAgentStatusChanged = false
-    try {
-      for (const payload of agentStatusChunk.payloads) {
-        titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
-      }
-      titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
-        titleScanData: titleInput
-      })
-      // Why: the Command Code scrape rides the same per-chunk batch (its facts
-      // trail the tracker's). cleanData keeps OSC 9999 payloads out of the
-      // detector's bounded recent-text window; the detector strips remaining
-      // control sequences itself, exactly like the renderer byte path.
-      titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
-    } finally {
-      titleTrackerEntry.applyingChunk = false
-      try {
-        // Why: per-chunk cross-channel contract order is status → titles →
-        // bell — the chunk's agentStatus:set events must reach the renderer
-        // before its pty:sideEffect batch.
-        retainedAgentStatusChanged = this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
-        const lastPayloadTitleOffset =
-          agentStatusChunk.lastPayloadCleanOffset === null
-            ? null
-            : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
-        this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
-      } finally {
-        // Why: flushed in the finally so a throwing tracker callback cannot
-        // strand this chunk's facts to be emitted under the next chunk's seq.
-        this.flushPendingTerminalSideEffectFacts(ptyId, titleTrackerEntry)
-      }
-    }
-    // Why: hook (OSC 9999) transitions often arrive without a title change, so
-    // headless-serve snapshots would never republish and paired remote clients
-    // kept the stale agent state until the next title change (#7970).
-    if (titleTrackerEntry.chunkTouchedSessionTabs || retainedAgentStatusChanged) {
-      this.touchMobileSessionSnapshotsForPty(ptyId)
-    }
-
-    const listeners = this.dataListeners.get(ptyId)
-    if (listeners) {
-      const meta = {
-        seq: outputSequence,
-        rawLength: sequenceChars,
-        ...(transformed ? { transformed: true } : {}),
-        ...(cwdChanged && cwd !== null ? { cwd } : {}),
-        ...(sourceRanges && sourceRanges.length > 0 ? { sourceRanges } : {})
-      }
-      for (const listener of listeners) {
-        try {
-          listener(data, meta)
-        } catch (error) {
-          // Why: inlined rather than via notifyRuntimeListeners to avoid a per-chunk closure
-          // allocation on the terminal-output hot path; isolation semantics match the helper.
-          console.error('[runtime] pty-data listener threw', error)
-        }
-      }
-    }
-    return outputSequence
   }
 
   private scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void {
@@ -9627,24 +8909,7 @@ export class OrcaRuntimeService {
    *  follows, and drop the mobile headless mirror — it rebuilds from the
    *  delivered tail / snapshot seeds instead of parsing a gapped stream. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
-    if (droppedChars > 0) {
-      // Why: the daemon snapshot's seq counts bytes its monitoring stream
-      // dropped. Advancing without parsing preserves that absolute domain so
-      // post-snapshot live chunks can be reconciled instead of duplicated.
-      const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + droppedChars
-      this.ptyOutputSequenceById.set(ptyId, outputSequence)
-    }
-    const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
-    if (pty) {
-      pty.tailPendingAnsi = ''
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      leaf.tailPendingAnsi = ''
-    }
-    this.oscTitleScanTailByPtyId.delete(ptyId)
-    this.osc7ScanTailByPtyId.delete(ptyId)
-    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.disposeHeadlessTerminal(ptyId)
+    return this.ptyWorktrees.notePtyDataGap(ptyId, droppedChars)
   }
 
   /** Record one derived side-effect fact: batched per chunk while applying
@@ -10025,7 +9290,7 @@ export class OrcaRuntimeService {
   }
 
   getPtyOutputSequence(ptyId: string): number {
-    return this.ptyOutputSequenceById.get(ptyId) ?? 0
+    return this.ptyWorktrees.getPtyOutputSequence(ptyId)
   }
 
   private recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
@@ -10087,34 +9352,7 @@ export class OrcaRuntimeService {
   }
 
   private getPtyLifecycleGeneration(ptyId: string): number {
-    const existing = this.ptyLifecycleGenerationById.get(ptyId)
-    if (existing !== undefined) {
-      return existing
-    }
-    const generation = this.nextPtyLifecycleGeneration++
-    this.ptyLifecycleGenerationById.set(ptyId, generation)
-    return generation
-  }
-
-  private advancePtyLifecycleGeneration(ptyId: string): void {
-    this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
-    // Why: a stop whose exit never arrived would otherwise stay armed across a
-    // same-id respawn and label the NEXT process's crash an operator close —
-    // the exact lie this cause model exists to remove.
-    this.stopRequestedPtyIds.delete(ptyId)
-    this.agentPromptLifecycleByPtyId.delete(ptyId)
-    this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
-    this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
-    this.legacyWorkerRecoveredPtys.delete(ptyId)
-    // Why: a respawn under the same session id needs its own subscriber-driven attach.
-    this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
-    this.subscriberDrivenProviderAttachInventoryWaiters.delete(ptyId)
-    this.spawnPublishedPtys.delete(ptyId)
-    // Why: a provider response belongs to the process generation that issued
-    // it; a respawn must neither reuse its frame nor join its in-flight call.
-    this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    return this.ptyWorktrees.getPtyLifecycleGeneration(ptyId)
   }
 
   synchronizePtyOutputSequenceFromProvider(
@@ -10122,82 +9360,11 @@ export class OrcaRuntimeService {
     providerSequence: { value: number; generation: 'continued' | 'reset' },
     runtimeSequenceAtSpawnStart = 0
   ): number {
-    if (
-      !Number.isFinite(providerSequence.value) ||
-      providerSequence.value < 0 ||
-      !Number.isFinite(runtimeSequenceAtSpawnStart) ||
-      runtimeSequenceAtSpawnStart < 0
-    ) {
-      return this.getPtyOutputSequence(ptyId)
-    }
-    const baseline = Math.floor(providerSequence.value)
-    const currentSequence = this.getPtyOutputSequence(ptyId)
-    const sequenceAtSpawnStart = Math.min(currentSequence, Math.floor(runtimeSequenceAtSpawnStart))
-    const postSpawnSequence = currentSequence - sequenceAtSpawnStart
-    const wasInitialized = this.providerSequenceInitializedPtys.has(ptyId)
-    const replacesExistingRuntimeGeneration = wasInitialized || sequenceAtSpawnStart > 0
-    const providerOffset =
-      providerSequence.generation === 'reset'
-        ? sequenceAtSpawnStart
-        : (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0)
-    const providerBaseline = providerOffset + baseline
-
-    if (providerSequence.generation === 'reset') {
-      this.advancePtyLifecycleGeneration(ptyId)
-      // Why: daemon respawn/cold restore starts a new absolute domain. Old
-      // emulator state cannot remain authoritative over the replacement.
-      if (replacesExistingRuntimeGeneration) {
-        this.disposeHeadlessTerminal(ptyId)
-      }
-      this.providerModeTrackersByPtyId.delete(ptyId)
-      this.wslDistroByPtyId.delete(ptyId)
-      this.terminalCwdByPtyId.delete(ptyId)
-      this.terminalFileUriHostnameByPtyId.delete(ptyId)
-      const pty = this.ptysById.get(ptyId)
-      if (pty) {
-        pty.wslDistro = null
-      }
-      // Why: raced post-spawn bytes may already contain the replacement's permission state.
-      if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
-        this.resetTrackedTerminalStateForProviderGeneration(ptyId)
-      }
-    }
-
-    const synchronizedSequence =
-      providerSequence.generation === 'reset'
-        ? currentSequence
-        : wasInitialized
-          ? currentSequence
-          : providerBaseline + postSpawnSequence
-    this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
-    this.providerSequenceInitializedPtys.add(ptyId)
-    this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
-
-    const snapshotMayCoverMissingState =
-      (providerSequence.generation === 'continued' && !wasInitialized) ||
-      (postSpawnSequence > 0 &&
-        providerSequence.generation === 'reset' &&
-        replacesExistingRuntimeGeneration) ||
-      (providerSequence.generation === 'continued' &&
-        wasInitialized &&
-        providerBaseline > currentSequence)
-    if (snapshotMayCoverMissingState) {
-      // Why: bytes can cross the control/stream sockets around attach. Until a
-      // full renderer/provider snapshot is available, a partial model is unsafe.
-      this.providerSnapshotPreferredPtys.add(ptyId)
-    } else if (providerSequence.generation === 'reset') {
-      this.providerSnapshotPreferredPtys.delete(ptyId)
-    }
-
-    const headless = this.headlessTerminals.get(ptyId)
-    if (headless && !wasInitialized && providerSequence.generation === 'continued') {
-      // Why: daemon bytes can reach main just before spawn resolves. Queue the
-      // baseline behind those writes so their emulator sequence is rebased too.
-      headless.writeChain = headless.writeChain.then(() => {
-        headless.outputSequence = synchronizedSequence
-      })
-    }
-    return synchronizedSequence
+    return this.ptyWorktrees.synchronizePtyOutputSequenceFromProvider(
+      ptyId,
+      providerSequence,
+      runtimeSequenceAtSpawnStart
+    )
   }
 
   subscribeToTerminalData(
@@ -10313,21 +9480,7 @@ export class OrcaRuntimeService {
    *  Headless state exists only after the first ingested byte; a snapshot
    *  reconcile in flight implies a spawn-path attach already happened. */
   private isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
-    if (this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId)) {
-      return false
-    }
-    // A spawn published (or admission pending) this generation already
-    // attaches the provider stream; a replacement under a reused id must not
-    // read as the discovered never-attached session it replaced.
-    if (this.spawnPublishedPtys.has(ptyId) || this.pendingPtyRegistrationIncarnations.has(ptyId)) {
-      return false
-    }
-    // SSH panes have their own lease/reattach machinery.
-    if (parseAppSshPtyId(ptyId)) {
-      return false
-    }
-    const pty = this.ptysById.get(ptyId)
-    return pty !== undefined && pty.connectionId === null && pty.connected
+    return this.ptyWorktrees.isKnownUnattachedLocalDaemonPty(ptyId)
   }
 
   /** First remote view subscriber of a never-attached local daemon session:
@@ -10850,73 +10003,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     dims: { cols: number; rows: number }
   ): RuntimeHeadlessTerminal {
-    let state: RuntimeHeadlessTerminal | null = null
-    const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
-    const emulator = new HeadlessEmulator({
-      cols: dims.cols,
-      rows: dims.rows,
-      pathFlavor,
-      remotePosixFileUriAuthority:
-        !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
-      wslDistro: this.ptysById.get(ptyId)?.connectionId
-        ? undefined
-        : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
-      // Why: replies take the provider input path (same entry as pty:write —
-      // daemon shell-ready gating and the SSH relay write apply unchanged),
-      // NOT writePtyInput, so renderer interactive-output metering never
-      // counts responder traffic as user-input echo.
-      onQueryReply: (reply) => {
-        // Why the identity check: queued writeChain links can parse after
-        // disposeHeadlessTerminal, and daemon respawns reuse session ids — a
-        // stale link's reply must never reach a successor PTY under this id.
-        if (state !== null && this.headlessTerminals.get(ptyId) === state) {
-          if (
-            !shouldForwardHeadlessTerminalQueryReply(this.ptysById.get(ptyId)?.launchAgent, reply)
-          ) {
-            return
-          }
-          // Why this write is safe pre-shell-ready: daemon Session.write
-          // QUEUES (never drops) input while the POSIX shell-ready gate is
-          // pending and flushes at the ready marker or the 15s
-          // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
-          // reply is delayed at most that bound, not lost.
-          this.ptyController?.write(ptyId, reply)
-        }
-      }
-    })
-    if (isNativeWindowsConptyPty(ptyId)) {
-      emulator.installConptyPrimaryDeviceAttributesOverride()
-    }
-    // Why the lazy getter: replies must use the freshest renderer push at
-    // parse time, and stay silent (never default) before the first push.
-    emulator.installViewAttributeResponder(() => getTerminalViewAttributes())
-    const viewAttributes = getTerminalViewAttributes()
-    if (viewAttributes) {
-      emulator.applyPushedViewAttributes(viewAttributes)
-    }
-    const constructed: RuntimeHeadlessTerminal = {
-      emulator,
-      outputSequence: 0,
-      writeChain: Promise.resolve(),
-      ownership: new PtyShellOwnershipMirror(async () => {
-        const controller = this.ptyController
-        const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
-        if (
-          !controller?.confirmShellForeground ||
-          this.headlessTerminals.get(ptyId) !== constructed
-        ) {
-          return false
-        }
-        const confirmed = await controller.confirmShellForeground(ptyId)
-        return (
-          confirmed &&
-          this.headlessTerminals.get(ptyId) === constructed &&
-          this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
-        )
-      })
-    }
-    state = constructed
-    return state
+    return this.ptyWorktrees.createPtyHeadlessTerminalState(ptyId, dims)
   }
 
   /** Phase-5 ConPTY DA1 retrofit (terminal-query-authority.md): invoked via
@@ -11474,18 +10561,7 @@ export class OrcaRuntimeService {
   }
 
   resolveLeafForHandle(handle: string): { ptyId: string | null } | null {
-    const record = this.handles.get(handle)
-    if (!record) {
-      return null
-    }
-    if (record.tabId.startsWith('pty:')) {
-      return { ptyId: record.ptyId }
-    }
-    const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!leaf) {
-      return null
-    }
-    return { ptyId: leaf.ptyId }
+    return this.ptyWorktrees.resolveLeafForHandle(handle)
   }
 
   // Why: remote clients hold handles across transport reconnects. A handle
@@ -11494,24 +10570,7 @@ export class OrcaRuntimeService {
   // still awaiting their first PTY (ptyId null) may adopt it, which preserves
   // the mobile pre-spawn subscribe flow.
   resolveLiveLeafForHandle(handle: string): { ptyId: string | null } | null {
-    const record = this.handles.get(handle)
-    if (!record) {
-      return null
-    }
-    if (record.tabId.startsWith('pty:')) {
-      return { ptyId: record.ptyId }
-    }
-    const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!leaf) {
-      return null
-    }
-    if (
-      record.ptyId !== null &&
-      (leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration)
-    ) {
-      throw new Error('terminal_handle_stale')
-    }
-    return { ptyId: leaf.ptyId }
+    return this.ptyWorktrees.resolveLiveLeafForHandle(handle)
   }
 
   getOrchestrationCompatibilityHostId(): 'local' {
@@ -11598,66 +10657,16 @@ export class OrcaRuntimeService {
     }
   }
 
-  /** Every pane key this PTY could be addressed by. Independent of launch authority: an ordinary
-   *  restored PTY has neither a launch token nor a receipt, and those are exactly the panes whose
-   *  spawn-time `ptyPaneKey` mapping teardown could not resolve. */
-  private collectPaneKeysForPty(ptyId: string): Set<string> {
-    const paneKeys = new Set<string>()
-    const pty = this.ptysById.get(ptyId)
-    if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
-      paneKeys.add(pty.paneKey)
-    }
-    const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
-      paneKeys.add(receipt.paneKey)
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
-        paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
-      }
-    }
-    return paneKeys
-  }
-
   private retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return
-    }
-    const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent) {
-      return
-    }
-    const paneKeys = this.collectPaneKeysForPty(ptyId)
-    this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
-    pty.launchToken = null
-    pty.launchIncarnationId = null
-    pty.launchAgent = null
-    for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
-    }
+    return this.ptyWorktrees.retirePtyAgentLaunchAuthority(ptyId)
   }
 
   async resolveTerminalCwd(handle: string): Promise<string | null> {
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    if (!ptyId) {
-      return null
-    }
-    const tracked = this.terminalCwdByPtyId.get(ptyId)
-    if (tracked) {
-      return tracked
-    }
-    try {
-      const cwd = await this.ptyController?.getCwd?.(ptyId)
-      return cwd && cwd.trim().length > 0 ? cwd : null
-    } catch {
-      return null
-    }
+    return this.ptyWorktrees.resolveTerminalCwd(handle)
   }
 
   resolveTerminalFileUriHostname(handle: string): string | null {
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    return ptyId ? (this.terminalFileUriHostnameByPtyId.get(ptyId) ?? null) : null
+    return this.ptyWorktrees.resolveTerminalFileUriHostname(handle)
   }
 
   private recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
@@ -12554,167 +11563,7 @@ export class OrcaRuntimeService {
       providerExitObserved?: boolean
     }
   ): void {
-    const pty = this.ptyExit_guardIncarnation(ptyId, exitIncarnationId)
-    if (!pty) {
-      return
-    }
-
-    const { exitCause } = this.ptyExit_resolveExitCause(ptyId, exitCode, options?.cause)
-
-    const { preservesAbnormalSshSurface, preservesIntentionalHandlessSurface, incarnationId } =
-      this.ptyExit_decideSshSurface(pty, ptyId, exitCode, options)
-
-    this.ptyExit_collectExitPaneKeys(pty, ptyId, exitCode, options, preservesAbnormalSshSurface)
-
-    this.ptyExit_updateLivenessVerdict(ptyId, preservesAbnormalSshSurface)
-
-    const exactSurfaces = this.ptyExit_cleanupLeaves(pty, ptyId)
-
-    const exitedSurfaces = this.ptyExit_notifyTabAndMobile(
-      pty,
-      ptyId,
-      exitIncarnationId,
-      exitCode,
-      exitCause,
-      preservesAbnormalSshSurface,
-      preservesIntentionalHandlessSurface,
-      exactSurfaces,
-      incarnationId
-    )
-
-    this.ptyExit_releaseLayout(ptyId)
-
-    this.ptyExit_settleDispatch(
-      ptyId,
-      exitCode,
-      exitCause,
-      preservesAbnormalSshSurface,
-      exitedSurfaces
-    )
-
-    this.ptyExit_teardown(ptyId)
-  }
-
-  private ptyExit_guardIncarnation(
-    ptyId: string,
-    exitIncarnationId?: PtyIncarnationId
-  ): RuntimePtyRecord | null {
-    const pty = this.ptysById.get(ptyId)
-    if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
-      return null
-    }
-    return pty ?? null
-  }
-
-  private ptyExit_resolveExitCause(
-    ptyId: string,
-    exitCode: number,
-    cause?: TerminalExitCause
-  ): { exitCause: TerminalExitCause; stopNeverConfirmed: boolean } {
-    const observedCause = cause ?? resolveUnreportedExitCause(exitCode)
-    const stopNeverConfirmed =
-      observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
-    const exitCause: TerminalExitCause =
-      this.stopRequestedPtyIds.has(ptyId) && !stopNeverConfirmed
-        ? OPERATOR_CLOSE_EXIT_CAUSE
-        : observedCause
-    this.stopRequestedPtyIds.delete(ptyId)
-    return { exitCause, stopNeverConfirmed }
-  }
-
-  private ptyExit_decideSshSurface(
-    pty: RuntimePtyRecord | null,
-    ptyId: string,
-    exitCode: number,
-    options?: { hostExitConfirmed?: boolean }
-  ): {
-    preservesAbnormalSshSurface: boolean
-    preservesIntentionalHandlessSurface: boolean
-    incarnationId: PtyIncarnationId
-  } {
-    const preservesAbnormalSshSurface =
-      this.isSshOwnedPtyId(ptyId) &&
-      pty?.connectionId != null &&
-      exitCode < 0 &&
-      options?.hostExitConfirmed !== true
-
-    const incarnationId =
-      (pty?.incarnationId as PtyIncarnationId) ??
-      (`runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}` as PtyIncarnationId)
-
-    const intentionalStopIncarnation = this.intentionalHandlelessPtyStops.get(ptyId)
-    const preservesIntentionalHandlessSurface =
-      this.intentionalHandlelessPtyStops.has(ptyId) &&
-      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
-
-    return {
-      preservesAbnormalSshSurface,
-      preservesIntentionalHandlessSurface,
-      incarnationId
-    }
-  }
-
-  private ptyExit_collectExitPaneKeys(
-    pty: RuntimePtyRecord | null,
-    ptyId: string,
-    exitCode: number,
-    options?: { hostExitConfirmed?: boolean; providerExitObserved?: boolean },
-    preservesAbnormalSshSurface?: boolean
-  ): void {
-    const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
-
-    if (preservesAbnormalSshSurface) {
-      this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
-    } else {
-      this.retirePtyAgentLaunchAuthority(ptyId)
-    }
-
-    const processDeathCertified =
-      exitCode >= 0 || options?.hostExitConfirmed === true || options?.providerExitObserved === true
-
-    if (processDeathCertified && exitPaneKeys.size > 0) {
-      this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
-    }
-  }
-
-  private ptyExit_updateLivenessVerdict(ptyId: string, preservesAbnormalSshSurface: boolean): void {
-    if (preservesAbnormalSshSurface) {
-      if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
-        this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
-      }
-    }
-  }
-
-  private ptyExit_cleanupLeaves(
-    pty: RuntimePtyRecord | null,
-    ptyId: string
-  ): Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[] {
-    this.advancePtyLifecycleGeneration(ptyId)
-    this.notifyPtyExitListeners(ptyId)
-
-    const exactSurfaceByKey = new Map<
-      string,
-      Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
-    >()
-
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
-        worktreeId: leaf.worktreeId,
-        parentTabId: leaf.tabId,
-        leafId: leaf.leafId
-      })
-    }
-
-    const parsedPaneKey = parsePaneKey(pty?.paneKey ?? '')
-    if (pty?.tabId && parsedPaneKey) {
-      exactSurfaceByKey.set(`${pty.worktreeId}\0${pty.tabId}\0${parsedPaneKey.leafId}`, {
-        worktreeId: pty.worktreeId,
-        parentTabId: pty.tabId,
-        leafId: parsedPaneKey.leafId
-      })
-    }
-
-    return [...exactSurfaceByKey.values()]
+    return this.ptyWorktrees.onPtyExit(ptyId, exitCode, exitIncarnationId, options)
   }
 
   private ptyExit_notifyTabAndMobile(
@@ -12739,34 +11588,6 @@ export class OrcaRuntimeService {
       exactSurfaces,
       incarnationId
     )
-  }
-
-  private ptyExit_releaseLayout(ptyId: string): void {
-    this.layouts.delete(ptyId)
-    this.layoutQueues.delete(ptyId)
-    this.freshSubscribeGuard.delete(ptyId)
-    this.cancelPendingDriverMutations(ptyId)
-    this.retireOrchestrationMailboxDeliveryForPty(ptyId)
-  }
-
-  private ptyExit_settleDispatch(
-    ptyId: string,
-    exitCode: number,
-    exitCause: TerminalExitCause,
-    preservesAbnormalSshSurface: boolean,
-    exitedSurfaces: { handle: string; paneKey: string | null }[]
-  ): void {
-    if (preservesAbnormalSshSurface) {
-      return
-    }
-
-    for (const surface of exitedSurfaces) {
-      this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
-    }
-  }
-
-  private ptyExit_teardown(_ptyId: string): void {
-    this.pruneDisconnectedPtyRecords()
   }
 
   // ─── Driver state (mobile-presence lock) ──────────────────────────
@@ -12812,10 +11633,7 @@ export class OrcaRuntimeService {
   // while a phone drives, the registry still suppresses host resize, and when
   // the phone leaves the surviving viewer keeps the PTY suppressed.
   isPtyResizeDrivenRemotely(ptyId: string): boolean {
-    if (this.getDriver(ptyId).kind === 'mobile') {
-      return true
-    }
-    return this.isRemoteDesktopResizeDriven(ptyId)
+    return this.ptyWorktrees.isPtyResizeDrivenRemotely(ptyId)
   }
 
   isRemoteDesktopResizeDriven(ptyId: string): boolean {
@@ -14150,18 +12968,10 @@ export class OrcaRuntimeService {
     processIncarnation: string,
     serializedHostScope: string | null
   ): Promise<'live' | 'exited' | 'unverifiable'> {
-    const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
-    if (!hostScope || !this.ptyController?.listProcesses) {
-      return 'unverifiable'
-    }
-    const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    return this.ptyWorktrees.inspectTerminalProcessIncarnationLiveness(
+      processIncarnation,
+      serializedHostScope
     )
-    if (!listed.ok) {
-      return 'unverifiable'
-    }
-    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
   }
 
   private getTerminalTopologyRevision(worktreeId: string): number {
@@ -14176,23 +12986,7 @@ export class OrcaRuntimeService {
   async adoptTerminalOrphans(
     request: RuntimeTerminalOrphanAdoptionRequest
   ): Promise<RuntimeTerminalOrphanAdoptionResult> {
-    if (request.claims.length === 0) {
-      throw new Error('terminal_orphan_claims_required')
-    }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
-    const resolvedWorkspace = workspace.folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(workspace.folderWorkspace)
-      : await this.resolveWorktreeSelector(`id:${workspace.id}`)
-    const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-      [resolvedWorkspace],
-      workspace.id,
-      undefined,
-      workspace.connectionId ?? null
-    )
-    if (!inventory) {
-      throw new Error('terminal_liveness_unavailable')
-    }
-    return this.adoptTerminalOrphansFromInventory(request, workspace, inventory)
+    return this.ptyWorktrees.adoptTerminalOrphans(request)
   }
 
   private async adoptTerminalOrphansFromInventory(
@@ -14660,12 +13454,7 @@ export class OrcaRuntimeService {
   }
 
   private getTerminalOrphanAdoptionSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult {
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-      allowAttachedWindow: true,
-      onlyRuntimeOwnedTerminals: true
-    })
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId)
+    return this.ptyWorktrees.getTerminalOrphanAdoptionSnapshot(worktreeId)
   }
 
   private buildTerminalVisualLayouts(
@@ -14987,17 +13776,7 @@ export class OrcaRuntimeService {
   }
 
   getTerminalProcessIncarnation(handle: string): string | null {
-    const live = this.getLivePtyForHandle(handle)
-    const record = live?.record ?? this.handles.get(handle)
-    if (!record?.ptyId) {
-      return null
-    }
-    const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
-    if (incarnationId) {
-      return `${record.ptyId}:${incarnationId}`
-    }
-    // Why: legacy providers may omit process incarnation; retain the prior restart-degraded fence.
-    return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
+    return this.ptyWorktrees.getTerminalProcessIncarnation(handle)
   }
 
   /**
@@ -15006,11 +13785,11 @@ export class OrcaRuntimeService {
    * provider that addressed it.
    */
   markPtyLivenessUnverifiable(ptyId: string, reason: string): void {
-    this.rememberPtyLivenessVerdict(ptyId, { status: 'unverifiable', reason })
+    return this.ptyWorktrees.markPtyLivenessUnverifiable(ptyId, reason)
   }
 
   markPtyLivenessLive(ptyId: string): void {
-    this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
+    return this.ptyWorktrees.markPtyLivenessLive(ptyId)
   }
 
   /**
@@ -15023,60 +13802,24 @@ export class OrcaRuntimeService {
    * where it is known rather than reconstructed afterwards (STA-4603).
    */
   markPtyStopRequested(ptyId: string): void {
-    return markPtyStopRequested(ptyId, this as unknown)
+    return this.ptyWorktrees.markPtyStopRequested(ptyId)
   }
 
   isPtyStopRequested(ptyId: string): boolean {
-    return isPtyStopRequested(ptyId, this as unknown)
+    return this.ptyWorktrees.isPtyStopRequested(ptyId)
   }
 
   /** Null when nothing has been observed either way, so callers keep their own default. */
   getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null {
-    return this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict ?? null
+    return this.ptyWorktrees.getPtyLivenessVerdict(ptyId)
   }
 
   getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
-    const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
-    return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null
-  }
-
-  private rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void {
-    if (verdict.status === 'exited') {
-      // An earned death certificate ends the question; nothing left to remember.
-      this.ptyLivenessVerdictByPtyId.delete(ptyId)
-      return
-    }
-    this.ptyLivenessVerdictByPtyId.delete(ptyId)
-    this.ptyLivenessObservationSequence += 1
-    this.ptyLivenessVerdictByPtyId.set(ptyId, {
-      verdict,
-      observedAt: this.ptyLivenessObservationSequence
-    })
-    while (this.ptyLivenessVerdictByPtyId.size > MAX_TRACKED_PTY_LIVENESS_VERDICTS) {
-      let oldestOrphaned: string | null = null
-      for (const candidate of this.ptyLivenessVerdictByPtyId.keys()) {
-        if (
-          !this.ptysById.has(candidate) &&
-          !this.handleByPtyId.has(candidate) &&
-          !this.leafExistsForPty(candidate)
-        ) {
-          oldestOrphaned = candidate
-          break
-        }
-      }
-      if (!oldestOrphaned) {
-        return
-      }
-      this.ptyLivenessVerdictByPtyId.delete(oldestOrphaned)
-    }
+    return this.ptyWorktrees.getTerminalLivenessVerdict(handle)
   }
 
   private forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
-    const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
-    if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
-      return
-    }
-    this.ptyLivenessVerdictByPtyId.delete(ptyId)
+    return this.ptyWorktrees.forgetPtyLivenessVerdict(ptyId, observedNoLaterThan)
   }
 
   getExactWorkerProviderSession(
@@ -15313,17 +14056,12 @@ export class OrcaRuntimeService {
   }
 
   private controllerKnowsPtyIsLive(ptyId: string): boolean {
-    try {
-      return this.ptyController?.hasPty?.(ptyId) === true
-    } catch {
-      // Why: liveness lookup failures are doubt; doubt never gates a write.
-      return false
-    }
+    return this.ptyWorktrees.controllerKnowsPtyIsLive(ptyId)
   }
 
   /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
   private isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
-    return isLeafPtyProvenAbsent(ptyId, this as unknown)
+    return this.ptyWorktrees.isLeafPtyProvenAbsent(ptyId)
   }
 
   async sendTerminal(
@@ -15654,19 +14392,7 @@ export class OrcaRuntimeService {
    *  Linux; an SSH pane is spawned by node-pty on the remote host, so the client's
    *  process.platform says nothing about it. */
   private getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
-    const pty = this.ptysById.get(ptyId)
-    const connectionId = pty?.connectionId
-    if (!connectionId) {
-      return process.platform
-    }
-    const remotePlatform = getRegisteredSshState(connectionId)?.remotePlatform
-    if (remotePlatform) {
-      return remotePlatform
-    }
-    // Why: remotePlatform only arrives with the relay handshake; until then the worktree path
-    // flavor is the same signal getAgentLaunchPlatformForRepo already trusts for a remote repo.
-    const worktreePath = pty ? splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath : null
-    return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
+    return this.ptyWorktrees.getPtyWriteHostPlatform(ptyId)
   }
 
   private async writeTerminalAgentPrompt(
@@ -15865,8 +14591,7 @@ export class OrcaRuntimeService {
   }
 
   private getPtyAgent(ptyId: string): TuiAgent | null {
-    const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return this.ptyWorktrees.getPtyAgent(ptyId)
   }
 
   private assertAgentPromptPermissionSafe(
@@ -16219,36 +14944,7 @@ export class OrcaRuntimeService {
   }
 
   subscribeToPtyExit(ptyId: string, listener: () => void): () => void {
-    const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
-    if (this.isPtyKnownExited(ptyId)) {
-      listener()
-      return () => {}
-    }
-    let listeners = this.ptyExitListenersByPtyId.get(ptyId)
-    if (!listeners) {
-      listeners = new Set()
-      this.ptyExitListenersByPtyId.set(ptyId, listeners)
-    }
-    let active = true
-    const unsubscribe = (): void => {
-      if (!active) {
-        return
-      }
-      active = false
-      listeners.delete(listener)
-      if (listeners.size === 0 && this.ptyExitListenersByPtyId.get(ptyId) === listeners) {
-        this.ptyExitListenersByPtyId.delete(ptyId)
-      }
-    }
-    listeners.add(listener)
-    if (
-      this.getPtyLifecycleGeneration(ptyId) !== lifecycleGeneration ||
-      this.isPtyKnownExited(ptyId)
-    ) {
-      unsubscribe()
-      listener()
-    }
-    return unsubscribe
+    return this.ptyWorktrees.subscribeToPtyExit(ptyId, listener)
   }
 
   async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
@@ -19567,24 +18263,7 @@ export class OrcaRuntimeService {
   private getPtyExecutionHostMetadata(
     ptyId: string | null
   ): Pick<RuntimeTerminalCreate, 'executionHostId' | 'hostPlatform'> {
-    if (!ptyId) {
-      return {}
-    }
-    const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return {}
-    }
-    if (pty.connectionId) {
-      const remotePlatform = getRegisteredSshState(pty.connectionId)?.remotePlatform
-      return {
-        executionHostId: toSshExecutionHostId(pty.connectionId),
-        ...(remotePlatform ? { hostPlatform: remotePlatform } : {})
-      }
-    }
-    return {
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      hostPlatform: pty.isWsl || pty.wslDistro ? 'linux' : process.platform
-    }
+    return this.ptyWorktrees.getPtyExecutionHostMetadata(ptyId)
   }
 
   async launchAgentTerminal(
@@ -19683,28 +18362,14 @@ export class OrcaRuntimeService {
   }
 
   private setPairedRendererSessionOwnership(ptyId: string, owned: boolean): void {
-    if (owned) {
-      this.pairedRendererSessionOwnedPtyIds.add(ptyId)
-    } else {
-      this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
-    }
+    return this.ptyWorktrees.setPairedRendererSessionOwnership(ptyId, owned)
   }
 
   private findLiveRegisteredPtyForRendererTab(
     worktreeId: string,
     tabId: string
   ): RuntimePtyWorktreeRecord | null {
-    for (const pty of this.ptysById.values()) {
-      if (
-        pty.worktreeId === worktreeId &&
-        pty.tabId === tabId &&
-        pty.connected &&
-        parsePaneKey(pty.paneKey ?? '')?.leafId
-      ) {
-        return pty
-      }
-    }
-    return null
+    return this.ptyWorktrees.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
   }
 
   // Why: looser rollback guard than findLiveRegisteredPtyForRendererTab — a shell without a registered pane key is still a real terminal the timeout must not kill (#7718).
@@ -19742,98 +18407,12 @@ export class OrcaRuntimeService {
   }
 
   private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
-    const existing = this.resolveHandleForTab(tabId)
-    if (existing) {
-      return Promise.resolve(existing)
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const idx = this.graphSyncCallbacks.indexOf(check)
-        if (idx !== -1) {
-          this.graphSyncCallbacks.splice(idx, 1)
-        }
-        reject(new Error('Timed out waiting for terminal handle after creation'))
-      }, timeoutMs)
-
-      const check = (): void => {
-        const handle = this.resolveHandleForTab(tabId)
-        if (handle) {
-          clearTimeout(timer)
-          const idx = this.graphSyncCallbacks.indexOf(check)
-          if (idx !== -1) {
-            this.graphSyncCallbacks.splice(idx, 1)
-          }
-          resolve(handle)
-        }
-      }
-      this.graphSyncCallbacks.push(check)
-      // Why: graph sync may have fired between the initial check and registration; re-check to avoid a missed wake-up.
-      check()
-    })
+    return this.ptyWorktrees.waitForTerminalHandle(tabId, timeoutMs)
   }
 
   // Why: mobile may subscribe before the PTY spawns; wait for it so subscribe proceeds with phone-fit instead of a bare scrollback+end.
   waitForLeafPtyId(handle: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<string> {
-    const leaf = this.resolveLeafForHandle(handle)
-    if (leaf?.ptyId) {
-      return Promise.resolve(leaf.ptyId)
-    }
-
-    // Why: ptyId null→real invalidates the old handle; capture tabId+leafId now for direct leaf lookup afterward.
-    const record = this.handles.get(handle)
-    const savedTabId = record?.tabId ?? null
-    const savedLeafId = record?.leafId ?? null
-
-    return new Promise<string>((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      let check: () => void = () => {}
-      const cleanup = (): void => {
-        if (timer) {
-          clearTimeout(timer)
-          timer = null
-        }
-        const idx = this.graphSyncCallbacks.indexOf(check)
-        if (idx !== -1) {
-          this.graphSyncCallbacks.splice(idx, 1)
-        }
-        signal?.removeEventListener('abort', onAbort)
-      }
-      const finish = (ptyId: string): void => {
-        cleanup()
-        resolve(ptyId)
-      }
-      const fail = (error: Error): void => {
-        cleanup()
-        reject(error)
-      }
-      const onAbort = (): void => {
-        fail(new Error('request_aborted'))
-      }
-      if (signal?.aborted) {
-        reject(new Error('request_aborted'))
-        return
-      }
-      signal?.addEventListener('abort', onAbort, { once: true })
-      timer = setTimeout(() => {
-        fail(new Error('Timed out waiting for PTY to spawn'))
-      }, timeoutMs)
-
-      check = (): void => {
-        // Try the handle first (works if handle wasn't invalidated yet)
-        let ptyId = this.resolveLeafForHandle(handle)?.ptyId
-        // Why: ptyId null→real invalidates the old handle; fall back to direct leaf lookup by saved coordinates.
-        if (!ptyId && savedTabId && savedLeafId) {
-          const directLeaf = this.leaves.get(this.getLeafKey(savedTabId, savedLeafId))
-          ptyId = directLeaf?.ptyId ?? null
-        }
-        if (ptyId) {
-          finish(ptyId)
-        }
-      }
-      this.graphSyncCallbacks.push(check)
-      check()
-    })
+    return this.ptyWorktrees.waitForLeafPtyId(handle, timeoutMs, signal)
   }
 
   // Why: never-mounted tabs have no PTY or snapshot; synthetic handles need the ptyId to mount the exact owning tab.
@@ -19865,8 +18444,7 @@ export class OrcaRuntimeService {
   }
 
   getRendererTerminalSerializerGenerationForHandle(handle: string): number {
-    const ptyId = this.handles.get(handle)?.ptyId
-    return ptyId ? this.getRendererTerminalSerializerGeneration(ptyId) : 0
+    return this.ptyWorktrees.getRendererTerminalSerializerGenerationForHandle(handle)
   }
 
   replaceHeadlessTerminalFromRendererSnapshotForRecovery(
@@ -19911,73 +18489,14 @@ export class OrcaRuntimeService {
   }
 
   private getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
-    const ptyIds = new Set<string>()
-    for (const pty of this.ptysById.values()) {
-      if (pty.connected && pty.worktreeId === worktreeId && pty.tabId === tabId) {
-        ptyIds.add(pty.ptyId)
-      }
-    }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === worktreeId && leaf.tabId === tabId && leaf.ptyId) {
-        ptyIds.add(leaf.ptyId)
-      }
-    }
-    return [...ptyIds]
+    return this.ptyWorktrees.getPtyIdsForExplicitTabClose(worktreeId, tabId)
   }
 
   private async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string
   ): Promise<boolean> {
-    let addressedPtyStopped = false
-    const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
-    for (const ptyId of ptyIds) {
-      // Why here: this is the single funnel for an explicit close, and the
-      // intent must be on record before the stop, since the provider may report
-      // the exit itself with a status that reads like a natural finish.
-      this.markPtyStopRequested(ptyId)
-      let stopped = false
-      if (this.ptyController?.stopAndWait) {
-        try {
-          stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
-        } catch (error) {
-          this.markPtyLivenessUnverifiable(
-            ptyId,
-            error instanceof Error ? error.message : String(error)
-          )
-        }
-        if (!stopped) {
-          const verdict = this.getPtyLivenessVerdict(ptyId)
-          const providerAlreadyRetiredPty =
-            verdict?.status === 'unverifiable' &&
-            verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
-          if (!providerAlreadyRetiredPty) {
-            this.ptyController.kill(ptyId)
-            if (!verdict || verdict.status === 'live') {
-              this.markPtyLivenessUnverifiable(
-                ptyId,
-                'a follow-up stop was issued but its outcome could not be verified'
-              )
-            }
-          }
-        }
-      } else {
-        stopped = this.ptyController?.kill(ptyId) ?? false
-      }
-      if (ptyId === addressedPtyId) {
-        addressedPtyStopped = stopped
-      }
-    }
-    return addressedPtyStopped
-  }
-
-  private resolveHandleForTab(tabId: string): string | null {
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === tabId && leaf.ptyId !== null) {
-        return this.issueHandle(leaf)
-      }
-    }
-    return null
+    return this.ptyWorktrees.stopExplicitlyClosedTabPtys(ptyIds, addressedPtyId)
   }
 
   async focusTerminal(
@@ -20690,7 +19209,7 @@ export class OrcaRuntimeService {
   }
 
   async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
-    return this.managedWorktrees.acquireWorktreeTerminalSpawn(worktreeId)
+    return this.ptyWorktrees.acquireWorktreeTerminalSpawn(worktreeId)
   }
 
   private persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
@@ -20777,8 +19296,16 @@ export class OrcaRuntimeService {
   }
 
   getLivePtyIdsForWorktree(worktreeId: string, freshPtyIds?: ReadonlySet<string>): Set<string> {
-    return this.managedWorktrees.getLivePtyIdsForWorktree(worktreeId, freshPtyIds)
+    return this.ptyWorktrees.getLivePtyIdsForWorktree(worktreeId, freshPtyIds)
   }
+  buildMaterializedHeadlessParentLayout(...args: unknown[]) {
+    return (
+      this.mobileTabSnapshots as never as {
+        buildMaterializedHeadlessParentLayout: (...a: unknown[]) => unknown
+      }
+    ).buildMaterializedHeadlessParentLayout(...args)
+  }
+
   private get clientSessionTabSelections() {
     return this.managedWorktrees.clientSessionTabSelections
   }
@@ -20809,23 +19336,7 @@ export class OrcaRuntimeService {
   }
 
   private getTerminalHandlesForPtyId(ptyId: string): string[] {
-    const handles = new Set(
-      this.getLeavesForPty(ptyId)
-        .filter((candidate) => candidate.connected)
-        .map((leaf) => this.issueHandle(leaf))
-    )
-    const runtimeHandle = this.handleByPtyId.get(ptyId)
-    if (runtimeHandle) {
-      handles.add(runtimeHandle)
-    }
-    const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
-    if (!pty) {
-      throw Object.assign(new Error('terminal_worktree_sleep_handle_unavailable'), { ptyId })
-    }
-    if (handles.size === 0) {
-      handles.add(this.issuePtyHandle(pty))
-    }
-    return [...handles].sort()
+    return this.ptyWorktrees.getTerminalHandlesForPtyId(ptyId)
   }
 
   private getRecordedTerminalSleepHandles(
@@ -21373,7 +19884,7 @@ export class OrcaRuntimeService {
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
-    return this.managedWorktrees.recordPtyWorktree(ptyId, worktreeId, state)
+    return this.ptyWorktrees.recordPtyWorktree(ptyId, worktreeId, state)
   }
 
   private makeRuntimePaneKey(
@@ -21385,7 +19896,7 @@ export class OrcaRuntimeService {
   }
 
   private getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {
-    return this.managedWorktrees.getOrCreatePtyWorktreeRecord(ptyId)
+    return this.ptyWorktrees.getOrCreatePtyWorktreeRecord(ptyId)
   }
 
   /** Synchronizes PTY tracking records with running daemon sessions, querying their foreground agent states. */
@@ -21394,7 +19905,7 @@ export class OrcaRuntimeService {
     targetWorktreeId: string | null = null,
     deadline?: number
   ): Promise<Set<string> | null> {
-    return this.managedWorktrees.refreshPtyWorktreeRecordsFromController(
+    return this.ptyWorktrees.refreshPtyWorktreeRecordsFromController(
       resolvedWorktrees,
       targetWorktreeId,
       deadline
@@ -21407,7 +19918,7 @@ export class OrcaRuntimeService {
     deadline?: number,
     connectionId?: string | null
   ): Promise<PtyControllerInventory | null> {
-    return this.managedWorktrees.refreshPtyWorktreeRecordsWithControllerInventory(
+    return this.ptyWorktrees.refreshPtyWorktreeRecordsWithControllerInventory(
       resolvedWorktrees,
       targetWorktreeId,
       deadline,
@@ -21416,179 +19927,27 @@ export class OrcaRuntimeService {
   }
 
   private refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
-    const controller = this.ptyController
-    if (!controller?.hasPty) {
-      return null
-    }
-    const knownPtyIds = new Set<string>()
-    const persistedBindingByPtyId = new Map<string, { tabId: string; paneKey: string }>()
-    for (const pty of this.ptysById.values()) {
-      if (pty.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-        knownPtyIds.add(pty.ptyId)
-      }
-    }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === FLOATING_TERMINAL_WORKTREE_ID && leaf.ptyId) {
-        knownPtyIds.add(leaf.ptyId)
-      }
-    }
-    const snapshot = this.mobileSessionTabsByWorktree.get(FLOATING_TERMINAL_WORKTREE_ID)
-    for (const tab of snapshot?.tabs ?? []) {
-      if (tab.type !== 'terminal') {
-        continue
-      }
-      if (tab.ptyId) {
-        knownPtyIds.add(tab.ptyId)
-        persistedBindingByPtyId.set(tab.ptyId, {
-          tabId: tab.parentTabId,
-          paneKey: this.getMobileTerminalPaneKey(tab)
-        })
-      }
-      for (const [leafId, ptyId] of Object.entries(tab.parentLayout?.ptyIdsByLeafId ?? {})) {
-        knownPtyIds.add(ptyId)
-        persistedBindingByPtyId.set(ptyId, {
-          tabId: tab.parentTabId,
-          paneKey: isTerminalLeafId(leafId)
-            ? makePaneKey(tab.parentTabId, leafId)
-            : `${tab.parentTabId}:${/^pane:(\d+)$/.exec(leafId)?.[1] ?? leafId}`
-        })
-      }
-    }
-
-    const liveness = new Map<string, boolean>()
-    try {
-      for (const ptyId of knownPtyIds) {
-        const live = controller.hasPty(ptyId)
-        if (live === null) {
-          return null
-        }
-        liveness.set(ptyId, live)
-      }
-    } catch {
-      return null
-    }
-
-    const livePtyIds = new Set<string>()
-    for (const [ptyId, live] of liveness) {
-      let pty = this.ptysById.get(ptyId)
-      if (live) {
-        livePtyIds.add(ptyId)
-        const binding = persistedBindingByPtyId.get(ptyId)
-        if (!pty && binding) {
-          // Why: a live daemon PTY restored from disk needs its pane identity before mobile can issue a safe handle.
-          pty = this.recordPtyWorktree(ptyId, FLOATING_TERMINAL_WORKTREE_ID, {
-            connected: true,
-            tabId: binding.tabId,
-            paneKey: binding.paneKey
-          })
-        }
-        if (pty) {
-          pty.connected = true
-          pty.disconnectedAt = null
-          this.forgetPtyLivenessVerdict(ptyId)
-          this.refreshPtyForegroundAgent(ptyId)
-        }
-      } else if (pty && !this.leafExistsForPty(ptyId)) {
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
-      }
-    }
-    this.pruneDisconnectedPtyRecords()
-    return livePtyIds
+    return this.ptyWorktrees.refreshFloatingWorkspacePtyLiveness()
   }
 
   private pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void {
-    if (pty.connected) {
-      return
-    }
-    // Why: disconnected PTY records stay addressable for status/exit reads, but their transcripts must not accumulate after the process dies.
-    pty.tailBuffer = []
-    pty.tailTranscriptBuffer = []
-    pty.tailTranscriptChars = 0
-    pty.tailPartialLine = ''
-    pty.tailPendingAnsi = ''
-    pty.tailRedrawCursor = null
-    pty.tailTruncated = false
-    pty.tailLinesTotal = 0
-    pty.waitBlockedAt = null
-    // Why: tail is now empty, so clear the memoized wait scan; onPtyData must recompute from the reset tail if this record resumes output.
-    pty.tailWaitState = undefined
+    return this.ptyWorktrees.pruneDisconnectedPtyTranscript(pty)
   }
 
   private pruneDisconnectedPtyRecords(): void {
-    const retained = [...this.ptysById.values()]
-      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
-      .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
-    const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
-    for (const stale of retained.slice(0, staleCount)) {
-      // Why: exited runtime-owned PTYs stay readable, but long-lived runtimes churn through many sessions; bound the archive.
-      this.dropDisconnectedPtyRecord(stale.ptyId)
-    }
-  }
-
-  private dropDisconnectedPtyRecord(ptyId: string): void {
-    // Why: pruning can remove a PTY without the normal exit callback.
-    this.advancePtyLifecycleGeneration(ptyId)
-    this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
-    this.ptysById.delete(ptyId)
-    this.recentPtyOutputById.delete(ptyId)
-    this.setupCompletionTokenByPtyId.delete(ptyId)
-    this.clearWaitBlockedCheckState(ptyId)
-    this.recentPtyPathCandidatesById.delete(ptyId)
-    this.ptyOutputSequenceById.delete(ptyId)
-    this.providerSequenceInitializedPtys.delete(ptyId)
-    this.providerSequenceOffsetByPtyId.delete(ptyId)
-    this.providerSnapshotPreferredPtys.delete(ptyId)
-    this.providerModeTrackersByPtyId.delete(ptyId)
-    this.providerModeSnapshotScansByPtyId.delete(ptyId)
-    this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
-    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.terminalSpawnCommandsByPtyId.delete(ptyId)
-    this.disposePtyTitleTracker(ptyId)
-    this.invalidatePtyIncarnationHandle(ptyId)
-    this.oscTitleScanTailByPtyId.delete(ptyId)
-    this.osc7ScanTailByPtyId.delete(ptyId)
-    this.terminalCwdByPtyId.delete(ptyId)
-    this.terminalFileUriHostnameByPtyId.delete(ptyId)
-    this.wslDistroByPtyId.delete(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
-    const handle = this.handleByPtyId.get(ptyId)
-    if (handle) {
-      // Why: pruning can remove a PTY without onPtyExit firing; release this leader's agent team so it doesn't leak.
-      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-      this.handleByPtyId.delete(ptyId)
-      this.syntheticTerminalHandles.delete(handle)
-      const record = this.handles.get(handle)
-      if (record?.tabId.startsWith('pty:')) {
-        this.handles.delete(handle)
-      }
-    }
+    return this.ptyWorktrees.pruneDisconnectedPtyRecords()
   }
 
   private leafExistsForPty(ptyId: string): boolean {
-    return (this.leavesByPtyId.get(ptyId)?.length ?? 0) > 0
+    return this.ptyWorktrees.leafExistsForPty(ptyId)
   }
 
   private rebuildLeafPtyIndex(): void {
-    const next = new Map<string, RuntimeLeafRecord[]>()
-    for (const leaf of this.leaves.values()) {
-      if (!leaf.ptyId) {
-        continue
-      }
-      const leaves = next.get(leaf.ptyId)
-      if (leaves) {
-        leaves.push(leaf)
-      } else {
-        next.set(leaf.ptyId, [leaf])
-      }
-    }
-    this.leavesByPtyId = next
+    return this.ptyWorktrees.rebuildLeafPtyIndex()
   }
 
   private getLeavesForPty(ptyId: string): RuntimeLeafRecord[] {
-    return this.leavesByPtyId.get(ptyId) ?? []
+    return this.ptyWorktrees.getLeavesForPty(ptyId)
   }
 
   private getSummaryForRuntimeWorktreeId(
@@ -21950,7 +20309,7 @@ export class OrcaRuntimeService {
   }
 
   private getWorktreeIdForTerminalHandle(handle: string): string | null {
-    return this.managedWorktrees.getWorktreeIdForTerminalHandle(handle)
+    return this.ptyWorktrees.getWorktreeIdForTerminalHandle(handle)
   }
 
   private setPtyManagementTitleFromObservedTitle(
@@ -22078,66 +20437,7 @@ export class OrcaRuntimeService {
     leaf: RuntimeLeafRecord | null = null,
     options: { retryForegroundWrappers?: boolean } = {}
   ): Promise<boolean> {
-    const leafTitle = leaf
-      ? getLatestAgentCandidateTitle(
-          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-          { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
-        )
-      : null
-    const leafTitleClassification = classifyAgentTitle(leafTitle)
-    if (ptyTitleProvesAgentPresence(pty, leafTitle, leafTitleClassification)) {
-      return true
-    }
-    const ptyTitle = getLatestAgentCandidateTitle(
-      { title: pty.title, updatedAt: pty.titleUpdatedAt },
-      { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
-    )
-    const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-    if (leafTitle === null && ptyTitleProvesAgentPresence(pty, ptyTitle, ptyTitleClassification)) {
-      return true
-    }
-    const managementTitleClassification = classifyLatestAgentTitle({
-      title: pty.managementTitle,
-      updatedAt: pty.managementTitleAt
-    })
-    const openCodeMarkerTitle = leafTitle ?? ptyTitle
-    if (isOpenCodeNativeTitle(openCodeMarkerTitle) && pty.launchAgent === 'opencode') {
-      return true
-    }
-    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    if (!isOpenCodeNativeTitle(openCodeMarkerTitle) && isKnownReadyPromptPreview(waitText)) {
-      return true
-    }
-    // Why: stale status is a fallback only when no current title evidence exists; neutral titles (shells) clear it.
-    if (
-      pty.lastAgentStatus !== null &&
-      leafTitle === null &&
-      ptyTitle === null &&
-      managementTitleClassification !== 'management'
-    ) {
-      return true
-    }
-    if (!this.ptyController) {
-      return false
-    }
-    const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
-    // Why: mirrors the leaf path — an unreadable foreground is indistinguishable from an
-    // exited one, so a bare Cursor identity title never substitutes for corroboration.
-    if (!fg) {
-      return false
-    }
-    const shouldSuppressClaudeForeground =
-      leafTitle !== null
-        ? leafTitleClassification === 'management'
-        : managementTitleClassification === 'management'
-    if (shouldSuppressClaudeForeground && isExpectedAgentProcess(fg, 'claude')) {
-      return false
-    }
-    // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
-    return await this.isRecognizedForegroundAgentProcess(pty.ptyId, fg, {
-      suppressClaude: shouldSuppressClaudeForeground,
-      retryWrappers: options.retryForegroundWrappers !== false
-    })
+    return this.ptyWorktrees.isPtyRunningAgent(pty, leaf, options)
   }
 
   private async isRecognizedForegroundAgentProcess(
@@ -22185,7 +20485,7 @@ export class OrcaRuntimeService {
   }
 
   private getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {
-    return this.getLeavesForPty(ptyId)[0] ?? null
+    return this.ptyWorktrees.getPrimaryLeafForPty(ptyId)
   }
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
@@ -22324,136 +20624,40 @@ export class OrcaRuntimeService {
   }
 
   cancelMessageWaiters(handle: string): void {
-    const waiters = this.messageWaitersByHandle.get(handle)
-    if (!waiters) {
-      return
-    }
-    for (const waiter of [...waiters]) {
-      this.resolveMessageWaiter(waiter, 'cancelled')
-    }
+    return this.ptyWorktrees.cancelMessageWaiters(handle)
   }
 
   private resolveMessageWaiter(waiter: MessageWaiter, result: MessageWaitResult): void {
-    this.removeMessageWaiter(waiter)
-    waiter.resolve(result)
+    return this.ptyWorktrees.resolveMessageWaiter(waiter, result)
   }
 
   private removeMessageWaiter(waiter: MessageWaiter): void {
-    if (waiter.timeout) {
-      clearTimeout(waiter.timeout)
-      waiter.timeout = null
-    }
-    if (waiter.abortCleanup) {
-      waiter.abortCleanup()
-      waiter.abortCleanup = null
-    }
-    const waiters = this.messageWaitersByHandle.get(waiter.handle)
-    if (waiters) {
-      waiters.delete(waiter)
-      if (waiters.size === 0) {
-        this.messageWaitersByHandle.delete(waiter.handle)
-      }
-    }
+    return this.ptyWorktrees.removeMessageWaiter(waiter)
   }
 
   private buildPtyTerminalSummary(
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary {
-    const worktree = worktreesById.get(pty.worktreeId)
-    const title = getLatestPtyTitle(pty)
-
-    const pane = parsePaneKey(pty.paneKey ?? '')
-    const orphaned = !pty.tabId || !pane || pane.tabId !== pty.tabId
-    return {
-      handle: this.issuePtyHandle(pty),
-      ptyId: pty.ptyId,
-      incarnationId: pty.incarnationId,
-      orphaned,
-      worktreeId: pty.worktreeId,
-      worktreePath: worktree?.path ?? '',
-      branch: worktree?.branch ?? '',
-      tabId: orphaned ? `pty:${pty.ptyId}` : pty.tabId!,
-      leafId: orphaned ? `pty:${pty.ptyId}` : pane.leafId,
-      title,
-      connected: pty.connected,
-      writable: pty.connected,
-      lastOutputAt: pty.lastOutputAt,
-      preview: pty.preview,
-      ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
-      ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
-      ...this.resolvePaneAgentIdentityField(
-        pty.launchAgent,
-        pty.foregroundAgent,
-        title,
-        pty.paneKey ?? null
-      )
-    }
+    return this.ptyWorktrees.buildPtyTerminalSummary(pty, worktreesById)
   }
 
   private getLiveLeafForHandle(handle: string): {
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord
   } {
-    this.assertGraphReady()
-    const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      throw new Error('terminal_handle_stale')
-    }
-    if (record.rendererGraphEpoch !== this.rendererGraphEpoch) {
-      throw new Error('terminal_handle_stale')
-    }
-
-    const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!leaf || leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) {
-      throw new Error('terminal_handle_stale')
-    }
-    return { record, leaf }
+    return this.ptyWorktrees.getLiveLeafForHandle(handle)
   }
 
   private getLivePtyForHandle(handle: string): {
     record: TerminalHandleRecord
     pty: RuntimePtyWorktreeRecord
   } | null {
-    let record = this.handles.get(handle)
-    if (!record) {
-      const ptyId = [...this.handleByPtyId.entries()].find(
-        ([, mappedHandle]) => mappedHandle === handle
-      )?.[0]
-      const pty = ptyId ? this.ptysById.get(ptyId) : null
-      if (pty) {
-        // Why: graph reload clears renderer handle records, but runtime-owned PTY handles remain the caller's control identity.
-        this.issuePtyHandle(pty)
-        record = this.handles.get(handle)
-      }
-    }
-    if (!record || record.runtimeId !== this.runtimeId || !record.tabId.startsWith('pty:')) {
-      return null
-    }
-    if (!record.ptyId) {
-      return null
-    }
-    const pty = this.ptysById.get(record.ptyId)
-    if (!pty || pty.ptyId !== record.ptyId) {
-      return null
-    }
-    // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
-    this.handleByPtyId.set(record.ptyId, handle)
-    return { record, pty }
+    return this.ptyWorktrees.getLivePtyForHandle(handle)
   }
 
   private assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {
-    const runtimePty = this.getLivePtyForHandle(handle)
-    if (runtimePty) {
-      if (runtimePty.pty.ptyId !== expectedPtyId) {
-        throw new Error('terminal_handle_stale')
-      }
-      return
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (leaf.ptyId !== expectedPtyId) {
-      throw new Error('terminal_handle_stale')
-    }
+    return this.ptyWorktrees.assertLiveTerminalHandleTargetsPty(handle, expectedPtyId)
   }
 
   private readPtyTerminal(
@@ -22461,196 +20665,35 @@ export class OrcaRuntimeService {
     pty: RuntimePtyWorktreeRecord,
     opts: { cursor?: number; limit?: number } = {}
   ): RuntimeTerminalRead {
-    return readTerminalTail({
-      handle,
-      status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-      previewLines: pty.tailBuffer,
-      completedLines: pty.tailTranscriptBuffer,
-      partialLine: pty.tailPartialLine,
-      completedLineCount: pty.tailLinesTotal,
-      bufferTruncated: pty.tailTruncated,
-      cursor: opts.cursor,
-      limit: opts.limit
-    })
+    return this.ptyWorktrees.readPtyTerminal(handle, pty, opts)
   }
 
   private issueHandle(leaf: RuntimeLeafRecord): string {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    const existingHandle = this.handleByLeafKey.get(leafKey)
-    if (existingHandle) {
-      const existingRecord = this.handles.get(existingHandle)
-      if (
-        existingRecord &&
-        existingRecord.rendererGraphEpoch === this.rendererGraphEpoch &&
-        existingRecord.ptyId === leaf.ptyId &&
-        existingRecord.ptyGeneration === leaf.ptyGeneration
-      ) {
-        return existingHandle
-      }
-    }
-
-    const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
-    if (preAllocatedHandle) {
-      return preAllocatedHandle
-    }
-    const incarnationId = leaf.ptyId ? (this.ptysById.get(leaf.ptyId)?.incarnationId ?? null) : null
-    const retained = leaf.ptyId ? this.handleByPtyIncarnation.get(leaf.ptyId) : undefined
-    if (retained && leaf.ptyId && retained.incarnationId !== incarnationId) {
-      this.invalidatePtyIncarnationHandle(leaf.ptyId)
-    } else if (retained) {
-      this.bindPtyIncarnationHandle(retained, leaf)
-      return retained.handle
-    }
-
-    const handle = `term_${randomUUID()}`
-    this.syntheticTerminalHandles.add(handle)
-    this.handles.set(handle, {
-      handle,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.handleByLeafKey.set(leafKey, handle)
-    if (leaf.ptyId && incarnationId) {
-      this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
-    }
-    return handle
-  }
-
-  private bindPtyIncarnationHandle(
-    retained: PtyIncarnationHandleRecord,
-    leaf: RuntimeLeafRecord
-  ): void {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    if (retained.leafKey !== leafKey) {
-      if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
-        this.handleByLeafKey.delete(retained.leafKey)
-      }
-      retained.leafKey = leafKey
-    }
-    this.handles.set(retained.handle, {
-      handle: retained.handle,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.handleByLeafKey.set(leafKey, retained.handle)
+    return this.ptyWorktrees.issueHandle(leaf)
   }
 
   private invalidatePtyIncarnationHandle(ptyId: string): void {
-    const retained = this.handleByPtyIncarnation.get(ptyId)
-    if (!retained) {
-      return
-    }
-    this.handleByPtyIncarnation.delete(ptyId)
-    if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
-      this.handleByLeafKey.delete(retained.leafKey)
-    }
-    this.handles.delete(retained.handle)
-    this.syntheticTerminalHandles.delete(retained.handle)
-    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
+    return this.ptyWorktrees.invalidatePtyIncarnationHandle(ptyId)
   }
 
   private clearPtyIncarnationHandles(): void {
-    for (const retained of this.handleByPtyIncarnation.values()) {
-      this.syntheticTerminalHandles.delete(retained.handle)
-    }
-    this.handleByPtyIncarnation.clear()
+    return this.ptyWorktrees.clearPtyIncarnationHandles()
   }
 
   private reconcilePtyIncarnationHandles(): void {
-    for (const [ptyId, retained] of this.handleByPtyIncarnation) {
-      const pty = this.ptysById.get(ptyId)
-      const leaves = this.getLeavesForPty(ptyId)
-      if (
-        !pty?.incarnationId ||
-        pty.incarnationId !== retained.incarnationId ||
-        leaves.length !== 1 ||
-        this.handleByPtyId.has(ptyId)
-      ) {
-        this.invalidatePtyIncarnationHandle(ptyId)
-        continue
-      }
-      this.bindPtyIncarnationHandle(retained, leaves[0])
-    }
+    return this.ptyWorktrees.reconcilePtyIncarnationHandles()
   }
 
   private adoptPreAllocatedHandle(leaf: RuntimeLeafRecord): string | null {
-    if (!leaf.ptyId) {
-      return null
-    }
-    const preAllocated = this.handleByPtyId.get(leaf.ptyId)
-    if (!preAllocated) {
-      return null
-    }
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    this.handles.set(preAllocated, {
-      handle: preAllocated,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.handleByLeafKey.set(leafKey, preAllocated)
-    return preAllocated
+    return this.ptyWorktrees.adoptPreAllocatedHandle(leaf)
   }
 
   private issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
-    const existingHandle =
-      this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
-    if (existingHandle) {
-      const existingRecord = this.handles.get(existingHandle)
-      if (
-        existingRecord &&
-        existingRecord.runtimeId === this.runtimeId &&
-        existingRecord.ptyId === pty.ptyId
-      ) {
-        this.handleByPtyId.set(pty.ptyId, existingHandle)
-        return existingHandle
-      }
-    }
-
-    const handle = existingHandle ?? `term_${randomUUID()}`
-    if (!existingHandle) {
-      this.syntheticTerminalHandles.add(handle)
-    }
-    const syntheticId = `pty:${pty.ptyId}`
-    this.handles.set(handle, {
-      handle,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: pty.worktreeId,
-      tabId: syntheticId,
-      leafId: syntheticId,
-      ptyId: pty.ptyId,
-      ptyGeneration: 0
-    })
-    this.handleByPtyId.set(pty.ptyId, handle)
-    return handle
+    return this.ptyWorktrees.issuePtyHandle(pty)
   }
 
   private findHandleForPtyRecord(ptyId: string): string | null {
-    for (const [handle, record] of this.handles) {
-      if (
-        record.runtimeId === this.runtimeId &&
-        record.ptyId === ptyId &&
-        record.tabId.startsWith('pty:')
-      ) {
-        return handle
-      }
-    }
-    return null
+    return this.ptyWorktrees.findHandleForPtyRecord(ptyId)
   }
 
   private refreshWritableFlags(): void {
@@ -22660,18 +20703,7 @@ export class OrcaRuntimeService {
   }
 
   private invalidateLeafHandle(leafKey: string): void {
-    const handle = this.handleByLeafKey.get(leafKey)
-    if (!handle) {
-      return
-    }
-    const record = this.handles.get(handle)
-    if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
-      this.handleByPtyIncarnation.delete(record.ptyId)
-    }
-    this.handleByLeafKey.delete(leafKey)
-    this.handles.delete(handle)
-    this.syntheticTerminalHandles.delete(handle)
-    this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
+    return this.ptyWorktrees.invalidateLeafHandle(leafKey)
   }
 
   private adoptFirstPtyForLeafHandle(
@@ -22679,13 +20711,7 @@ export class OrcaRuntimeService {
     ptyId: string | null,
     ptyGeneration: number
   ): boolean {
-    const handle = this.handleByLeafKey.get(leafKey)
-    const record = handle ? this.handles.get(handle) : null
-    if (!handle || !record || record.ptyId !== null || ptyId === null) {
-      return false
-    }
-    this.handles.set(handle, { ...record, ptyId, ptyGeneration })
-    return true
+    return this.ptyWorktrees.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
 
   private rememberDetachedPreAllocatedLeaves(): void {
@@ -22698,85 +20724,15 @@ export class OrcaRuntimeService {
   }
 
   private resolveExitWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.issueHandle(leaf)
-    if (!handle) {
-      return
-    }
-    const waiters = this.waitersByHandle.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of [...waiters]) {
-      if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
-      } else {
-        // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
-      }
-    }
+    return this.ptyWorktrees.resolveExitWaiters(leaf)
   }
 
   private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    const candidateHandle =
-      this.handleByLeafKey.get(leafKey) ??
-      (leaf.ptyId
-        ? (this.handleByPtyId.get(leaf.ptyId) ??
-          this.handleByPtyIncarnation.get(leaf.ptyId)?.handle)
-        : undefined)
-    if (!candidateHandle || !this.waitersByHandle.has(candidateHandle)) {
-      return
-    }
-    const handle = this.issueHandle(leaf)
-    const waiters = this.waitersByHandle.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
-      }
-    }
+    return this.ptyWorktrees.resolveTuiIdleWaiters(leaf)
   }
 
   private resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
-    const handle = this.handleByPtyId.get(ptyId)
-    if (!handle) {
-      return
-    }
-    const waiters = this.waitersByHandle.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of [...waiters]) {
-      if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
-      } else {
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
-      }
-    }
-  }
-
-  private isPtyKnownExited(ptyId: string): boolean {
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      // Why: `!connected` is an inference, not proof. The liveness sweep clears it with no
-      // exit code for every PTY of a dropped relay, so reading that as an exit retires the
-      // lease of a process still running on the host — 'unknown' must keep watching.
-      return getPtyTerminalState(pty) === 'exited'
-    }
-    return this.getLeavesForPty(ptyId).some((leaf) => getTerminalState(leaf) === 'exited')
-  }
-
-  private notifyPtyExitListeners(ptyId: string): void {
-    const listeners = this.ptyExitListenersByPtyId.get(ptyId)
-    if (!listeners) {
-      return
-    }
-    this.ptyExitListenersByPtyId.delete(ptyId)
-    notifyRuntimeListeners(listeners, (listener) => listener(), 'pty-exit')
+    return this.ptyWorktrees.resolvePtyExitWaiters(pty, ptyId)
   }
 
   private resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
@@ -23048,82 +21004,30 @@ export class OrcaRuntimeService {
   }
 
   private getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
-    for (const leaf of this.leaves.values()) {
-      if (leaf.ptyId !== pty.ptyId) {
-        continue
-      }
-      const title = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
-      if (!title) {
-        continue
-      }
-      const status = detectExplicitIdleStatusFromTitle(title)
-      if (status !== null) {
-        return status
-      }
-    }
-    return null
+    return this.ptyWorktrees.getAdoptedPtyExplicitIdleStatus(pty)
   }
 
   private resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
-    this.removeWaiter(waiter)
-    waiter.resolve(result)
+    return this.ptyWorktrees.resolveWaiter(waiter, result)
   }
 
   private bindTerminalWaiterAbort(
     waiter: TerminalWaiter,
     signal: AbortSignal | undefined
   ): boolean {
-    if (!signal) {
-      return true
-    }
-    if (signal.aborted) {
-      return false
-    }
-    const onAbort = (): void => {
-      this.removeWaiter(waiter)
-      waiter.reject(new Error('request_aborted'))
-    }
-    waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
-    signal.addEventListener('abort', onAbort, { once: true })
-    return true
+    return this.ptyWorktrees.bindTerminalWaiterAbort(waiter, signal)
   }
 
   private rejectWaitersForHandle(handle: string, code: string): void {
-    const waiters = this.waitersByHandle.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of [...waiters]) {
-      this.removeWaiter(waiter)
-      waiter.reject(new Error(code))
-    }
+    return this.ptyWorktrees.rejectWaitersForHandle(handle, code)
   }
 
   private rejectAllWaiters(code: string): void {
-    for (const handle of [...this.waitersByHandle.keys()]) {
-      this.rejectWaitersForHandle(handle, code)
-    }
+    return this.ptyWorktrees.rejectAllWaiters(code)
   }
 
   private removeWaiter(waiter: TerminalWaiter): void {
-    if (waiter.timeout) {
-      clearTimeout(waiter.timeout)
-    }
-    if (waiter.pollInterval) {
-      clearInterval(waiter.pollInterval)
-    }
-    if (waiter.abortCleanup) {
-      waiter.abortCleanup()
-      waiter.abortCleanup = null
-    }
-    const waiters = this.waitersByHandle.get(waiter.handle)
-    if (!waiters) {
-      return
-    }
-    waiters.delete(waiter)
-    if (waiters.size === 0) {
-      this.waitersByHandle.delete(waiter.handle)
-    }
+    return this.ptyWorktrees.removeWaiter(waiter)
   }
 
   private getLeafKey(tabId: string, leafId: string): string {
@@ -23650,64 +21554,79 @@ export class OrcaRuntimeService {
     return this.mobileSessionFacade.reconcileHeadlessMobileSessionBrowserTabs()
   }
 
-  appendBrowserTabOrder() {
-    return (this.snapshotValueComparison as any).appendBrowserTabOrder(...(arguments as any))
+  collectBrowserGroupAssignment(persistedGroups: unknown, mergedBrowserOrder: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
+    return (this as any).collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
   }
 
-  collectBrowserGroupAssignment() {
-    return (this.snapshotValueComparison as any).collectBrowserGroupAssignment(
-      ...(arguments as any)
+  isServeOwnedPtyId(ptyId: string | null | undefined) {
+    return this.ptyWorktrees.isServeOwnedPtyId(ptyId)
+  }
+
+  isSshOwnedPtyId(ptyId: string | null | undefined) {
+    return this.ptyWorktrees.isSshOwnedPtyId(ptyId)
+  }
+
+  workspaceSessionHasRuntimeOwnedPtyCandidate(session: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
+    return (this as any).workspaceSessionHasRuntimeOwnedPtyCandidate(session)
+  }
+
+  workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
+    session: unknown,
+    worktreeId: string,
+    tabs: unknown
+  ) {
+    return this.managedWorktrees.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
+      session,
+      worktreeId,
+      tabs
     )
   }
 
-  isServeOwnedPtyId() {
-    return (this.snapshotValueComparison as any).isServeOwnedPtyId(...(arguments as any))
-  }
-
-  isSshOwnedPtyId() {
-    return (this.snapshotValueComparison as any).isSshOwnedPtyId(...(arguments as any))
-  }
-
-  workspaceSessionHasRuntimeOwnedPtyCandidate() {
-    return (this.snapshotValueComparison as any).workspaceSessionHasRuntimeOwnedPtyCandidate(
-      ...(arguments as any)
+  getRecentExpiredSshLease(worktreeId: string, tabId: string, leafId: string, ptyId: string) {
+    return (this.snapshotValueComparison as any).getRecentExpiredSshLease(
+      worktreeId,
+      tabId,
+      leafId,
+      ptyId
     )
   }
 
-  workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate() {
-    return this.managedWorktrees.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate()
+  hasRecentExpiredSshLeasePane(worktreeId: string, tab: unknown) {
+    return (this.snapshotValueComparison as any).hasRecentExpiredSshLeasePane(worktreeId, tab)
   }
 
-  getRecentExpiredSshLease() {
-    return (this.snapshotValueComparison as any).getRecentExpiredSshLease(...(arguments as any))
+  isServeOrSshOwnedPtyId(ptyId: string | null | undefined) {
+    return this.ptyWorktrees.isServeOrSshOwnedPtyId(ptyId)
   }
 
-  hasRecentExpiredSshLeasePane() {
-    return (this.snapshotValueComparison as any).hasRecentExpiredSshLeasePane(...(arguments as any))
+  hasServeOrSshOwnedBinding(tab: unknown) {
+    return (this.snapshotValueComparison as any).hasServeOrSshOwnedBinding(tab)
   }
 
-  isServeOrSshOwnedPtyId() {
-    return (this.snapshotValueComparison as any).isServeOrSshOwnedPtyId(...(arguments as any))
+  hasLiveOrPersistedServeOrSshOwnedPtyBinding(worktreeId: string, tab: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
+    return (this as any).hasLiveOrPersistedServeOrSshOwnedPtyBinding(worktreeId, tab)
   }
 
-  hasServeOrSshOwnedBinding() {
-    return (this.snapshotValueComparison as any).hasServeOrSshOwnedBinding(...(arguments as any))
-  }
-
-  hasLiveOrPersistedServeOrSshOwnedPtyBinding() {
-    return (this.snapshotValueComparison as any).hasLiveOrPersistedServeOrSshOwnedPtyBinding(
-      ...(arguments as any)
-    )
-  }
-
-  hasLiveRuntimeSessionOwnedPtyBinding() {
+  hasLiveRuntimeSessionOwnedPtyBinding(worktreeId: string, tab: unknown) {
     return (this.snapshotValueComparison as any).hasLiveRuntimeSessionOwnedPtyBinding(
-      ...(arguments as any)
+      worktreeId,
+      tab
     )
   }
 
-  clearRuntimeSessionOwnershipForMobileTab() {
-    return this.mobileSessionFacade.clearRuntimeSessionOwnershipForMobileTab()
+  clearRuntimeSessionOwnershipForMobileTab(
+    worktreeId: string,
+    snapshot: unknown,
+    parentTabId: string
+  ) {
+    return this.mobileSessionFacade.clearRuntimeSessionOwnershipForMobileTab(
+      worktreeId,
+      snapshot,
+      parentTabId
+    )
   }
 
   getMobileTerminalLeafPtyIds() {
@@ -23722,10 +21641,9 @@ export class OrcaRuntimeService {
     return this.mobileSessionFacade.persistedParentStillBindsMobileTerminalLeaf()
   }
 
-  releaseRuntimeSessionOwnershipForRendererRetiredTabs() {
-    return (
-      this.snapshotValueComparison as any
-    ).releaseRuntimeSessionOwnershipForRendererRetiredTabs(...(arguments as any))
+  releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot: unknown, existing: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
+    return (this as any).releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot, existing)
   }
 
   isRuntimeOwnedHeadlessMobileTab() {
@@ -23772,8 +21690,8 @@ export class OrcaRuntimeService {
     return this.mobileSessionFacade.getMobileSessionWorktreeIdsForPty()
   }
 
-  touchMobileSessionTabsForWorktree() {
-    return this.mobileSessionFacade.touchMobileSessionTabsForWorktree()
+  touchMobileSessionTabsForWorktree(worktreeId: string, options?: { immediate?: boolean }) {
+    return this.mobileSessionFacade.touchMobileSessionTabsForWorktree(worktreeId, options)
   }
 
   touchMobileSessionTabsForPane() {
@@ -23792,32 +21710,32 @@ export class OrcaRuntimeService {
     return this.mobileSessionFacade.buildHeadlessMobileSessionTabGroups()
   }
 
-  buildMaterializedHeadlessParentLayout() {
-    return (this.mobileTabSnapshots as any).buildMaterializedHeadlessParentLayout(
-      ...(arguments as any)
+  removePersistedHeadlessTerminalTab(
+    worktreeId: string,
+    parentTabId: string,
+    options?: { allowMissing?: boolean }
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
+    return (this as any).removePersistedHeadlessTerminalTab(worktreeId, parentTabId, options)
+  }
+
+  persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: unknown) {
+    return (this.mobileTabSnapshots as any).persistHeadlessTerminalTabOrder(worktreeId, tabOrder)
+  }
+
+  emitMobileSessionTabsSnapshot(snapshot: unknown) {
+    return (this.mobileTabSnapshots as any).emitMobileSessionTabsSnapshot(snapshot)
+  }
+
+  projectMobileSessionTabsForClient(result: unknown, clientNavigationId?: string) {
+    return (this.mobileTabSnapshots as any).projectMobileSessionTabsForClient(
+      result,
+      clientNavigationId
     )
   }
 
-  removePersistedHeadlessTerminalTab() {
-    return (this.mobileTabSnapshots as any).removePersistedHeadlessTerminalTab(
-      ...(arguments as any)
-    )
-  }
-
-  persistHeadlessTerminalTabOrder() {
-    return (this.mobileTabSnapshots as any).persistHeadlessTerminalTabOrder(...(arguments as any))
-  }
-
-  emitMobileSessionTabsSnapshot() {
-    return this.mobileSessionFacade.emitMobileSessionTabsSnapshot()
-  }
-
-  projectMobileSessionTabsForClient() {
-    return this.mobileSessionFacade.projectMobileSessionTabsForClient()
-  }
-
-  withClientHostedPagesHold() {
-    return (this.mobileTabSnapshots as any).withClientHostedPagesHold(...(arguments as any))
+  withClientHostedPagesHold(snapshot: unknown, clientNavigationId?: string) {
+    return (this.mobileTabSnapshots as any).withClientHostedPagesHold(snapshot, clientNavigationId)
   }
 
   private getHeadlessMobileSessionGroupId() {
@@ -23828,6 +21746,7 @@ export class OrcaRuntimeService {
 }
 
 // Re-export shims for WP7 batch extraction (runtime-browser-screencast.ts)
+export { buildPreview } from './runtime-tail-read'
 export { reclaimBrowserForDesktop }
 export { publishBrowserRemoteViewers }
 export { getBrowserRemoteViewerPages }
@@ -23842,7 +21761,6 @@ import {
   DEFAULT_TERMINAL_LIST_LIMIT,
   DEFAULT_TERMINAL_READ_LIMIT,
   DEFAULT_WORKTREE_PS_LIMIT,
-  DISCONNECTED_PTY_RECORD_MAX,
   FETCH_FRESHNESS_MS,
   MAX_TAIL_CHARS,
   MOBILE_AUTO_RESTORE_FIT_MAX_MS,
@@ -23861,11 +21779,8 @@ import {
   WAIT_BLOCKED_KEYWORD_PATTERN,
   addRuntimeWorkingTerminalEvidence,
   agentTitleProvesAgentPresence,
-  appendCompletedTerminalTranscript,
-  appendNormalizedToTailBuffer,
   applyRestoredTerminalTailSeed,
   assertTerminalInputWithinLimitWithYield,
-  buildPreview,
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
   buildRestoredTerminalTailSeed,
@@ -23877,7 +21792,6 @@ import {
   buildVisibleSnapshotReadFallback,
   canonicalizeTerminalSessionWorktreeId,
   classifyAgentTitle,
-  classifyLatestAgentTitle,
   compareWorktreePs,
   computeTerminalTailWaitState,
   detectExplicitIdleStatusFromTitle,
@@ -23888,7 +21802,6 @@ import {
   getLatestLeafTitle,
   getLatestPtyTitle,
   getLeafWorktreeStatus,
-  getPtyTerminalState,
   getSavedTabWorktreeStatus,
   getTerminalState,
   includeTargetResolvedWorktree,
@@ -23899,7 +21812,6 @@ import {
   mapExplicitAgentStateToRuntimeTerminalStatus,
   maxTimestamp,
   mergeWorktreeSummaryStatus,
-  normalizeTerminalChunk,
   notifyRuntimeListeners,
   projectTerminalTailLines,
   projectVisibleTerminalLines,
@@ -23912,13 +21824,13 @@ import {
   runtimeWorktreeIdsEqual,
   setBoundedMapEntry,
   tailGainedNewerBlockedReason,
-  tailStateMatches,
   terminalReadLimit,
   terminalTitleBlocksExplicitAgentStatus,
   withTimeoutResult
 } from './runtime-tail-projection'
 import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
+import { RuntimePtyWorktrees } from './runtime-pty-worktrees'
 import { RuntimeMobileSessionFacade } from './runtime-mobile-session-facade'
 import type {
   RetainedTailRedrawCursor,
@@ -23931,7 +21843,6 @@ export {
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   resolveWorktreeScanCacheTtlMs,
-  buildPreview,
   buildRestoredTerminalTailSeed,
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason,

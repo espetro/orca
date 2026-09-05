@@ -4517,9 +4517,8 @@ export class RuntimeMobileSessionFacade {
     return this.deps.managedWorktrees().getMobileSessionWorktreeIdsForPty()
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- args forwarded by ManagedWorktrees shim separately
-  touchMobileSessionTabsForWorktree(..._args: any[]): any {
-    return this.deps.managedWorktrees().touchMobileSessionTabsForWorktree()
+  touchMobileSessionTabsForWorktree(worktreeId: string, options?: { immediate?: boolean }): void {
+    return this.deps.managedWorktrees().touchMobileSessionTabsForWorktree(worktreeId, options)
   }
 
   touchMobileSessionTabsForPane(...args: any[]): any {
