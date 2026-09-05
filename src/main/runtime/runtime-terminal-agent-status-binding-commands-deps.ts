@@ -1,4 +1,5 @@
-import type { RuntimePtyController, RuntimeStore, ResolvedWorktree } from './runtime-repo-git-commands-shared-types'
+/* oxlint-disable typescript/no-explicit-any -- extracted deps mirroring untyped runtime fields */
+import type { RuntimePtyController } from './runtime-repo-git-commands-shared-types'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 
 export type RuntimeTerminalAgentStatusBindingCommandsDeps = {

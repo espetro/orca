@@ -1,5 +1,5 @@
 import type { AgentStatus } from '../../shared/agent-detection'
-import type { TerminalTailWaitState } from '../../shared/terminal-tail-wait-state'
+import type { TerminalTailWaitState } from './runtime-tail-read'
 import type { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import type { ProviderBufferAcquisition } from './runtime-provider-buffer'

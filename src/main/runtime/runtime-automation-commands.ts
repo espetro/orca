@@ -20,7 +20,7 @@ import type {
   AutomationsChangedPayload,
   RuntimeClientEvent
 } from '../../shared/runtime-client-events'
-import type { RuntimeNotifier } from '../../shared/runtime-notifier-types'
+import type { RuntimeNotifier } from './orca-runtime'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import type { AutomationService } from '../automations/service'
 import type {

@@ -1,6 +1,6 @@
-import type { Store } from '../../shared/store-types'
+import type { RuntimeStore as Store } from './orca-runtime'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
-import type { RuntimeNotifier } from '../../shared/runtime-notifier-types'
+import type { RuntimeNotifier } from './orca-runtime'
 import type { RuntimeWorktreeLifecycleEvent } from '../../shared/runtime-types'
 
 export type RuntimeClientEventPublishingCommandsDeps = {

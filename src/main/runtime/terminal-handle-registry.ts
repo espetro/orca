@@ -1,6 +1,6 @@
 import type { RuntimeLeafRecord } from './runtime-leaf-record'
-import type { TerminalHandleRecord } from './runtime-terminal-handle'
-import type { PtyIncarnationHandleRecord } from './runtime-pty-incarnation'
+import type { TerminalHandleRecord } from './orca-runtime'
+import type { PtyIncarnationHandleRecord } from './orca-runtime'
 
 /** Registry managing terminal handles, leaves, and their bidirectional indices.
  *  Consolidates 7 related fields: leaves, leavesByPtyId, handles, handleByLeafKey,

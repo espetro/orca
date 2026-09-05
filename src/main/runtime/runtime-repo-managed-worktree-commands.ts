@@ -58,9 +58,9 @@ export class RuntimeRepoManagedWorktreeCommands {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const resolved = await self.deps.listResolvedWorktrees()
-    const repoId = repoSelector ? (await self.deps.resolveRepoSelector(repoSelector)).id : null
-    const settings = self.deps.store?.getSettings()
+    const resolved = await this.self.deps.listResolvedWorktrees()
+    const repoId = repoSelector ? (await this.self.deps.resolveRepoSelector(repoSelector)).id : null
+    const settings = this.self.deps.store?.getSettings()
     const visibilityDefaults = sourceDefaultsSupported
       ? settings?.worktreeVisibilityDefaults
       : settings?.worktreeVisibilityDefaults
@@ -69,7 +69,7 @@ export class RuntimeRepoManagedWorktreeCommands {
     const visibilitySettings = settings
       ? { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
       : undefined
-    const visibilitySourceMatchersByRepoId = self.buildRuntimeVisibilitySourceMatchersByRepoId(
+    const visibilitySourceMatchersByRepoId = this.self.buildRuntimeVisibilitySourceMatchersByRepoId(
       resolved,
       visibilityDefaults
     )
@@ -77,7 +77,7 @@ export class RuntimeRepoManagedWorktreeCommands {
       if (repoId && worktree.repoId !== repoId) {
         return false
       }
-      return self.isRuntimeWorktreeVisible(
+      return this.self.isRuntimeWorktreeVisible(
         worktree,
         visibilitySourceMatchersByRepoId.get(worktree.repoId),
         visibilitySettings
@@ -101,11 +101,11 @@ export class RuntimeRepoManagedWorktreeCommands {
     retiredNamesByRepo: Record<string, readonly string[]>
     retiredNameTiersByRepo: Record<string, number>
   }> {
-    const store = self.deps.store
+    const store = this.self.deps.store
     if (!store) {
       return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
     }
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.self.deps.resolveRepoSelector(repoSelector)
     const settings = store.getSettings()
     const registry: RetiredNameRegistry = await getRetiredNameRegistryForRepo(
       store,
@@ -124,8 +124,8 @@ export class RuntimeRepoManagedWorktreeCommands {
     connectionId?: string | null,
     sourceDefaultsSupported = true
   ): Promise<DetectedWorktreeListResult> {
-    return self.listDetectedWorktreesForResolvedRepo(
-      await self.resolveRepoSelectorForConnection(repoSelector, connectionId),
+    return this.self.listDetectedWorktreesForResolvedRepo(
+      await this.self.resolveRepoSelectorForConnection(repoSelector, connectionId),
       sourceDefaultsSupported
     )
   }
@@ -134,7 +134,7 @@ export class RuntimeRepoManagedWorktreeCommands {
     repo: Repo,
     sourceDefaultsSupported = true
   ): Promise<DetectedWorktreeListResult> {
-    const store = self.deps.requireStore()
+    const store = this.self.deps.requireStore()
     const settings = store.getSettings()
     const visibilityDefaults = sourceDefaultsSupported
       ? settings.worktreeVisibilityDefaults
@@ -155,7 +155,7 @@ export class RuntimeRepoManagedWorktreeCommands {
         resolveConfiguredWorktreeBasePaths(repo)
       )
       const detected = worktrees.map((worktree) =>
-        self.toRuntimeDetectedWorktree(
+        this.self.toRuntimeDetectedWorktree(
           repo,
           worktree,
           matcher,
@@ -172,7 +172,7 @@ export class RuntimeRepoManagedWorktreeCommands {
     }
     let scan: RuntimeWorktreeScanResult
     try {
-      scan = await self.deps.listRepoWorktreesForResolution(repo)
+      scan = await this.self.deps.listRepoWorktreesForResolution(repo)
     } catch {
       scan = { ok: false, worktrees: [] }
     }
@@ -197,7 +197,7 @@ export class RuntimeRepoManagedWorktreeCommands {
         ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
         hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
       }
-      const detectedWorktree = self.toRuntimeDetectedWorktree(
+      const detectedWorktree = this.self.toRuntimeDetectedWorktree(
         repo,
         worktree,
         worktreeVisibilitySourceMatcher,
@@ -222,15 +222,15 @@ export class RuntimeRepoManagedWorktreeCommands {
     knownWorktreeIds: readonly string[],
     connectionId?: string | null
   ): Promise<{ stoppedWorktreeIds: string[] }> {
-    const repo = await self.resolveRepoSelectorForConnection(repoSelector, connectionId)
+    const repo = await this.self.resolveRepoSelectorForConnection(repoSelector, connectionId)
     // Why: killing PTYs must be proven against the host right now — a cached scan
     // (30s TTL) can still list a directory git already dropped, and the renderer
     // purges its state either way, so a stale miss strands those processes for good.
-    self.deps.invalidateWorktreeScanCacheForRepo(repo.id)
+    this.self.deps.invalidateWorktreeScanCacheForRepo(repo.id)
     // Why: rescanning by `id:` would re-resolve the already-resolved repo, and a
     // duplicate id across hosts makes that second lookup throw selector_ambiguous
     // even though the caller's selector was unique — losing the sweep entirely.
-    const detected = await self.listDetectedWorktreesForResolvedRepo(repo)
+    const detected = await this.self.listDetectedWorktreesForResolvedRepo(repo)
     if (!detected.authoritative) {
       return { stoppedWorktreeIds: [] }
     }
@@ -240,9 +240,9 @@ export class RuntimeRepoManagedWorktreeCommands {
       detected.worktrees.map((worktree) => worktree.id),
       {
         runtime: this,
-        getLocalProvider: () => self.deps.getLocalProvider(),
-        getSshProvider: (connectionId) => self.deps.getSshProviderFn?.(connectionId),
-        onPtyStopped: self.deps.onPtyStopped ?? undefined
+        getLocalProvider: () => this.self.deps.getLocalProvider(),
+        getSshProvider: (connectionId) => this.self.deps.getSshProviderFn?.(connectionId),
+        onPtyStopped: this.self.deps.onPtyStopped ?? undefined
       }
     )
   }
@@ -252,13 +252,13 @@ export class RuntimeRepoManagedWorktreeCommands {
     connectionId?: string | null
   ): Promise<Repo> {
     if (connectionId === undefined) {
-      return self.deps.resolveRepoSelector(repoSelector)
+      return this.self.deps.resolveRepoSelector(repoSelector)
     }
     // Why: an explicit connection identity only *narrows* the selector; it must not
     // change the grammar. Matching the selector as a bare repo id would make
     // `path:`/`name:` selectors resolve to repo_not_found on this path alone.
     const wanted = connectionId?.trim() || null
-    const matches = self.deps
+    const matches = this.self.deps
       .selectReposBySelector(repoSelector)
       .filter((repo) => (repo.connectionId?.trim() || null) === wanted)
     if (matches.length !== 1) {
@@ -272,12 +272,16 @@ export class RuntimeRepoManagedWorktreeCommands {
     worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
     settings?: ReturnType<RuntimeStore['getSettings']>
   ): boolean {
-    const repo = self.deps.store?.getRepo(worktree.repoId)
-    if (!repo || !self.deps.store) {
+    const repo = this.self.deps.store?.getRepo(worktree.repoId)
+    if (!repo || !this.self.deps.store) {
       return true
     }
-    return self.toRuntimeDetectedWorktree(repo, worktree, worktreeVisibilitySourceMatcher, settings)
-      .visible
+    return this.self.toRuntimeDetectedWorktree(
+      repo,
+      worktree,
+      worktreeVisibilitySourceMatcher,
+      settings
+    ).visible
   }
 
   private buildRuntimeVisibilitySourceMatchersByRepoId(
@@ -291,7 +295,7 @@ export class RuntimeRepoManagedWorktreeCommands {
       checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
     }
     return new Map(
-      (self.deps.store?.getRepos() ?? [])
+      (this.self.deps.store?.getRepos() ?? [])
         .filter((repo) => checkoutPathsByRepoId.has(repo.id))
         .map((repo) => [
           repo.id,
@@ -311,7 +315,7 @@ export class RuntimeRepoManagedWorktreeCommands {
     providedSettings?: ReturnType<RuntimeStore['getSettings']>,
     providedMeta?: WorktreeMeta | null
   ): DetectedWorktree {
-    const settings = providedSettings ?? self.deps.store?.getSettings()
+    const settings = providedSettings ?? this.self.deps.store?.getSettings()
     if (!settings) {
       return {
         ...worktree,
@@ -325,7 +329,7 @@ export class RuntimeRepoManagedWorktreeCommands {
       worktree,
       meta:
         providedMeta === undefined
-          ? self.deps.store?.getWorktreeMeta(worktree.id)
+          ? this.self.deps.store?.getWorktreeMeta(worktree.id)
           : (providedMeta ?? undefined),
       settings,
       knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),

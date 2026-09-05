@@ -1,5 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TuiAgent } from '../../shared/agent-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 // Constants used by liveness verdict tracking
 const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000

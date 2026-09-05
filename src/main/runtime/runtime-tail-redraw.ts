@@ -152,7 +152,7 @@ export function processTerminalTailCompleteSegments(segments: string[]): string[
   return processed
 }
 
-function applyTerminalLineControls(line: string): {
+export function applyTerminalLineControls(line: string): {
   text: string
   cursorColumn: number
   hadControl: boolean
@@ -234,7 +234,7 @@ function clampTerminalPreviewCursor(nextCursor: number): number {
   return Math.min(MAX_TAIL_PARTIAL_CHARS, Math.max(0, Math.floor(nextCursor)))
 }
 
-function parseAnsiControlSequence(
+export function parseAnsiControlSequence(
   value: string,
   escapeIndex: number
 ):
@@ -289,7 +289,7 @@ function isStTerminatedStringControlIntroducer(introducer: string | undefined): 
   return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
 }
 
-function hasCanonicalNumericCsiParams(params: string): boolean {
+export function hasCanonicalNumericCsiParams(params: string): boolean {
   return /^[0-9;]*$/.test(params)
 }
 

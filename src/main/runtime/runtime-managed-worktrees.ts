@@ -166,7 +166,7 @@ import {
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from '../ipc/worktree-symlinks'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../../main/local-project-runtime-resolution'
 import type { Store } from '../persistence'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import {
@@ -285,7 +285,7 @@ export type RuntimeManagedWorktreesDeps = {
     draftPaste?: WorktreeStartupDraftPaste
   } | null>
   captureReadyGraphEpoch: () => number
-  clientEventPublishingCommands: RuntimeClientEventPublishingCommands
+  clientEventPublishingCommands: () => RuntimeClientEventPublishingCommands
   createDefaultTabTerminals: (
     worktreeSelector: string,
     worktreeId: string,
@@ -337,7 +337,7 @@ export type RuntimeManagedWorktreesDeps = {
     base: RemoteTrackingBase,
     gitOptions?: { wslDistro?: string }
   ) => Promise<boolean>
-  hookAgentRowResolutionCommands: RuntimeHookAgentRowResolutionCommands
+  hookAgentRowResolutionCommands: () => RuntimeHookAgentRowResolutionCommands
   hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (
     worktreeId?: string,
     options?: {
@@ -2221,7 +2221,7 @@ export class RuntimeManagedWorktrees {
   }
 
   emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
-    this.deps.clientEventPublishingCommands.emitWorktreeLifecycle(event)
+    this.deps.clientEventPublishingCommands().emitWorktreeLifecycle(event)
   }
 
   folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
@@ -2396,7 +2396,7 @@ export class RuntimeManagedWorktrees {
   }
 
   getWorktreeIdForTerminalHandle(handle: string): string | null {
-    return this.deps.hookAgentRowResolutionCommands.getWorktreeIdForTerminalHandle(handle)
+    return this.deps.hookAgentRowResolutionCommands().getWorktreeIdForTerminalHandle(handle)
   }
 
   async hasTerminalsForWorktree(worktreeSelector: string): Promise<boolean> {
@@ -2531,7 +2531,7 @@ export class RuntimeManagedWorktrees {
   }
 
   notifyWorktreesChanged(repoId: string): void {
-    this.deps.clientEventPublishingCommands.notifyWorktreesChanged(repoId)
+    this.deps.clientEventPublishingCommands().notifyWorktreesChanged(repoId)
   }
 
   notifyWorktreesChangedForRemoteClients(repoId: string): void {

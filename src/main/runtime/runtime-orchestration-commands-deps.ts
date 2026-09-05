@@ -1,5 +1,5 @@
 import type { OrchestrationDb } from './orchestration/db'
-import type { Store } from '../../shared/store'
+import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeLeafTerminal, RuntimePtyWorktreeRecord } from '../../shared/runtime-types'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../shared/orchestration-compatibility-evidence'
 import type { OrchestrationMailboxNotificationCoordinator } from './orchestration/mailbox-notification-coordinator'

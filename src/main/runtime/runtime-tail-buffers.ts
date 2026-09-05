@@ -2,9 +2,17 @@
 // Pure terminal tail projection: ANSI-normalized tail buffers, wait-state
 // detection, restored-tail seeding, and worktree/agent title classification.
 // Zero runtime state — every function here is a pure transform over its args.
-import type { RetainedTailRedrawCursor, RetainedTerminalRow } from './runtime-tail-redraw'
+import {
+  applyTerminalLineControls,
+  containsTerminalVerticalLineControl,
+  processTerminalTailCompleteSegments,
+  splitRetainedTerminalTailSegments,
+  hasCanonicalNumericCsiParams,
+  parseAnsiControlSequence,
+  type RetainedTailRedrawCursor,
+  type RetainedTerminalRow
+} from './runtime-tail-redraw'
 import { MAX_TAIL_CHARS, MAX_TAIL_LINES, MAX_TAIL_PARTIAL_CHARS } from './runtime-tail-shared'
-
 
 export function appendNormalizedToTailBuffer(
   previousLines: string[],

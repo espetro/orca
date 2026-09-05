@@ -120,7 +120,7 @@ export async function runFileWatchStream(args: {
       handleTerminalError,
       setupAbortController.signal
     )
-    void setupPromise
+    void setupPromise!
       .then((nextUnwatch) => {
         if (cleanupPromise || settled) {
           return

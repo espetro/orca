@@ -14,9 +14,15 @@ import {
 import { detectTerminalComposerDraft } from '../../shared/terminal-composer-draft'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { RetainedTailRedrawCursor } from './runtime-tail-redraw'
-import type { RuntimeLeafRecord, RuntimeTerminalProjection } from './runtime-tail-shared'
-import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE, findActionableTerminalWaitBlockedSignal } from './runtime-terminal-wait'
-
+import {
+  MAX_PREVIEW_CHARS,
+  type RuntimeLeafRecord,
+  type RuntimeTerminalProjection
+} from './runtime-tail-shared'
+import {
+  TERMINAL_WAIT_BLOCKED_SENTINEL_RE,
+  findActionableTerminalWaitBlockedSignal
+} from './runtime-terminal-wait'
 
 export function buildPreview(lines: string[], partialLine: string): string {
   const previewLines: string[] = []
@@ -48,7 +54,11 @@ export function buildPreview(lines: string[], partialLine: string): string {
 // Why: restore payloads can be multi-MB; the records only retain a bounded tail,
 // so cap the one-time parse on the spawn path to the suffix that can matter.
 
-export function buildTerminalWaitText(lines: string[], partialLine: string, preview: string): string {
+export function buildTerminalWaitText(
+  lines: string[],
+  partialLine: string,
+  preview: string
+): string {
   const waitText = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -465,7 +475,9 @@ export function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
-export async function assertTerminalInputWithinLimitWithYield(text: string | undefined): Promise<void> {
+export async function assertTerminalInputWithinLimitWithYield(
+  text: string | undefined
+): Promise<void> {
   if (!text) {
     return
   }

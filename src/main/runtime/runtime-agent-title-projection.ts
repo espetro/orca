@@ -1,4 +1,11 @@
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output. */
+import { parseAnsiControlSequence } from './runtime-tail-redraw'
+import { hasCanonicalNumericCsiParams } from './runtime-tail-redraw'
+import {
+  detectAgentStatusFromTitle,
+  isClaudeManagementTitle,
+  isShellProcess
+} from '../../shared/agent-detection'
 
 export function classifyLatestAgentTitle(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
@@ -13,7 +20,10 @@ export function getLatestPtyTitle(pty: RuntimePtyWorktreeRecord): string | null 
   )
 }
 
-export function getLatestLeafTitle(leaf: RuntimeLeafRecord, tabTitle: string | null): string | null {
+export function getLatestLeafTitle(
+  leaf: RuntimeLeafRecord,
+  tabTitle: string | null
+): string | null {
   return getLatestAgentCandidateTitle(
     { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
     { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },

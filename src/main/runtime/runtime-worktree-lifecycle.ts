@@ -1,85 +1,132 @@
 /* eslint-disable max-lines -- Why: this module contains extracted worktree lifecycle operations; state-owner extraction can split further if max-lines limits expand */
+/* eslint-disable @typescript-eslint/no-explicit-any -- Why: bridges to the god-class runtime surface use unknown/any placeholders pending typed extraction. */
 import type {
   RemoveWorktreeResult,
-  ForceDeleteWorktreeBranchResult,
-  ExecutionHostId,
-  GitPushTarget
-} from '../../shared/runtime-rpc-schema'
+  ForceDeleteWorktreeBranchResult
+} from '../../shared/worktree/create-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
 import { parseExactWorktreeIdSelector } from '../../shared/worktree/id'
-import { parseExecutionHostId } from '../../shared/runtime-execution-host'
-import { requireSshGitProvider } from '../git/ssh-git-provider'
-import { getSshFilesystemProvider } from '../git/ssh-filesystem-provider'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import { isWorktreePathMissing } from '../worktree-removal-safety'
+import type { Repo } from '../../shared/repo-types'
+import type { IPtyProvider } from '../providers/types'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { resolveWorktreeRemovalRepoOwner } from '../worktree-removal-repo-owner'
+import { forceDeleteLocalBranch, listWorktreesStrict, removeWorktree } from '../git/worktree'
+import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
+import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval } from '../local-worktree-removal-recovery'
 import {
-  getLocalProjectWorktreeGitOptions,
-  getRepoExecutionHostId,
-  resolveWorktreeRemovalRepoOwner
-} from '../../shared/repo-worktree-git-context'
-import {
-  forceDeleteLocalBranch,
-  listWorktreesStrict,
-  removeWorktree,
-  findRegisteredDeletableWorktree,
-  assertWorktreeUnlockedForRemoval,
-  formatWorktreeRemovalError,
-  isWindowsAbsolutePathLike
-} from '../../shared/worktree-git-commands'
-import {
-  removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   cleanupUnusedWorktreePushTargetRemoteSsh,
   cleanupUnusedWorktreePushTargetRemote
-} from '../../shared/worktree-removal-coordination'
+} from '../ipc/worktree-remote'
+import { getRuntimeFolderWorkspaceRootId } from './runtime-folder-workspace'
 import {
-  getRuntimeFolderWorkspaceRootId,
   canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   canCleanupUnregisteredOrcaLeftoverDirectory,
-  resolveWorktreeRemovalMetadata,
-  isRuntimeWorktreePathMissing,
-  isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError,
-  getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath,
-  isLocalRuntimeGitRepository,
-  assertWorktreeCleanForRemoval,
   isDangerousWorktreeRemovalPath,
-  removeLocalWorktreePath,
-  getWorktreeSharedLinkPaths,
-  findExistingWorktreeSymlinkPaths,
-  removeWorktreeLinkedPaths,
-  recoverLocalWindowsWorktreeRemoval,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
-} from '../../shared/worktree-removal-fs'
+} from '../worktree-removal-safety'
+import { resolveWorktreeRemovalMetadata } from '../worktree-removal-repo-owner'
+import { isOrphanCompatiblePreflightError, isOrphanedWorktreeError } from '../ipc/worktree-logic'
+import {
+  getLocalWorktreePathAccess,
+  toLocalWorktreeRuntimePath,
+  removeLocalWorktreePath
+} from '../local-worktree-filesystem'
+import { assertWorktreeCleanForRemoval } from '../git/worktree'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import {
+  findExistingWorktreeSymlinkPaths,
+  removeWorktreeLinkedPaths
+} from '../ipc/worktree-symlinks'
+import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-recovery'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { gitExecFileAsync } from '../git/runner'
-import { deleteRemoteWorktreeHistory } from '../../shared/terminal-history/remote-history-sync'
-import { withWorktreeSpan } from '../../shared/tracing-worktree-spans'
-import { getRuntimeWorktreeRemovalOptionsKey } from '../../shared/worktree-removal-race-detection'
-import { killAllProcessesForWorktree } from '../child-process/worktree-process-cleanup'
-import { invalidateAuthorizedRootsCache } from '../authorized-roots-cache'
-import { getEffectiveHooks, runHook } from '../worktree-hooks/hook-runner'
+import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
+import { withWorktreeSpan } from '../observability/instrumentation'
+import { getWorktreeRemovalOptionsKey as getRuntimeWorktreeRemovalOptionsKey } from '../ipc/worktrees/removal/worktree-removal-coordinator'
+import { killAllProcessesForWorktree } from './worktree-teardown'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { getEffectiveHooks, runHook } from '../hooks'
+
+async function isRuntimeWorktreePathMissing(
+  repo: Repo,
+  worktreePath: string,
+  localWorktreeGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  if (!repo.connectionId) {
+    const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+    return isWorktreePathMissing(
+      toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
+      access.statPath
+    )
+  }
+
+  const fsProvider = getSshFilesystemProvider(repo.connectionId)
+  if (!fsProvider) {
+    return false
+  }
+  return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
+}
+
+async function isLocalRuntimeGitRepository(
+  runtimeWorktreePath: string,
+  localWorktreeGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  try {
+    await gitExecFileAsync(['status', '--short'], {
+      cwd: runtimeWorktreePath,
+      ...localWorktreeGitOptions
+    })
+    return true
+  } catch (error) {
+    return !gitStatusErrorMeansNotRepository(error)
+  }
+}
+
+function gitStatusErrorMeansNotRepository(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : typeof error === 'string'
+          ? error
+          : ''
+  const stderr =
+    error && typeof error === 'object' && 'stderr' in error
+      ? String((error as { stderr: unknown }).stderr)
+      : ''
+  return /not a git repository/i.test(`${message}\n${stderr}`)
+}
 
 type WorktreeLifecycleRuntime = {
   store: unknown | undefined
   preservedBranchCleanupByScope: Map<string, unknown>
   removeManagedWorktreeInFlight: Map<string, unknown>
-  getSshProviderFn?: (connectionId: string) => unknown
+  getSshProviderFn?: (connectionId: string) => IPtyProvider | undefined
   getLocalProvider(): unknown
   onPtyStopped?: (...args: unknown[]) => void
   requireStore(): unknown
-  resolveWorktreeRemovalTarget(
-    worktreeSelector: string,
-    hostId?: ExecutionHostId
-  ): Promise<unknown>
+  resolveWorktreeRemovalTarget(worktreeSelector: string, hostId?: ExecutionHostId): Promise<unknown>
   clearOptimisticReconcileToken(worktreeId: string): void
-  removeWorktreeMetadataAndHistory(store: unknown, worktreeId: string, hostId?: ExecutionHostId): void
-  acquireFileWatcherRemoval(path: string, connectionId?: string): Promise<unknown>
-  stopPtysForDestructiveWorktreeRemoval(
+  removeWorktreeMetadataAndHistory(
+    store: unknown,
     worktreeId: string,
-    options: unknown
-  ): Promise<void>
+    hostId?: ExecutionHostId
+  ): void
+  acquireFileWatcherRemoval(path: string, connectionId?: string): Promise<unknown>
+  stopPtysForDestructiveWorktreeRemoval(worktreeId: string, options: unknown): Promise<void>
   closeFileWatchersForRemoval(path: string): Promise<void>
   invalidateResolvedWorktreeCache(): void
   invalidateWorktreeScanCacheForRepo(repoId: string): void
@@ -207,7 +254,10 @@ export async function forceDeletePreservedBranch(
       runtime.store as any
     )
   } else {
-    const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(runtime.requireStore() as any, repo)
+    const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(
+      runtime.requireStore() as any,
+      repo
+    )
     await (Object.keys(localWorktreeGitOptions).length > 0
       ? forceDeleteLocalBranch(
           repo.path,
@@ -215,7 +265,11 @@ export async function forceDeletePreservedBranch(
           (cleanupTarget as any).head,
           (argv, cwd) => gitExecFileAsync(argv, { cwd, ...localWorktreeGitOptions })
         )
-      : forceDeleteLocalBranch(repo.path, (cleanupTarget as any).branchName, (cleanupTarget as any).head))
+      : forceDeleteLocalBranch(
+          repo.path,
+          (cleanupTarget as any).branchName,
+          (cleanupTarget as any).head
+        ))
     await cleanupUnusedWorktreePushTargetRemote(
       repo.path,
       removalTarget.id,
@@ -254,7 +308,11 @@ export async function removeManagedWorktree(
     worktreeId: (removalTarget as any).id,
     hostId: cleanupHostId
   })
-  const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
+  const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
+    force,
+    allowUnverifiedPtyStop,
+    skipArchive: !runHooks
+  })
   const inFlightRemoval = runtime.removeManagedWorktreeInFlight.get(cleanupScopeKey)
   if (inFlightRemoval) {
     if ((inFlightRemoval as any).optionsKey === optionsKey) {
@@ -288,7 +346,9 @@ export async function removeManagedWorktree(
       // still resolved exactly one repo above, and that repo names the owner.
       const removalHostId = repo ? (cleanupHostId ?? getRepoExecutionHostId(repo)) : cleanupHostId
       if (!repo) {
-        const orphanHost = parseExecutionHostId((store as any).getWorktreeMeta((removalTarget as any).id)?.hostId)
+        const orphanHost = parseExecutionHostId(
+          (store as any).getWorktreeMeta((removalTarget as any).id)?.hostId
+        )
         if (cleanupHostId && orphanHost?.id !== cleanupHostId) {
           throw new Error(
             `Workspace identity for ${(removalTarget as any).id} no longer belongs to ${cleanupHostId}. Refresh projects and try again.`
@@ -330,10 +390,11 @@ export async function removeManagedWorktree(
             ? orphanFullPath
             : undefined
         if (orphanWatcherPath) {
-          await runtime.acquireFileWatcherRemoval(
-            orphanWatcherPath,
-            orphanHost?.kind === 'ssh' ? orphanHost.targetId : undefined
-          )
+          await runtime
+            .acquireFileWatcherRemoval(
+              orphanWatcherPath,
+              orphanHost?.kind === 'ssh' ? orphanHost.targetId : undefined
+            )
             .then((gate: any) => gate.finish(false))
             .catch(() => {})
         }
@@ -410,7 +471,8 @@ export async function removeManagedWorktree(
         (removalTarget as any).id,
         cleanupHostId ?? getRepoExecutionHostId(repo)
       )
-      const removedPushTarget = (removedMeta as any)?.pushTarget ?? (removalTarget as any).pushTarget
+      const removedPushTarget =
+        (removedMeta as any)?.pushTarget ?? (removalTarget as any).pushTarget
       const registeredWorktree = findRegisteredDeletableWorktree(
         repo.path,
         (removalTarget as any).path,
@@ -549,7 +611,11 @@ export async function removeManagedWorktree(
               localWorktreeGitOptions
             )
             runtime.clearOptimisticReconcileToken((removalTarget as any).id)
-            runtime.removeWorktreeMetadataAndHistory(store, (removalTarget as any).id, removalHostId)
+            runtime.removeWorktreeMetadataAndHistory(
+              store,
+              (removalTarget as any).id,
+              removalHostId
+            )
             runtime.preservedBranchCleanupByScope.delete(cleanupScopeKey)
             runtime.invalidateResolvedWorktreeCache()
             runtime.invalidateWorktreeScanCacheForRepo((removalTarget as any).repoId)
@@ -559,7 +625,11 @@ export async function removeManagedWorktree(
           }
         }
         if (
-          await isRuntimeWorktreePathMissing(repo, (removalTarget as any).path, localWorktreeGitOptions)
+          await isRuntimeWorktreePathMissing(
+            repo,
+            (removalTarget as any).path,
+            localWorktreeGitOptions
+          )
         ) {
           if (!force && !removedMeta) {
             // Why: without persisted metadata, require the renderer recovery
@@ -599,7 +669,9 @@ export async function removeManagedWorktree(
           runtime.notifyWorktreesChanged(repo.id)
           return {}
         }
-        throw new Error(`Refusing to delete unregistered worktree path: ${(removalTarget as any).path}`)
+        throw new Error(
+          `Refusing to delete unregistered worktree path: ${(removalTarget as any).path}`
+        )
       }
       const canonicalWorktreePath = (registeredWorktree as any).path
       const deleteBranch = (removedMeta as any)?.preserveBranchOnDelete !== true
@@ -853,7 +925,11 @@ export async function removeManagedWorktree(
               localWorktreeGitOptions
             )
             runtime.clearOptimisticReconcileToken((removalTarget as any).id)
-            runtime.removeWorktreeMetadataAndHistory(store, (removalTarget as any).id, removalHostId)
+            runtime.removeWorktreeMetadataAndHistory(
+              store,
+              (removalTarget as any).id,
+              removalHostId
+            )
             runtime.preservedBranchCleanupByScope.delete(cleanupScopeKey)
             runtime.invalidateResolvedWorktreeCache()
             runtime.invalidateWorktreeScanCacheForRepo((removalTarget as any).repoId)

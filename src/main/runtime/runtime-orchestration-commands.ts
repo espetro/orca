@@ -105,11 +105,7 @@ export class RuntimeOrchestrationCommands {
   }
 
   getOrchestrationDbIfAvailable() {
-    try {
-      return this.deps.orchestrationDb ?? this.deps.store?.getOrchestrationDb?.()
-    } catch {
-      return this.deps.orchestrationDb
-    }
+    return this.deps.orchestrationDb
   }
 
   buildAgentOrchestrationByPaneKey(): Record<string, AgentStatusOrchestrationContext> | undefined {
@@ -156,7 +152,17 @@ export class RuntimeOrchestrationCommands {
   ): AgentStatusOrchestrationContext | undefined {
     const dispatch =
       db?.getActiveDispatchForTerminal?.(handle) ??
-      this.deps.getRecentSettledDispatchForTerminal(handle, db)
+      (this.deps.getRecentSettledDispatchForTerminal(handle, db) as {
+        task_id: string
+        run_id: string
+        status: string
+        id: string
+      } | null as {
+        task_id: string
+        run_id: string
+        status: 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
+        id: string
+      } | null)
     if (!dispatch) {
       return undefined
     }

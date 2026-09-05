@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { RuntimePtyTitleTrackerEntry } from '../pty-handling/pty-title-tracker-types'
+import type { RuntimePtyTitleTrackerEntry } from './orca-runtime'
 
 export type RuntimePtyTitleTrackingCommandsDeps = {
   ptyTitleTrackersByPtyId: Map<string, RuntimePtyTitleTrackerEntry>

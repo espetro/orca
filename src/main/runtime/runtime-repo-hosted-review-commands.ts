@@ -33,8 +33,8 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview as createStackedHostedReviewFromRepo } from '../source-control/stacked-hosted-review-creation'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { resolveLocalProjectRuntimeForRepo } from '../local-project-runtime-resolution'
-import { getAgentLaunchPlatformForRepo } from '../agent-launch-platform'
+import { resolveLocalProjectRuntimeForRepo } from '../../main/local-project-runtime-resolution'
+import { getAgentLaunchPlatformForRepo } from './agent-launch-platform'
 import { detectGitHubAvatarIcon } from '../repo-icon-autodetect'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
@@ -65,14 +65,14 @@ export class RuntimeRepoHostedReviewCommands {
   }
 
   private getLocalGitExecutionOptionArgs(repo: Repo): [] | [{ wslDistro?: string }] {
-    const localGitOptions = getLocalProjectWorktreeGitOptions(self.deps.requireStore(), repo)
+    const localGitOptions = getLocalProjectWorktreeGitOptions(this.deps.requireStore(), repo)
     return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
   }
 
   private getAgentLaunchPlatformForRepo(repo: Repo): NodeJS.Platform {
     const projectRuntime = repo.connectionId
       ? undefined
-      : resolveLocalProjectRuntimeForRepo(self.deps.requireStore(), repo)
+      : resolveLocalProjectRuntimeForRepo(this.deps.requireStore(), repo)
     return getAgentLaunchPlatformForRepo(repo, projectRuntime)
   }
 
@@ -87,7 +87,7 @@ export class RuntimeRepoHostedReviewCommands {
   }
 
   async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     const options = self.getHostedReviewExecutionOptions(repo)
     return options
       ? getRepoSlug(repo.path, repo.connectionId ?? null, options)
@@ -95,7 +95,7 @@ export class RuntimeRepoHostedReviewCommands {
   }
 
   async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     const options = self.getHostedReviewExecutionOptions(repo)
     return options
       ? getRepoUpstream(repo.path, repo.connectionId ?? null, options)
@@ -107,9 +107,9 @@ export class RuntimeRepoHostedReviewCommands {
   // local git repos; SSH repos resolve lazily when their settings open (their
   // connection may not be up yet). Sequential to respect the gh rate limit;
   // failures leave `upstream` unset so the next launch retries.
-  private async backfillForkUpstreams(): Promise<void> {
+  async backfillForkUpstreams(): Promise<void> {
     try {
-      const store = self.deps.requireStore()
+      const store = this.deps.requireStore()
       let changed = false
       for (const repo of store.getRepos()) {
         if (repo.upstream !== undefined || repo.kind === 'folder' || repo.connectionId) {
@@ -145,7 +145,7 @@ export class RuntimeRepoHostedReviewCommands {
         changed = true
       }
       if (changed) {
-        self.deps.notifyReposChanged()
+        this.deps.notifyReposChanged()
       }
     } catch {
       // Best-effort startup backfill; never disrupt launch.
@@ -159,7 +159,7 @@ export class RuntimeRepoHostedReviewCommands {
     page?: number,
     noCache?: boolean
   ): Promise<ListWorkItemsResult<MainWorkItem>> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     return listWorkItems(
       repo.path,
       limit,
@@ -176,7 +176,7 @@ export class RuntimeRepoHostedReviewCommands {
     repoSelector: string,
     limit?: number
   ): Promise<Awaited<ReturnType<typeof listGitHubIssues>>['items']> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     const result = await listGitHubIssues(
       repo.path,
       limit,
@@ -192,7 +192,7 @@ export class RuntimeRepoHostedReviewCommands {
     number: number,
     type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     // Why: open-by-number must pin the same source the list and start-point use,
     // else a fork and its upstream sharing a PR number resolve to different PRs.
     return getWorkItem(
@@ -211,7 +211,7 @@ export class RuntimeRepoHostedReviewCommands {
     number: number,
     type: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     return getWorkItemByOwnerRepo(
       repo.path,
       ownerRepo,
@@ -227,7 +227,7 @@ export class RuntimeRepoHostedReviewCommands {
     number: number,
     type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     return getWorkItemDetails(
       repo.path,
       number,
@@ -239,7 +239,7 @@ export class RuntimeRepoHostedReviewCommands {
   }
 
   async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     return countWorkItems(
       repo.path,
       query,
@@ -250,7 +250,7 @@ export class RuntimeRepoHostedReviewCommands {
   }
 
   async listRepoLabels(repoSelector: string): Promise<Awaited<ReturnType<typeof listLabels>>> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
@@ -262,7 +262,7 @@ export class RuntimeRepoHostedReviewCommands {
   async listRepoAssignableUsers(
     repoSelector: string
   ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,
@@ -285,7 +285,7 @@ export class RuntimeRepoHostedReviewCommands {
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null
   ): Promise<PRRefreshOutcome> {
-    const repo = await self.deps.resolveRepoSelector(repoSelector)
+    const repo = await this.deps.resolveRepoSelector(repoSelector)
     const options: GitHubPRBranchLookupOptions = self.getHostedReviewExecutionOptions(repo) ?? {}
     const lookupOptions = { ...options }
     if (acceptMergedFallbackPR === true) {
@@ -322,7 +322,7 @@ export class RuntimeRepoHostedReviewCommands {
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
   }): Promise<HostedReviewInfo | null> {
-    const repo = await self.deps.resolveRepoSelector(args.repoSelector)
+    const repo = await this.deps.resolveRepoSelector(args.repoSelector)
     const executionOptions = self.getHostedReviewExecutionOptions(repo)
     const review = await getHostedReviewForBranchFromRepo({
       repoPath: repo.path,
@@ -340,10 +340,10 @@ export class RuntimeRepoHostedReviewCommands {
     })
     if (
       review?.provider === 'github' &&
-      self.deps.stats &&
-      !self.deps.stats.hasCountedPR(review.url)
+      this.deps.stats &&
+      !this.deps.stats.hasCountedPR(review.url)
     ) {
-      self.deps.stats.record({
+      this.deps.stats.record({
         type: 'pr_created',
         at: Date.now(),
         repoId: repo.id,
@@ -405,8 +405,8 @@ export class RuntimeRepoHostedReviewCommands {
           executionOptions
         )
       : await createHostedReviewFromRepo(repoPath, input, repo.connectionId ?? null)
-    if (result.ok && self.deps.stats && !self.deps.stats.hasCountedPR(result.url)) {
-      self.deps.stats.record({
+    if (result.ok && this.deps.stats && !this.deps.stats.hasCountedPR(result.url)) {
+      this.deps.stats.record({
         type: 'pr_created',
         at: Date.now(),
         repoId: repo.id,
@@ -438,8 +438,8 @@ export class RuntimeRepoHostedReviewCommands {
       repo.connectionId ?? null,
       executionOptions ?? {}
     )
-    if (result.ok && self.deps.stats && !self.deps.stats.hasCountedPR(result.url)) {
-      self.deps.stats.record({
+    if (result.ok && this.deps.stats && !this.deps.stats.hasCountedPR(result.url)) {
+      this.deps.stats.record({
         type: 'pr_created',
         at: Date.now(),
         repoId: repo.id,

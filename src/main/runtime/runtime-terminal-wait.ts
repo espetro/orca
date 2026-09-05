@@ -3,10 +3,7 @@
 // detection, restored-tail seeding, and worktree/agent title classification.
 // Zero runtime state — every function here is a pure transform over its args.
 import type { AgentStatus } from '../../shared/agent-detection'
-import {
-  detectAgentStatusFromTitle,
-  isOpenCodeNativeTitle
-} from '../../shared/agent-detection'
+import { detectAgentStatusFromTitle, isOpenCodeNativeTitle } from '../../shared/agent-detection'
 import type {
   RuntimeTerminalInteractiveWait,
   RuntimeTerminalState,
@@ -17,7 +14,6 @@ import type {
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import { getTerminalState } from './runtime-tail-read'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-tail-shared'
-
 
 export const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 export const TUI_IDLE_POLL_INTERVAL_MS = 2000
@@ -64,12 +60,14 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
   return true
 }
 
-export function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
+export function detectTerminalWaitBlockedReason(
+  preview: string
+): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
   return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
 }
 
-function findActionableTerminalWaitBlockedSignal(
+export function findActionableTerminalWaitBlockedSignal(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
@@ -177,7 +175,7 @@ function isTerminalWaitWhitespace(value: string, index: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
-const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
+export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
 
 // Why text at all: cursor-agent's hook set has no approval event and beforeShellExecution

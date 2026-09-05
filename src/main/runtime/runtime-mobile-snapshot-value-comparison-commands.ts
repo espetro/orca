@@ -1,6 +1,12 @@
+/* oxlint-disable typescript/no-explicit-any -- extracted code operating on untyped runtime snapshots */
 import type { RuntimeMobileSnapshotValueComparisonDeps } from './runtime-mobile-snapshot-value-comparison-commands-deps'
-import type { RuntimeMobileSessionTabsSnapshot, RuntimeMobileSessionSnapshotTab, RuntimeMobileSessionTerminalTab, RuntimeMobileSessionTabGroup } from '../../shared/runtime-types'
-import { collectLayoutLeafIdsInOrder } from '../../shared/terminal-layout'
+import type {
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileSessionTabGroup
+} from '../../shared/runtime-types'
+import { collectLayoutLeafIdsInOrder } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 
 const SSH_PANE_RECOVERY_GRACE_MS = 30000
@@ -68,9 +74,7 @@ export class RuntimeMobileSnapshotValueComparisonCommands {
   ): void {
     const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
     const liveIds = liveBrowserTabs.map((tab) => tab.id)
-    const existingBrowserTabs = existing.tabs.filter(
-      (tab): tab is any => tab.type === 'browser'
-    )
+    const existingBrowserTabs = existing.tabs.filter((tab): tab is any => tab.type === 'browser')
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
     if (this.headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
@@ -208,10 +212,7 @@ export class RuntimeMobileSnapshotValueComparisonCommands {
     )
   }
 
-  hasRecentExpiredSshLeasePane(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
+  hasRecentExpiredSshLeasePane(worktreeId: string, tab: RuntimeMobileSessionTerminalTab): boolean {
     return this.getRecentExpiredSshLease(worktreeId, tab.parentTabId, tab.leafId) !== null
   }
 
@@ -380,9 +381,9 @@ export class RuntimeMobileSnapshotValueComparisonCommands {
       }
       if (
         this.deps.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${tab.parentTabId}`) ||
-        this.deps.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
-          incomingIdentityKeys.has(id)
-        ) ||
+        this.deps
+          .getMobileSessionSnapshotTabIdentityKeys(tab)
+          .some((id) => incomingIdentityKeys.has(id)) ||
         !this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)
       ) {
         continue
@@ -495,11 +496,11 @@ export class RuntimeMobileSnapshotValueComparisonCommands {
   }
 
   // Stub methods needed by parent (will be delegated from OrcaRuntimeService)
-  private buildHeadlessMobileSessionBrowserTabs(worktreeId: string): any[] {
+  private buildHeadlessMobileSessionBrowserTabs(_worktreeId: string): any[] {
     return []
   }
 
-  private headlessBrowserTabsUnchanged(a: any, b: any): boolean {
+  private headlessBrowserTabsUnchanged(_a: any, _b: any): boolean {
     return false
   }
 
@@ -507,11 +508,11 @@ export class RuntimeMobileSnapshotValueComparisonCommands {
     return epoch.startsWith('headless-')
   }
 
-  private collectHeadlessParentTabOrder(tabs: any[]): string[] {
+  private collectHeadlessParentTabOrder(_tabs: any[]): string[] {
     return []
   }
 
-  private getHeadlessMobileSessionGroupId(worktreeId: string): string {
+  private getHeadlessMobileSessionGroupId(_worktreeId: string): string {
     return 'default'
   }
 }

@@ -1,16 +1,32 @@
+/* oxlint-disable typescript/no-explicit-any -- extracted code operating on untyped runtime snapshots */
 import type { RuntimeTerminalAgentStatusBindingCommandsDeps } from './runtime-terminal-agent-status-binding-commands-deps'
-import type { TerminalAgentStatusSnapshot, RuntimeTerminalInteractiveWait, RuntimeTerminalAgentStatus, RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import { detectTerminalWaitBlockedReason } from '../../shared/agent-prompt-injection'
+import type {
+  TerminalAgentStatusSnapshot,
+  RuntimeTerminalInteractiveWait,
+  RuntimeTerminalAgentStatus,
+  RuntimeTerminalWaitBlockedReason
+} from '../../shared/runtime-types'
+import { detectTerminalWaitBlockedReason } from './runtime-terminal-wait'
 import { detectAgentStatusFromTitle, isOpenCodeNativeTitle } from '../../shared/agent-detection'
 import { getTerminalState } from '../../shared/terminal-tab-types'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { recognizeAgentProcess, isShellProcess } from '../../shared/agent-process-recognition'
 import { hasCompatibleAgentTitleIdentity } from '../../shared/agent-title-owner'
-import { buildTerminalWaitText, getLatestAgentCandidateTitleInfo, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../../shared/agent-prompt-injection'
+import { getLatestAgentCandidateTitleInfo } from './runtime-agent-title-projection'
+import { buildTerminalWaitText } from './runtime-tail-read'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './runtime-terminal-wait'
 
 type PtyForegroundProcessRead = { controller: any; process: string | null; available: boolean }
-type PtyForegroundProcessReadEntry = { controller: any; startedAfterTitleObservation: number; promise: Promise<PtyForegroundProcessRead> }
-type PtyForegroundAgentRefresh = { promise: Promise<boolean>; startedAfterTitleObservation: number; requestedAfterTitleObservation: number }
+type PtyForegroundProcessReadEntry = {
+  controller: any
+  startedAfterTitleObservation: number
+  promise: Promise<PtyForegroundProcessRead>
+}
+type PtyForegroundAgentRefresh = {
+  promise: Promise<boolean>
+  startedAfterTitleObservation: number
+  requestedAfterTitleObservation: number
+}
 
 export class RuntimeTerminalAgentStatusBindingCommands {
   constructor(private readonly deps: RuntimeTerminalAgentStatusBindingCommandsDeps) {}
@@ -40,7 +56,11 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     throw new Error('terminal_handle_stale')
   }
 
-  getTerminalAgentStatusSnapshot = (handle: string, expectedPtyId: string, waitTextOverride?: string): TerminalAgentStatusSnapshot => {
+  getTerminalAgentStatusSnapshot = (
+    handle: string,
+    expectedPtyId: string,
+    waitTextOverride?: string
+  ): TerminalAgentStatusSnapshot => {
     const pty = this.deps.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected || pty.pty.ptyId !== expectedPtyId) {
@@ -53,16 +73,22 @@ export class RuntimeTerminalAgentStatusBindingCommands {
             { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
           )
         : null
-      const ptyTitle = leafTitle ?? getLatestAgentCandidateTitleInfo(
-        { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
-        { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
-      )
-      const waitText = waitTextOverride ?? buildTerminalWaitText(pty.pty.tailBuffer, pty.pty.tailPartialLine, pty.pty.preview)
+      const ptyTitle =
+        leafTitle ??
+        getLatestAgentCandidateTitleInfo(
+          { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
+          { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
+        )
+      const waitText =
+        waitTextOverride ??
+        buildTerminalWaitText(pty.pty.tailBuffer, pty.pty.tailPartialLine, pty.pty.preview)
       return {
         waitText,
         waitBlockedAt: pty.pty.waitBlockedAt,
         title: ptyTitle?.title ?? null,
-        titleStatus: ptyTitle ? detectAgentStatusFromTitle(ptyTitle.title) : pty.pty.lastAgentStatus,
+        titleStatus: ptyTitle
+          ? detectAgentStatusFromTitle(ptyTitle.title)
+          : pty.pty.lastAgentStatus,
         titleStatusIsLive: ptyTitle !== null
       }
     }
@@ -81,7 +107,9 @@ export class RuntimeTerminalAgentStatusBindingCommands {
       { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
     )
     return {
-      waitText: waitTextOverride ?? buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+      waitText:
+        waitTextOverride ??
+        buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
       waitBlockedAt: leaf.waitBlockedAt,
       title: title?.title ?? null,
       titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
@@ -89,16 +117,31 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     }
   }
 
-  hasAuthoritativeTerminalWaitPermission = (terminal: TerminalAgentStatusSnapshot, explicitStatus: { status: any; updatedAt: number } | null, lifecycle: { status: any | null; updatedAt: number } | null | undefined): boolean => {
-    return this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle) !== null
+  hasAuthoritativeTerminalWaitPermission = (
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: any; updatedAt: number } | null,
+    lifecycle: { status: any | null; updatedAt: number } | null | undefined
+  ): boolean => {
+    return (
+      this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle) !== null
+    )
   }
 
-  resolveAuthoritativeTerminalWaitPermission = (terminal: TerminalAgentStatusSnapshot, explicitStatus: { status: any; updatedAt: number } | null, lifecycle: { status: any | null; updatedAt: number } | null | undefined): RuntimeTerminalWaitBlockedReason | null => {
+  resolveAuthoritativeTerminalWaitPermission = (
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: any; updatedAt: number } | null,
+    lifecycle: { status: any | null; updatedAt: number } | null | undefined
+  ): RuntimeTerminalWaitBlockedReason | null => {
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     if (!blockedByWaitText) {
       return null
     }
-    const liveTitleClearsBlockedText = terminal.titleStatusIsLive && terminal.titleStatus !== null && terminal.titleStatus !== 'permission' && !isOpenCodeNativeTitle(terminal.title) && blockedByWaitText !== 'agent-approval-prompt'
+    const liveTitleClearsBlockedText =
+      terminal.titleStatusIsLive &&
+      terminal.titleStatus !== null &&
+      terminal.titleStatus !== 'permission' &&
+      !isOpenCodeNativeTitle(terminal.title) &&
+      blockedByWaitText !== 'agent-approval-prompt'
     if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
       return null
     }
@@ -117,7 +160,9 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
   }
 
-  async getTerminalInteractiveWait(handle: string): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
+  async getTerminalInteractiveWait(
+    handle: string
+  ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
     let ptyId: string
     let terminal: TerminalAgentStatusSnapshot
     try {
@@ -127,7 +172,11 @@ export class RuntimeTerminalAgentStatusBindingCommands {
       return undefined
     }
     const explicitStatus = this.deps.getFreshExplicitAgentStatusForHandle(handle)
-    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, this.deps.agentPromptLifecycleByPtyId.get(ptyId))
+    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
+      terminal,
+      explicitStatus,
+      this.deps.agentPromptLifecycleByPtyId.get(ptyId)
+    )
     if (promptReason) {
       return {
         source: 'prompt-text',
@@ -141,25 +190,40 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     if (explicitStatus?.status !== 'permission') {
       return null
     }
-    const status = await withTimeout(this.probeAgentStatusOncePerPty(handle, ptyId), TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS, undefined)
+    const status = await withTimeout(
+      this.probeAgentStatusOncePerPty(handle, ptyId),
+      TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
+      undefined
+    )
     if (!status) {
       return undefined
     }
-    return status.isRunningAgent && status.status === 'permission' ? { source: 'hook', since: explicitStatus.updatedAt } : null
+    return status.isRunningAgent && status.status === 'permission'
+      ? { source: 'hook', since: explicitStatus.updatedAt }
+      : null
   }
 
-  private readonly interactiveWaitProbesByPtyId = new Map<string, Promise<RuntimeTerminalAgentStatus | undefined>>()
+  private readonly interactiveWaitProbesByPtyId = new Map<
+    string,
+    Promise<RuntimeTerminalAgentStatus | undefined>
+  >()
 
-  probeAgentStatusOncePerPty = (handle: string, ptyId: string): Promise<RuntimeTerminalAgentStatus | undefined> => {
+  probeAgentStatusOncePerPty = (
+    handle: string,
+    ptyId: string
+  ): Promise<RuntimeTerminalAgentStatus | undefined> => {
     const inFlight = this.interactiveWaitProbesByPtyId.get(ptyId)
     if (inFlight) {
       return inFlight
     }
-    const probe = this.deps.getTerminalAgentStatus(handle).catch(() => undefined).finally(() => {
-      if (this.interactiveWaitProbesByPtyId.get(ptyId) === probe) {
-        this.interactiveWaitProbesByPtyId.delete(ptyId)
-      }
-    })
+    const probe = this.deps
+      .getTerminalAgentStatus(handle)
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.interactiveWaitProbesByPtyId.get(ptyId) === probe) {
+          this.interactiveWaitProbesByPtyId.delete(ptyId)
+        }
+      })
     this.interactiveWaitProbesByPtyId.set(ptyId, probe)
     return probe
   }
@@ -195,27 +259,46 @@ export class RuntimeTerminalAgentStatusBindingCommands {
   }
 
   shouldDelayPtyBackedMobileSnapshotForForegroundAgent = (pty: any, title: string): boolean => {
-    return !pty.launchAgent && pty.foregroundAgent === null && hasCompatibleAgentTitleIdentity(title)
+    return (
+      !pty.launchAgent && pty.foregroundAgent === null && hasCompatibleAgentTitleIdentity(title)
+    )
   }
 
-  readPtyForegroundProcessFromController = (ptyId: string, afterTitleObservation = 0): Promise<PtyForegroundProcessRead> | null => {
+  readPtyForegroundProcessFromController = (
+    ptyId: string,
+    afterTitleObservation = 0
+  ): Promise<PtyForegroundProcessRead> | null => {
     const controller = this.deps.ptyController
     if (!controller) {
       return null
     }
     const pending = this.deps.ptyForegroundProcessReads.get(ptyId)
-    if (pending?.controller === controller && pending.startedAfterTitleObservation >= afterTitleObservation) {
+    if (
+      pending?.controller === controller &&
+      pending.startedAfterTitleObservation >= afterTitleObservation
+    ) {
       return pending.promise
     }
     if (pending?.controller === controller) {
-      return pending.promise.then(() => this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation) ?? { controller, process: null, available: false })
+      return pending.promise.then(
+        () =>
+          this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation) ?? {
+            controller,
+            process: null,
+            available: false
+          }
+      )
     }
     const unavailable: PtyForegroundProcessRead = { controller, process: null, available: false }
     let processRead: Promise<string | null>
     try {
       processRead = Promise.resolve(controller.getForegroundProcess(ptyId))
     } catch {
-      const entry: PtyForegroundProcessReadEntry = { controller, startedAfterTitleObservation: afterTitleObservation, promise: Promise.resolve(unavailable) }
+      const entry: PtyForegroundProcessReadEntry = {
+        controller,
+        startedAfterTitleObservation: afterTitleObservation,
+        promise: Promise.resolve(unavailable)
+      }
       entry.promise = entry.promise.finally(() => {
         if (this.deps.ptyForegroundProcessReads.get(ptyId) === entry) {
           this.deps.ptyForegroundProcessReads.delete(ptyId)
@@ -225,11 +308,14 @@ export class RuntimeTerminalAgentStatusBindingCommands {
       return entry.promise
     }
     let entry: PtyForegroundProcessReadEntry
-    const promise = processRead.then((process) => ({ controller, process, available: true })).catch(() => unavailable).finally(() => {
-      if (this.deps.ptyForegroundProcessReads.get(ptyId) === entry) {
-        this.deps.ptyForegroundProcessReads.delete(ptyId)
-      }
-    })
+    const promise = processRead
+      .then((process) => ({ controller, process, available: true }))
+      .catch(() => unavailable)
+      .finally(() => {
+        if (this.deps.ptyForegroundProcessReads.get(ptyId) === entry) {
+          this.deps.ptyForegroundProcessReads.delete(ptyId)
+        }
+      })
     entry = { controller, startedAfterTitleObservation: afterTitleObservation, promise }
     this.deps.ptyForegroundProcessReads.set(ptyId, entry)
     return entry.promise
@@ -251,8 +337,14 @@ export class RuntimeTerminalAgentStatusBindingCommands {
       if (current.lastOscTitleAt !== titleObservedAt && current.lastAgentStatus !== null) {
         return
       }
-      if (result.controller === this.deps.ptyController && result.available && recognizeAgentProcess(result.process) !== null) {
-        const restoredStatus = this.deps.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+      if (
+        result.controller === this.deps.ptyController &&
+        result.available &&
+        recognizeAgentProcess(result.process) !== null
+      ) {
+        const restoredStatus = this.deps.ptyTitleTrackersByPtyId
+          .get(ptyId)
+          ?.tracker.restoreLastAgentExit()
         if (restoredStatus !== null && restoredStatus !== undefined) {
           current.lastAgentStatus = restoredStatus
           for (const leaf of this.deps.getLeavesForPty(ptyId)) {
@@ -275,14 +367,23 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     void this.refreshPtyForegroundAgentFromController(ptyId)
   }
 
-  getPendingForegroundAgentRefreshForTitle = (ptyId: string, titleObservedAt: number): Promise<boolean> | undefined => {
+  getPendingForegroundAgentRefreshForTitle = (
+    ptyId: string,
+    titleObservedAt: number
+  ): Promise<boolean> | undefined => {
     if (!this.deps.ptyForegroundAgentRefreshes.has(ptyId)) {
       return undefined
     }
-    return this.refreshPtyForegroundAgentFromController(ptyId, { afterTitleObservation: titleObservedAt })
+    return this.refreshPtyForegroundAgentFromController(ptyId, {
+      afterTitleObservation: titleObservedAt
+    })
   }
 
-  delayPtyBackedMobileSnapshotForForegroundAgent = (ptyId: string, titleObservedAt: number, foregroundRefresh: Promise<boolean>): void => {
+  delayPtyBackedMobileSnapshotForForegroundAgent = (
+    ptyId: string,
+    titleObservedAt: number,
+    foregroundRefresh: Promise<boolean>
+  ): void => {
     this.deps.ptyDelayedForegroundSnapshotTitleObservations.set(ptyId, titleObservedAt)
     void foregroundRefresh.then((foregroundAgentChanged) => {
       if (this.deps.ptyDelayedForegroundSnapshotTitleObservations.get(ptyId) !== titleObservedAt) {
@@ -298,19 +399,35 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     })
   }
 
-  refreshPtyForegroundAgentFromController = (ptyId: string, options: { afterTitleObservation?: number } = {}): Promise<boolean> => {
+  refreshPtyForegroundAgentFromController = (
+    ptyId: string,
+    options: { afterTitleObservation?: number } = {}
+  ): Promise<boolean> => {
     const startedAfterTitleObservation = options.afterTitleObservation ?? 0
     const pendingRefresh = this.deps.ptyForegroundAgentRefreshes.get(ptyId)
     if (pendingRefresh) {
-      pendingRefresh.requestedAfterTitleObservation = Math.max(pendingRefresh.requestedAfterTitleObservation, startedAfterTitleObservation)
+      pendingRefresh.requestedAfterTitleObservation = Math.max(
+        pendingRefresh.requestedAfterTitleObservation,
+        startedAfterTitleObservation
+      )
       return pendingRefresh.promise
     }
-    const entry: PtyForegroundAgentRefresh = { promise: Promise.resolve(false), startedAfterTitleObservation, requestedAfterTitleObservation: startedAfterTitleObservation }
+    const entry: PtyForegroundAgentRefresh = {
+      promise: Promise.resolve(false),
+      startedAfterTitleObservation,
+      requestedAfterTitleObservation: startedAfterTitleObservation
+    }
     const refresh = (async (): Promise<boolean> => {
       while (true) {
         entry.startedAfterTitleObservation = entry.requestedAfterTitleObservation
-        const foregroundAgentChanged = await this.loadPtyForegroundAgentFromController(ptyId, entry.startedAfterTitleObservation)
-        if (foregroundAgentChanged || entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation) {
+        const foregroundAgentChanged = await this.loadPtyForegroundAgentFromController(
+          ptyId,
+          entry.startedAfterTitleObservation
+        )
+        if (
+          foregroundAgentChanged ||
+          entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation
+        ) {
           return foregroundAgentChanged
         }
       }
@@ -324,7 +441,10 @@ export class RuntimeTerminalAgentStatusBindingCommands {
     return refresh
   }
 
-  loadPtyForegroundAgentFromController = async (ptyId: string, afterTitleObservation = 0): Promise<boolean> => {
+  loadPtyForegroundAgentFromController = async (
+    ptyId: string,
+    afterTitleObservation = 0
+  ): Promise<boolean> => {
     if (!this.deps.ptyController) {
       return false
     }
@@ -344,7 +464,9 @@ export class RuntimeTerminalAgentStatusBindingCommands {
       return false
     }
     const foregroundProcess = result.process
-    const foregroundAgent = foregroundProcess ? (recognizeAgentProcess(foregroundProcess)?.agent ?? null) : null
+    const foregroundAgent = foregroundProcess
+      ? (recognizeAgentProcess(foregroundProcess)?.agent ?? null)
+      : null
     if (pty.foregroundAgent === foregroundAgent) {
       return false
     }

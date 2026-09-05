@@ -1,4 +1,5 @@
 import type { RuntimeClientEventPublishingCommandsDeps } from './runtime-client-event-publishing-commands-deps'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { RuntimeWorktreeLifecycleEvent } from '../../shared/runtime-types'
 
@@ -373,12 +374,15 @@ export class RuntimeClientEventPublishingCommands {
         }
       }
 
-      this.deps.store.setWorkspaceSession(hostId, {
-        ...sessionObj,
-        activeWorktreeIdsOnShutdown,
-        ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
-        ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
-      })
+      this.deps.store.setWorkspaceSession(
+        {
+          ...(sessionObj as Record<string, unknown>),
+          activeWorktreeIdsOnShutdown,
+          ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
+          ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
+        } as WorkspaceSessionState,
+        hostId
+      )
     }
   }
 }
