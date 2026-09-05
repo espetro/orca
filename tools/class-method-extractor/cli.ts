@@ -125,6 +125,11 @@ function methodFullTextWithComments(method: MethodDeclaration): {
   }
 }
 
+// Strip `private` so the facade member is callable from the source class (TS2341).
+function publicizeMethodText(text: string): string {
+  return text.replace(/^(\s*)private\s+/, '$1')
+}
+
 function facadeImports(
   facadeText: string,
   sfMap: Map<string, { module: string; typeOnly: boolean }>
@@ -159,29 +164,57 @@ function facadeImports(
 function facadeSource(
   spec: ExtractorSpec,
   movedTexts: Map<string, string>,
-  sourceFile: SourceFile,
-  project: Project
+  sourceFile: SourceFile
 ): string {
   const className = spec.className
   const sfMap = importMap(sourceFile)
   const depEntries = Object.entries(spec.deps)
-  // Force the type checker to instantiate so dep field types resolve instead of degrading to unknown.
-  if (depEntries.length > 0) {
-    project.getProgram().getTypeChecker()
+  const cls = sourceFile.getClass(spec.sourceClassName ?? DEFAULT_SOURCE_CLASS_NAME)
+  const callbackType = (methodName: string): string => {
+    const method = cls?.getMethod(methodName)
+    if (!method) {
+      fail(`callback dep "${methodName}": no such method on ${cls?.getName() ?? 'source class'}`)
+    }
+    const params = method
+      .getParameters()
+      .map((p) => p.getText())
+      .join(', ')
+    const ret = method.getReturnTypeNode()?.getText()
+    if (!ret) {
+      fail(`callback dep "${methodName}": cannot derive return type; add an explicit one`)
+    }
+    return `(${params}) => ${ret}`
+  }
+  const lazyType = (fieldName: string): string => {
+    const member = cls?.getInstanceProperty(fieldName)
+    if (!member) {
+      fail(`lazy dep "${fieldName}": no such property on ${cls?.getName() ?? 'source class'}`)
+    }
+    const typeText = member.getType().getText(sourceFile)
+    if (typeText === 'unknown' || typeText === 'any') {
+      fail(`lazy dep "${fieldName}": field type resolved to ${typeText}`)
+    }
+    return typeText
+  }
+  const directType = (fieldName: string): string => {
+    const member = cls?.getInstanceProperty(fieldName)
+    if (!member) {
+      fail(`direct dep "${fieldName}": no such property on ${cls?.getName() ?? 'source class'}`)
+    }
+    const typeText = member.getType().getText(sourceFile)
+    if (typeText === 'unknown' || typeText === 'any') {
+      fail(`direct dep "${fieldName}": field type resolved to ${typeText}`)
+    }
+    return typeText
   }
   const lines: string[] = []
   for (const [dep, d] of depEntries) {
-    const member = sourceFile
-      .getClass(spec.sourceClassName ?? DEFAULT_SOURCE_CLASS_NAME)
-      ?.getInstanceProperty(d.from)
-    const typeText = member ? member.getType().getText(sourceFile) : 'unknown'
     if (d.kind === 'direct') {
-      lines.push(`  ${dep}: ${typeText}`)
+      lines.push(`  ${dep}: ${directType(d.from)}`)
     } else if (d.kind === 'lazy') {
-      const inner = /\bnull\b/.test(typeText) ? typeText : `${typeText} | null`
-      lines.push(`  ${dep}: () => ${inner}`)
+      lines.push(`  ${dep}: () => ${lazyType(d.from)}`)
     } else {
-      lines.push(`  ${dep}: ${typeText}`)
+      lines.push(`  ${dep}: ${callbackType(d.from)}`)
     }
   }
   const methodTexts = spec.methods.map(
@@ -291,30 +324,76 @@ function runMove(file: string, specPath: string, dryRun: boolean): void {
   const movedTexts = new Map<string, string>()
   for (const method of methods) {
     const { text } = methodFullTextWithComments(method)
-    movedTexts.set(method.getName(), normalizeBody(text, spec))
+    const facadeMethodText = publicizeMethodText(text)
+    movedTexts.set(method.getName(), normalizeBody(facadeMethodText, spec))
   }
 
   // 2. Generate facade file.
-  writeFileSync(targetPath, facadeSource(spec, movedTexts, sf, project))
+  writeFileSync(targetPath, facadeSource(spec, movedTexts, sf))
 
-  // 3. Replace method bodies in place with delegation stubs, preserving leading comments.
+  // 3. Drop dead privates; stub only methods still referenced in the source class.
   const facadeField = facadeFieldName(spec.target)
-  const spans = spec.methods.map((name) => {
-    const m = cls.getMethodOrThrow(name)
-    const { spanStart, commentText } = methodFullTextWithComments(m)
-    return { name, spanStart, end: m.getEnd(), text: `${commentText}${stubFor(m, facadeField)}` }
-  })
+  const stillReferenced = (name: string): boolean => {
+    const movedSpans = methods.map((m) => [m.getStart(), m.getEnd()] as const)
+    for (const ref of cls.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+      if (ref.getExpression().getKindName() !== 'ThisKeyword' || ref.getName() !== name) {
+        continue
+      }
+      const pos = ref.getStart()
+      if (movedSpans.some(([s, e]) => pos >= s && pos < e)) {
+        continue
+      }
+      return true
+    }
+    return false
+  }
+  const stubbed = new Set<string>()
+  const removed = new Set<string>()
+  const spans: { name: string; spanStart: number; end: number; text: string }[] = []
+  for (const method of spec.methods.map((n) => cls.getMethodOrThrow(n))) {
+    const name = method.getName()
+    const { spanStart, commentText } = methodFullTextWithComments(method)
+    if (method.hasModifier(SyntaxKind.PrivateKeyword) && !stillReferenced(name)) {
+      removed.add(name)
+      spans.push({ name, spanStart, end: method.getEnd(), text: '' })
+    } else {
+      stubbed.add(name)
+      spans.push({
+        name,
+        spanStart,
+        end: method.getEnd(),
+        text: `${commentText}${stubFor(method, facadeField)}`
+      })
+    }
+  }
   // Replace bottom-up so earlier spans stay valid.
   for (const s of [...spans].sort((a, b) => b.spanStart - a.spanStart)) {
     sf.removeText(s.spanStart, s.end)
-    sf.insertText(s.spanStart, s.text)
+    if (s.text) {
+      sf.insertText(s.spanStart, s.text)
+    }
+  }
+  for (const name of removed) {
+    console.log(`Removed ${name} (private, unreferenced after move: no stub emitted).`)
   }
 
   // 4. Facade field declaration + constructor wiring.
   const cls2 = sf.getClassOrThrow(spec.sourceClassName ?? DEFAULT_SOURCE_CLASS_NAME)
-  const anchorIndex = cls2.getMembers().findIndex((m) => m.getText().includes('accountCommands'))
+  const fieldDecl = `private readonly ${facadeField}: ${spec.className}`
+  const members = cls2.getMembers()
+  // Insert after the last sibling *Commands field, else after the store field.
+  let anchorIndex = -1
+  for (let i = members.length - 1; i >= 0; i--) {
+    const text = members[i].getText()
+    if (/private readonly \w+Commands: \w/.test(text) || /private readonly store:/.test(text)) {
+      anchorIndex = i
+      break
+    }
+  }
   if (anchorIndex !== -1) {
-    cls2.insertMember(anchorIndex + 1, `  private readonly ${facadeField}: ${spec.className}`)
+    cls2.insertMember(anchorIndex + 1, `  ${fieldDecl}`)
+  } else {
+    cls2.insertMember(0, `  ${fieldDecl}`)
   }
   const ctor = cls2.getConstructors()[0]
   const wiring = Object.entries(spec.deps)
@@ -334,10 +413,26 @@ function runMove(file: string, specPath: string, dryRun: boolean): void {
     const idx = stmts.findIndex((s) => s.getText().startsWith('this.store = store'))
     ctor.insertStatements(idx + 1, assign)
   }
-  sf.addImportDeclaration({
-    moduleSpecifier: `./${spec.target.replace(/\.ts$/, '')}`,
-    namedImports: [spec.className]
-  })
+  // 5. Import into the top import block: right after the last existing
+  // `./runtime-*` value import (sibling facade), else among the top imports.
+  const importInsertIndex = (() => {
+    const imports = sf.getImportDeclarations()
+    let lastRuntimeValue = -1
+    for (const imp of imports) {
+      const spec2 = imp.getModuleSpecifierValue()
+      if (/^\.[\w/-]*\/?runtime-/.test(spec2) && !imp.isTypeOnly()) {
+        lastRuntimeValue = imp.getSpecifier().getEnd()
+      }
+    }
+    if (lastRuntimeValue !== -1) {
+      return lastRuntimeValue
+    }
+    return imports.length > 0 ? imports[0].getStart() : 0
+  })()
+  sf.insertText(
+    importInsertIndex,
+    `\nimport { ${spec.className} } from './${spec.target.replace(/\.ts$/, '')}'`
+  )
 
   sf.saveSync()
   console.log(`Wrote facade ${targetPath} and edited ${resolve(file)}`)
@@ -363,12 +458,17 @@ function runVerify(
 
   const drifts: string[] = []
   for (const name of spec.methods) {
-    const beforeText = normalizeBody(beforeCls.getMethodOrThrow(name).getText(), spec)
+    const beforeMethod = beforeCls.getMethodOrThrow(name)
     const afterMethod = afterCls.getMethod(name)
     if (!afterMethod) {
+      // Private-and-unreferenced methods are removed, not stubbed: nothing to compare.
+      if (beforeMethod.hasModifier(SyntaxKind.PrivateKeyword)) {
+        continue
+      }
       drifts.push(`${name}: missing in facade`)
       continue
     }
+    const beforeText = publicizeMethodText(normalizeBody(beforeMethod.getText(), spec))
     const afterText = afterMethod.getText()
     if (stripWs(beforeText) === stripWs(afterText)) {
       continue
@@ -443,4 +543,4 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main()
 }
 
-export { runMove, runVerify, normalizeBody, captureSet, facadeSource, stubFor }
+export { runMove, runVerify, normalizeBody, captureSet, facadeSource, stubFor, publicizeMethodText }
