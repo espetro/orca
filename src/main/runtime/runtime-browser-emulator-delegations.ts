@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from './orca-runtime'
+import type { RuntimeFileCommands } from './orca-runtime-files'
 import type { RuntimeGitCommands } from './orca-runtime-git'
 import type { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 
@@ -274,6 +275,52 @@ export function installGitCommandDelegations(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic pass-through by design
     proto[method] = function (this: OrcaRuntimeService, ...args: any[]) {
       return (getGitCommands(this) as unknown as Record<string, (...a: any[]) => unknown>)[method](
+        ...args
+      )
+    }
+  }
+}
+
+const FILE_METHOD_NAMES = [
+  'listMobileFiles',
+  'searchMobileFilePaths',
+  'searchQuickOpenFilePaths',
+  'openMobileFile',
+  'openMobileDiff',
+  'readMobileFile',
+  'resolveTerminalPath',
+  'readTerminalArtifactFile',
+  'readTerminalArtifactPreview',
+  'writeTerminalArtifactFile',
+  'revokeTerminalFileGrantsForClient',
+  'readFileExplorerDir',
+  'watchFileExplorer',
+  'readFileExplorerPreview',
+  'readDocPreviewFile',
+  'readFileExplorerChunk',
+  'writeFileExplorerFile',
+  'createFileExplorerFile',
+  'createFileExplorerDir',
+  'createFileExplorerDirNoClobber',
+  'commitFileExplorerUpload',
+  'renameFileExplorerPath',
+  'copyFileExplorerPath',
+  'deleteFileExplorerPath',
+  'searchRuntimeFiles',
+  'listRuntimeFiles',
+  'listRuntimeMarkdownDocuments',
+  'statRuntimeFile'
+] as const
+
+export function installFileCommandDelegations(
+  serviceClass: abstract new (...args: never[]) => OrcaRuntimeService,
+  getFileCommands: (service: OrcaRuntimeService) => RuntimeFileCommands
+): void {
+  const proto = serviceClass.prototype as unknown as Record<string, unknown>
+  for (const method of FILE_METHOD_NAMES) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic pass-through by design
+    proto[method] = function (this: OrcaRuntimeService, ...args: any[]) {
+      return (getFileCommands(this) as unknown as Record<string, (...a: any[]) => unknown>)[method](
         ...args
       )
     }

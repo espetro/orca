@@ -234,6 +234,7 @@ import { hasHostAuthoritativeTerminalMembership } from './workspace-session-term
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
 import {
   installBrowserEmulatorCommandDelegations,
+  installFileCommandDelegations,
   installGitCommandDelegations,
   installLinearCommandDelegations
 } from './runtime-browser-emulator-delegations'
@@ -2391,6 +2392,34 @@ export interface OrcaRuntimeService {
   discardRuntimeGitPath: RuntimeGitCommands['discardRuntimeGitPath']
   getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl']
   getRuntimeGitRemoteCommitUrl: RuntimeGitCommands['getRuntimeGitRemoteCommitUrl']
+  listMobileFiles: RuntimeFileCommands['listMobileFiles']
+  searchMobileFilePaths: RuntimeFileCommands['searchMobileFilePaths']
+  searchQuickOpenFilePaths: RuntimeFileCommands['searchQuickOpenFilePaths']
+  openMobileFile: RuntimeFileCommands['openMobileFile']
+  openMobileDiff: RuntimeFileCommands['openMobileDiff']
+  readMobileFile: RuntimeFileCommands['readMobileFile']
+  resolveTerminalPath: RuntimeFileCommands['resolveTerminalPath']
+  readTerminalArtifactFile: RuntimeFileCommands['readTerminalArtifactFile']
+  readTerminalArtifactPreview: RuntimeFileCommands['readTerminalArtifactPreview']
+  writeTerminalArtifactFile: RuntimeFileCommands['writeTerminalArtifactFile']
+  revokeTerminalFileGrantsForClient: RuntimeFileCommands['revokeTerminalFileGrantsForClient']
+  readFileExplorerDir: RuntimeFileCommands['readFileExplorerDir']
+  watchFileExplorer: RuntimeFileCommands['watchFileExplorer']
+  readFileExplorerPreview: RuntimeFileCommands['readFileExplorerPreview']
+  readDocPreviewFile: RuntimeFileCommands['readDocPreviewFile']
+  readFileExplorerChunk: RuntimeFileCommands['readFileExplorerChunk']
+  writeFileExplorerFile: RuntimeFileCommands['writeFileExplorerFile']
+  createFileExplorerFile: RuntimeFileCommands['createFileExplorerFile']
+  createFileExplorerDir: RuntimeFileCommands['createFileExplorerDir']
+  createFileExplorerDirNoClobber: RuntimeFileCommands['createFileExplorerDirNoClobber']
+  commitFileExplorerUpload: RuntimeFileCommands['commitFileExplorerUpload']
+  renameFileExplorerPath: RuntimeFileCommands['renameFileExplorerPath']
+  copyFileExplorerPath: RuntimeFileCommands['copyFileExplorerPath']
+  deleteFileExplorerPath: RuntimeFileCommands['deleteFileExplorerPath']
+  searchRuntimeFiles: RuntimeFileCommands['searchRuntimeFiles']
+  listRuntimeFiles: RuntimeFileCommands['listRuntimeFiles']
+  listRuntimeMarkdownDocuments: RuntimeFileCommands['listRuntimeMarkdownDocuments']
+  statRuntimeFile: RuntimeFileCommands['statRuntimeFile']
 }
 /* oxlint-enable typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging */
 
@@ -2406,6 +2435,7 @@ export class OrcaRuntimeService {
       (service) => service.linearCommands as never
     )
     installGitCommandDelegations(OrcaRuntimeService, (service) => service.gitCommands)
+    installFileCommandDelegations(OrcaRuntimeService, (service) => service.fileCommands)
   }
 
   private readonly runtimeId = randomUUID()
@@ -7180,61 +7210,6 @@ export class OrcaRuntimeService {
     }
   })
 
-  listMobileFiles(...args: any[]): any {
-    return this.fileCommands.listMobileFiles.apply(this.fileCommands, args as never)
-  }
-
-  searchMobileFilePaths(...args: any[]): any {
-    return this.fileCommands.searchMobileFilePaths.apply(this.fileCommands, args as never)
-  }
-
-  searchQuickOpenFilePaths(...args: any[]): any {
-    return this.fileCommands.searchQuickOpenFilePaths.apply(this.fileCommands, args as never)
-  }
-
-  openMobileFile(...args: any[]): any {
-    return this.fileCommands.openMobileFile.apply(this.fileCommands, args as never)
-  }
-
-  openMobileDiff(...args: any[]): any {
-    return this.fileCommands.openMobileDiff.apply(this.fileCommands, args as never)
-  }
-
-  readMobileFile(...args: any[]): any {
-    return this.fileCommands.readMobileFile.apply(this.fileCommands, args as never)
-  }
-
-  resolveTerminalPath(...args: any[]): any {
-    return this.fileCommands.resolveTerminalPath.apply(this.fileCommands, args as never)
-  }
-
-  readTerminalArtifactFile(...args: any[]): any {
-    return this.fileCommands.readTerminalArtifactFile.apply(this.fileCommands, args as never)
-  }
-
-  readTerminalArtifactPreview(...args: any[]): any {
-    return this.fileCommands.readTerminalArtifactPreview.apply(this.fileCommands, args as never)
-  }
-
-  writeTerminalArtifactFile(...args: any[]): any {
-    return this.fileCommands.writeTerminalArtifactFile.apply(this.fileCommands, args as never)
-  }
-
-  revokeTerminalFileGrantsForClient(...args: any[]): any {
-    return (this.fileCommands.revokeTerminalFileGrantsForClient as (...a: any[]) => any).apply(
-      this.fileCommands,
-      args
-    )
-  }
-
-  readFileExplorerDir(...args: any[]): any {
-    return this.fileCommands.readFileExplorerDir.apply(this.fileCommands, args as never)
-  }
-
-  watchFileExplorer(...args: any[]): any {
-    return this.fileCommands.watchFileExplorer.apply(this.fileCommands, args as never)
-  }
-
   closeFileWatchersForRemoval = async (
     worktreePath: string,
     connectionId?: string,
@@ -7344,21 +7319,6 @@ export class OrcaRuntimeService {
       throw error
     }
   }
-  readFileExplorerPreview(...args: any[]): any {
-    return this.fileCommands.readFileExplorerPreview.apply(this.fileCommands, args as never)
-  }
-
-  readDocPreviewFile(...args: any[]): any {
-    return this.fileCommands.readDocPreviewFile.apply(this.fileCommands, args as never)
-  }
-
-  readFileExplorerChunk(...args: any[]): any {
-    return this.fileCommands.readFileExplorerChunk.apply(this.fileCommands, args as never)
-  }
-
-  writeFileExplorerFile(...args: any[]): any {
-    return this.fileCommands.writeFileExplorerFile.apply(this.fileCommands, args as never)
-  }
 
   writeFileExplorerFileBase64(...args: any[]): any {
     return this.fileCommands.writeFileExplorerFileBase64.apply(this.fileCommands, args as never)
@@ -7369,56 +7329,6 @@ export class OrcaRuntimeService {
       this.fileCommands,
       args
     )
-  }
-
-  createFileExplorerFile(...args: any[]): any {
-    return this.fileCommands.createFileExplorerFile.apply(this.fileCommands, args as never)
-  }
-
-  createFileExplorerDir(...args: any[]): any {
-    return this.fileCommands.createFileExplorerDir.apply(this.fileCommands, args as never)
-  }
-
-  createFileExplorerDirNoClobber(...args: any[]): any {
-    return (this.fileCommands.createFileExplorerDirNoClobber as (...a: any[]) => any).apply(
-      this.fileCommands,
-      args
-    )
-  }
-
-  commitFileExplorerUpload(...args: any[]): any {
-    return this.fileCommands.commitFileExplorerUpload.apply(this.fileCommands, args as never)
-  }
-
-  renameFileExplorerPath(...args: any[]): any {
-    return this.fileCommands.renameFileExplorerPath.apply(this.fileCommands, args as never)
-  }
-
-  copyFileExplorerPath(...args: any[]): any {
-    return this.fileCommands.copyFileExplorerPath.apply(this.fileCommands, args as never)
-  }
-
-  deleteFileExplorerPath(...args: any[]): any {
-    return this.fileCommands.deleteFileExplorerPath.apply(this.fileCommands, args as never)
-  }
-
-  searchRuntimeFiles(...args: any[]): any {
-    return this.fileCommands.searchRuntimeFiles.apply(this.fileCommands, args as never)
-  }
-
-  listRuntimeFiles(...args: any[]): any {
-    return this.fileCommands.listRuntimeFiles.apply(this.fileCommands, args as never)
-  }
-
-  listRuntimeMarkdownDocuments(...args: any[]): any {
-    return (this.fileCommands.listRuntimeMarkdownDocuments as (...a: any[]) => any).apply(
-      this.fileCommands,
-      args
-    )
-  }
-
-  statRuntimeFile(...args: any[]): any {
-    return this.fileCommands.statRuntimeFile.apply(this.fileCommands, args as never)
   }
 
   private readonly gitCommands = new RuntimeGitCommands({
