@@ -3297,7 +3297,7 @@ export class OrcaRuntimeService {
       assertStableReadyGraph: (...args) => this.assertStableReadyGraph(...args),
       authoritativeWindowId: () => this.authoritativeWindowId,
       buildMaterializedHeadlessParentLayout: (...args: unknown[]) =>
-        (this.buildMaterializedHeadlessParentLayout as (...a: unknown[]) => unknown)(...args),
+        this.terminalClusterFacade.buildMaterializedHeadlessParentLayout(...args),
       cancelAllPendingFitRestoreTimers: (...args) => this.cancelAllPendingFitRestoreTimers(...args),
       captureReadyGraphEpoch: (...args) => this.captureReadyGraphEpoch(...args),
       claudeAgentTeams: () => this.claudeAgentTeams,
@@ -12465,10 +12465,6 @@ export class OrcaRuntimeService {
   getLivePtyIdsForWorktree(worktreeId: string, freshPtyIds?: ReadonlySet<string>): Set<string> {
     return this.ptyWorktrees.getLivePtyIdsForWorktree(worktreeId, freshPtyIds)
   }
-  buildMaterializedHeadlessParentLayout(...args: unknown[]) {
-    return this.terminalClusterFacade.buildMaterializedHeadlessParentLayout(args)
-  }
-
   private get clientSessionTabSelections() {
     return this.managedWorktrees.clientSessionTabSelections
   }
