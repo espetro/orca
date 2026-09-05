@@ -146,3 +146,82 @@ export function installBrowserEmulatorCommandDelegations(
 }
 
 export type { BrowserOrEmulatorCommands }
+
+const LINEAR_METHOD_NAMES = [
+  'linearConnect',
+  'linearDisconnect',
+  'linearSelectWorkspace',
+  'linearStatus',
+  'linearTestConnection',
+  'linearSearchIssues',
+  'linearSearchForAgents',
+  'linearIssueContext',
+  'linearTeamListForAgents',
+  'linearTeamMembersForAgents',
+  'linearTeamStatesForAgents',
+  'linearTeamLabelsForAgents',
+  'linearProjectListForAgents',
+  'linearIssueListForAgents',
+  'linearMcpIssueList',
+  'linearResolveCurrentIssue',
+  'linearListIssues',
+  'linearCreateIssue',
+  'linearGetIssue',
+  'linearUpdateIssue',
+  'linearAddIssueComment',
+  'linearIssueSetState',
+  'linearIssueRelationWrite',
+  'linearSaveIssue',
+  'linearIssueUpdateTask',
+  'linearIssueAddComment',
+  'linearIssueAttachLink',
+  'linearIssueCreate',
+  'linearIssueComments',
+  'linearListTeams',
+  'linearListProjects',
+  'linearCreateProject',
+  'linearGetProject',
+  'linearListProjectIssues',
+  'linearListCustomViews',
+  'linearGetCustomView',
+  'linearListCustomViewIssues',
+  'linearListCustomViewProjects',
+  'linearTeamStates',
+  'linearTeamLabels',
+  'linearTeamMembers',
+  'jiraConnect',
+  'jiraDisconnect',
+  'jiraSelectSite',
+  'jiraStatus',
+  'jiraReadStatus',
+  'jiraTestConnection',
+  'jiraSearchIssues',
+  'jiraListIssues',
+  'jiraCreateIssue',
+  'jiraGetIssue',
+  'jiraLookupIssueSummary',
+  'jiraUpdateIssue',
+  'jiraAddIssueComment',
+  'jiraIssueComments',
+  'jiraListProjects',
+  'jiraListIssueTypes',
+  'jiraListCreateFields',
+  'jiraListPriorities',
+  'jiraListAssignableUsers',
+  'jiraListTransitions',
+  'jiraGetProjectStatusOrder'
+] as const
+
+export function installLinearCommandDelegations(
+  serviceClass: abstract new (...args: never[]) => OrcaRuntimeService,
+  // oxlint-disable-next-line typescript/no-explicit-any -- mirrors other delegation groups
+  getLinearCommands: (service: OrcaRuntimeService) => Record<string, (...a: never[]) => unknown>
+): void {
+  const proto = serviceClass.prototype as unknown as Record<string, unknown>
+  for (const method of LINEAR_METHOD_NAMES) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic pass-through by design
+    proto[method] = function (this: OrcaRuntimeService, ...args: any[]) {
+      return (getLinearCommands(this)[method] as (...a: any[]) => unknown)(...args)
+    }
+  }
+}

@@ -232,7 +232,10 @@ import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { hasHostAuthoritativeTerminalMembership } from './workspace-session-terminal-membership-authority'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
-import { installBrowserEmulatorCommandDelegations } from './runtime-browser-emulator-delegations'
+import {
+  installBrowserEmulatorCommandDelegations,
+  installLinearCommandDelegations
+} from './runtime-browser-emulator-delegations'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
@@ -2290,6 +2293,68 @@ export interface OrcaRuntimeService {
   emulatorButton: RuntimeEmulatorCommands['emulatorButton']
   emulatorLogcat: RuntimeEmulatorCommands['emulatorLogcat']
   emulatorKill: RuntimeEmulatorCommands['emulatorKill']
+  linearConnect: RuntimeLinearCommands['linearConnect']
+  linearDisconnect: RuntimeLinearCommands['linearDisconnect']
+  linearSelectWorkspace: RuntimeLinearCommands['linearSelectWorkspace']
+  linearStatus: RuntimeLinearCommands['linearStatus']
+  linearTestConnection: RuntimeLinearCommands['linearTestConnection']
+  linearSearchIssues: RuntimeLinearCommands['linearSearchIssues']
+  linearSearchForAgents: RuntimeLinearCommands['linearSearchForAgents']
+  linearIssueContext: RuntimeLinearCommands['linearIssueContext']
+  linearTeamListForAgents: RuntimeLinearCommands['linearTeamListForAgents']
+  linearTeamMembersForAgents: RuntimeLinearCommands['linearTeamMembersForAgents']
+  linearTeamStatesForAgents: RuntimeLinearCommands['linearTeamStatesForAgents']
+  linearTeamLabelsForAgents: RuntimeLinearCommands['linearTeamLabelsForAgents']
+  linearProjectListForAgents: RuntimeLinearCommands['linearProjectListForAgents']
+  linearIssueListForAgents: RuntimeLinearCommands['linearIssueListForAgents']
+  linearMcpIssueList: RuntimeLinearCommands['linearMcpIssueList']
+  linearResolveCurrentIssue: RuntimeLinearCommands['linearResolveCurrentIssue']
+  linearListIssues: RuntimeLinearCommands['linearListIssues']
+  linearCreateIssue: RuntimeLinearCommands['linearCreateIssue']
+  linearGetIssue: RuntimeLinearCommands['linearGetIssue']
+  linearUpdateIssue: RuntimeLinearCommands['linearUpdateIssue']
+  linearAddIssueComment: RuntimeLinearCommands['linearAddIssueComment']
+  linearIssueSetState: RuntimeLinearCommands['linearIssueSetState']
+  linearIssueRelationWrite: RuntimeLinearCommands['linearIssueRelationWrite']
+  linearSaveIssue: RuntimeLinearCommands['linearSaveIssue']
+  linearIssueUpdateTask: RuntimeLinearCommands['linearIssueUpdateTask']
+  linearIssueAddComment: RuntimeLinearCommands['linearIssueAddComment']
+  linearIssueAttachLink: RuntimeLinearCommands['linearIssueAttachLink']
+  linearIssueCreate: RuntimeLinearCommands['linearIssueCreate']
+  linearIssueComments: RuntimeLinearCommands['linearIssueComments']
+  linearListTeams: RuntimeLinearCommands['linearListTeams']
+  linearListProjects: RuntimeLinearCommands['linearListProjects']
+  linearCreateProject: RuntimeLinearCommands['linearCreateProject']
+  linearGetProject: RuntimeLinearCommands['linearGetProject']
+  linearListProjectIssues: RuntimeLinearCommands['linearListProjectIssues']
+  linearListCustomViews: RuntimeLinearCommands['linearListCustomViews']
+  linearGetCustomView: RuntimeLinearCommands['linearGetCustomView']
+  linearListCustomViewIssues: RuntimeLinearCommands['linearListCustomViewIssues']
+  linearListCustomViewProjects: RuntimeLinearCommands['linearListCustomViewProjects']
+  linearTeamStates: RuntimeLinearCommands['linearTeamStates']
+  linearTeamLabels: RuntimeLinearCommands['linearTeamLabels']
+  linearTeamMembers: RuntimeLinearCommands['linearTeamMembers']
+  jiraConnect: RuntimeLinearCommands['jiraConnect']
+  jiraDisconnect: RuntimeLinearCommands['jiraDisconnect']
+  jiraSelectSite: RuntimeLinearCommands['jiraSelectSite']
+  jiraStatus: RuntimeLinearCommands['jiraStatus']
+  jiraReadStatus: RuntimeLinearCommands['jiraReadStatus']
+  jiraTestConnection: RuntimeLinearCommands['jiraTestConnection']
+  jiraSearchIssues: RuntimeLinearCommands['jiraSearchIssues']
+  jiraListIssues: RuntimeLinearCommands['jiraListIssues']
+  jiraCreateIssue: RuntimeLinearCommands['jiraCreateIssue']
+  jiraGetIssue: RuntimeLinearCommands['jiraGetIssue']
+  jiraLookupIssueSummary: RuntimeLinearCommands['jiraLookupIssueSummary']
+  jiraUpdateIssue: RuntimeLinearCommands['jiraUpdateIssue']
+  jiraAddIssueComment: RuntimeLinearCommands['jiraAddIssueComment']
+  jiraIssueComments: RuntimeLinearCommands['jiraIssueComments']
+  jiraListProjects: RuntimeLinearCommands['jiraListProjects']
+  jiraListIssueTypes: RuntimeLinearCommands['jiraListIssueTypes']
+  jiraListCreateFields: RuntimeLinearCommands['jiraListCreateFields']
+  jiraListPriorities: RuntimeLinearCommands['jiraListPriorities']
+  jiraListAssignableUsers: RuntimeLinearCommands['jiraListAssignableUsers']
+  jiraListTransitions: RuntimeLinearCommands['jiraListTransitions']
+  jiraGetProjectStatusOrder: RuntimeLinearCommands['jiraGetProjectStatusOrder']
 }
 /* oxlint-enable typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging */
 
@@ -2299,6 +2364,10 @@ export class OrcaRuntimeService {
       OrcaRuntimeService,
       (service) => service.browserScreencastCommands as never,
       (service) => service.emulatorCommands
+    )
+    installLinearCommandDelegations(
+      OrcaRuntimeService,
+      (service) => service.linearCommands as never
     )
   }
 
@@ -14281,265 +14350,6 @@ export class OrcaRuntimeService {
 
   private getLeafKey(tabId: string, leafId: string): string {
     return this.terminalClusterFacade.getLeafKey(tabId, leafId)
-  }
-  linearConnect(...args: any[]): any {
-    return this.linearCommands.linearConnect.apply(this.linearCommands, args as never)
-  }
-
-  linearDisconnect(...args: any[]): any {
-    return this.linearCommands.linearDisconnect.apply(this.linearCommands, args as never)
-  }
-
-  linearSelectWorkspace(...args: any[]): any {
-    return this.linearCommands.linearSelectWorkspace.apply(this.linearCommands, args as never)
-  }
-
-  linearStatus(...args: any[]): any {
-    return this.linearCommands.linearStatus.apply(this.linearCommands, args as never)
-  }
-
-  linearTestConnection(...args: any[]): any {
-    return this.linearCommands.linearTestConnection.apply(this.linearCommands, args as never)
-  }
-
-  linearSearchIssues(...args: any[]): any {
-    return this.linearCommands.linearSearchIssues.apply(this.linearCommands, args as never)
-  }
-
-  linearSearchForAgents(...args: any[]): any {
-    return this.linearCommands.linearSearchForAgents.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueContext(...args: any[]): any {
-    return this.linearCommands.linearIssueContext.apply(this.linearCommands, args as never)
-  }
-
-  linearTeamListForAgents(...args: any[]): any {
-    return this.linearCommands.linearTeamListForAgents.apply(this.linearCommands, args as never)
-  }
-
-  linearTeamMembersForAgents(...args: any[]): any {
-    return (this.linearCommands.linearTeamMembersForAgents as (...a: any[]) => any).apply(
-      this.linearCommands,
-      args
-    )
-  }
-
-  linearTeamStatesForAgents(...args: any[]): any {
-    return this.linearCommands.linearTeamStatesForAgents.apply(this.linearCommands, args as never)
-  }
-
-  linearTeamLabelsForAgents(...args: any[]): any {
-    return this.linearCommands.linearTeamLabelsForAgents.apply(this.linearCommands, args as never)
-  }
-
-  linearProjectListForAgents(...args: any[]): any {
-    return (this.linearCommands.linearProjectListForAgents as (...a: any[]) => any).apply(
-      this.linearCommands,
-      args
-    )
-  }
-
-  linearIssueListForAgents(...args: any[]): any {
-    return this.linearCommands.linearIssueListForAgents.apply(this.linearCommands, args as never)
-  }
-
-  linearMcpIssueList(...args: any[]): any {
-    return this.linearCommands.linearMcpIssueList.apply(this.linearCommands, args as never)
-  }
-
-  linearResolveCurrentIssue(...args: any[]): any {
-    return this.linearCommands.linearResolveCurrentIssue.apply(this.linearCommands, args as never)
-  }
-
-  linearListIssues(...args: any[]): any {
-    return this.linearCommands.linearListIssues.apply(this.linearCommands, args as never)
-  }
-
-  linearCreateIssue(...args: any[]): any {
-    return this.linearCommands.linearCreateIssue.apply(this.linearCommands, args as never)
-  }
-
-  linearGetIssue(...args: any[]): any {
-    return this.linearCommands.linearGetIssue.apply(this.linearCommands, args as never)
-  }
-
-  linearUpdateIssue(...args: any[]): any {
-    return this.linearCommands.linearUpdateIssue.apply(this.linearCommands, args as never)
-  }
-
-  linearAddIssueComment(...args: any[]): any {
-    return this.linearCommands.linearAddIssueComment.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueSetState(...args: any[]): any {
-    return this.linearCommands.linearIssueSetState.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueRelationWrite(...args: any[]): any {
-    return this.linearCommands.linearIssueRelationWrite.apply(this.linearCommands, args as never)
-  }
-
-  linearSaveIssue(...args: any[]): any {
-    return this.linearCommands.linearSaveIssue.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueUpdateTask(...args: any[]): any {
-    return this.linearCommands.linearIssueUpdateTask.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueAddComment(...args: any[]): any {
-    return this.linearCommands.linearIssueAddComment.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueAttachLink(...args: any[]): any {
-    return this.linearCommands.linearIssueAttachLink.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueCreate(...args: any[]): any {
-    return this.linearCommands.linearIssueCreate.apply(this.linearCommands, args as never)
-  }
-
-  linearIssueComments(...args: any[]): any {
-    return this.linearCommands.linearIssueComments.apply(this.linearCommands, args as never)
-  }
-
-  linearListTeams(...args: any[]): any {
-    return this.linearCommands.linearListTeams.apply(this.linearCommands, args as never)
-  }
-
-  linearListProjects(...args: any[]): any {
-    return this.linearCommands.linearListProjects.apply(this.linearCommands, args as never)
-  }
-
-  linearCreateProject(...args: any[]): any {
-    return this.linearCommands.linearCreateProject.apply(this.linearCommands, args as never)
-  }
-
-  linearGetProject(...args: any[]): any {
-    return this.linearCommands.linearGetProject.apply(this.linearCommands, args as never)
-  }
-
-  linearListProjectIssues(...args: any[]): any {
-    return this.linearCommands.linearListProjectIssues.apply(this.linearCommands, args as never)
-  }
-
-  linearListCustomViews(...args: any[]): any {
-    return this.linearCommands.linearListCustomViews.apply(this.linearCommands, args as never)
-  }
-
-  linearGetCustomView(...args: any[]): any {
-    return this.linearCommands.linearGetCustomView.apply(this.linearCommands, args as never)
-  }
-
-  linearListCustomViewIssues(...args: any[]): any {
-    return (this.linearCommands.linearListCustomViewIssues as (...a: any[]) => any).apply(
-      this.linearCommands,
-      args
-    )
-  }
-
-  linearListCustomViewProjects(...args: any[]): any {
-    return (this.linearCommands.linearListCustomViewProjects as (...a: any[]) => any).apply(
-      this.linearCommands,
-      args
-    )
-  }
-
-  linearTeamStates(...args: any[]): any {
-    return this.linearCommands.linearTeamStates.apply(this.linearCommands, args as never)
-  }
-
-  linearTeamLabels(...args: any[]): any {
-    return this.linearCommands.linearTeamLabels.apply(this.linearCommands, args as never)
-  }
-
-  linearTeamMembers(...args: any[]): any {
-    return this.linearCommands.linearTeamMembers.apply(this.linearCommands, args as never)
-  }
-
-  jiraConnect(...args: any[]): any {
-    return this.linearCommands.jiraConnect.apply(this.linearCommands, args as never)
-  }
-
-  jiraDisconnect(...args: any[]): any {
-    return this.linearCommands.jiraDisconnect.apply(this.linearCommands, args as never)
-  }
-
-  jiraSelectSite(...args: any[]): any {
-    return this.linearCommands.jiraSelectSite.apply(this.linearCommands, args as never)
-  }
-
-  jiraStatus(...args: any[]): any {
-    return this.linearCommands.jiraStatus.apply(this.linearCommands, args as never)
-  }
-
-  jiraReadStatus(...args: any[]): any {
-    return this.linearCommands.jiraReadStatus.apply(this.linearCommands, args as never)
-  }
-
-  jiraTestConnection(...args: any[]): any {
-    return this.linearCommands.jiraTestConnection.apply(this.linearCommands, args as never)
-  }
-
-  jiraSearchIssues(...args: any[]): any {
-    return this.linearCommands.jiraSearchIssues.apply(this.linearCommands, args as never)
-  }
-
-  jiraListIssues(...args: any[]): any {
-    return this.linearCommands.jiraListIssues.apply(this.linearCommands, args as never)
-  }
-
-  jiraCreateIssue(...args: any[]): any {
-    return this.linearCommands.jiraCreateIssue.apply(this.linearCommands, args as never)
-  }
-
-  jiraGetIssue(...args: any[]): any {
-    return this.linearCommands.jiraGetIssue.apply(this.linearCommands, args as never)
-  }
-
-  jiraLookupIssueSummary(...args: any[]): any {
-    return this.linearCommands.jiraLookupIssueSummary.apply(this.linearCommands, args as never)
-  }
-
-  jiraUpdateIssue(...args: any[]): any {
-    return this.linearCommands.jiraUpdateIssue.apply(this.linearCommands, args as never)
-  }
-
-  jiraAddIssueComment(...args: any[]): any {
-    return this.linearCommands.jiraAddIssueComment.apply(this.linearCommands, args as never)
-  }
-
-  jiraIssueComments(...args: any[]): any {
-    return this.linearCommands.jiraIssueComments.apply(this.linearCommands, args as never)
-  }
-
-  jiraListProjects(...args: any[]): any {
-    return this.linearCommands.jiraListProjects.apply(this.linearCommands, args as never)
-  }
-
-  jiraListIssueTypes(...args: any[]): any {
-    return this.linearCommands.jiraListIssueTypes.apply(this.linearCommands, args as never)
-  }
-
-  jiraListCreateFields(...args: any[]): any {
-    return this.linearCommands.jiraListCreateFields.apply(this.linearCommands, args as never)
-  }
-
-  jiraListPriorities(...args: any[]): any {
-    return this.linearCommands.jiraListPriorities.apply(this.linearCommands, args as never)
-  }
-
-  jiraListAssignableUsers(...args: any[]): any {
-    return this.linearCommands.jiraListAssignableUsers.apply(this.linearCommands, args as never)
-  }
-
-  jiraListTransitions(...args: any[]): any {
-    return this.linearCommands.jiraListTransitions.apply(this.linearCommands, args as never)
-  }
-
-  jiraGetProjectStatusOrder(...args: any[]): any {
-    return this.linearCommands.jiraGetProjectStatusOrder.apply(this.linearCommands, args as never)
   }
 
   // ── Browser automation ──
