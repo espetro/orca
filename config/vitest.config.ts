@@ -19,7 +19,11 @@ const sharedTestOptions = {
   // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
   // the Vitest 5s defaults are too tight for the slowest integration cases.
   hookTimeout: 60_000,
-  testTimeout: 30_000
+  testTimeout: 30_000,
+  // CI-only: one retry keeps a flaky test from failing a required shard; local
+  // runs stay retry-free so flakiness surfaces for devs. Retried-but-passed
+  // tests are printed by the default reporter and scraped into the job summary.
+  retry: process.env.CI ? 1 : 0
 } satisfies ViteUserConfig['test']
 
 // Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
