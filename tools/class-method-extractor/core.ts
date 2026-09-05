@@ -144,7 +144,7 @@ function facadeImports(
     if (!entry) {
       continue
     }
-    const key = `${entry.module}`
+    const key = `${entry.module}::${entry.typeOnly ? 'type' : 'value'}`
     const bucket = byModule.get(key) ?? { names: [], typeOnly: entry.typeOnly }
     bucket.names.push(name)
     byModule.set(key, bucket)
@@ -154,8 +154,11 @@ function facadeImports(
     a[0].localeCompare(b[0])
   )) {
     const list = names.sort().join(', ')
+    const modulePath = module.replace(/::(type|value)$/, '')
     imports.push(
-      typeOnly ? `import type { ${list} } from '${module}'` : `import { ${list} } from '${module}'`
+      typeOnly
+        ? `import type { ${list} } from '${modulePath}'`
+        : `import { ${list} } from '${modulePath}'`
     )
   }
   return imports
@@ -171,13 +174,18 @@ function facadeSource(
   const depEntries = Object.entries(spec.deps)
   const cls = sourceFile.getClass(spec.sourceClassName ?? DEFAULT_SOURCE_CLASS_NAME)
   const callbackType = (methodName: string): string => {
+    const explicit = (spec.deps[methodName] as { explicitType?: string } | undefined)?.explicitType
+    if (explicit) {
+      return explicit
+    }
     const method = cls?.getMethod(methodName)
     if (!method) {
       fail(`callback dep "${methodName}": no such method on ${cls?.getName() ?? 'source class'}`)
     }
     const params = method
       .getParameters()
-      .map((p) => p.getText())
+      .map((p) => p.getText().replace(/\s*=\s*[\s\S]+$/, ''))
+      .map((t) => t.trimEnd())
       .join(', ')
     const ret = method.getReturnTypeNode()?.getText()
     if (!ret) {

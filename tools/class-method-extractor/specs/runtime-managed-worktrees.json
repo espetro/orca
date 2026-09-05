@@ -1,0 +1,471 @@
+{
+  "target": "runtime-managed-worktrees.ts",
+  "className": "RuntimeManagedWorktrees",
+  "methods": [
+    "acquireWorktreeTerminalMutation",
+    "acquireWorktreeTerminalSpawn",
+    "activateManagedWorktree",
+    "closeHeadlessBrowserPagesForWorktree",
+    "collectMobileVisibleGraphChangedWorktrees",
+    "commitWorktreeTerminalSleepPtys",
+    "createManagedRemoteWorktree",
+    "createManagedWorktree",
+    "dedupeWorktreeCreate",
+    "emitWorktreeBaseStatus",
+    "emitWorktreeLifecycle",
+    "folderWorkspaceToResolvedWorktree",
+    "getKnownWorkspaceSessionWorktreeIds",
+    "getLivePtyIdsForWorktree",
+    "getMobileSessionTabsForWorktree",
+    "getMobileSessionWorktreeIdsForPty",
+    "getOrCreatePtyWorktreeRecord",
+    "getSummaryForRuntimeWorktreeId",
+    "getTerminalWorktreeIdForPaneKey",
+    "getValidatedExplicitWorktreeIdSelector",
+    "getWorkspaceSessionForWorktree",
+    "getWorkspaceSessionHostIdForWorktree",
+    "getWorktreeIdForTerminalHandle",
+    "hasTerminalsForWorktree",
+    "hydrateInferredWorktreeLineage",
+    "invalidateSshWorktreeScanCache",
+    "listWorktreeLineage",
+    "notifyActivateWorktree",
+    "notifyClientsActivateWorktree",
+    "notifyHostActivateWorktree",
+    "notifyWorktreeCatalogChangedForRemoteClients",
+    "notifyWorktreeFolderRenamed",
+    "notifyWorktreesChanged",
+    "notifyWorktreesChangedForRemoteClients",
+    "onWorktreeLifecycle",
+    "persistClientHostedBrowserPagesForWorktree",
+    "persistManagedWorktreeSortOrder",
+    "prefetchManagedWorktreeCreateBase",
+    "probeWorktreeDrift",
+    "provisionManagedWorktreeTerminals",
+    "reconcileWorktreeBaseStatus",
+    "recordCreatedWorktreeLineage",
+    "recordPtyWorktree",
+    "refreshPtyWorktreeRecordsFromController",
+    "refreshPtyWorktreeRecordsWithControllerInventory",
+    "removeManagedWorktree",
+    "removeWorktreeMetadataAndHistory",
+    "resolveActiveWorktreeContext",
+    "resolveBrowserNetworkExecutionHostForWorktree",
+    "resolveLineageForWorktreeCreate",
+    "resolveMobileMarkdownWorktreeId",
+    "resolveProjectRuntimeForWorktree",
+    "resolveWorktreeRemovalTarget",
+    "resolveWorktreeSelector",
+    "setWorkspaceSessionForWorktree",
+    "showManagedWorktree",
+    "sleepManagedWorktree",
+    "sleepResolvedWorktreeTerminals",
+    "sleepTerminalsForWorktree",
+    "stopExactTerminalsForWorktree",
+    "stopPtysForDestructiveWorktreeRemoval",
+    "stopTerminalsForWorktree",
+    "touchMobileSessionTabsForWorktree",
+    "tryGetWorkspaceSessionHostIdForWorktree",
+    "updateManagedWorktreeMeta",
+    "workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate"
+  ],
+  "deps": {
+    "_orchestrationDb": {
+      "kind": "direct",
+      "from": "_orchestrationDb"
+    },
+    "acceptedRendererMobileSnapshotByWorktree": {
+      "kind": "lazy",
+      "from": "acceptedRendererMobileSnapshotByWorktree"
+    },
+    "adoptControllerTerminalHandle": {
+      "kind": "callback",
+      "from": "adoptControllerTerminalHandle"
+    },
+    "agentBrowserBridge": {
+      "kind": "direct",
+      "from": "agentBrowserBridge"
+    },
+    "assertGraphReady": {
+      "kind": "callback",
+      "from": "assertGraphReady"
+    },
+    "assertStableReadyGraph": {
+      "kind": "callback",
+      "from": "assertStableReadyGraph"
+    },
+    "attachAgentRowsToSummaries": {
+      "kind": "callback",
+      "from": "attachAgentRowsToSummaries"
+    },
+    "authoritativeWindowId": {
+      "kind": "lazy",
+      "from": "authoritativeWindowId"
+    },
+    "buildResolvedWorktreeFromId": {
+      "kind": "callback",
+      "from": "buildResolvedWorktreeFromId"
+    },
+    "buildStartupForAgent": {
+      "kind": "callback",
+      "from": "buildStartupForAgent"
+    },
+    "buildStartupForDraft": {
+      "kind": "callback",
+      "from": "buildStartupForDraft"
+    },
+    "captureReadyGraphEpoch": {
+      "kind": "callback",
+      "from": "captureReadyGraphEpoch"
+    },
+    "clientEventPublishingCommands": {
+      "kind": "direct",
+      "from": "clientEventPublishingCommands"
+    },
+    "createDefaultTabTerminals": {
+      "kind": "callback",
+      "from": "createDefaultTabTerminals"
+    },
+    "createTerminal": {
+      "kind": "callback",
+      "from": "createTerminal"
+    },
+    "emitClientEvent": {
+      "kind": "callback",
+      "from": "emitClientEvent"
+    },
+    "fetchRemoteWithCache": {
+      "kind": "callback",
+      "from": "fetchRemoteWithCache"
+    },
+    "forgetPtyLivenessVerdict": {
+      "kind": "callback",
+      "from": "forgetPtyLivenessVerdict"
+    },
+    "getAvailableAuthoritativeWindow": {
+      "kind": "callback",
+      "from": "getAvailableAuthoritativeWindow"
+    },
+    "getLeafKey": {
+      "kind": "callback",
+      "from": "getLeafKey"
+    },
+    "getLivePtyForHandle": {
+      "kind": "callback",
+      "from": "getLivePtyForHandle"
+    },
+    "getLocalProvider": {
+      "kind": "callback",
+      "from": "getLocalProvider"
+    },
+    "getOrStartRemoteFetch": {
+      "kind": "callback",
+      "from": "getOrStartRemoteFetch"
+    },
+    "getOrStartRemoteTrackingBaseRefresh": {
+      "kind": "callback",
+      "from": "getOrStartRemoteTrackingBaseRefresh"
+    },
+    "getPtyRecordForPaneKey": {
+      "kind": "callback",
+      "from": "getPtyRecordForPaneKey"
+    },
+    "getRecordedTerminalSleepHandles": {
+      "kind": "callback",
+      "from": "getRecordedTerminalSleepHandles"
+    },
+    "getResolvedWorktreeMap": {
+      "kind": "callback",
+      "from": "getResolvedWorktreeMap"
+    },
+    "getRuntimeId": {
+      "kind": "callback",
+      "from": "getRuntimeId"
+    },
+    "getSshProviderFn": {
+      "kind": "lazy",
+      "from": "getSshProviderFn"
+    },
+    "getStartedAt": {
+      "kind": "callback",
+      "from": "getStartedAt"
+    },
+    "getTerminalHandlesForPtyId": {
+      "kind": "callback",
+      "from": "getTerminalHandlesForPtyId"
+    },
+    "graphStatus": {
+      "kind": "lazy",
+      "from": "graphStatus"
+    },
+    "hasFreshResolvedWorktreeCache": {
+      "kind": "callback",
+      "from": "hasFreshResolvedWorktreeCache"
+    },
+    "hasRemoteTrackingRef": {
+      "kind": "callback",
+      "from": "hasRemoteTrackingRef"
+    },
+    "hookAgentRowResolutionCommands": {
+      "kind": "direct",
+      "from": "hookAgentRowResolutionCommands"
+    },
+    "hydrateHeadlessMobileSessionTabsFromWorkspaceSession": {
+      "kind": "callback",
+      "from": "hydrateHeadlessMobileSessionTabsFromWorkspaceSession"
+    },
+    "intentionalHandlelessPtyStops": {
+      "kind": "lazy",
+      "from": "intentionalHandlelessPtyStops"
+    },
+    "invalidatePtyIncarnationHandle": {
+      "kind": "callback",
+      "from": "invalidatePtyIncarnationHandle"
+    },
+    "invalidateResolvedWorktreeCache": {
+      "kind": "callback",
+      "from": "invalidateResolvedWorktreeCache"
+    },
+    "invalidateSshWorktreeScanCacheInternal": {
+      "kind": "callback",
+      "from": "invalidateSshWorktreeScanCacheInternal"
+    },
+    "invalidateWorktreeScanCacheForRepo": {
+      "kind": "callback",
+      "from": "invalidateWorktreeScanCacheForRepo"
+    },
+    "leafExistsForPty": {
+      "kind": "callback",
+      "from": "leafExistsForPty"
+    },
+    "leaves": {
+      "kind": "lazy",
+      "from": "leaves"
+    },
+    "listResolvedWorktreeSnapshot": {
+      "kind": "callback",
+      "from": "listResolvedWorktreeSnapshot"
+    },
+    "listResolvedWorktrees": {
+      "kind": "callback",
+      "from": "listResolvedWorktrees"
+    },
+    "makeRuntimePaneKey": {
+      "kind": "callback",
+      "from": "makeRuntimePaneKey"
+    },
+    "markLocalWorkspaceTrustedForAgent": {
+      "kind": "callback",
+      "from": "markLocalWorkspaceTrustedForAgent"
+    },
+    "markPtyLivenessUnverifiable": {
+      "kind": "callback",
+      "from": "markPtyLivenessUnverifiable"
+    },
+    "markRemoteWorkspaceTrustedForAgent": {
+      "kind": "callback",
+      "from": "markRemoteWorkspaceTrustedForAgent"
+    },
+    "mobileSessionTabsAgentStatusHeartbeat": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsAgentStatusHeartbeat"
+    },
+    "mobileSessionTabsByWorktree": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsByWorktree"
+    },
+    "mobileTabSnapshots": {
+      "kind": "lazy",
+      "from": "mobileTabSnapshots"
+    },
+    "nextTitleObservationSequence": {
+      "kind": "callback",
+      "from": "nextTitleObservationSequence"
+    },
+    "notifier": {
+      "kind": "direct",
+      "from": "notifier"
+    },
+    "notifyMobileSessionTabsChanged": {
+      "kind": "callback",
+      "from": "notifyMobileSessionTabsChanged"
+    },
+    "offscreenBrowserBackend": {
+      "kind": "direct",
+      "from": "offscreenBrowserBackend"
+    },
+    "onPtyStopped": {
+      "kind": "lazy",
+      "from": "onPtyStopped"
+    },
+    "pasteStartupDraftWhenReady": {
+      "kind": "callback",
+      "from": "pasteStartupDraftWhenReady"
+    },
+    "projectMobileSessionTabsForClient": {
+      "kind": "callback",
+      "from": "projectMobileSessionTabsForClient",
+      "explicitType": "(result: unknown, clientNavigationId?: string) => unknown"
+    },
+    "pruneDisconnectedPtyRecords": {
+      "kind": "callback",
+      "from": "pruneDisconnectedPtyRecords"
+    },
+    "ptyController": {
+      "kind": "direct",
+      "from": "ptyController"
+    },
+    "ptyControllerAggregateInventoryGeneration": {
+      "kind": "lazy",
+      "from": "ptyControllerAggregateInventoryGeneration"
+    },
+    "ptyControllerInventoryGenerationByProvider": {
+      "kind": "lazy",
+      "from": "ptyControllerInventoryGenerationByProvider"
+    },
+    "ptyControllerInventorySequence": {
+      "kind": "lazy",
+      "from": "ptyControllerInventorySequence"
+    },
+    "ptyLivenessObservationSequence": {
+      "kind": "lazy",
+      "from": "ptyLivenessObservationSequence"
+    },
+    "ptyLivenessVerdictByPtyId": {
+      "kind": "lazy",
+      "from": "ptyLivenessVerdictByPtyId"
+    },
+    "ptysById": {
+      "kind": "lazy",
+      "from": "ptysById"
+    },
+    "reconcileSubscriberDrivenProviderAttach": {
+      "kind": "callback",
+      "from": "reconcileSubscriberDrivenProviderAttach"
+    },
+    "refreshFloatingWorkspacePtyLiveness": {
+      "kind": "callback",
+      "from": "refreshFloatingWorkspacePtyLiveness"
+    },
+    "refreshMobileSessionPtyRecords": {
+      "kind": "callback",
+      "from": "refreshMobileSessionPtyRecords"
+    },
+    "refreshPtyForegroundAgent": {
+      "kind": "lazy",
+      "from": "refreshPtyForegroundAgent"
+    },
+    "rememberRestoredOrchestrationAuthority": {
+      "kind": "callback",
+      "from": "rememberRestoredOrchestrationAuthority"
+    },
+    "requireStore": {
+      "kind": "callback",
+      "from": "requireStore"
+    },
+    "resolveExplicitWorktreeIdScoped": {
+      "kind": "callback",
+      "from": "resolveExplicitWorktreeIdScoped"
+    },
+    "resolveFolderWorkspaceConnectionId": {
+      "kind": "callback",
+      "from": "resolveFolderWorkspaceConnectionId"
+    },
+    "resolveLineageCandidateForTaskId": {
+      "kind": "callback",
+      "from": "resolveLineageCandidateForTaskId"
+    },
+    "resolveRemoteTrackingBase": {
+      "kind": "callback",
+      "from": "resolveRemoteTrackingBase"
+    },
+    "resolveRepoSelector": {
+      "kind": "callback",
+      "from": "resolveRepoSelector"
+    },
+    "resolveWorkspaceParentSelector": {
+      "kind": "callback",
+      "from": "resolveWorkspaceParentSelector"
+    },
+    "restoredOrchestrationAuthorityByPtyId": {
+      "kind": "lazy",
+      "from": "restoredOrchestrationAuthorityByPtyId"
+    },
+    "sendStartupFollowupWhenReady": {
+      "kind": "callback",
+      "from": "sendStartupFollowupWhenReady"
+    },
+    "setPtyManagementTitleFromObservedTitle": {
+      "kind": "callback",
+      "from": "setPtyManagementTitleFromObservedTitle"
+    },
+    "setupCompletionTokenByPtyId": {
+      "kind": "lazy",
+      "from": "setupCompletionTokenByPtyId"
+    },
+    "showTerminal": {
+      "kind": "callback",
+      "from": "showTerminal"
+    },
+    "snapshotValueComparison": {
+      "kind": "lazy",
+      "from": "snapshotValueComparison"
+    },
+    "splitTerminal": {
+      "kind": "callback",
+      "from": "splitTerminal"
+    },
+    "store": {
+      "kind": "direct",
+      "from": "store"
+    },
+    "tabs": {
+      "kind": "lazy",
+      "from": "tabs"
+    },
+    "terminalMutationTailByWorktreeId": {
+      "kind": "lazy",
+      "from": "terminalMutationTailByWorktreeId"
+    },
+    "terminalSleepByWorktreeId": {
+      "kind": "lazy",
+      "from": "terminalSleepByWorktreeId"
+    },
+    "terminalSleepGeneration": {
+      "kind": "lazy",
+      "from": "terminalSleepGeneration"
+    },
+    "terminalSleepStateByWorktreeId": {
+      "kind": "lazy",
+      "from": "terminalSleepStateByWorktreeId"
+    },
+    "toMobileSessionTabsResult": {
+      "kind": "callback",
+      "from": "toMobileSessionTabsResult"
+    },
+    "validateLineageParent": {
+      "kind": "callback",
+      "from": "validateLineageParent"
+    },
+    "wslDistroByPtyId": {
+      "kind": "lazy",
+      "from": "wslDistroByPtyId"
+    },
+    "getHostedReviewExecutionOptions": {
+      "kind": "callback",
+      "from": "getHostedReviewExecutionOptions",
+      "explicitType": "(repo: Repo) => { localGitExecOptions: { wslDistro?: string } } | undefined"
+    },
+    "getLocalGitExecutionOptionArgs": {
+      "kind": "callback",
+      "from": "getLocalGitExecutionOptionArgs",
+      "explicitType": "(repo: Repo) => [] | [{ wslDistro?: string }]"
+    }
+  },
+  "stateFields": [
+    "worktreeCreateByMutationId",
+    "worktreeLifecycleListeners",
+    "optimisticReconcileTokens",
+    "clientSessionTabSelections"
+  ]
+}

@@ -1,7 +1,8 @@
 // move subcommand: executes a spec against the source file (backup, generate
 // facade, transplant, stub, wire ctor) and writes the new facade file.
+import { SyntaxKind } from 'ts-morph'
 import { copyFileSync, existsSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   BACKUP_PATH,
   DEFAULT_SOURCE_CLASS_NAME,
@@ -12,6 +13,7 @@ import {
   methodFullTextWithComments,
   newProject,
   parseSpec,
+  normalizeBody,
   publicizeMethodText,
   stubFor
 } from './core.ts'
@@ -164,7 +166,7 @@ function runMove(file: string, specPath: string, dryRun: boolean): void {
       if (d.kind === 'lazy') {
         return `${dep}: () => this.${d.from}`
       }
-      return `${dep}: (arg) => this.${d.from}(arg)`
+      return `${dep}: (...args) => this.${d.from}(...args)`
     })
     .join(',\n')
   const assign = `this.${facadeField} = new ${spec.className}({\n${wiring}\n})`
