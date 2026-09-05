@@ -1,0 +1,444 @@
+{
+  "target": "runtime-agent-cluster-facade.ts",
+  "className": "RuntimeAgentClusterFacade",
+  "methods": [
+    "applySeededAgentStatus",
+    "assertAgentPromptGeneration",
+    "assertAgentPromptPermissionSafe",
+    "assertAgentSkillSharingAllowed",
+    "attachAgentRowsToSummaries",
+    "buildAgentOrchestrationByPaneKey",
+    "buildStartupForAgent",
+    "clearAgentRowSnapshotsForPty",
+    "closeStructuredAgentSessionTab",
+    "createAgentPromptRenderGate",
+    "createAgentSession",
+    "createStructuredAgentSessionHandoffTransport",
+    "emitTerminalAgentStatusEvents",
+    "ensureAgentSession",
+    "ensureStructuredAgentSessionHost",
+    "executionOwnerSupportsAgentSessionOperation",
+    "getAgentPromptActivity",
+    "getAgentSessionExecutionNamespace",
+    "getAgentStatusForHandle",
+    "getAgentStatusLaunchConfigForPaneKey",
+    "getAgentStatusOrchestrationContextForHandle",
+    "getAgentStatusOrchestrationContextForPaneKey",
+    "getAgentStatusTerminalHandleForPaneKey",
+    "getFreshExplicitAgentStatusForHandle",
+    "getHookAgentRowForPane",
+    "getPtyAgent",
+    "getStructuredAgentSessionCreateSupport",
+    "getTerminalAgentStatus",
+    "handleAgentTeamsTmuxCompat",
+    "hasPersistedStructuredAgentSessionStore",
+    "isAgentWrapperForegroundProcess",
+    "isPtyRunningAgent",
+    "isRecognizedForegroundAgentProcess",
+    "isTerminalRunningAgent",
+    "isTerminalRunningSettledPromptAgent",
+    "launchAgentTerminal",
+    "loadPtyForegroundAgentFromController",
+    "markLocalWorkspaceTrustedForAgent",
+    "markRemoteWorkspaceTrustedForAgent",
+    "markWorkspaceTrustedForAgent",
+    "prepareClaudeAgentTeamsLeader",
+    "prepareClaudeAgentTeamsLeaderForHandle",
+    "prepareStructuredAgentSessionStartupRestoration",
+    "prepareStructuredAgentSessionStartupRestorationOnce",
+    "processAgentStatusOscForPty",
+    "publishDiscoveredSkillsFromAgent",
+    "publishStructuredAgentSessionTab",
+    "reconcileManagedAgentHooks",
+    "recordAgentPromptLifecycleState",
+    "recordAgentPromptPermissionObservation",
+    "releaseClaudeAgentTeamsLeaderForHandle",
+    "resolveAgentTerminalCreateOptions",
+    "resolveHookLiveAgentRow",
+    "resolvePaneAgentIdentityField",
+    "resolveStructuredAgentSessionCreateIntent",
+    "resolveStructuredAgentSessionIntent",
+    "resolveStructuredAgentSessionLocation",
+    "restoreAgentPromptLifecycleByteOrder",
+    "restoreStructuredAgentSessionTabs",
+    "restoreStructuredAgentSessionTabsOnce",
+    "retainAgentRowSnapshot",
+    "retirePtyAgentLaunchAuthority",
+    "sendTerminalAgentPrompt",
+    "serializeAgentPromptSubmission",
+    "toAgentSessionOptions",
+    "validateOrchestrationAgentLauncher",
+    "writeTerminalAgentPrompt"
+  ],
+  "deps": {
+    "assertLiveTerminalHandleTargetsPty": {
+      "kind": "callback",
+      "from": "assertLiveTerminalHandleTargetsPty"
+    },
+    "closeStructuredTuiOwner": {
+      "kind": "callback",
+      "from": "closeStructuredTuiOwner"
+    },
+    "closeTerminal": {
+      "kind": "callback",
+      "from": "closeTerminal"
+    },
+    "createTerminal": {
+      "kind": "callback",
+      "from": "createTerminal"
+    },
+    "emitMobileSessionTabsSnapshot": {
+      "kind": "callback",
+      "from": "emitMobileSessionTabsSnapshot",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "focusTerminal": {
+      "kind": "callback",
+      "from": "focusTerminal"
+    },
+    "getAgentLaunchPlatformForRepo": {
+      "kind": "callback",
+      "from": "getAgentLaunchPlatformForRepo",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "getAgentLaunchPlatformForWorkspace": {
+      "kind": "callback",
+      "from": "getAgentLaunchPlatformForWorkspace",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "getHeadlessMobileSessionGroupId": {
+      "kind": "callback",
+      "from": "getHeadlessMobileSessionGroupId",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "getKnownWorkspaceSessionWorktreeIds": {
+      "kind": "callback",
+      "from": "getKnownWorkspaceSessionWorktreeIds"
+    },
+    "getLeavesForPty": {
+      "kind": "callback",
+      "from": "getLeavesForPty"
+    },
+    "getLiveLeafForHandle": {
+      "kind": "callback",
+      "from": "getLiveLeafForHandle"
+    },
+    "getLivePtyForHandle": {
+      "kind": "callback",
+      "from": "getLivePtyForHandle"
+    },
+    "getLocalProvider": {
+      "kind": "callback",
+      "from": "getLocalProvider"
+    },
+    "getOrchestrationDbIfAvailable": {
+      "kind": "callback",
+      "from": "getOrchestrationDbIfAvailable"
+    },
+    "getPaneKeyForTerminalHandle": {
+      "kind": "callback",
+      "from": "getPaneKeyForTerminalHandle"
+    },
+    "getPrimaryLeafForPty": {
+      "kind": "callback",
+      "from": "getPrimaryLeafForPty"
+    },
+    "getPtyLifecycleGeneration": {
+      "kind": "callback",
+      "from": "getPtyLifecycleGeneration"
+    },
+    "getPtyOutputSequence": {
+      "kind": "callback",
+      "from": "getPtyOutputSequence"
+    },
+    "getPtyRecordForPaneKey": {
+      "kind": "callback",
+      "from": "getPtyRecordForPaneKey"
+    },
+    "getPtyWriteHostPlatform": {
+      "kind": "callback",
+      "from": "getPtyWriteHostPlatform"
+    },
+    "getSummaryForRuntimeWorktreeId": {
+      "kind": "callback",
+      "from": "getSummaryForRuntimeWorktreeId",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "getTerminalHandleForPaneKey": {
+      "kind": "callback",
+      "from": "getTerminalHandleForPaneKey"
+    },
+    "getWorkspaceSessionForWorktree": {
+      "kind": "callback",
+      "from": "getWorkspaceSessionForWorktree"
+    },
+    "hydrateHeadlessMobileSessionTabsFromWorkspaceSession": {
+      "kind": "callback",
+      "from": "hydrateHeadlessMobileSessionTabsFromWorkspaceSession",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "isLeafPtyProvenAbsent": {
+      "kind": "callback",
+      "from": "isLeafPtyProvenAbsent"
+    },
+    "issuePtyHandle": {
+      "kind": "callback",
+      "from": "issuePtyHandle"
+    },
+    "issueStructuredTuiPtyHandle": {
+      "kind": "callback",
+      "from": "issueStructuredTuiPtyHandle"
+    },
+    "makeRuntimePaneKey": {
+      "kind": "callback",
+      "from": "makeRuntimePaneKey",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "nextTitleObservationSequence": {
+      "kind": "callback",
+      "from": "nextTitleObservationSequence"
+    },
+    "proveRecoveredStructuredTuiPtyProcess": {
+      "kind": "callback",
+      "from": "proveRecoveredStructuredTuiPtyProcess"
+    },
+    "readTerminal": {
+      "kind": "callback",
+      "from": "readTerminal"
+    },
+    "refreshMobileSessionPtyRecords": {
+      "kind": "callback",
+      "from": "refreshMobileSessionPtyRecords"
+    },
+    "refreshStructuredTuiOwnerBinding": {
+      "kind": "callback",
+      "from": "refreshStructuredTuiOwnerBinding"
+    },
+    "requireStore": {
+      "kind": "callback",
+      "from": "requireStore"
+    },
+    "resolveConfiguredCodexStructuredArgs": {
+      "kind": "callback",
+      "from": "resolveConfiguredCodexStructuredArgs"
+    },
+    "resolveRecoveredStructuredTuiTranscript": {
+      "kind": "callback",
+      "from": "resolveRecoveredStructuredTuiTranscript",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "resolveRuntimeFileTarget": {
+      "kind": "callback",
+      "from": "resolveRuntimeFileTarget"
+    },
+    "resolveTerminalWorkspaceLaunchScope": {
+      "kind": "callback",
+      "from": "resolveTerminalWorkspaceLaunchScope"
+    },
+    "resolveWorkspaceTerminalStartupCwd": {
+      "kind": "callback",
+      "from": "resolveWorkspaceTerminalStartupCwd",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "resolveWorktreeSelector": {
+      "kind": "callback",
+      "from": "resolveWorktreeSelector"
+    },
+    "sendTerminal": {
+      "kind": "callback",
+      "from": "sendTerminal",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "setPtyManagementTitleFromObservedTitle": {
+      "kind": "callback",
+      "from": "setPtyManagementTitleFromObservedTitle"
+    },
+    "showTerminal": {
+      "kind": "callback",
+      "from": "showTerminal"
+    },
+    "splitTerminal": {
+      "kind": "callback",
+      "from": "splitTerminal",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "stopStructuredSessionProcess": {
+      "kind": "callback",
+      "from": "stopStructuredSessionProcess"
+    },
+    "structuredTuiStatus": {
+      "kind": "callback",
+      "from": "structuredTuiStatus"
+    },
+    "subscribeToTerminalData": {
+      "kind": "callback",
+      "from": "subscribeToTerminalData"
+    },
+    "terminalHasShellForegroundProcess": {
+      "kind": "callback",
+      "from": "terminalHasShellForegroundProcess"
+    },
+    "waitForAdoptedStructuredTuiProof": {
+      "kind": "callback",
+      "from": "waitForAdoptedStructuredTuiProof",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "waitForStructuredClaudeTuiProof": {
+      "kind": "callback",
+      "from": "waitForStructuredClaudeTuiProof",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "waitForStructuredTuiIdleOrExit": {
+      "kind": "callback",
+      "from": "waitForStructuredTuiIdleOrExit"
+    },
+    "waitForStructuredTuiOwnerExit": {
+      "kind": "callback",
+      "from": "waitForStructuredTuiOwnerExit"
+    },
+    "waitForStructuredTuiProof": {
+      "kind": "callback",
+      "from": "waitForStructuredTuiProof",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "waitForStructuredTuiPtyExit": {
+      "kind": "callback",
+      "from": "waitForStructuredTuiPtyExit"
+    },
+    "waitForTerminal": {
+      "kind": "callback",
+      "from": "waitForTerminal",
+      "explicitType": "(...args: any[]) => any"
+    },
+    "agentSessionClaimSigner": {
+      "kind": "lazy",
+      "from": "agentSessionClaimSigner"
+    },
+    "agentSessionCreateOperations": {
+      "kind": "lazy",
+      "from": "agentSessionCreateOperations"
+    },
+    "claudeAgentTeams": {
+      "kind": "lazy",
+      "from": "claudeAgentTeams"
+    },
+    "onTerminalAgentStatus": {
+      "kind": "lazy",
+      "from": "onTerminalAgentStatus"
+    },
+    "getSshProviderFn": {
+      "kind": "lazy",
+      "from": "getSshProviderFn"
+    },
+    "prepareCodexStructuredLaunchFn": {
+      "kind": "lazy",
+      "from": "prepareCodexStructuredLaunchFn"
+    },
+    "getAgentProviderSessionRowsForPaneFn": {
+      "kind": "lazy",
+      "from": "getAgentProviderSessionRowsForPaneFn"
+    },
+    "getAgentStatusSnapshotFn": {
+      "kind": "lazy",
+      "from": "getAgentStatusSnapshotFn"
+    },
+    "runtimeId": {
+      "kind": "lazy",
+      "from": "runtimeId"
+    },
+    "store": {
+      "kind": "lazy",
+      "from": "store"
+    },
+    "ptysById": {
+      "kind": "lazy",
+      "from": "ptysById"
+    },
+    "ptyController": {
+      "kind": "lazy",
+      "from": "ptyController"
+    },
+    "tabs": {
+      "kind": "lazy",
+      "from": "tabs"
+    },
+    "notifier": {
+      "kind": "lazy",
+      "from": "notifier"
+    },
+    "mobileSessionTabsByWorktree": {
+      "kind": "lazy",
+      "from": "mobileSessionTabsByWorktree"
+    },
+    "ptyWorktrees": {
+      "kind": "lazy",
+      "from": "ptyWorktrees"
+    },
+    "skillArtifactCommands": {
+      "kind": "lazy",
+      "from": "skillArtifactCommands"
+    },
+    "mobileSessionFacade": {
+      "kind": "lazy",
+      "from": "mobileSessionFacade"
+    },
+    "hookAgentRowResolutionCommands": {
+      "kind": "lazy",
+      "from": "hookAgentRowResolutionCommands"
+    },
+    "terminalAgentStatusBinding": {
+      "kind": "lazy",
+      "from": "terminalAgentStatusBinding"
+    },
+    "getTerminalAgentStatusPtyId": {
+      "kind": "lazy",
+      "from": "getTerminalAgentStatusPtyId"
+    },
+    "assertTerminalAgentStatusPtyBinding": {
+      "kind": "lazy",
+      "from": "assertTerminalAgentStatusPtyBinding"
+    },
+    "getTerminalAgentStatusSnapshot": {
+      "kind": "lazy",
+      "from": "getTerminalAgentStatusSnapshot"
+    },
+    "hasAuthoritativeTerminalWaitPermission": {
+      "kind": "lazy",
+      "from": "hasAuthoritativeTerminalWaitPermission"
+    },
+    "getOrCreatePtyTitleTrackerEntry": {
+      "kind": "lazy",
+      "from": "getOrCreatePtyTitleTrackerEntry"
+    },
+    "agentPromptLifecycleByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptLifecycleByPtyId"
+    },
+    "agentPromptPermissionSequenceByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptPermissionSequenceByPtyId"
+    },
+    "agentPromptExplicitStatusFloorByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptExplicitStatusFloorByPtyId"
+    },
+    "agentPromptSubmissionTailByPtyId": {
+      "kind": "lazy",
+      "from": "agentPromptSubmissionTailByPtyId"
+    },
+    "agentStatusOscProcessorsByPtyId": {
+      "kind": "lazy",
+      "from": "agentStatusOscProcessorsByPtyId"
+    },
+    "latestAgentStatusByPaneKey": {
+      "kind": "lazy",
+      "from": "latestAgentStatusByPaneKey"
+    }
+  },
+  "stateFields": [
+    "structuredAgentSessionTabRestorePromise",
+    "structuredAgentSessionStartupRestorePromise",
+    "managedHookReconciliationGeneration",
+    "managedHookReconciliationTail"
+  ]
+}
