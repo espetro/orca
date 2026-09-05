@@ -116,7 +116,6 @@ import type { StructuredTuiOwner } from '../native-chat/agent-session-wire/struc
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { waitForStructuredTuiExitProof } from './structured-tui-exit-proof'
-import { SESSION_TAB_NOT_FOUND_ERROR } from '../../shared/session-tab-close'
 import { hasStructuredTuiIdleEvidence } from './structured-tui-idle-evidence'
 import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import {
@@ -146,7 +145,6 @@ import { OrchestrationError } from './orchestration/orchestration-error'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type {
   OrchestrationCompatibilityEvidence,
   OrchestrationCompatibilityHostStamp
@@ -275,7 +273,6 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
-import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 import type { BrowserSessionTabSelectionOptions } from './browser-tab-create-publication'
 import type { BrowserScreencastSubscriber } from './browser-screencast-driver-scope'
 import type {
@@ -354,8 +351,7 @@ import type { TerminalPaneSplitSource } from '../../shared/feature-education-tel
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoIdFromWorktreeId,
-  splitWorktreeId,
-  splitWorktreeIdForFilesystem
+  splitWorktreeId
 } from '../../shared/worktree/id'
 
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -476,12 +472,7 @@ import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
-import {
-  committedMobileSessionTabClose,
-  delegatedMobileSessionTabClose,
-  refusedMobileSessionTabClose,
-  type MobileSessionTabCloseOutcome
-} from './mobile-session-tab-close-outcome'
+import type { MobileSessionTabCloseOutcome } from './mobile-session-tab-close-outcome'
 import type {
   PtyProviderBufferSnapshot,
   IPtyProvider,
@@ -2451,6 +2442,7 @@ export class OrcaRuntimeService {
   private readonly managedBaseCommands: RuntimeManagedBaseCommands
   private readonly remoteDesktopCommands: RuntimeRemoteDesktopCommands
   private readonly clientConnectionCommands: RuntimeClientConnectionCommands
+  private readonly mobileTabOperations: RuntimeMobileTabOperations
   private readonly agentClusterFacade: RuntimeAgentClusterFacade
   private readonly mobileSessionFacade: RuntimeMobileSessionFacade
   private readonly ptyWorktrees: RuntimePtyWorktrees
@@ -3131,6 +3123,84 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.mobileTabOperations = new RuntimeMobileTabOperations({
+      applySeededAgentStatus: (...args) => this.applySeededAgentStatus(...args),
+      assertStableReadyGraph: (...args) => this.assertStableReadyGraph(...args),
+      browserTabClose: (...args) => this.browserTabClose(...args),
+      captureReadyGraphEpoch: (...args) => this.captureReadyGraphEpoch(...args),
+      clientHostedBrowserRows: this.clientHostedBrowserRows,
+      clientSessionTabSelections: () => this.clientSessionTabSelections,
+      closeFileWatchersForRemoval: () => this.closeFileWatchersForRemoval,
+      closeStructuredAgentSessionTab: (...args) => this.closeStructuredAgentSessionTab(...args),
+      collectBrowserGroupAssignment: (...args) => this.collectBrowserGroupAssignment(...args),
+      fileCommands: this.fileCommands,
+      forgetFileWatchersAfterRemoval: () => this.forgetFileWatchersAfterRemoval,
+      getAvailableAuthoritativeWindow: (...args) => this.getAvailableAuthoritativeWindow(...args),
+      getPtyOutputSequence: (...args) => this.getPtyOutputSequence(...args),
+      getTerminalSize: (...args) => this.getTerminalSize(...args),
+      getTrackedRawTitleForPty: () => this.getTrackedRawTitleForPty,
+      getValidatedExplicitWorktreeIdSelector: (...args) =>
+        this.getValidatedExplicitWorktreeIdSelector(...args),
+      getWorkspaceSessionForWorktree: (...args) => this.getWorkspaceSessionForWorktree(...args),
+      hasRecentExpiredSshLeasePane: (...args) => this.hasRecentExpiredSshLeasePane(...args),
+      hasRecentTerminalOutputPath: (...args) => this.hasRecentTerminalOutputPath(...args),
+      hasServeOrSshOwnedBinding: (...args) => this.hasServeOrSshOwnedBinding(...args),
+      headlessHydrationState: this.headlessHydrationState,
+      headlessTerminals: this.headlessTerminals,
+      isHeadlessBuiltMobileSessionPublicationBase: (...args) =>
+        this.isHeadlessBuiltMobileSessionPublicationBase(...args),
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      mobileSessionTabsChangeSequence: this.mobileSessionTabsChangeSequence,
+      notifier: () => this.notifier,
+      offscreenBrowserBackend: () => this.offscreenBrowserBackend,
+      persistClientHostedBrowserPagesForWorktree: (...args) =>
+        this.persistClientHostedBrowserPagesForWorktree(...args),
+      persistedClientHostedBrowserWorktreeIds: this.persistedClientHostedBrowserWorktreeIds,
+      providerSnapshotPreferredPtys: this.providerSnapshotPreferredPtys,
+      ptyController: () => this.ptyController,
+      ptyWorktrees: () => this.ptyWorktrees,
+      recordRecentPtyOutputForPathProvenance: (...args) =>
+        this.recordRecentPtyOutputForPathProvenance(...args),
+      rendererPublicationThrottle: this.rendererPublicationThrottle,
+      repointPendingMessagesForHandle: (...args) => this.repointPendingMessagesForHandle(...args),
+      republishMobileSessionTabsSnapshot: (...args) =>
+        this.republishMobileSessionTabsSnapshot(...args),
+      requireStore: (...args) => this.requireStore(...args),
+      resolveKnownWorkspaceFileTarget: (...args) => this.resolveKnownWorkspaceFileTarget(...args),
+      resolveRuntimeFileTarget: (...args) => this.resolveRuntimeFileTarget(...args),
+      resolveRuntimeGitTarget: (...args) => this.resolveRuntimeGitTarget(...args),
+      resolveTerminalContext: (...args) => this.resolveTerminalContext(...args),
+      resolveTerminalCwd: (...args) => this.resolveTerminalCwd(...args),
+      resolveTerminalFileUriHostname: (...args) => this.resolveTerminalFileUriHostname(...args),
+      resolveWorktreeSelector: (...args) => this.resolveWorktreeSelector(...args),
+      restoreFileWatchersAfterFailedRemoval: () => this.restoreFileWatchersAfterFailedRemoval,
+      retireRuntimeOwnedBrowserSessionTab: (...args) =>
+        this.retireRuntimeOwnedBrowserSessionTab(...args),
+      runtimeId: () => this.runtimeId,
+      snapshotValueComparison: () => this.snapshotValueComparison,
+      store: () => this.store,
+      tabs: this.tabs,
+      terminalClusterFacade: () => this.terminalClusterFacade,
+      workspaceSessionHasRuntimeOwnedPtyCandidate: (...args) =>
+        this.workspaceSessionHasRuntimeOwnedPtyCandidate(...args),
+      workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate: (...args) =>
+        this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(...args),
+      recordOsc7MetadataForPty: () => this.recordOsc7MetadataForPty,
+      buildHeadlessMobileSessionBrowserTabs: (...args) =>
+        this.buildHeadlessMobileSessionBrowserTabs(...args),
+      buildHeadlessMobileSessionTerminalTabs: (...args) =>
+        this.buildHeadlessMobileSessionTerminalTabs(...args),
+      headlessMobileSnapshotContentUnchanged: (...args) =>
+        this.headlessMobileSnapshotContentUnchanged(...args),
+      isRuntimeOwnedHeadlessMobileTab: (...args) => this.isRuntimeOwnedHeadlessMobileTab(...args),
+      mergeMobileSessionSnapshotTabs: (...args) => this.mergeMobileSessionSnapshotTabs(...args),
+      mergeMobileSessionTabGroups: (...args) => this.mergeMobileSessionTabGroups(...args),
+      notifyMobileSessionTabSnapshots: (...args) => this.notifyMobileSessionTabSnapshots(...args),
+      reconcileHeadlessMobileSessionBrowserTabs: (...args) =>
+        this.reconcileHeadlessMobileSessionBrowserTabs(...args),
+      mobileSessionFacade: () => this.mobileSessionFacade,
+      mobileTabSnapshots: () => this.mobileTabSnapshots
+    })
     this.clientConnectionCommands = new RuntimeClientConnectionCommands({
       store: this.store,
       notifyReposChanged: (...args) => this.notifyReposChanged(...args),
@@ -3360,10 +3430,10 @@ export class OrcaRuntimeService {
       hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
         this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
       isDeliberatelyParkedPane: (...args) => this.isDeliberatelyParkedPane(...args),
-      isHeadlessBuiltMobileSessionPublicationBase: (...args) =>
-        this.isHeadlessBuiltMobileSessionPublicationBase(...args),
-      isHeadlessMobileSessionPublication: (...args) =>
-        this.isHeadlessMobileSessionPublication(...args),
+      isHeadlessBuiltMobileSessionPublicationBase: (publicationEpoch) =>
+        this.isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch),
+      isHeadlessMobileSessionPublication: (publicationEpoch) =>
+        this.isHeadlessMobileSessionPublication(publicationEpoch),
       isKnownUnattachedLocalDaemonPty: (...args) => this.isKnownUnattachedLocalDaemonPty(...args),
       isMobileSessionSurfaceMembershipAllowed: (...args: any[]) =>
         (this.isMobileSessionSurfaceMembershipAllowed as (...a: any[]) => any)(...args),
@@ -4346,7 +4416,7 @@ export class OrcaRuntimeService {
       getMobileSessionSnapshotTabIdentityKeys: (tab) =>
         this.getMobileSessionSnapshotTabIdentityKeys(tab as never),
       getHeadlessMobileSessionGroupId: (worktreeId) =>
-        this.getHeadlessMobileSessionGroupId(worktreeId),
+        this.mobileSessionFacade.getHeadlessMobileSessionGroupId(worktreeId),
       getRuntimeBrowserPageForTab: (tab: any, _worktreeId) => {
         if (typeof tab.browserPageId === 'string') {
           return getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
@@ -6301,207 +6371,10 @@ export class OrcaRuntimeService {
       workspaceSession?: WorkspaceSessionState
     } = {}
   ): Set<string> {
-    // Why: report which worktrees were reconciled in place so callers don't
-    // reconcile them a second time (see notifyMobileSessionTabsChanged).
-    const reconciledWorktreeIds = new Set<string>()
-    if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
-      return reconciledWorktreeIds
-    }
-    const session =
-      options.workspaceSession ??
-      (worktreeId
-        ? this.getWorkspaceSessionForWorktree(worktreeId)
-        : this.store?.getWorkspaceSession?.())
-    if (!session) {
-      return reconciledWorktreeIds
-    }
-    // Why: with no runtime-owned candidate in the session and no offscreen
-    // browser backend, this hydrate provably builds zero tabs for
-    // every worktree — skip the per-worktree rebuild entirely (hot on every
-    // graph sync). Scoped to onlyRuntimeOwnedTerminals so full hydrates are
-    // untouched.
-    if (
-      options.onlyRuntimeOwnedTerminals === true &&
-      !this.offscreenBrowserBackend &&
-      getRuntimeBrowserPageRegistry(this).listPages(worktreeId ?? '').length === 0 &&
-      options.runtimeOwnedTerminalCandidateKnown !== true &&
-      !(worktreeId
-        ? this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
-            session,
-            worktreeId,
-            session.tabsByWorktree[worktreeId] ?? []
-          )
-        : this.workspaceSessionHasRuntimeOwnedPtyCandidate(session))
-    ) {
-      return reconciledWorktreeIds
-    }
-    const entries =
-      worktreeId !== undefined
-        ? ([[worktreeId, session.tabsByWorktree[worktreeId] ?? []]] as const)
-        : Object.entries(session.tabsByWorktree ?? {})
-    // Why: workspaceSession keys are `${repoId}::${path}` and are not pruned when
-    // a repo disappears from this client's view (e.g. removed on another client,
-    // or a stale browser-persisted session). Hydrating such a key would surface a
-    // phantom "unknown"/duplicate workspace with no live repo behind it. Only
-    // hydrate sessions whose repo still exists; leave unparseable keys alone.
-    // Resolved lazily so unparseable keys (floating terminals) never pay for a
-    // repo inventory on the hot poll path, and `null` when the store cannot
-    // report repos — an unavailable list must not read as "every repo is gone".
-    let liveRepoIds: Set<string> | null | undefined
-    for (const [entryWorktreeId, persistedTabs] of entries) {
-      const ownerRepoId = splitWorktreeIdForFilesystem(entryWorktreeId)?.repoId
-      if (ownerRepoId) {
-        if (liveRepoIds === undefined) {
-          const knownRepos = this.store?.getRepos?.()
-          liveRepoIds = knownRepos ? new Set(knownRepos.map((repo) => repo.id)) : null
-        }
-        if (liveRepoIds && !liveRepoIds.has(ownerRepoId)) {
-          continue
-        }
-      }
-      const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
-      if (
-        existing &&
-        existing.tabs.length > 0 &&
-        options.force !== true &&
-        options.onlyRuntimeOwnedTerminals !== true
-      ) {
-        // Why: terminals are stable/persisted so we normally skip a rebuild, but
-        // offscreen browser tabs are live and may have been created/closed since.
-        // Reconcile just the browser tabs against the live bridge instead of
-        // leaving a stale snapshot that omits a freshly-opened browser tab.
-        this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, existing)
-        reconciledWorktreeIds.add(entryWorktreeId)
-        continue
-      }
-      const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
-        entryWorktreeId,
-        persistedTabs,
-        session
-      ).filter(
-        (tab) =>
-          options.onlyRuntimeOwnedTerminals !== true ||
-          this.hasServeOrSshOwnedBinding(tab) ||
-          this.hasRecentExpiredSshLeasePane(entryWorktreeId, tab)
-      )
-      // Why: offscreen browser panes are live-only (no persisted session entry),
-      // so include them on every hydrate regardless of the onlyRuntimeOwnedTerminals
-      // filter, which is about terminal PTY ownership and never applies to browsers.
-      const browserTabs = this.buildHeadlessMobileSessionBrowserTabs(entryWorktreeId)
-      const tabs: RuntimeMobileSessionSnapshotTab[] = [...terminalTabs, ...browserTabs]
-      if (tabs.length === 0) {
-        continue
-      }
-      const activeTab = this.pickHeadlessActiveTerminalTab(terminalTabs)
-      const tabOrder = [
-        ...this.collectHeadlessParentTabOrder(terminalTabs),
-        ...browserTabs.map((tab) => tab.id)
-      ]
-      const groupId = this.getHeadlessMobileSessionGroupId(entryWorktreeId)
-      const mergedTabs =
-        options.onlyRuntimeOwnedTerminals === true && existing
-          ? this.mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
-          : tabs
-      const mergedActiveTab =
-        existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
-        activeTab ??
-        mergedTabs[0] ??
-        null
-      const mergedTerminalTabs = mergedTabs.filter(
-        (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-      )
-      const mergedBrowserOrder = mergedTabs
-        .filter((tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser')
-        .map((tab) => tab.id)
-      // Why: a persisted multi-group split must be restored on cold rebuild, or
-      // the headless serve coalesces the user's group layout back into one group
-      // (the persisted tabGroups/tabGroupLayouts would otherwise be write-only).
-      const persistedGroups = session.tabGroups?.[entryWorktreeId]
-      const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
-      const hasPersistedSplit =
-        options.onlyRuntimeOwnedTerminals !== true &&
-        persistedGroups !== undefined &&
-        persistedGroups.length > 1
-      const activeTopLevelId = mergedActiveTab
-        ? mergedActiveTab.type === 'terminal'
-          ? mergedActiveTab.parentTabId
-          : mergedActiveTab.id
-        : null
-      const nextTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
-        ? this.snapshotValueComparison.appendBrowserTabOrder(
-            this.distributeHeadlessTabsAcrossGroups(
-              persistedGroups.map((group) => ({
-                id: group.id,
-                activeTabId: group.activeTabId,
-                tabOrder: [...group.tabOrder],
-                ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
-              })),
-              this.collectHeadlessParentTabOrder(mergedTerminalTabs),
-              activeTopLevelId
-            ),
-            mergedBrowserOrder,
-            undefined,
-            // Why: distribute drops browser ids (terminal-only), so carry each
-            // browser's persisted group forward instead of coalescing left.
-            this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
-          )
-        : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroups
-          ? this.snapshotValueComparison.appendBrowserTabOrder(
-              this.mergeMobileSessionTabGroups(
-                entryWorktreeId,
-                existing.tabGroups,
-                mergedTerminalTabs,
-                mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
-              ),
-              mergedBrowserOrder
-            )
-          : [
-              {
-                id: groupId,
-                activeTabId: mergedActiveTab?.id
-                  ? (activeTab?.parentTabId ?? mergedActiveTab.id)
-                  : (tabOrder[0] ?? null),
-                tabOrder
-              }
-            ]
-      // Why: merging runtime tabs INTO a renderer publication must not reclass
-      // the snapshot as headless-built — the preservation predicate would then
-      // treat the renderer's own tabs as runtime-owned and resurrect tabs the
-      // renderer later closes. Keep the renderer base epoch with a merge suffix
-      // (idempotent) so ownership stays derivable from the epoch.
-      const mergedIntoRendererPublication =
-        options.onlyRuntimeOwnedTerminals === true &&
-        existing !== undefined &&
-        !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
-      const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-        worktree: existing?.worktree ?? entryWorktreeId,
-        publicationEpoch: mergedIntoRendererPublication
-          ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
-          : `headless-hydrated:${Date.now().toString(36)}`,
-        snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: existing?.activeGroupId ?? groupId,
-        activeTabId: mergedActiveTab?.id ?? null,
-        activeTabType: mergedActiveTab?.type ?? null,
-        tabGroups: nextTabGroups,
-        // Why: the runtime-owned rebuild runs on every graph sync — carry the
-        // existing split layout forward or each sync drops it and fans out.
-        ...(hasPersistedSplit && persistedLayout
-          ? { tabGroupLayout: persistedLayout }
-          : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroupLayout
-            ? { tabGroupLayout: existing.tabGroupLayout }
-            : {}),
-        tabs: mergedTabs
-      }
-      // Why: the runtime-owned hydrate runs on EVERY graph sync; when the rebuilt
-      // projection matches the existing snapshot, keep the existing object and
-      // (epoch, version) untouched so identity-based change detection stays a
-      // pure no-op and unchanged runtime/browser worktrees never fan out.
-      if (existing && this.headlessMobileSnapshotContentUnchanged(existing, nextSnapshot)) {
-        continue
-      }
-      this.mobileSessionTabsByWorktree.set(entryWorktreeId, nextSnapshot)
-    }
-    return reconciledWorktreeIds
+    return this.mobileTabOperations.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+      worktreeId,
+      options
+    )
   }
 
   // Why: content equality for the hydrate's idempotence check — compares every
@@ -6556,7 +6429,7 @@ export class OrcaRuntimeService {
   private async refreshMobileSessionPtyRecords(
     targetWorktreeId: string | null = null
   ): Promise<Set<string> | null> {
-    return this.mobileSessionFacade.refreshMobileSessionPtyRecords(targetWorktreeId)
+    return this.mobileTabOperations.refreshMobileSessionPtyRecords(targetWorktreeId)
   }
 
   async activateMobileSessionTab(
@@ -6571,20 +6444,6 @@ export class OrcaRuntimeService {
     } = {}
   ): Promise<RuntimeMobileSessionTabsResult> {
     return this.mobileSessionFacade.activateMobileSessionTab(worktreeSelector, tabId, leafId, opts)
-  }
-
-  private applyMobileSessionTabNavigation(
-    snapshot: RuntimeMobileSessionTabsResult,
-    activeTabId: string,
-    navigation: RuntimeNavigationTarget,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult {
-    return this.mobileSessionFacade.applyMobileSessionTabNavigation(
-      snapshot,
-      activeTabId,
-      navigation,
-      clientNavigationId
-    )
   }
 
   /**
@@ -6635,255 +6494,7 @@ export class OrcaRuntimeService {
       localPtyTeardownOwnedExternally?: boolean
     } = {}
   ): Promise<MobileSessionTabCloseOutcome> {
-    const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
-    const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    const observedPtyIds = await this.refreshMobileSessionPtyRecords()
-    if (graphEpoch !== null) {
-      this.assertStableReadyGraph(graphEpoch)
-    }
-    this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktreeId)
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (options.reason !== undefined && options.reason !== 'user' && observedPtyIds === null) {
-      // Why: keep-on-unknown must also restore the mirror the caller already pruned.
-      this.republishMobileSessionTabsSnapshot(worktreeId)
-      return refusedMobileSessionTabClose('unknown-liveness', {
-        snapshotRepublished: Boolean(snapshot)
-      })
-    }
-    if (
-      options.expectedPublicationEpoch !== undefined &&
-      snapshot?.publicationEpoch !== options.expectedPublicationEpoch
-    ) {
-      this.republishMobileSessionTabsSnapshot(worktreeId)
-      return refusedMobileSessionTabClose('stale-publication', {
-        snapshotRepublished: Boolean(snapshot)
-      })
-    }
-    const tab =
-      snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
-      snapshot?.tabs.find(
-        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
-      ) ??
-      snapshot?.tabs.find(
-        (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
-      )
-    if (!snapshot || !tab) {
-      throw new Error('tab_not_found')
-    }
-    if (options.expectedTerminalHandle !== undefined) {
-      const terminalIncarnationMatches =
-        tab.type === 'terminal' &&
-        snapshot.tabs.some(
-          (candidate) =>
-            candidate.type === 'terminal' &&
-            candidate.parentTabId === tab.parentTabId &&
-            this.getMobileSessionTerminalHandle(worktreeId, candidate) ===
-              options.expectedTerminalHandle
-        )
-      if (!terminalIncarnationMatches) {
-        this.republishMobileSessionTabsSnapshot(worktreeId)
-        return refusedMobileSessionTabClose('stale-terminal', {
-          snapshotRepublished: true
-        })
-      }
-    }
-    let closedSelectionTabIds = [tab.id]
-    const finishCommittedClose = (): MobileSessionTabCloseOutcome =>
-      committedMobileSessionTabClose(
-        this.clientSessionTabSelections,
-        worktreeId,
-        closedSelectionTabIds
-      )
-    if (tab.type === 'terminal') {
-      const parentLeafCount = snapshot.tabs.filter(
-        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-      ).length
-      const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
-      if (closingWholeParent) {
-        closedSelectionTabIds = snapshot.tabs.flatMap((candidate) =>
-          candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-            ? [candidate.id, candidate.parentTabId]
-            : []
-        )
-      }
-      // Why: a non-'user' reason is a client-lifecycle echo ("terminal gone"),
-      // not authorization to kill. Every destructive branch below can take the
-      // whole parent down, so any live PTY under the parent means the echo is a
-      // transport artifact: refuse the close and republish the snapshot so the
-      // echoing client re-syncs and re-attaches. A reasonless close keeps
-      // legacy behavior — old clients send user closes without the field.
-      if (options.reason !== undefined && options.reason !== 'user') {
-        const parentLeaves = snapshot.tabs.filter(
-          (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-            candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-        )
-        // Why: exited PTYs keep a disconnected record in ptysById for status
-        // reads (and a still-synced leaf retains its record), so record
-        // presence is not liveness — only `connected` counts, or a genuinely
-        // dead tab never retires and the echo loops forever.
-        const leafHasConnectedPty = (leaf: RuntimeMobileSessionTerminalTab): boolean => {
-          const snapshotPtyIds = [
-            leaf.ptyId,
-            leaf.parentLayout?.ptyIdsByLeafId?.[leaf.leafId]
-          ].filter((ptyId): ptyId is string => Boolean(ptyId))
-          // Why: daemon discovery can prove the PTY live before its pane binding
-          // reconnects; missing metadata is never authority to retire it.
-          return (
-            this.findPtyForMobileTerminalTab(worktreeId, leaf)?.connected === true ||
-            snapshotPtyIds.some((ptyId) => observedPtyIds?.has(ptyId) === true)
-          )
-        }
-        if (parentLeaves.some(leafHasConnectedPty)) {
-          // Why: when the echo addresses a dead leaf under a live sibling we
-          // still refuse (every reachable close path below destroys the whole
-          // parent, live sibling included) but skip the republish — re-adding
-          // the dead leaf on the echoing client would feed an endless
-          // refuse→republish→re-echo cycle.
-          const addressedDeadLeaf = tab.id === tabId && !leafHasConnectedPty(tab)
-          if (!addressedDeadLeaf) {
-            this.republishMobileSessionTabsSnapshot(worktreeId)
-          }
-          // Why: both markers are skew-safe; clients must restore a mirror only
-          // when the host actually republished it, not for a dead leaf.
-          return refusedMobileSessionTabClose('live-host-pty', {
-            snapshotRepublished: !addressedDeadLeaf
-          })
-        }
-        if (!closingWholeParent || this.tabs.has(tab.parentTabId)) {
-          // Why: only the renderer may retire its own tab or split leaf; a
-          // remote lifecycle echo must never cross that boundary into a kill.
-          return refusedMobileSessionTabClose('retirement-owner')
-        }
-      }
-      // Why: a runtime-owned headless tab is absent from renderer state, so the
-      // closeTerminalTab relay below would ack success without killing its PTY,
-      // and syncMobileSessionTabs would republish the "closed" tab. Only bypass
-      // the relay when no renderer owns the parent: an adopted tab needs the
-      // renderer's live pin guard and durable close transaction.
-      if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
-          killPtys: options.reason === undefined || options.reason === 'user'
-        })
-        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-        this.store?.flushOrThrow?.()
-        return finishCommittedClose()
-      }
-      if (closingWholeParent && this.notifier?.closeTerminalTab) {
-        // Why: whole-tab close is a lifecycle transaction. The renderer reply
-        // arrives only after canonical retirement and a forced session flush.
-        const win = this.getAvailableAuthoritativeWindow()
-        if (win?.webContents.isDestroyed?.()) {
-          throw new Error('runtime_unavailable')
-        }
-        const releasePublicationThrottle =
-          options.clientNavigationId && win
-            ? this.rendererPublicationThrottle.acquire(win.webContents)
-            : () => {}
-        try {
-          await (options.localPtyTeardownOwnedExternally
-            ? this.notifier.closeTerminalTab(tab.parentTabId, {
-                localPtyTeardownOwnedExternally: true
-              })
-            : this.notifier.closeTerminalTab(tab.parentTabId))
-        } finally {
-          releasePublicationThrottle()
-        }
-        const remainingSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-        const remainingTab = remainingSnapshot?.tabs.find(
-          (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-            candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-        )
-        if (
-          remainingSnapshot &&
-          remainingTab &&
-          this.isRuntimeOwnedHeadlessMobileTab(worktreeId, remainingTab)
-        ) {
-          // Why: after relay recovery the renderer can acknowledge a tab it no longer mirrors; the HUB must still retire its SSH-owned surface.
-          this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
-            // Why: the renderer may already have durably removed the tab before acknowledging.
-            allowMissingPersistedTab: true
-          })
-          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-          this.store?.flushOrThrow?.()
-        }
-        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
-        return finishCommittedClose()
-      }
-      // Why: notifier implementations without the acknowledged relay may expose
-      // only raw pane close. Runtime-owned parents still need de-persist + kill.
-      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab)
-        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-        this.store?.flushOrThrow?.()
-        return finishCommittedClose()
-      }
-      if (!this.notifier?.closeTerminal) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab)
-        this.store?.flushOrThrow?.()
-        return finishCommittedClose()
-      }
-      if (tab.id === tabId) {
-        const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-        if (pty) {
-          if (this.ptyController?.kill(pty.ptyId) !== true) {
-            throw new Error('terminal_close_failed')
-          }
-          return finishCommittedClose()
-        }
-        this.notifier.closeTerminal(tab.parentTabId)
-        return delegatedMobileSessionTabClose()
-      }
-      // Why: paired web tab bars represent a split terminal with one local
-      // parent tab id. Closing that parent should close the desktop tab, not
-      // just whichever leaf happened to be first in the session snapshot.
-      this.notifier.closeTerminal(tab.parentTabId)
-      this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
-      return delegatedMobileSessionTabClose()
-    } else if (tab.type === 'browser') {
-      // Why: a browser tab can be hosted by a client, by the offscreen backend,
-      // or by the renderer; each surface owns a different retirement path.
-      const clientPage = tab.browserPageId
-        ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
-        : undefined
-      if (clientPage) {
-        await this.browserTabClose({
-          worktree: `id:${worktreeId}`,
-          page: clientPage.browserPageId
-        })
-      } else if (this.isOffscreenMobileSessionBrowserTab(snapshot, tab)) {
-        await this.offscreenBrowserBackend!.closeTab(tab.browserPageId!).catch(() => {})
-        this.retireRuntimeOwnedBrowserSessionTab(worktreeId, tab.browserPageId!)
-      } else {
-        if (!this.notifier?.closeSessionTab) {
-          throw new Error('runtime_unavailable')
-        }
-        await this.notifier.closeSessionTab(tab.id, worktreeId)
-      }
-    } else if (tab.type === 'agent-session') {
-      if (this.notifier?.closeSessionTab) {
-        try {
-          await this.notifier.closeSessionTab(
-            structuredAgentSessionTabId(tab.sessionId),
-            worktreeId
-          )
-        } catch (error) {
-          // The renderer already having removed the tab is an idempotent close, not a veto.
-          if (!(error instanceof Error && error.message === SESSION_TAB_NOT_FOUND_ERROR)) {
-            throw error
-          }
-        }
-      }
-      this.closeStructuredAgentSessionTab(worktreeId, snapshot, tab)
-    } else {
-      if (!this.notifier?.closeSessionTab) {
-        throw new Error('runtime_unavailable')
-      }
-      await this.notifier.closeSessionTab(tab.id, worktreeId)
-    }
-    return finishCommittedClose()
+    return this.mobileTabOperations.closeMobileSessionTab(worktreeSelector, tabId, options)
   }
 
   // Why: a refused echoed close means the echoing client already pruned its
@@ -6891,24 +6502,6 @@ export class OrcaRuntimeService {
   // that dedupe by snapshotVersion re-add and re-attach the still-live tab.
   private republishMobileSessionTabsSnapshot(worktreeId: string): void {
     return this.mobileSessionFacade.republishMobileSessionTabsSnapshot(worktreeId)
-  }
-
-  private getMobileSessionTerminalHandle(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): string | null {
-    return this.terminalClusterFacade.getMobileSessionTerminalHandle(worktreeId, tab)
-  }
-
-  private notifyRendererOfHeadlessTerminalClose(parentTabId: string): void {
-    return this.terminalClusterFacade.notifyRendererOfHeadlessTerminalClose(parentTabId)
-  }
-
-  private isOffscreenMobileSessionBrowserTab(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionBrowserTab
-  ): boolean {
-    return this.mobileSessionFacade.isOffscreenMobileSessionBrowserTab(snapshot, tab)
   }
 
   // Public so runtime-side page release (lease fencing) can prune a tab whose page is gone.
@@ -6961,67 +6554,9 @@ export class OrcaRuntimeService {
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
   ): void {
-    if (!worktreeId) {
-      return
-    }
-    const { targetGroupId, focusesHost } = options
-    // Why: client-placed pages publish through the page registry and need no offscreen backing.
-    if (
-      !this.offscreenBrowserBackend &&
-      !getRuntimeBrowserPageRegistry(this).getPage(browserPageId)
-    ) {
-      return
-    }
-    // Hydrate first so the freshly created browser tab is present in the snapshot.
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const tab = snapshot?.tabs.find(
-      (candidate): candidate is RuntimeMobileSessionBrowserTab =>
-        candidate.type === 'browser' && candidate.browserPageId === browserPageId
-    )
-    if (!snapshot || !tab) {
-      return
-    }
-    const {
-      snapshot: nextSnapshot,
-      groups: nextGroups,
-      placedInTargetGroup
-    } = applyBrowserSessionTabSelection({
-      snapshot,
-      tabId: tab.id,
-      ...(targetGroupId !== undefined ? { targetGroupId } : {}),
-      focusesHost,
-      publicationEpoch: `headless:${Date.now().toString(36)}`
-    })
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
-    // Why: browser group membership is otherwise live-only; persist it so a
-    // later rebuild keeps the browser in its group instead of coalescing left.
-    if (placedInTargetGroup && nextSnapshot.tabGroupLayout) {
-      this.persistHeadlessTabGroups(worktreeId, nextGroups, nextSnapshot.tabGroupLayout)
-    }
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
-    if (options.caller) {
-      // Why: the originating device still lands on the tab it just created; only the shared
-      // snapshot stayed put. Local creates keep the pre-navigation shape by having no caller.
-      this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId),
-        tab.id,
-        options.caller.navigation,
-        options.caller.clientNavigationId
-      )
-    }
-  }
-
-  private closeHeadlessMobileTerminalTab(
-    worktreeId: string,
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionTerminalTab,
-    options: { allowMissingPersistedTab?: boolean; killPtys?: boolean } = {}
-  ): void {
-    return this.terminalClusterFacade.closeHeadlessMobileTerminalTab(
+    return this.mobileTabOperations.markHeadlessBrowserSessionTabActive(
       worktreeId,
-      snapshot,
-      tab,
+      browserPageId,
       options
     )
   }
@@ -7062,7 +6597,7 @@ export class OrcaRuntimeService {
       viewMode?: 'terminal' | 'chat'
     }
   ): Promise<{ updated: true }> {
-    return this.terminalClusterFacade.setMobileSessionTabProps(worktreeSelector, args)
+    return this.mobileTabOperations.setMobileSessionTabProps(worktreeSelector, args)
   }
 
   // Delegation methods
@@ -7126,7 +6661,7 @@ export class OrcaRuntimeService {
     groups: readonly RuntimeMobileSessionTabGroup[],
     layout: TabGroupLayoutNode
   ): void {
-    return this.terminalClusterFacade.persistHeadlessTabGroups(worktreeId, groups, layout)
+    return this.mobileTabOperations.persistHeadlessTabGroups(worktreeId, groups, layout)
   }
 
   async readMobileMarkdownTab(
@@ -7142,7 +6677,7 @@ export class OrcaRuntimeService {
     baseVersion: string,
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult> {
-    return this.mobileSessionFacade.saveMobileMarkdownTab(
+    return this.mobileTabOperations.saveMobileMarkdownTab(
       worktreeSelector,
       tabId,
       baseVersion,
@@ -8486,86 +8021,7 @@ export class OrcaRuntimeService {
   // trackHeadlessTerminalData chain after the seed via the same writeChain.
   // See docs/mobile-prefer-renderer-scrollback.md.
   private maybeHydrateHeadlessFromRenderer(ptyId: string): void {
-    if (this.headlessHydrationState.has(ptyId)) {
-      return
-    }
-    const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
-    if (this.headlessTerminals.has(ptyId) && !providerSnapshotPreferred) {
-      // Daemon-snapshot seed already populated the emulator — skip hydration.
-      this.headlessHydrationState.set(ptyId, 'done')
-      return
-    }
-    const controller = this.ptyController
-    if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
-      return
-    }
-    if (!controller.hasRendererSerializer(ptyId)) {
-      // Renderer hasn't registered yet (or never will). Live writes lazy-
-      // create the state via trackHeadlessTerminalData on this same tick.
-      return
-    }
-
-    if (providerSnapshotPreferred) {
-      // Why: a stream byte can create a partial model before restored history
-      // arrives. A mounted renderer snapshot can safely replace that model.
-      this.disposeHeadlessTerminal(ptyId)
-    }
-
-    this.headlessHydrationState.set(ptyId, 'pending')
-    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    // Why: hydration writes below never set forwardQueryReplies (main-side
-    // replay guard) — renderer-buffer snapshots can embed stale queries.
-    const state = this.ptyWorktrees.createPtyHeadlessTerminalState(ptyId, dims)
-    state.outputSequence = this.getPtyOutputSequence(ptyId)
-    this.headlessTerminals.set(ptyId, state)
-
-    // Why: append the seed work to writeChain so live writes queued by
-    // trackHeadlessTerminalData (after this method returns synchronously)
-    // execute AFTER the seed-write resolves. If we awaited inline before
-    // setting headlessTerminals, the live byte would lazy-create a separate
-    // state and the seed-resolve would overwrite it, dropping live bytes.
-    state.writeChain = state.writeChain.then(async () => {
-      try {
-        const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
-          altScreenForcesZeroRows: true
-        })
-        if (!rendered || rendered.data.length === 0) {
-          return
-        }
-        this.recordOsc7MetadataForPty(ptyId, rendered.data)
-        this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
-        // Resize to renderer's dims so the seed reflows correctly into the
-        // emulator's grid, then resize back to PTY dims (if known) so live
-        // writes use the correct cell layout.
-        if (rendered.cols !== dims.cols || rendered.rows !== dims.rows) {
-          state.emulator.resize(rendered.cols, rendered.rows)
-        }
-        await state.emulator.write(rendered.data)
-        const ptyDims = this.getTerminalSize(ptyId)
-        if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
-          state.emulator.resize(ptyDims.cols, ptyDims.rows)
-        }
-        // Why: the renderer xterm no longer sees synthetic hook title frames
-        // (they feed main's tracker only), so its serializer lastTitle can be
-        // stale here. Prefer main's tracked title; the renderer's is only the
-        // seed when main has observed none (fresh relaunch, cold tracker).
-        state.ownership.seedOwner(undefined, {
-          alternateScreen: state.emulator.isAlternateScreen
-        })
-        const seedTitle = this.getTrackedRawTitleForPty(ptyId) ?? rendered.lastTitle
-        if (seedTitle) {
-          state.emulator.setLastTitle(seedTitle)
-          this.applySeededAgentStatus(ptyId, seedTitle)
-        }
-        this.providerSnapshotPreferredPtys.delete(ptyId)
-      } catch {
-        // Hydration is best-effort. Live writes continue via the same
-        // writeChain that this catch-arm leaves intact.
-      } finally {
-        this.headlessHydrationState.set(ptyId, 'done')
-      }
-    })
+    return this.mobileTabOperations.maybeHydrateHeadlessFromRenderer(ptyId)
   }
 
   // Why: seed-derived agent status reflects historical state. Orchestration
@@ -8691,7 +8147,7 @@ export class OrcaRuntimeService {
   }
 
   private disposeHeadlessTerminal(ptyId: string): void {
-    return this.terminalClusterFacade.disposeHeadlessTerminal(ptyId)
+    return this.mobileTabOperations.disposeHeadlessTerminal(ptyId)
   }
 
   resolveLeafForHandle(handle: string): { ptyId: string | null } | null {
@@ -12189,16 +11645,6 @@ export class OrcaRuntimeService {
     return this.mobileSessionFacade.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, tabId)
   }
 
-  private restoreLivePairedRendererSessionOwnedMobileTerminals(
-    worktreeId: string | null,
-    options: { missingSnapshotOnly?: boolean; notify?: boolean } = {}
-  ): void {
-    return this.terminalClusterFacade.restoreLivePairedRendererSessionOwnedMobileTerminals(
-      worktreeId,
-      options
-    )
-  }
-
   private setPairedRendererSessionOwnership(ptyId: string, owned: boolean): void {
     return this.ptyWorktrees.setPairedRendererSessionOwnership(ptyId, owned)
   }
@@ -13063,65 +12509,22 @@ export class OrcaRuntimeService {
   }
 
   notifyMobileSessionTabsChanged(worktreeId?: string): void {
-    if (!worktreeId) {
-      this.clientHostedBrowserRows.publishAll()
-      for (const id of new Set([
-        ...this.persistedClientHostedBrowserWorktreeIds,
-        ...getRuntimeBrowserPageRegistry(this)
-          .listPages()
-          .map((page) => page.workspaceId)
-      ])) {
-        this.persistClientHostedBrowserPagesForWorktree(id)
-      }
-      this.notifyMobileSessionTabSnapshots()
-      return
-    }
-    // Why: every client-page mutation — create, navigate, metadata, host quit, recovery — reaches
-    // this announcement, so the host's own rows derive from it rather than from a second seam.
-    this.clientHostedBrowserRows.publish(worktreeId)
-    this.persistClientHostedBrowserPagesForWorktree(worktreeId)
-    const hasClientBrowserPages =
-      getRuntimeBrowserPageRegistry(this).listPages(worktreeId).length > 0
-    if (this.offscreenBrowserBackend || hasClientBrowserPages) {
-      const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
-        worktreeId,
-        hasClientBrowserPages
-          ? { allowAttachedWindow: true, onlyRuntimeOwnedTerminals: true }
-          : undefined
-      )
-      // Why: hydrate already reconciles an existing snapshot in place; only reconcile here when it didn't (fresh build or early-returned hydrate).
-      if (!reconciled.has(worktreeId)) {
-        const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-        if (existing) {
-          this.reconcileHeadlessMobileSessionBrowserTabs(worktreeId, existing)
-        }
-      }
-    }
-    // Why: structural changes must propagate promptly; cancel any pending coalesced notify since this immediate emit supersedes it.
-    this.cancelScheduledMobileSessionTabsChanged(worktreeId)
-    this.notifyMobileSessionTabsChangedNow(worktreeId, ++this.mobileSessionTabsChangeSequence)
+    return this.mobileTabOperations.notifyMobileSessionTabsChanged(worktreeId)
   }
 
   private scheduleMobileSessionTabsChanged(worktreeId: string): void {
     return this.mobileSessionFacade.scheduleMobileSessionTabsChanged(worktreeId)
   }
 
-  private cancelScheduledMobileSessionTabsChanged(worktreeId: string): void {
-    return this.mobileSessionFacade.cancelScheduledMobileSessionTabsChanged(worktreeId)
-  }
-
   private notifyMobileSessionTabsChangedNow(worktreeId: string, changeSequence: number): void {
-    return this.mobileSessionFacade.notifyMobileSessionTabsChangedNow(worktreeId, changeSequence)
+    return this.mobileTabOperations.notifyMobileSessionTabsChangedNow(worktreeId, changeSequence)
   }
 
   private getMobileSessionTabsForWorktree(
     worktreeId: string,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
-    return this.terminalClusterFacade.getMobileSessionTabsForWorktree(
-      worktreeId,
-      clientNavigationId
-    )
+    return this.mobileTabOperations.getMobileSessionTabsForWorktree(worktreeId, clientNavigationId)
   }
 
   private getLiveBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
@@ -13181,7 +12584,7 @@ export class OrcaRuntimeService {
     tab: RuntimeMobileSessionTerminalTab,
     options: { allowWorktreeOnlyMatch?: boolean } = {}
   ): RuntimePtyWorktreeRecord | null {
-    return this.terminalClusterFacade.findPtyForMobileTerminalTab(worktreeId, tab, options)
+    return this.mobileTabOperations.findPtyForMobileTerminalTab(worktreeId, tab, options)
   }
 
   private getMobileTerminalPaneKey(tab: RuntimeMobileSessionTerminalTab): string {
@@ -13598,6 +13001,18 @@ export class OrcaRuntimeService {
     return (this.snapshotValueComparison as any).hasRecentExpiredSshLeasePane(worktreeId, tab)
   }
 
+  isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
+    return this.mobileSnapshotMerge.isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch)
+  }
+
+  private isHeadlessMobileSessionPublication(publicationEpoch: string): boolean {
+    return (
+      publicationEpoch.startsWith('headless:') ||
+      publicationEpoch.startsWith('headless-hydrated:') ||
+      publicationEpoch.includes(':headless-merge:')
+    )
+  }
+
   isServeOrSshOwnedPtyId(ptyId: string | null | undefined) {
     return this.ptyWorktrees.isServeOrSshOwnedPtyId(ptyId)
   }
@@ -13607,8 +13022,10 @@ export class OrcaRuntimeService {
   }
 
   hasLiveOrPersistedServeOrSshOwnedPtyBinding(worktreeId: string, tab: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
-    return (this as any).hasLiveOrPersistedServeOrSshOwnedPtyBinding(worktreeId, tab)
+    return (this.snapshotValueComparison as any).hasLiveOrPersistedServeOrSshOwnedPtyBinding(
+      worktreeId,
+      tab
+    )
   }
 
   hasLiveRuntimeSessionOwnedPtyBinding(worktreeId: string, tab: unknown) {
@@ -13623,7 +13040,7 @@ export class OrcaRuntimeService {
     snapshot: unknown,
     parentTabId: string
   ) {
-    return this.mobileSessionFacade.clearRuntimeSessionOwnershipForMobileTab(
+    return this.mobileTabOperations.clearRuntimeSessionOwnershipForMobileTab(
       worktreeId,
       snapshot,
       parentTabId
@@ -13631,8 +13048,9 @@ export class OrcaRuntimeService {
   }
 
   releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot: unknown, existing: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
-    return (this as any).releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot, existing)
+    return (
+      this.snapshotValueComparison as any
+    ).releaseRuntimeSessionOwnershipForRendererRetiredTabs(snapshot, existing)
   }
 
   // Delegation methods for RuntimeMobileSnapshotMergeCommands:
@@ -13652,8 +13070,11 @@ export class OrcaRuntimeService {
     parentTabId: string,
     options?: { allowMissing?: boolean }
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- variadic forward
-    return (this as any).removePersistedHeadlessTerminalTab(worktreeId, parentTabId, options)
+    return this.mobileTabSnapshots.removePersistedHeadlessTerminalTab(
+      worktreeId,
+      parentTabId,
+      options
+    )
   }
 
   persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: string[]) {
@@ -13661,7 +13082,7 @@ export class OrcaRuntimeService {
   }
 
   emitMobileSessionTabsSnapshot(snapshot: unknown) {
-    return (this.mobileTabSnapshots as any).emitMobileSessionTabsSnapshot(snapshot)
+    return this.mobileTabOperations.emitMobileSessionTabsSnapshot(snapshot)
   }
 
   projectMobileSessionTabsForClient(result: unknown, clientNavigationId?: string) {
@@ -13708,10 +13129,6 @@ export class OrcaRuntimeService {
     worktreeId: string
   ): boolean {
     return hasHostAuthoritativeTerminalMembership(session, worktreeId)
-  }
-
-  private getHeadlessMobileSessionGroupId() {
-    return this.terminalClusterFacade.getHeadlessMobileSessionGroupId()
   }
 
   // eslint-enable @typescript-eslint/no-explicit-any
@@ -13763,12 +13180,12 @@ import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
 import { RuntimePtyWorktrees } from './runtime-pty-worktrees'
 import { RuntimeTerminalCluster } from './runtime-terminal-cluster-facade'
-import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { RuntimeMobileSessionFacade } from './runtime-mobile-session-facade'
 import { RuntimeAgentClusterFacade } from './runtime-agent-cluster-facade'
 import { RuntimeManagedBaseCommands } from './runtime-managed-base-commands'
 import { RuntimeRemoteDesktopCommands } from './runtime-remote-desktop-commands'
 import { RuntimeClientConnectionCommands } from './runtime-client-connection-commands'
+import { RuntimeMobileTabOperations } from './runtime-mobile-tab-operations'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,

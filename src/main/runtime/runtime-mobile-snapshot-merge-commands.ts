@@ -219,7 +219,7 @@ export class RuntimeMobileSnapshotMergeCommands {
   // BASE epoch still says who published the snapshot. A renderer-based merged
   // snapshot must not be classified as headless-built, or its renderer tabs
   // read as runtime-owned.
-  private isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
+  isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
     const base = publicationEpoch.split(':headless-merge:')[0]
     return base.startsWith('headless:') || base.startsWith('headless-hydrated:')
   }
