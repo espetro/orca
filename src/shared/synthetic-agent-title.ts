@@ -99,8 +99,8 @@ export function getSyntheticAgentTerminalTitle(
 }
 
 export function shouldDriveSyntheticAgentTitleFromHook(
-  agentType: AgentType | null | undefined,
-  state: AgentStatusState
+  agentType: string | null | undefined,
+  state: string
 ): boolean {
   const profile = getSyntheticAgentTitleProfile(agentType)
   if (!profile || profile.synthesizeTerminalTitle === false) {

@@ -1,12 +1,10 @@
 /* eslint-disable max-lines -- main-process entry point; owns app lifecycle, service wiring, window creation, and hook/daemon startup with no cleaner split seam. */
-import { existsSync, statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import os from 'node:os'
 import {
   app,
   BrowserWindow,
-  dialog,
   ipcMain,
   nativeTheme,
   powerMonitor,
@@ -15,7 +13,7 @@ import {
 } from 'electron'
 import { applyMacPressAndHoldDefaultAtStartup } from './macos-press-and-hold-default'
 import { getBenchStartupSwitches } from './bench-startup-switches'
-import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
+import { stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
   Store,
@@ -43,7 +41,6 @@ import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/p
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { applyAppIcon } from './app-icon'
-import { relaunchApp } from './app-relaunch'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { initSshHostKeyStoreFile } from './ssh/ssh-host-key-store'
 import { AgentSessionTransitionRecorder } from './stats/agent-session-transition-recorder'
@@ -57,8 +54,7 @@ import {
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
   getSshPtyProvider,
-  registerHeadlessPtyRuntime,
-  type CodexHomeLaunchContext
+  registerHeadlessPtyRuntime
 } from './ipc/pty'
 import {
   initDaemonPtyProvider,
@@ -77,10 +73,9 @@ import {
 import { closeAllWatchers, desktopWorktreeWatcherRemoval } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
-import { registerCoreHandlers } from './ipc/register-core-handlers/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
-import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
+import { initTelemetry, shutdownTelemetry, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
 import { recordManagedHookInstallFailure } from './agent-hooks/install-telemetry'
 import {
@@ -99,7 +94,6 @@ import {
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
-import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/startup-notification-registration'
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
@@ -119,8 +113,6 @@ import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
 } from './runtime/runtime-rpc-startup-failure'
-import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
-import { ServeReadinessPublisher } from './server/serve-readiness'
 import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
 import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
@@ -133,23 +125,17 @@ import {
   registerAppMenu,
   rebuildAppMenu
 } from './menu/register-app-menu'
-import { createGpuAccelerationAboutPanelOptions } from './menu/gpu-acceleration-about-panel'
 import {
   checkForRemoteServerUpdate,
-  checkForUpdatesFromMenu,
   downloadRemoteServerUpdate,
   getRemoteServerUpdaterSnapshot,
   installRemoteServerUpdate,
-  isQuittingForUpdate,
-  resolveUpdateInstallMode
+  isQuittingForUpdate
 } from './updater'
 import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
 import type { UpdateCheckOptions } from '../shared/update-status-types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
-import {
-  installServeSupervisorDisconnectQuit,
-  notifyServeSupervisorReady
-} from './serve-update-handoff'
+import { installServeSupervisorDisconnectQuit } from './serve-update-handoff'
 import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
@@ -175,28 +161,6 @@ import {
 } from './startup/native-code-cache'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
-import {
-  clearGpuFallbackMarker,
-  readActiveGpuFallbackMarker,
-  writeGpuFallbackMarker,
-  type GpuFallbackMarker,
-  type GpuFallbackEnvironment,
-  type WindowsGpuFallbackEnvironment
-} from './startup/gpu-fallback-marker'
-import { applyGpuFallbackCommandLineSwitches } from './startup/gpu-fallback-switches'
-import {
-  DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
-  DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
-  GpuCrashFallbackTracker,
-  isGpuFallbackCrashCandidate
-} from './crash-reporting/gpu-crash-fallback-decision'
-import { promptForGpuFallbackRestart } from './crash-reporting/gpu-fallback-restart-prompt'
-import { engageGpuFallbackAfterCrashBurst } from './crash-reporting/gpu-fallback-engagement'
-import { GpuCrashDiagnosticsRecorder } from './crash-reporting/gpu-crash-diagnostics'
-import {
-  handleGpuFallbackRecoveredLaunch,
-  promptForGpuFallbackRecoveredLaunch
-} from './crash-reporting/gpu-fallback-recovered-launch'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
@@ -232,8 +196,6 @@ import {
   logStartupDiagnostic,
   logStartupMilestone
 } from './startup/startup-diagnostics'
-import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
-import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { registerServeSignalHandlers } from './startup/serve-signal-handlers'
@@ -247,40 +209,17 @@ import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
-import {
-  attachMainWindowServices,
-  ensureAutoUpdaterConfigured
-} from './window/attach-main-window-services'
-import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { shutdownPairedRuntimeBrowserClientHosts } from './browser/paired-runtime-browser-client-host-runtime'
-import {
-  getDashboardPopoutWindow,
-  zoomDashboardPopoutIfFocused
-} from './window/dashboard-popout-window'
-import {
-  createSystemTray,
-  destroySystemTray,
-  setMacMenuBarIconVisible,
-  setTrayAttention,
-  type SystemTrayOptions
-} from './tray/system-tray'
+import { zoomDashboardPopoutIfFocused } from './window/dashboard-popout-window'
+import { destroySystemTray, type SystemTrayOptions } from './tray/system-tray'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { focusExistingMainWindow } from './window/focus-existing-window'
-import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
-import { markCodexProjectTrusted } from './agent-trust-presets'
-import {
-  normalizeCodexRuntimeSelection,
-  type CodexAccountSelectionTarget
-} from './codex-accounts/runtime-selection'
+import { normalizeCodexRuntimeSelection } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
 import { reconcileRetainedCodexHookHomes } from './codex/retained-codex-hook-state'
-import {
-  ensureRealHomeCodexHookState,
-  isRealHomeCodexHookLaneUsable
-} from './codex/codex-real-home-hook-install'
+import { isRealHomeCodexHookLaneUsable } from './codex/codex-real-home-hook-install'
 import { setCodexTrustGrantTelemetry } from './codex/codex-trust-grant-telemetry'
 import { startCodexSessionBackfillInBackground } from './codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from './codex/codex-session-index-heal'
@@ -289,16 +228,7 @@ import {
   stopCodexStateDbBackfillRecoveries
 } from './codex/codex-state-db-backfill-recovery'
 import { createCodexSessionMigrationScheduler } from './codex/codex-session-migration-scheduler'
-import { prepareCodexAiVaultSessionResume } from './codex/codex-ai-vault-session-resume'
-import { prepareLegacySharedCodexSessionResume } from './codex/codex-legacy-session-resume'
-import { ManagedCodexHomeTemporarilyUnavailableError } from './codex-accounts/host-codex-managed-home-ownership'
-import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
-import type { CodexSessionResumePreparation } from './codex/codex-session-resume-home'
-import { prepareCodexSessionResume } from './codex/codex-session-resume-preparation'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/codex-home-paths'
-import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
-import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
-import { getDefaultWslDistro } from './wsl'
+import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from './worktree-trash'
 import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
@@ -312,17 +242,10 @@ import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
-import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
-import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
-import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
-import { moveWorktree } from './git/worktree'
 import {
   configureWindowsHostGitEnvironmentReadiness,
   setDefaultWslDistroOverride
 } from './git/runner'
-import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
-import { parseWorkspaceKey } from '../shared/workspace-scope'
-import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { configureBrowserClientPageAutomationRuntime } from './browser/browser-client-page-automation-runtime'
 import { BrowserClientPageCommandError } from './browser/browser-client-page-command-failure'
@@ -337,7 +260,6 @@ import {
 } from './browser/doc-preview-protocol'
 import { registerDocPreviewGrantHandlers } from './ipc/doc-preview-grant-ipc'
 import { initializeBrowserClientHostId } from './browser/browser-client-host-id'
-import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
@@ -377,28 +299,17 @@ import {
 } from './hang-watchdog/hang-detection-marker'
 import { getMainProcessLifecycleIdentity } from './crash-reporting/main-process-lifecycle-identity'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
-import {
-  shouldRecoverRendererAfterProcessGone,
-  type ExpectedTeardownScope
-} from './crash-reporting/process-gone-classification'
 import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-reporting/process-gone-recorder'
 import { startCrashpadCapture } from './crash-reporting/crashpad-capture'
 import { startPreGoneProcessMetricsSampling } from './crash-reporting/process-gone-diagnostics'
-import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
-  advanceSyntheticTitleSpinnerEntries,
-  type SyntheticTitleSpinnerEntry
-} from './synthetic-title-spinner'
-import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
-import { shouldCopySyntheticTitleFrameToPtyData } from './synthetic-title-frame-routing'
+  createSyntheticTitleSpinnerController,
+  shouldSuppressCodexAutoApprovalSyntheticTitleFromHook
+} from './windows/synthetic-title-spinner'
 import {
   getSyntheticAgentTitleProfile,
-  shouldDriveSyntheticAgentTitleFromHook,
-  type SyntheticAgentTitleProfile
+  shouldDriveSyntheticAgentTitleFromHook
 } from '../shared/synthetic-agent-title'
-import type { AgentStatusState } from '../shared/agent-status-types'
-import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
-import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -410,10 +321,21 @@ import {
   applyElectronProxySettings,
   setDefaultProxySessionResolver
 } from './network/proxy-settings'
-import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
-import { CliInstaller } from './cli/cli-installer'
-import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
+import { createFirstWorkRenameHookAdapter } from './agent-hooks/first-work-rename-hook-adapter'
+import {
+  createWebContentsReloadFlags,
+  createWebContentsTimedFlag
+} from './windows/webcontents-reload-flags'
+import { createGpuFallbackLaunchController } from './windows/gpu-fallback-launch'
+import { createMainWindowController } from './windows/main-window-create'
+import { createCodexLaunchPreparation } from './runtime/codex-launch-preparation'
+import { ensureRealHomeCodexHookState } from './codex/codex-real-home-hook-install'
+import { prepareCodexAiVaultSessionResume } from './codex/codex-ai-vault-session-resume'
+import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
+import { setUnreadDockBadgeCount } from './dock/unread-badge'
+import type { ServeOptions } from './serve/serve-startup'
+import { createServeStartup, getBundledWebClientRoot, getServeOptions } from './serve/serve-startup'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
@@ -431,7 +353,6 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
-const serveReadinessPublisher = new ServeReadinessPublisher()
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
 let pendingUnpairedDeviceAuthFailure = false
@@ -460,9 +381,6 @@ function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void
       : { worktreeId: event.worktreeId, path: event.path }
   )
 }
-// Why: a reload intent must not leak to a later load; the recovery reload re-fires did-finish-load, so its flag spares live PTYs from the orphan sweep (#5787).
-const expectedRendererReload = createWebContentsTimedFlag()
-const recoveryReloadInFlight = createWebContentsTimedFlag()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
@@ -471,23 +389,6 @@ let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
 // Why: the serve barrier fails open, so this state tells headless clients a WSL PTY launch may still race an un-migrated registration ('settled' = off-Windows no-op).
 let managedWslCliReconciliationStatus: 'pending' | 'settled' | 'failed' = 'settled'
-const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
-  windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
-  threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
-})
-let activeGpuFallbackMarker: GpuFallbackMarker | null = null
-let gpuFallbackActiveThisLaunch = false
-let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
-const gpuCrashDiagnostics =
-  process.platform === 'win32'
-    ? new GpuCrashDiagnosticsRecorder({
-        provider: {
-          getGPUInfo: (infoType) => app.getGPUInfo(infoType),
-          getGPUFeatureStatus: () => app.getGPUFeatureStatus()
-        },
-        recordBreadcrumb: (data) => recordDurableCrashBreadcrumb('gpu_crash_hardware', data)
-      })
-    : null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -560,25 +461,10 @@ if (argvRequestsServeMode(process.argv)) {
 }
 const isServeMode = process.argv.includes('--serve')
 
-function updateGpuAccelerationAboutPanel(): void {
-  app.setAboutPanelOptions(
-    createGpuAccelerationAboutPanelOptions({
-      appName: app.name,
-      appVersion: app.getVersion(),
-      platform: process.platform,
-      gpuFallbackActive: gpuFallbackActiveThisLaunch,
-      gpuFeatureStatus
-    })
-  )
-}
-
 app.on('gpu-info-update', () => {
-  gpuFeatureStatus = app.getGPUFeatureStatus()
-  gpuCrashDiagnostics?.warm()
-  if (app.isReady()) {
-    updateGpuAccelerationAboutPanel()
-  }
+  gpuFallbackLaunch.trackGpuInfoUpdate()
 })
+
 if (isServeMode) {
   reserveServeStdoutForReadiness()
 }
@@ -593,138 +479,202 @@ const desktopActivationGate = createServeDesktopActivationGate({
   onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
 })
 
-// Kill switch for the first-work on-disk folder rename; the renderer reconciles the id change (migrateWorktreeIdentity) so it isn't mistaken for a deletion.
-const ENABLE_FIRST_WORK_FOLDER_RENAME = false
-
-// Why: inject the index.ts store/runtime singletons so the rename orchestrator stays module-state-free and unit-testable.
-function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
-  paneKey: string
-  tabId: string | undefined
-  worktreeId: string | undefined
-  payload: { state: string; prompt?: string; lastAssistantMessage?: string }
-  isReplay: boolean | undefined
-}): void {
-  const currentStore = store
-  const currentRuntime = runtime
-  if (!currentStore || !currentRuntime) {
-    return
-  }
-  void maybeAutoRenameBranchOnFirstWork(
-    {
-      paneKey: event.paneKey,
-      tabId: event.tabId,
-      worktreeId: event.worktreeId,
-      state: event.payload.state,
-      prompt: event.payload.prompt,
-      assistantMessage: event.payload.lastAssistantMessage,
-      isReplay: event.isReplay
-    },
-    {
-      getSettings: () => currentStore.getSettings(),
-      getRepo: (repoId) => currentStore.getRepo(repoId),
-      getAgentEnvResolvers: () => currentRuntime.getCommitMessageAgentEnvironmentResolvers(),
-      getCurrentDisplayName: (worktreeId) => {
-        const scope = parseWorkspaceKey(worktreeId)
-        if (scope?.type === 'folder') {
-          return currentStore.getFolderWorkspace(scope.folderWorkspaceId)?.name
-        }
-        return currentStore.getWorktreeMeta(worktreeId)?.displayName
-      },
-      getFolderWorkspacePath: (worktreeId) => {
-        const scope = parseWorkspaceKey(worktreeId)
-        return scope?.type === 'folder'
-          ? currentStore.getFolderWorkspace(scope.folderWorkspaceId)?.folderPath
-          : undefined
-      },
-      isPendingFirstAgentMessageRename: (worktreeId) => {
-        const scope = parseWorkspaceKey(worktreeId)
-        if (scope?.type === 'folder') {
-          return (
-            currentStore.getFolderWorkspace(scope.folderWorkspaceId)
-              ?.pendingFirstAgentMessageRename === true
-          )
-        }
-        return currentStore.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
-      },
-      canRenameOrcaCreatedBranch: (worktreeId) => {
-        const meta = currentStore.getWorktreeMeta(worktreeId)
-        // Why: a user branch could coincidentally match a creature name; only Orca-stamped worktrees are safe to auto-rename.
-        return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
-      },
-      setDisplayName: (worktreeId, displayName) => {
-        rememberBranchRenameFailureOutput(worktreeId, null)
-        const scope = parseWorkspaceKey(worktreeId)
-        if (scope?.type === 'folder') {
-          currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
-            name: displayName,
-            pendingFirstAgentMessageRename: false,
-            firstAgentMessageRenameError: null
-          })
-          currentRuntime.notifyFolderWorkspaceChanged()
-          return
-        }
-        currentStore.setWorktreeMeta(worktreeId, {
-          displayName,
-          pendingFirstAgentMessageRename: false,
-          // Success clears the failure badge (redundant with the explicit setRenameError(null)).
-          firstAgentMessageRenameError: null
-        })
-      },
-      renameWorktreeFolder: ENABLE_FIRST_WORK_FOLDER_RENAME
-        ? (worktreeId, newLeaf) =>
-            renameWorktreeFolderOnFirstWork(worktreeId, newLeaf, {
-              getRepo: (repoId) => currentStore.getRepo(repoId),
-              getSettings: () => currentStore.getSettings(),
-              migrateWorktreeIdentity: (oldId, newId) =>
-                currentStore.migrateWorktreeIdentity(oldId, newId),
-              notifyWorktreeRenamed: (repoId, oldId, newId) =>
-                currentRuntime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
-              pathExists: async (candidate) => existsSync(candidate),
-              moveWorktree
-            })
-        : undefined,
-      setRenameError: (worktreeId, error, failureOutput) => {
-        // Refresh the full-output capture before the dedupe below — a repeat error string is still a fresh run.
-        rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
-        // Skip the write + push when unchanged — most settled worktrees never had an error to clear.
-        const scope = parseWorkspaceKey(worktreeId)
-        if (scope?.type === 'folder') {
-          const current = currentStore.getFolderWorkspace(
-            scope.folderWorkspaceId
-          )?.firstAgentMessageRenameError
-          if ((current ?? null) === (error ?? null)) {
-            return
-          }
-          currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
-            firstAgentMessageRenameError: error
-          })
-          currentRuntime.notifyFolderWorkspaceChanged()
-          return
-        }
-        const current = currentStore.getWorktreeMeta(worktreeId)?.firstAgentMessageRenameError
-        if ((current ?? null) === (error ?? null)) {
-          return
-        }
-        currentStore.setWorktreeMeta(worktreeId, { firstAgentMessageRenameError: error })
-        // Why: the hook only knows the worktreeId, so derive the repoId notifyBranchRenamed expects.
-        currentRuntime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
-      },
-      resolveWorktreeIdForTab: (tabId) => currentStore.getWorktreeIdForTab(tabId),
-      onRenamed: (repoIdOrWorktreeId) => {
-        if (parseWorkspaceKey(repoIdOrWorktreeId)?.type === 'folder') {
-          currentRuntime.notifyFolderWorkspaceChanged()
-          return
-        }
-        currentRuntime.notifyBranchRenamed(repoIdOrWorktreeId)
-      }
-    }
-  )
-}
-
 const devInstanceIdentity = getDevInstanceIdentity(is.dev)
 const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   ? devInstanceIdentity.appUserModelId
   : undefined
+
+// Extraction delegates (function declarations: hoisted, so pre-ready closures like desktopActivationGate can capture them regardless of declaration order).
+const reloadFlags = createWebContentsReloadFlags({ getIsQuitting: () => isQuitting })
+const {
+  markExpectedRendererReload,
+  clearExpectedRendererReload,
+  getExpectedTeardownScope,
+  markRecoveryReloadInFlight,
+  isRecoveryReloadInFlight
+} = reloadFlags
+
+const codexLaunchPreparation = createCodexLaunchPreparation({
+  app,
+  getStore: () => store,
+  getCodexRuntimeHome: () => codexRuntimeHome,
+  getCodexSessionMigration: () => codexSessionMigration
+})
+const {
+  prepareCodexRuntimeHomeForLaunch,
+  prepareCodexSessionResumeForLaunch,
+  prepareAiVaultSessionResume: prepareCodexAiVaultSessionResumeForLaunch
+} = codexLaunchPreparation
+
+const maybeAutoRenameBranchOnFirstWorkFromHook = createFirstWorkRenameHookAdapter({
+  getStore: () => store,
+  getRuntime: () => runtime
+})
+
+const syntheticTitles = createSyntheticTitleSpinnerController({
+  getWindow: () => mainWindow,
+  getRuntime: () => runtime,
+  getStore: () => store,
+  getPtyIdForPaneKey
+})
+
+const serveStartup = createServeStartup({
+  getRuntime: () => runtime,
+  getRuntimeRpc: () => runtimeRpc,
+  getManagedWslCliReconciliationStatus: () => managedWslCliReconciliationStatus
+})
+
+const gpuFallbackLaunch = createGpuFallbackLaunchController({
+  isServeMode,
+  getIsQuitting: () => isQuitting,
+  setQuitting: () => {
+    isQuitting = true
+  },
+  getMainWindow: () => mainWindow
+})
+
+function focusExistingWindow(): void {
+  mainWindowController.focusExistingWindow()
+}
+
+function getSystemTrayOptions(): SystemTrayOptions | null {
+  const currentStore = store
+  if (!currentStore) {
+    return null
+  }
+  return {
+    appIcon: currentStore.getSettings().appIcon,
+    isDevInstance: devInstanceIdentity.isDev,
+    devInstanceLabel: devInstanceIdentity.devLabel,
+    onOpen: () => mainWindowController.showMainWindowFromTray(),
+    onOpenSettings: openSettingsFromSystemMenu,
+    onCheckForUpdates: () => {
+      // Why: updater status renders in the main window, so a bare check would complete invisibly.
+      mainWindowController.showMainWindowFromTray()
+      runUserInitiatedUpdateCheck()
+    },
+    onQuit: () => mainWindowController.quitFromSystemTray()
+  }
+}
+
+function openSettingsFromSystemMenu(): void {
+  mainWindowController.openSettingsFromSystemMenu()
+}
+
+function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
+  mainWindowController.runUserInitiatedUpdateCheck(options)
+}
+
+function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
+  return mainWindowController.syncMacMenuBarIcon(showMenuBarIcon)
+}
+
+function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
+  mainWindowController.sendOpenFeatureTour(targetWindow)
+}
+
+function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
+  mainWindowController.sendOpenSetupGuide(targetWindow)
+}
+
+function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
+  mainWindowController.sendOpenCrashReport(targetWindow)
+}
+
+function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+  return mainWindowController.openMainWindow(options)
+}
+
+function presentGpuFallbackRecoveredLaunchPrompt(window: BrowserWindow): Promise<void> {
+  return gpuFallbackLaunch.presentGpuFallbackRecoveredLaunchPrompt(window)
+}
+
+function recordProcessGoneCrash(
+  source: 'renderer' | 'child',
+  processType: string,
+  reason: string,
+  exitCode: number | null,
+  details: Record<string, unknown>,
+  webContentsId?: number
+): void {
+  recordProcessGoneCrashEvent(crashReports, {
+    source,
+    processType,
+    reason,
+    exitCode,
+    expectedTeardown: getExpectedTeardownScope(webContentsId),
+    details,
+    ...(webContentsId !== undefined ? { webContentsId } : {})
+  })
+}
+
+const mainWindowController = createMainWindowController({
+  app,
+  isServeMode,
+  isDev: is.dev,
+  windowTitle: devInstanceIdentity.name,
+  isDevInstance: devInstanceIdentity.isDev,
+  devInstanceLabel: devInstanceIdentity.devLabel ?? '',
+  getStore: () => store,
+  getRuntime: () => runtime,
+  getStats: () => stats,
+  getClaudeUsage: () => claudeUsage,
+  getCodexUsage: () => codexUsage,
+  getOpenCodeUsage: () => openCodeUsage,
+  getCodexAccounts: () => codexAccounts,
+  getCodexRuntimeHome: () => codexRuntimeHome,
+  getClaudeAccounts: () => claudeAccounts,
+  getClaudeRuntimeAuth: () => claudeRuntimeAuth,
+  getRateLimits: () => rateLimits,
+  getAutomations: () => automations,
+  getKeybindings: () => keybindings,
+  getPluginService: () => pluginService,
+  getPluginMarketplaceService: () => pluginMarketplaceService,
+  getPluginMarketplaceInstaller: () => pluginMarketplaceInstaller,
+  getCrashReports: () => crashReports,
+  getAgentAwakeService: () => agentAwakeService,
+  getDesktopRelayService: () => desktopRelayService,
+  getMainWindow: () => mainWindow,
+  setMainWindow: (window) => {
+    mainWindow = window
+  },
+  getIsQuitting: () => isQuitting,
+  setQuitting: () => {
+    isQuitting = true
+  },
+  clearQuitting: () => {
+    isQuitting = false
+  },
+  getLocalPtyStartupReady: () => localPtyStartupReady,
+  getLocalPtyProviderStartupReady: () => localPtyProviderStartupReady,
+  markExpectedRendererReload,
+  clearExpectedRendererReload,
+  markRecoveryReloadInFlight,
+  isRecoveryReloadInFlight,
+  getExpectedTeardownScope,
+  prepareCodexRuntimeHomeForLaunch,
+  prepareCodexSessionResumeForLaunch,
+  prepareAiVaultSessionResume: prepareCodexAiVaultSessionResumeForLaunch,
+  handleCodexHomePtySpawned,
+  handlePtyExit,
+  emitPluginWorktreeLifecycle,
+  maybeAutoRenameBranchOnFirstWorkFromHook,
+  stopAllSyntheticTitleSpinners: syntheticTitles.stopAllSyntheticTitleSpinners,
+  resumeSyntheticTitleSpinnerTimer: syntheticTitles.resumeSyntheticTitleSpinnerTimer,
+  stopSyntheticTitleSpinnerTimer: syntheticTitles.stopSyntheticTitleSpinnerTimer,
+  driveSyntheticTitleFromHook: syntheticTitles.driveSyntheticTitleFromHook,
+  shouldSuppressCodexAutoApprovalSyntheticTitleFromHook,
+  getSyntheticAgentTitleProfile,
+  shouldDriveSyntheticAgentTitleFromHook,
+  onOpenSettingsPushed: (webContentsId) => {
+    // Why: untimed — any TTL can be outrun by a slow cold start; id-scoping + consume-on-read still prevent leaking to a later renderer.
+    pendingOpenSettings.mark(webContentsId, Number.POSITIVE_INFINITY)
+  },
+  onAgentStateObserved: recordAgentStateCrashBreadcrumb,
+  onSystemTrayOptionsNeeded: getSystemTrayOptions,
+  recordProcessGoneCrash,
+  presentGpuFallbackRecoveredLaunchPrompt
+})
 
 installUncaughtPipeErrorGuard()
 // Why (issue #9441): without this, one rejected background promise during startup restore kills main silently (exit 1, no crash report).
@@ -759,9 +709,6 @@ configureOrcaUserDataPathEnv()
 setAppEnvironment(new ElectronAppEnvironment())
 installServeSupervisorDisconnectQuit(isServeMode)
 
-// Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
-const TRAY_CREATE_FALLBACK_MS = 12_000
-
 const startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('before-single-instance-lock', {
@@ -778,15 +725,6 @@ if (startupDiagnosticsEnabled) {
 // Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
 // look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
 startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
-
-function focusExistingWindow(): void {
-  focusExistingMainWindow({
-    app,
-    getWindow: () => mainWindow,
-    openWindow: openMainWindow,
-    warn: console.warn
-  })
-}
 
 function requestDesktopActivation(argv: readonly string[] = []): void {
   skillShareDeepLinks.capture(argv, (shareId) => {
@@ -823,68 +761,6 @@ function settleServeDesktopActivation(): void {
   settleServeDesktopActivationGate(desktopActivationGate, {
     hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
   })
-}
-
-// Why: webContents-scoped auto-expiring flag so an intent can't leak to a later renderer load; `consume` clears on match for one-shot signals.
-function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
-  mark: (webContentsId: number, durationMs?: number) => void
-  clear: (webContentsId?: number) => void
-  matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
-} {
-  let state: { webContentsId: number; until: number } | null = null
-  return {
-    mark(webContentsId, durationMs = defaultDurationMs) {
-      state = { webContentsId, until: Date.now() + durationMs }
-    },
-    clear(webContentsId) {
-      if (webContentsId === undefined || state?.webContentsId === webContentsId) {
-        state = null
-      }
-    },
-    matches(webContentsId, options) {
-      if (!state || Date.now() > state.until) {
-        state = null
-        return false
-      }
-      if (state.webContentsId !== webContentsId) {
-        return false
-      }
-      if (options?.consume) {
-        state = null
-      }
-      return true
-    }
-  }
-}
-
-function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
-  expectedRendererReload.mark(webContentsId, durationMs)
-}
-
-function clearExpectedRendererReload(webContentsId?: number): void {
-  expectedRendererReload.clear(webContentsId)
-}
-
-function getExpectedTeardownScope(
-  webContentsId?: number,
-  includeSystemSessionEnd = true
-): ExpectedTeardownScope {
-  return resolveExpectedTeardownScope({
-    isQuitting,
-    isQuittingForUpdate: isQuittingForUpdate(),
-    isExpectedRendererReload:
-      webContentsId !== undefined && expectedRendererReload.matches(webContentsId),
-    includeSystemSessionEnd
-  })
-}
-
-function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
-  recoveryReloadInFlight.mark(webContentsId, durationMs)
-}
-
-function isRecoveryReloadInFlight(webContentsId: number): boolean {
-  // Why: consume on read — the recovery reload fires exactly one did-finish-load, so a later genuine reload still sweeps orphaned PTYs.
-  return recoveryReloadInFlight.matches(webContentsId, { consume: true })
 }
 
 function recordAgentStateCrashBreadcrumb(agentType: string, state: string): void {
@@ -1011,8 +887,8 @@ if (hasSingleInstanceLock) {
   optOutOfHiddenPageWakeUpThrottling()
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
-  maybeApplyGpuFallbackForThisLaunch()
-  if (!gpuFallbackActiveThisLaunch) {
+  gpuFallbackLaunch.maybeApplyGpuFallbackForThisLaunch()
+  if (!gpuFallbackLaunch.isGpuFallbackActiveThisLaunch()) {
     enableMainProcessGpuFeatures()
   }
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
@@ -1190,861 +1066,6 @@ function bindTerminalRuntimeStartupServices(
   localPtyProviderStartupReady = services.then((value) => value.localPtyProviderReady)
 }
 
-async function prepareCodexRuntimeHomeForLaunch(
-  target?: CodexAccountSelectionTarget,
-  launchEnv?: NodeJS.ProcessEnv,
-  launchContext?: CodexHomeLaunchContext
-): Promise<string | null> {
-  if (
-    target?.runtime !== 'wsl' &&
-    launchContext?.launchAgent === 'codex' &&
-    launchContext.workspacePath
-  ) {
-    try {
-      // Why: renderer quick-launch cannot await trust IPC before its PTY mounts; launch prep runs before every recognized Codex spawn.
-      await markCodexProjectTrusted(launchContext.workspacePath)
-    } catch (error) {
-      console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
-    }
-  }
-  const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
-    if (
-      target?.runtime === 'wsl' ||
-      !codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv)
-    ) {
-      return false
-    }
-    // Why (flag ON, system default): the hook entry must exist — appended last
-    // and trusted by codex's own app-server grant — in the real ~/.codex before
-    // the pane spawns. An incapable grant flips the lane gate so the launch
-    // below falls back to the managed home instead of a status-blind pane.
-    await ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
-      userDataPath: app.getPath('userData')
-    })
-    return true
-  }
-  let realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
-  // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
-  // the fallbacks below all key off `null`, which means "system default", so
-  // swallowing the refusal would launch the wrong account (#STA-4422).
-  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
-    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
-  })
-  if (runtimeHomePath === null && !realHomeHooksPrepared) {
-    // Why: launch prep can reject an untrusted managed home and clear its
-    // selection. Establish hook capability for that newly selected lane, then
-    // re-resolve if the capability gate rejects it.
-    realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
-    if (realHomeHooksPrepared) {
-      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
-        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
-      })
-    }
-  }
-  if (runtimeHomePath === null && target?.runtime !== 'wsl') {
-    // Why: Codex runs on the user's real ~/.codex; the managed-home hook
-    // install below would target a home Codex never reads on this lane.
-    return null
-  }
-  const hookTarget =
-    target?.runtime === 'wsl'
-      ? {
-          runtime: 'wsl' as const,
-          wslDistro: target.wslDistro?.trim() || getDefaultWslDistro()
-        }
-      : target
-  const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
-  try {
-    // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
-    const status = hooksEnabled
-      ? ((await codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget)) ??
-        // Why: a managed account's launch home is its own self-contained
-        // CODEX_HOME, so hooks/trust must install there, not the shared mirror.
-        (await codexHookService.install(runtimeHomePath ?? undefined)))
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        (await codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined)))
-    if (status.state === 'error') {
-      console.warn(
-        `[codex-hook-service] failed to ${
-          hooksEnabled ? 'refresh' : 'refresh user'
-        } runtime hooks before launch`,
-        status.detail
-      )
-    }
-  } catch (error) {
-    // Why: hook install is best-effort launch prep; a malformed hooks file must not block Codex from starting.
-    console.warn(
-      `[codex-hook-service] failed to ${
-        hooksEnabled ? 'refresh' : 'refresh user'
-      } runtime hooks before launch`,
-      error
-    )
-  }
-  return runtimeHomePath
-}
-
-async function prepareCodexSessionResumeForLaunch(args: {
-  providerSession: AgentProviderSessionMetadata
-  target: CodexAccountSelectionTarget
-  launchEnv?: NodeJS.ProcessEnv
-  workspacePath?: string
-}): Promise<CodexSessionResumePreparation | null> {
-  if (args.target.runtime === 'wsl' || !codexRuntimeHome || !store) {
-    return null
-  }
-  const systemHomePath = getSystemCodexHomePath()
-  // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
-  const trustedHomes = [
-    systemHomePath,
-    ...codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery()
-  ]
-  const settingsStore = store
-  // Why: resolved eagerly, once, before any ranking or provenance match. The
-  // marker read used to be deferred into the ranking thunk so a
-  // provenance-present resume never paid for it, but that optimisation let an
-  // unreadable selected home reach the PTY as "no selection": the provenance
-  // branch simply omits the account from `trustedHomes` and another account's
-  // readable alias wins. A throw here refuses the whole resume instead
-  // (#STA-4422).
-  const selectedAccountCodexHome =
-    codexRuntimeHome.resolveSelectedHostAccountCodexHomePathForResume()
-  // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
-  // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
-  const preparation = await prepareCodexSessionResume({
-    sessionId: args.providerSession.id,
-    transcriptPath: args.providerSession.transcriptPath,
-    trustedCodexHomes: trustedHomes,
-    // Why: the legacy id rescan's winning home becomes this pane's CODEX_HOME, i.e. its account;
-    // rank it by the current selection so settings insertion order can never decide the account.
-    getSelectedAccountCodexHome: () => selectedAccountCodexHome,
-    systemCodexHomePath: systemHomePath,
-    // Why: the mirror winning is what triggers the migration into ~/.codex below, so it must
-    // outrank the path-sorted account homes or a system-default selection resumes as an account.
-    sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
-    resolveVerifiedResumeHome: async (sessionSource) => {
-      let migrated = { useRealCodexHome: false }
-      try {
-        migrated = await prepareLegacySharedCodexSessionResume(
-          {
-            agent: 'codex',
-            executionHostId: 'local',
-            filePath: sessionSource.transcriptPath,
-            codexHome: sessionSource.homePath
-          },
-          {
-            isHostSystemDefaultRealHome: () => codexRuntimeHome!.isHostSystemDefaultRealHome(),
-            systemCodexHomePath: systemHomePath
-          }
-        )
-      } catch (error) {
-        // Why: this launch path pins CODEX_HOME to the account that OWNS the
-        // rollout and deliberately refuses to repin onto whichever account is
-        // selected now (#10793), so it does not wire
-        // getSelectedHostAccountCodexHomePath and this branch cannot fire today.
-        // It stays as a contract guard: the blanket catch below must never
-        // silently swallow a typed refusal if that ever changes.
-        if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
-          throw error
-        }
-        // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
-        console.warn(
-          '[codex-session-resume] Legacy rollout migration failed; using origin home:',
-          error
-        )
-      }
-      const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
-
-      if (args.workspacePath) {
-        try {
-          await markCodexProjectTrusted(args.workspacePath)
-        } catch (error) {
-          console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
-        }
-      }
-      const isSystemHome =
-        normalizeRuntimePathForComparison(resumeHome) ===
-        normalizeRuntimePathForComparison(systemHomePath)
-      const hooksEnabled = isAgentStatusHooksEnabled(settingsStore.getSettings())
-      try {
-        if (isSystemHome) {
-          await ensureRealHomeCodexHookState({
-            hooksEnabled,
-            userDataPath: app.getPath('userData')
-          })
-        } else if (hooksEnabled) {
-          await codexHookService.install(resumeHome)
-        } else {
-          await codexHookService.refreshRuntimeUserHooks(resumeHome)
-        }
-      } catch (error) {
-        // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
-        console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
-      }
-      return resumeHome
-    }
-  })
-  return preparation.outcome === 'resume'
-    ? {
-        ...preparation,
-        reconcileSharedRuntimeAuth:
-          normalizeRuntimePathForComparison(preparation.codexHomePath) ===
-          normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
-      }
-    : preparation
-}
-
-// Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
-function showMainWindowFromTray(): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) {
-      mainWindow.restore()
-    }
-    mainWindow.show()
-    mainWindow.focus()
-    return
-  }
-  if (!isQuittingForUpdate()) {
-    openMainWindow()
-  }
-}
-
-function openSettingsFromSystemMenu(): void {
-  showMainWindowFromTray()
-  const targetWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
-  if (!targetWindow) {
-    return
-  }
-  recordCrashBreadcrumb('settings_opened')
-
-  // Why: no signal proves the renderer listener is attached — push, and also leave a one-shot intent the unmounted renderer pulls at mount.
-  targetWindow.webContents.send('ui:openSettings')
-  // Why: untimed — any TTL can be outrun by a slow cold start; id-scoping + consume-on-read still prevent leaking to a later renderer.
-  pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
-}
-
-function quitFromSystemTray(): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    // Why: a hidden session may veto shutdown with a save/discard prompt, so make the window visible.
-    showMainWindowFromTray()
-  }
-  // Why: set the quit latch before app.quit() so the 'close' handler tears down instead of re-hiding to tray.
-  isQuitting = true
-  app.quit()
-}
-
-// Why: menu/tray are clickable before anything else configures the updater.
-function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
-  ensureAutoUpdaterConfigured()
-  checkForUpdatesFromMenu(options)
-}
-
-function getSystemTrayOptions(): SystemTrayOptions | null {
-  if (!store) {
-    return null
-  }
-  return {
-    appIcon: store.getSettings().appIcon,
-    isDevInstance: devInstanceIdentity.isDev,
-    devInstanceLabel: devInstanceIdentity.devLabel,
-    onOpen: showMainWindowFromTray,
-    onOpenSettings: openSettingsFromSystemMenu,
-    onCheckForUpdates: () => {
-      // Why: updater status renders in the main window, so a bare check would complete invisibly.
-      showMainWindowFromTray()
-      runUserInitiatedUpdateCheck()
-    },
-    onQuit: quitFromSystemTray
-  }
-}
-
-function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
-  if (process.platform !== 'darwin' || isServeMode) {
-    return null
-  }
-  const options = getSystemTrayOptions()
-  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
-}
-
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
-  logStartupMilestone('open-main-window-start')
-  if (!store) {
-    throw new Error('Store must be initialized before opening the main window')
-  }
-  if (!runtime) {
-    throw new Error('Runtime must be initialized before opening the main window')
-  }
-  if (!stats) {
-    throw new Error('Stats must be initialized before opening the main window')
-  }
-  if (!claudeUsage) {
-    throw new Error('Claude usage store must be initialized before opening the main window')
-  }
-  if (!codexUsage) {
-    throw new Error('Codex usage store must be initialized before opening the main window')
-  }
-  if (!openCodeUsage) {
-    throw new Error('OpenCode usage store must be initialized before opening the main window')
-  }
-  if (!rateLimits) {
-    throw new Error('Rate limit service must be initialized before opening the main window')
-  }
-  if (!automations) {
-    throw new Error('Automation service must be initialized before opening the main window')
-  }
-  if (!codexAccounts) {
-    throw new Error('Codex account service must be initialized before opening the main window')
-  }
-  if (!codexRuntimeHome) {
-    throw new Error('Codex runtime home service must be initialized before opening the main window')
-  }
-  if (!claudeAccounts) {
-    throw new Error('Claude account service must be initialized before opening the main window')
-  }
-  if (!claudeRuntimeAuth) {
-    throw new Error(
-      'Claude runtime auth service must be initialized before opening the main window'
-    )
-  }
-  if (!keybindings) {
-    throw new Error('Keybinding service must be initialized before opening the main window')
-  }
-
-  // Why: Chromium's BrowserWindow ctor resets userData to a Protected DACL, breaking writes; re-grant ACEs (marker-gated to avoid a ~60s startup stall).
-  if (process.platform === 'win32') {
-    logStartupMilestone('acl-grant-start')
-    ensureWindowsUserDataAclGrant(app.getPath('userData'), {
-      onDone: (result) => {
-        logStartupMilestone('acl-grant-done', { mode: result.mode })
-        if (result.mode === 'failed') {
-          console.warn('[win32-acl] userData ACL grant failed:', result.reason)
-        }
-      }
-    })
-    // Why here: read-only, and the install DACL is the one thing a 0x80000003
-    // child death cannot tell us about itself. See electron/electron#51761.
-    probeWindowsInstallDirAcl({ isServeMode })
-  }
-
-  const window = createMainWindow(store, {
-    getIsQuitting: () => isQuitting,
-    onQuitAborted: () => {
-      isQuitting = false
-      clearExpectedRendererReload()
-    },
-    onRendererProcessGone: (details, webContentsId) => {
-      recordProcessGoneCrash(
-        'renderer',
-        'renderer',
-        details.reason,
-        details.exitCode ?? null,
-        {
-          processType: 'renderer'
-        },
-        webContentsId
-      )
-    },
-    shouldRecoverRenderer: (details, webContentsId) =>
-      shouldRecoverRendererAfterProcessGone({
-        reason: details.reason,
-        expectedTeardown: getExpectedTeardownScope(webContentsId, false)
-      }),
-    onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
-      recordDurableCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
-        reason: details.reason,
-        exitCode: details.exitCode ?? null,
-        recentRecoveryCount
-      })
-      void presentRendererRecoveryPrompt(recentRecoveryCount)
-    },
-    deferLoad: true,
-    ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
-    title: devInstanceIdentity.name,
-    getKeybindings: () => keybindings?.getOverrides(),
-    onBeforeReload: ({ ignoreCache, webContentsId }) => {
-      if (mainWindow?.webContents.id === webContentsId) {
-        markExpectedRendererReload(webContentsId)
-      }
-      recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
-    },
-    // Why: the recovery reload re-fires did-finish-load; flag it so the local-PTY orphan sweep skips that reload (#5787).
-    onBeforeRecoveryReload: (webContentsId) => {
-      markRecoveryReloadInFlight(webContentsId)
-      recordDurableCrashBreadcrumb('renderer_recovery_reload')
-    }
-  })
-  recordCrashBreadcrumb('main_window_created')
-  logStartupMilestone('window-created')
-  // Why: Windows Tray construction can block synchronously on Shell_NotifyIcon, so both platforms defer creation to after first paint.
-  let trayCreated = false
-  const createSystemTrayDeferred = (): void => {
-    if (trayCreated || window.isDestroyed() || isQuitting || !store) {
-      return
-    }
-    trayCreated = true
-    if (process.platform === 'darwin') {
-      // Why: route through syncMacMenuBarIcon so startup and the live toggle share one serve-mode/visibility policy.
-      if (syncMacMenuBarIcon(store.getSettings().showMenuBarIcon !== false)) {
-        logStartupMilestone('tray-created')
-      }
-      return
-    }
-    const options = getSystemTrayOptions()
-    if (options && createSystemTray(options)) {
-      logStartupMilestone('tray-created')
-    }
-  }
-  window.once('ready-to-show', () => {
-    logStartupMilestone('ready-to-show')
-    setImmediate(createSystemTrayDeferred)
-  })
-  window.once('show', () => {
-    logStartupMilestone('window-shown')
-    void presentGpuFallbackRecoveredLaunchPrompt(window)
-  })
-  const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
-  trayCreateFallback.unref?.()
-
-  // Why: telemetry-plan.md anchors default-on app_opened to the first main-window load; this path fires only once consent is already enabled.
-  const rendererWebContentsId = window.webContents.id
-  const onFirstWindowLoad = (): void => {
-    clearExpectedRendererReload(rendererWebContentsId)
-    recordCrashBreadcrumb('main_window_loaded')
-    logStartupMilestone('did-finish-load')
-    if (!store) {
-      return
-    }
-    const consent = resolveConsent(store.getSettings())
-    if (consent.effective !== 'enabled') {
-      return
-    }
-    trackAppOpenedOnce()
-  }
-  window.webContents.on('did-finish-load', onFirstWindowLoad)
-
-  registerCoreHandlers(
-    store,
-    runtime,
-    stats,
-    claudeUsage,
-    codexUsage,
-    openCodeUsage,
-    codexAccounts,
-    claudeAccounts,
-    rateLimits,
-    rendererWebContentsId,
-    automations,
-    {
-      prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
-    },
-    agentAwakeService ?? undefined,
-    crashReports ?? undefined,
-    keybindings,
-    {
-      getAdditionalAiVaultCodexHomePaths: () =>
-        codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
-      prepareAiVaultSessionResume: (args) =>
-        prepareCodexAiVaultSessionResume(args, {
-          runtimeHome: codexRuntimeHome,
-          systemCodexHomePath: resolveHostCodexSessionSourceHome(store!.getSettings())
-        }),
-      onBeforeRelaunch: async () => {
-        isQuitting = true
-        desktopRelayService?.fenceAndCloseNow()
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
-      },
-      onOrcaProfileAuthMutation: () => desktopRelayService?.authMutated(),
-      onBeforeOrcaProfileSignOut: () => desktopRelayService?.fenceAndCloseNow()
-    },
-    pluginService ?? undefined,
-    pluginMarketplaceService && pluginMarketplaceInstaller
-      ? { marketplace: pluginMarketplaceService, installer: pluginMarketplaceInstaller }
-      : undefined
-  )
-  automations.setWebContents(window.webContents)
-  automations.start()
-  attachMainWindowServices(
-    window,
-    store,
-    runtime,
-    prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-    {
-      prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
-      awaitLocalPtyStartup: () => localPtyStartupReady,
-      awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
-      onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
-        if (window.webContents.id === webContentsId) {
-          markExpectedRendererReload(webContentsId)
-        }
-        recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
-      },
-      // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
-      isRecoveryReloadInFlight,
-      onCodexHomePtySpawned: handleCodexHomePtySpawned,
-      onPtyExit: handlePtyExit,
-      onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
-      updateInstallMode: resolveUpdateInstallMode(isServeMode),
-      onWorktreeLifecycle: emitPluginWorktreeLifecycle
-    }
-  )
-  // Why: attach the durable renderer pull now, but launch the diagnostic process after first paint.
-  initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
-  rateLimits.attach(window)
-  // Why: quota probes spawn CLIs and hit network, so don't fetch immediately and compete with first paint; show/focus listeners refresh later.
-  rateLimits.start({ fetchImmediately: false })
-  window.on('closed', () => {
-    if (mainWindow === window) {
-      mainWindow = null
-    }
-    clearExpectedRendererReload(rendererWebContentsId)
-    automations?.setWebContents(null)
-    // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
-    agentHookServer.setListener(null)
-    agentHookServer.setPaneStatusClearListener(null)
-    setMigrationUnsupportedPtyListener(null)
-    // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.
-    stopAllSyntheticTitleSpinners()
-  })
-  mainWindow = window
-  window.on('show', resumeSyntheticTitleSpinnerTimer)
-  window.on('restore', resumeSyntheticTitleSpinnerTimer)
-  window.on('hide', stopSyntheticTitleSpinnerTimer)
-  window.on('minimize', stopSyntheticTitleSpinnerTimer)
-  // Why: visibility-gated pollers (SSH port scanner) park while hidden and resume on this signal; re-wired per window since dock re-activation recreates it.
-  window.on('show', notifyMainWindowBecameVisible)
-  window.on('restore', notifyMainWindowBecameVisible)
-  // Why: user is back on show/restore, so clear the tray attention dot set while hidden (see notifications.ts).
-  window.on('show', () => setTrayAttention(false))
-  window.on('restore', () => setTrayAttention(false))
-  agentHookServer.setListener(
-    ({
-      paneKey,
-      tabId,
-      worktreeId,
-      connectionId,
-      payload,
-      receivedAt,
-      stateStartedAt,
-      launchToken,
-      providerSession,
-      providerSessionOnly,
-      promptInteractionKey,
-      restoredUnconfirmed,
-      observation,
-      isReplay
-    }) => {
-      if (mainWindow?.isDestroyed()) {
-        return
-      }
-      if (providerSessionOnly) {
-        // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
-        mainWindow?.webContents.send('agentStatus:set', {
-          ...payload,
-          paneKey,
-          ...(launchToken ? { launchToken } : {}),
-          tabId,
-          worktreeId,
-          connectionId,
-          receivedAt,
-          stateStartedAt,
-          ...(providerSession ? { providerSession } : {}),
-          ...(observation ? { observation } : {}),
-          providerSessionOnly: true
-        })
-        return
-      }
-      if (!restoredUnconfirmed) {
-        maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
-      }
-      const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
-      const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      const suppressSyntheticCodexAutoApprovalTitle =
-        payload.agentType === 'codex' &&
-        (payload.state === 'waiting' || payload.state === 'blocked')
-          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
-              agentType: payload.agentType,
-              state: payload.state,
-              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
-            })
-          : false
-      const statusEvent = {
-        ...payload,
-        paneKey,
-        ...(launchToken ? { launchToken } : {}),
-        ...(terminalHandle ? { terminalHandle } : {}),
-        tabId,
-        worktreeId,
-        connectionId,
-        receivedAt,
-        stateStartedAt,
-        ...(providerSession ? { providerSession } : {}),
-        ...(promptInteractionKey ? { promptInteractionKey } : {}),
-        ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
-        ...(observation ? { observation } : {}),
-        ...(orchestration ? { orchestration } : {})
-      }
-      mainWindow?.webContents.send('agentStatus:set', statusEvent)
-      if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
-        getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      }
-      recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
-      // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
-      const profile = getSyntheticAgentTitleProfile(payload.agentType)
-      if (
-        profile &&
-        shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
-        !suppressSyntheticCodexAutoApprovalTitle
-      ) {
-        driveSyntheticTitleFromHook(paneKey, payload.state, profile)
-      }
-    }
-  )
-  agentHookServer.setPaneStatusClearListener((clear) => {
-    if (mainWindow?.isDestroyed()) {
-      return
-    }
-    mainWindow?.webContents.send('agentStatus:clear', clear)
-    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
-  })
-  setMigrationUnsupportedPtyListener((event) => {
-    if (mainWindow?.isDestroyed()) {
-      return
-    }
-    if (event.type === 'set') {
-      mainWindow?.webContents.send('agentStatus:migrationUnsupported', event.entry)
-    } else {
-      mainWindow?.webContents.send('agentStatus:migrationUnsupportedClear', {
-        ptyId: event.ptyId
-      })
-    }
-  })
-  logStartupMilestone('load-start')
-  loadMainWindow(window)
-  return window
-}
-
-function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
-  webContents?.send('ui:openFeatureTour')
-}
-
-function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
-  webContents?.send('ui:openSetupGuide')
-}
-
-function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
-  webContents?.send('ui:openCrashReport')
-}
-
-// Why: on renderer crash-loop the breaker stops auto-reloading and the window goes blank, so a main-process dialog is the only retry/quit surface.
-async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
-  if (isQuitting) {
-    return
-  }
-  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
-  const options = {
-    type: 'error' as const,
-    buttons: ['Reload', 'Quit'],
-    defaultId: 0,
-    cancelId: 1,
-    title: 'Orca keeps failing to load',
-    message: 'The app window crashed repeatedly and stopped reloading automatically.',
-    detail: `Orca tried to recover ${recentRecoveryCount} times in a row without success. This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.`
-  }
-  const { response } = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options)
-  if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
-    recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
-    loadMainWindow(mainWindow)
-  } else if (response === 1) {
-    isQuitting = true
-    app.quit()
-  }
-}
-
-function getGpuFallbackEnvironment(): GpuFallbackEnvironment {
-  return {
-    appVersion: app.getVersion(),
-    electronVersion: process.versions.electron ?? '',
-    platform: process.platform
-  }
-}
-
-function getWindowsGpuFallbackEnvironment(): WindowsGpuFallbackEnvironment | null {
-  const environment = getGpuFallbackEnvironment()
-  if (environment.platform !== 'win32') {
-    return null
-  }
-  return { ...environment, platform: 'win32' }
-}
-
-// Writes both crash-time and post-recovery consent states through one build-scoped path.
-function persistGpuFallbackMarker(
-  userDataPath: string,
-  info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean }
-): boolean {
-  const environment = getWindowsGpuFallbackEnvironment()
-  if (!environment) {
-    return false
-  }
-  try {
-    writeGpuFallbackMarker(userDataPath, info, environment)
-    return true
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to persist marker:', error)
-    return false
-  }
-}
-
-// Read before app.whenReady() so app.disableHardwareAcceleration() takes effect. Windows desktop only.
-function maybeApplyGpuFallbackForThisLaunch(): void {
-  if (isServeMode || process.platform !== 'win32') {
-    return
-  }
-  const marker = readActiveGpuFallbackMarker(app.getPath('userData'), getGpuFallbackEnvironment())
-  if (!marker) {
-    return
-  }
-  activeGpuFallbackMarker = marker
-  app.disableHardwareAcceleration()
-  const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
-  gpuFallbackActiveThisLaunch = true
-  // Why: with no GPU child left, child-process-gone can't report a GPU fault, so
-  // name the applied switches in the trail any later crash report carries.
-  recordCrashBreadcrumb('gpu_fallback_applied', {
-    crashesInWindow: marker.crashesInWindow,
-    switches: appliedSwitches.join(',')
-  })
-}
-
-async function presentGpuFallbackRecoveredLaunchPrompt(window: BrowserWindow): Promise<void> {
-  const marker = activeGpuFallbackMarker
-  if (!marker || marker.userConfirmed || window.isDestroyed() || isQuitting) {
-    return
-  }
-  // One prompt per process. A failure leaves the on-disk marker unconfirmed so the next launch retries.
-  activeGpuFallbackMarker = null
-  const userDataPath = app.getPath('userData')
-  await handleGpuFallbackRecoveredLaunch({
-    isQuitting: () => isQuitting,
-    prompt: () => promptForGpuFallbackRecoveredLaunch(window),
-    confirmSafeGraphics: () => {
-      persistGpuFallbackMarker(userDataPath, {
-        engagedAt: marker.engagedAt,
-        crashesInWindow: marker.crashesInWindow,
-        userConfirmed: true
-      })
-    },
-    clearSafeGraphics: () => clearGpuFallbackMarker(userDataPath),
-    onPromptFailed: (error) =>
-      console.warn('[gpu-fallback] failed to show recovered-launch prompt:', error),
-    onSafeGraphicsKept: () =>
-      recordDurableCrashBreadcrumb('gpu_fallback_safe_graphics_kept', {
-        crashesInWindow: marker.crashesInWindow
-      }),
-    restartWithHardware: () => {
-      isQuitting = true
-      relaunchApp('gpu-fallback', {
-        mode: 'hardware-retry',
-        crashesInWindow: marker.crashesInWindow
-      })
-      destroySystemTray()
-      app.exit(0)
-    }
-  })
-}
-
-// Why: a burst of GPU child crashes means HW acceleration is unusable — persist a build-scoped marker and offer software rendering.
-async function handleGpuChildCrash(
-  reason: string,
-  exitCode: number | null,
-  crashedAt: number
-): Promise<void> {
-  // Software rendering already active or shutting down: nothing more to do.
-  if (gpuFallbackActiveThisLaunch || isQuitting || isServeMode) {
-    return
-  }
-  const result = gpuCrashFallbackTracker.recordGpuCrash(crashedAt)
-  if (!result.shouldEngageFallback) {
-    return
-  }
-  const fallbackData = {
-    processReason: reason,
-    exitCode,
-    crashesInWindow: result.crashesInWindow
-  }
-  const userDataPath = app.getPath('userData')
-  await engageGpuFallbackAfterCrashBurst(
-    { reason, exitCode, crashesInWindow: result.crashesInWindow, engagedAt: Date.now() },
-    {
-      isQuitting: () => isQuitting,
-      onEngaged: (engagement) =>
-        recordCrashBreadcrumb('gpu_fallback_engaged', {
-          reason: engagement.reason,
-          exitCode: engagement.exitCode,
-          crashesInWindow: engagement.crashesInWindow
-        }),
-      persistMarker: (engagement) =>
-        persistGpuFallbackMarker(userDataPath, {
-          engagedAt: engagement.engagedAt,
-          crashesInWindow: engagement.crashesInWindow,
-          userConfirmed: false
-        }),
-      confirmMarker: (engagement) => {
-        persistGpuFallbackMarker(userDataPath, {
-          engagedAt: engagement.engagedAt,
-          crashesInWindow: engagement.crashesInWindow,
-          userConfirmed: true
-        })
-      },
-      clearMarker: () => clearGpuFallbackMarker(userDataPath),
-      promptForRestart: () =>
-        promptForGpuFallbackRestart(
-          mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
-        ),
-      onPromptFailed: (error) =>
-        console.warn('[gpu-fallback] failed to show restart prompt:', error),
-      onRestartDeferred: () =>
-        recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
-      restartIntoSafeGraphics: () => {
-        isQuitting = true
-        relaunchApp('gpu-fallback', fallbackData)
-        // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
-        destroySystemTray()
-        app.exit(0)
-      }
-    }
-  )
-}
-
-function recordProcessGoneCrash(
-  source: 'renderer' | 'child',
-  processType: string,
-  reason: string,
-  exitCode: number | null,
-  details: Record<string, unknown>,
-  webContentsId?: number
-): void {
-  recordProcessGoneCrashEvent(crashReports, {
-    source,
-    processType,
-    reason,
-    exitCode,
-    expectedTeardown: getExpectedTeardownScope(webContentsId),
-    details,
-    ...(webContentsId !== undefined ? { webContentsId } : {})
-  })
-}
-
 function shutdownWatchersOnce(): Promise<void> {
   if (watcherShutdownDone) {
     return Promise.resolve()
@@ -2070,304 +1091,10 @@ function shutdownWatchersOnce(): Promise<void> {
   return watcherShutdownPromise
 }
 
-// Why: cursor-agent re-emits its own OSC title on every redraw, overwriting a one-shot frame — so re-assert a working frame on an interval.
-// 80ms matches Pi's cadence (smooth but under the IPC budget). opencode needs only one frame but reuses this for consistent animated UX.
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const SPINNER_INTERVAL_MS = 80
-
-const syntheticTitleSpinnerByPaneKey = new Map<
-  string,
-  SyntheticTitleSpinnerEntry<SyntheticAgentTitleProfile>
->()
-let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
-
-type ServeOptions = {
-  json: boolean
-  wsPort?: number
-  pairingAddress: string | null
-  noPairing: boolean
-  noOpen?: boolean
-  mobilePairing: boolean
-  recipeJson: boolean
-  projectRoot: string | null
-}
-
-function getServeOptions(argv = process.argv): ServeOptions {
-  const valueAfter = (flag: string): string | null => {
-    const index = argv.indexOf(flag)
-    if (index === -1) {
-      return null
-    }
-    const value = argv[index + 1]
-    return value && !value.startsWith('--') ? value : null
-  }
-  const rawPort = valueAfter('--serve-port')
-  let wsPort: number | undefined
-  if (rawPort) {
-    const parsedPort = Number(rawPort)
-    if (!Number.isInteger(parsedPort) || parsedPort < 0 || parsedPort > 65535) {
-      throw new Error(`Invalid --serve-port value: ${rawPort}`)
-    }
-    wsPort = parsedPort
-  }
-  return {
-    json: argv.includes('--serve-json'),
-    ...(wsPort !== undefined ? { wsPort } : {}),
-    pairingAddress: valueAfter('--serve-pairing-address'),
-    noPairing: argv.includes('--serve-no-pairing'),
-    noOpen: argv.includes('--serve-no-open'),
-    mobilePairing: argv.includes('--serve-mobile-pairing'),
-    recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
-  }
-}
-
-function getBundledWebClientRoot(): string | undefined {
-  const appPath = app.getAppPath()
-  const roots = [
-    join(appPath, 'out', 'web'),
-    // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
-    join(appPath, '..', 'web')
-  ]
-  return roots.find((root) => existsSync(join(root, 'web-index.html')))
-}
-
-async function renderTerminalPairingQr(pairingUrl: string): Promise<string | null> {
-  // Why dynamic: qrcode is only reachable from mobile pairing, so launch should
-  // not parse it for the majority who never pair a device.
-  const QRCode = await import('qrcode')
-  try {
-    return await QRCode.toString(pairingUrl, { type: 'terminal', small: true })
-  } catch {
-    try {
-      return await QRCode.toString(pairingUrl, { type: 'utf8' })
-    } catch {
-      return null
-    }
-  }
-}
-
-async function printServeReady(options: ServeOptions): Promise<void> {
-  if (!runtime || !runtimeRpc) {
-    throw new Error('Runtime server must be initialized before printing serve readiness')
-  }
-  if (options.recipeJson) {
-    if (!options.projectRoot) {
-      throw new Error('--serve-recipe-json requires --serve-project-root')
-    }
-    if (!isAbsolute(options.projectRoot)) {
-      throw new Error(`--serve-project-root must be absolute: ${options.projectRoot}`)
-    }
-    const projectRootStats = statSync(options.projectRoot)
-    if (!projectRootStats.isDirectory()) {
-      throw new Error(`--serve-project-root must be a directory: ${options.projectRoot}`)
-    }
-  }
-  const boundEndpoint = runtimeRpc.getWebSocketEndpoint()
-  const advertised = boundEndpoint
-    ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
-    : null
-  const pairing = options.noPairing
-    ? ({
-        available: false,
-        reason: 'disabled_by_operator',
-        guidance: 'Restart without --no-pairing to create a client pairing offer.'
-      } as const)
-    : runtimeRpc.createPairingOffer({
-        address: options.pairingAddress,
-        name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
-        scope: options.mobilePairing ? 'mobile' : 'runtime'
-      })
-  const pairingQr =
-    pairing.available && options.mobilePairing
-      ? await renderTerminalPairingQr(pairing.pairingUrl)
-      : null
-  await serveReadinessPublisher.publish(
-    {
-      runtimeId: runtime.getRuntimeId(),
-      boundEndpoint,
-      advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
-      // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
-      managedWslCliReconciliation: managedWslCliReconciliationStatus,
-      pairing: pairing.available
-        ? {
-            available: true,
-            url: pairing.pairingUrl,
-            endpoint: pairing.endpoint,
-            deviceId: pairing.deviceId,
-            webClientUrl: pairing.webClientUrl,
-            scope: options.mobilePairing ? 'mobile' : 'runtime',
-            qr: pairingQr
-          }
-        : pairing
-    },
-    options.recipeJson
-      ? { mode: 'recipe-json', projectRoot: options.projectRoot! }
-      : { mode: options.json ? 'json' : 'human' }
-  )
-  notifyServeSupervisorReady(runtime.getRuntimeId())
-}
-
 // Why: on PTY teardown drop the spinner entry explicitly, else the shared timer keeps ticking with sendSyntheticTitle no-oping forever.
 registerPaneKeyTeardownListener((paneKey) => {
-  stopSyntheticTitleSpinner(paneKey)
+  syntheticTitles.stopSyntheticTitleSpinner(paneKey)
 })
-
-function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return
-  }
-  // Why: throttle decorative spinner frames (up to 80ms/agent); final/permission frames are forced because they drive BEL.
-  if (
-    !shouldSendSyntheticTitleFrame({
-      force: options.force === true,
-      windowVisible: isSyntheticTitleWindowVisible()
-    })
-  ) {
-    return
-  }
-  // Why: feed the per-PTY tracker directly, never onPtyData — emulator/tails/transcripts/stats must not see fabricated bytes.
-  runtime?.ingestSyntheticTitleFrame(ptyId, data)
-  // Why: only the kill-switch-off renderer byte-parses synthetic frames; under main authority the copy mints phantom ACKs (see synthetic-title-frame-routing.ts).
-  if (shouldCopySyntheticTitleFrameToPtyData(store?.getSettings())) {
-    mainWindow.webContents.send('pty:data', { id: ptyId, data })
-  }
-}
-
-function isSyntheticTitleWindowVisible(): boolean {
-  return (
-    mainWindow !== null &&
-    !mainWindow.isDestroyed() &&
-    mainWindow.isVisible() &&
-    !mainWindow.isMinimized()
-  )
-}
-
-function canSendDecorativeSyntheticTitle(): boolean {
-  return shouldSendSyntheticTitleFrame({
-    force: false,
-    windowVisible: isSyntheticTitleWindowVisible()
-  })
-}
-
-function stopSyntheticTitleSpinner(paneKey: string): void {
-  if (syntheticTitleSpinnerByPaneKey.delete(paneKey)) {
-    stopSyntheticTitleSpinnerTimerIfIdle()
-  }
-}
-
-function stopAllSyntheticTitleSpinners(): void {
-  syntheticTitleSpinnerByPaneKey.clear()
-  stopSyntheticTitleSpinnerTimer()
-}
-
-function stopSyntheticTitleSpinnerTimer(): void {
-  if (!syntheticTitleSpinnerTimer) {
-    return
-  }
-  clearInterval(syntheticTitleSpinnerTimer)
-  syntheticTitleSpinnerTimer = null
-}
-
-function stopSyntheticTitleSpinnerTimerIfIdle(): void {
-  if (syntheticTitleSpinnerByPaneKey.size === 0) {
-    stopSyntheticTitleSpinnerTimer()
-  }
-}
-
-function tickSyntheticTitleSpinners(): void {
-  if (!canSendDecorativeSyntheticTitle()) {
-    stopSyntheticTitleSpinnerTimer()
-    return
-  }
-  const ticks = advanceSyntheticTitleSpinnerEntries({
-    entries: syntheticTitleSpinnerByPaneKey,
-    frameCount: SPINNER_FRAMES.length,
-    getPtyIdForPaneKey
-  })
-  for (const tick of ticks) {
-    sendSyntheticTitle(
-      tick.ptyId,
-      `\x1b]0;${SPINNER_FRAMES[tick.frame]} ${tick.profile.workingLabel}\x07`
-    )
-  }
-  stopSyntheticTitleSpinnerTimerIfIdle()
-}
-
-function ensureSyntheticTitleSpinnerTimer(): void {
-  if (
-    syntheticTitleSpinnerTimer ||
-    syntheticTitleSpinnerByPaneKey.size === 0 ||
-    !canSendDecorativeSyntheticTitle()
-  ) {
-    return
-  }
-  // Why: one shared timer for all spinners — per-pane intervals multiplied idle wakeups when several agents were working.
-  syntheticTitleSpinnerTimer = setInterval(tickSyntheticTitleSpinners, SPINNER_INTERVAL_MS)
-}
-
-function resumeSyntheticTitleSpinnerTimer(): void {
-  ensureSyntheticTitleSpinnerTimer()
-}
-
-function driveSyntheticTitleFromHook(
-  paneKey: string,
-  state: AgentStatusState,
-  profile: SyntheticAgentTitleProfile
-): void {
-  const ptyId = getPtyIdForPaneKey(paneKey)
-  if (!ptyId) {
-    return
-  }
-  if (state === 'working') {
-    // Why: emit the first frame immediately so the spinner is visible now, not up to 80ms later at the next interval tick.
-    const existing = syntheticTitleSpinnerByPaneKey.get(paneKey)
-    const frame = existing ? existing.frame : 0
-    sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[frame]} ${profile.workingLabel}\x07`)
-    if (existing) {
-      // Why: refresh the profile so a mid-pane agent-type change lands on the right idle/permission labels at terminal state.
-      existing.profile = profile
-      return
-    }
-    syntheticTitleSpinnerByPaneKey.set(paneKey, { frame, profile })
-    ensureSyntheticTitleSpinnerTimer()
-    return
-  }
-  // Why: stop the spinner first so the next tick can't race the state back to "working", then inject the terminal frame.
-  // Permission frames add a trailing BEL to light up user-input states; done frames omit it (completion notifications own that attention).
-  stopSyntheticTitleSpinner(paneKey)
-  const needsUserInput = state === 'blocked' || state === 'waiting'
-  const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
-  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, {
-    force: true
-  })
-}
-
-function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | {
-        agentArgs?: string | null
-        agentEnv?: Record<string, string> | null
-      }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return (
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
-  )
-}
 
 void app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
@@ -2405,7 +1132,7 @@ void app.whenReady().then(async () => {
   // safeStorage note above); this call stays unconditional so packaged builds keep their
   // existing post-ready rename, which lands after the Keychain name is already resolved.
   app.setName(devInstanceIdentity.appName)
-  updateGpuAccelerationAboutPanel()
+  gpuFallbackLaunch.updateGpuAccelerationAboutPanel()
 
   // Why: managed WSL launchers live outside the Windows app bundle, so keep their launcher/bridge contract synced across app updates.
   managedWslCliReconciliationStatus = 'pending'
@@ -3263,16 +1990,14 @@ void app.whenReady().then(async () => {
       serviceName: details.serviceName,
       type: details.type
     })
-    if (
-      isGpuFallbackCrashCandidate({
-        platform: process.platform,
-        processType: details.type,
-        reason: details.reason
-      })
-    ) {
+    if (gpuFallbackLaunch.isGpuFallbackChildCrashCandidate(details)) {
       const crashedAt = performance.now()
-      void gpuCrashDiagnostics?.record()
-      void handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
+      void gpuFallbackLaunch.getGpuCrashDiagnostics()?.record()
+      void gpuFallbackLaunch.handleGpuChildCrash(
+        details.reason,
+        details.exitCode ?? null,
+        crashedAt
+      )
     }
   })
 
@@ -3477,51 +2202,13 @@ void app.whenReady().then(async () => {
     // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
     registerServeSignalHandlers(process, () => app.quit())
     // Why: installs are best-effort tail work after the RPC transport is up; run them concurrently without blocking serve readiness.
-    const installServeCliArtifacts = async (): Promise<void> => {
-      // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
-      if (process.platform === 'darwin' || process.platform === 'linux') {
-        try {
-          // Why: serve is headless — a fallback osascript admin prompt would hang it; skip elevation since ~/.local/bin needs none.
-          const cliStatus = await new CliInstaller({
-            privilegedRunner: async () => {
-              throw new Error('serve CLI auto-install must not request administrator privileges')
-            }
-          }).install()
-          console.log(
-            `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
-          )
-        } catch (error) {
-          console.warn(
-            '[serve] orca CLI install skipped:',
-            error instanceof Error ? error.message : String(error)
-          )
-        }
-      }
-      // Why: Linux CLI installs as `orca-ide`, but the Claude Team launcher invokes bare `orca`; drop a ~/.local/bin dispatcher (ahead of /usr/bin) so it resolves. Best-effort.
-      if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
-        try {
-          const dispatcher = await installLinuxBareOrcaDispatcher({
-            resourcesPath: process.resourcesPath
-          })
-          console.log(
-            `[serve] bare orca dispatcher ${dispatcher.state}: ${dispatcher.dispatcherPath}` +
-              `${dispatcher.target ? ` -> ${dispatcher.target}` : ''}`
-          )
-        } catch (error) {
-          console.warn(
-            '[serve] bare orca dispatcher install skipped:',
-            error instanceof Error ? error.message : String(error)
-          )
-        }
-      }
-    }
-    void installServeCliArtifacts()
+    void serveStartup.installServeCliArtifacts()
     // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
     automations?.start()
     // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
     // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
     scheduleAllPendingHistoryTreeRemovals()
-    await printServeReady(serveOptions)
+    await serveStartup.printServeReady(serveOptions)
     return
   }
 
