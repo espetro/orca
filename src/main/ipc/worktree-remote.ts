@@ -1,139 +1,39 @@
-/* eslint-disable max-lines */
-// Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
-
-import type { BrowserWindow } from 'electron'
-import { posix, win32 } from 'node:path'
-import { existsSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Repo } from '../../shared/repo-types'
-import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
+/* eslint-disable max-lines -- Why: owns createRemoteWorktree/createLocalWorktree orchestration; remaining concerns extracted to sibling modules */
 import type {
-  LocalBaseRefRefreshResult,
-  LocalBaseRefUpdateSuggestion
-} from '../../shared/worktree/base-ref-drift-types'
-import type {
-  CreateWorktreeArgs,
   CreateWorktreeResult,
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
-import type { WorktreeMeta } from '../../shared/worktree/meta-types'
-import type {
-  AutomationWorkspaceProvenance,
-  CliWorkspaceProvenance,
-  GitPushTarget,
-  Worktree,
-  WorktreeHeadIdentity
-} from '../../shared/worktree/types'
-import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
-import {
-  getBranchConflictKind,
-  resolveDefaultBaseRefViaExec,
-  resolveDefaultBaseRefWithLocalGit
-} from '../git/repo'
-import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
-import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
-import { probeWorktreeBaseRefPresence } from '../git/worktree-base-ref-probe'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import type { ForgeProviderId } from '../source-control/forge-provider'
-import { validateGitPushTarget } from '../git/push-target-validation'
-import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
-import { gitExecFileAsync } from '../git/runner'
 import type {
   OrcaRuntimeService,
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
-import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
-import { getEffectiveHooks, loadHooks, parseOrcaYaml } from '../hooks'
+import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
+import type { BrowserWindow } from 'electron'
+import type { IFilesystemProvider } from '../providers/types'
+import type { Repo } from '../../shared/repo-types'
+import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
+import type { SshGitProvider } from '../providers/ssh-git-provider'
+import type { Store } from '../persistence'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { CreateWorktreeArgsWithSystemProvenance } from './worktrees/ipc-context-schemas'
+import type { GitPushTarget, WorktreeHeadIdentity } from '../../shared/worktree/types'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from '../setup-runner-script-text'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
-import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
-import {
-  getDefaultTabsLaunch,
-  getEffectiveHooksFromConfig,
-  shouldRunSetupForCreate
-} from '../effective-hook-config'
-import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import type { SshGitProvider } from '../providers/ssh-git-provider'
-import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
-import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
-import {
-  registerOptionalSshWorktreeCreateRoots,
-  registerRequiredSshWorktreeCreateRoots
-} from './ssh-worktree-create-root-registration'
-
-type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
-  automationProvenance?: AutomationWorkspaceProvenance
-  cliProvenance?: CliWorkspaceProvenance
-}
-import {
-  sanitizeWorktreeName,
-  sanitizeWorktreeDisplayName,
-  computeValidatedBranchName,
-  computeWorktreePath,
-  computeRemoteWorktreePath,
-  computeWorkspaceRoot,
-  ensurePathWithinWorkspace,
-  getWorktreeCreationLayout,
-  getWorktreePathSettings,
-  hasRepoWorktreeBasePath,
-  shouldSetDisplayName,
-  mergeWorktree
-} from './worktree-logic'
+import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import { existsSync } from 'node:fs'
 import { findCreatedWorktree } from './created-worktree-reconciliation'
-import type { BranchPrefixSettings } from '../../shared/branch-prefix'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
-import {
-  cleanupUnusedWorktreePushTargetRemoteWithExec,
-  sameGitHubRemoteUrl,
-  type GitRemoteExec,
-  type WorktreePushTargetStore
-} from './worktree-push-target-cleanup'
-import {
-  configureCreatedWorktreePushTargetWithExec,
-  ensureUniqueRemoteName,
-  findRemoteForUrl,
-  prepareWorktreePushTargetWithExec
-} from './worktree-push-target-setup'
-import { isENOENT } from './filesystem-path-containment'
-import { registerWorktreeRootsForRepo } from './registered-worktree-roots-cache'
+import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
+import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
+import type { getPRForBranch } from '../github/client'
+import { getLocalGitHubPrForBranch } from '../runtime/runtime-worktree-git-shared'
+import { configureCreatedWorktreePushTarget } from './worktree-push-target-commands'
+import { configureCreatedWorktreePushTargetWithExec } from './worktree-push-target-setup'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from './worktree-symlinks'
-import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
-import { normalizeSparseDirectories } from './sparse-checkout-directories'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
-import type { IFilesystemProvider } from '../providers/types'
-import {
-  buildSetupRunnerCommand,
-  getSetupRunnerCommandPlatformForPath
-} from '../../shared/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
-import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
-import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
-import {
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
-import {
-  getLocalProjectGitExecOptions,
-  getLocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
 import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
@@ -142,474 +42,109 @@ import {
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
 } from '../worktree-create-candidates'
 import {
+  getDefaultTabsLaunch,
+  getEffectiveHooksFromConfig,
+  shouldRunSetupForCreate
+} from '../effective-hook-config'
+import {
+  getLocalProjectGitExecOptions,
+  getLocalProjectWorktreeGitOptions
+} from '../project-runtime-git-options'
+import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
+import { gitExecFileAsync } from '../git/runner'
+import { isENOENT } from './filesystem-path-containment'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
+import { normalizeSparseDirectories } from './sparse-checkout-directories'
+import { posix, win32 } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { registerWorktreeRootsForRepo } from './registered-worktree-roots-cache'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
+import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+import {
+  computeRemoteWorktreePath,
+  computeWorktreePath,
+  computeWorkspaceRoot,
+  ensurePathWithinWorkspace,
+  getWorktreeCreationLayout,
+  getWorktreePathSettings,
+  hasRepoWorktreeBasePath,
+  mergeWorktree,
+  sanitizeWorktreeDisplayName,
+  sanitizeWorktreeName,
+  shouldSetDisplayName
+} from './worktree-logic'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
+import {
+  prepareWorktreePushTarget,
+  prepareWorktreePushTargetSsh
+} from './worktree-push-target-commands'
+import { getEffectiveHooks, loadHooks, parseOrcaYaml } from '../hooks'
+import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
 } from '../worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
+import { registerRequiredSshWorktreeCreateRoots } from './ssh-worktree-create-root-registration'
+import {
+  fetchRemoteForWorktreeCreate,
+  refreshRemoteTrackingBaseForWorktreeCreate
+} from './ssh-worktree-create-fetch-queue'
+import {
+  getOrStartRemoteWorktreeCreateBasePlan,
+  getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate,
+  refreshLocalBaseRefForRemoteWorktreeCreate
+} from './ssh-worktree-create-base-plan'
+import {
+  canCheckoutExistingLocalBranch,
+  canCheckoutExistingLocalBranchSsh,
+  getSshBranchConflictKind,
+  hasCommitRefSsh,
+  hasLocalWorktreeBaseRefWithOptions,
+  hasRemoteWorktreeBaseRef,
+  resolveCreateBranchName,
+  resolveCreateBranchNameSsh
+} from './worktree-create-branch-resolution'
+import {
+  getSelectedHostedReviewForBranch,
+  getSelectedReviewBranch,
+  isAllowedPushTargetRemoteConflict,
+  isMatchingSelectedGitHubPr
+} from './worktree-create-review-branch'
+import {
+  assertAttachableParentWorkspace,
+  recordWorkspaceLineageForCreatedWorktree
+} from './created-worktree-lineage'
+import {
+  appendWorktreeCreateWarning,
+  spawnLocalStartupAndSetupTerminals
+} from './worktree-create-startup-terminals'
+import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 
-const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
-const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
 // Why: bound the fallback `git fetch origin` so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
 const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
-const sshWorktreeCreateFetchInflight = new Map<string, Promise<void>>()
-const sshWorktreeCreateFetchCompletedAt = new Map<string, number>()
-const sshWorktreeCreateFetchQueueTail = new Map<string, Promise<void>>()
-const sshWorktreeCreateBasePlanInflight = new Map<
-  string,
-  Promise<RemoteWorktreeCreateBasePlan | null>
->()
 
-type RemoteWorktreeCreateBasePlan = {
-  baseBranch: string
-  remoteTrackingBase: RemoteTrackingBase | null
-}
-
-type StagedStartupResult = {
-  startupTerminal?: CreateWorktreeResult['startupTerminal']
-  activationSetup?: CreateWorktreeResult['setup']
-  didSpawnSetup: boolean
-  warning?: string
-}
-
-type RemoteLocalBaseRefRefreshability =
-  | {
-      refreshable: true
-      baseRef: string
-      localBranch: string
-      fullRef: string
-      remoteTrackingRef: string
-      behind: number
-      ownerWorktreePath?: string
-    }
-  | {
-      refreshable: false
-      // undefined = nothing to refresh (no local branch yet), so the caller reports no status at all.
-      result: LocalBaseRefRefreshResult | undefined
-    }
-
-function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
-  return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
-}
-
-function getSetupRunnerCommandPlatformForLaunch(
-  setup: CreateWorktreeResult['setup'],
-  fallbackPlatform: 'windows' | 'posix'
-): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
-}
-
-/** Why not throw on a missing parent: nesting is optional decoration, and the pick can go stale
- *  between the composer and the create. A malformed or self-referential key is a bad request and
- *  still fails; a parent that simply disappeared degrades to an unattached workspace, matching the
- *  runtime path and `recordWorkspaceLineageForCreatedWorktree`. */
-export function assertAttachableParentWorkspace(
-  store: Store,
-  parentWorkspace: CreateWorktreeArgs['parentWorkspace'],
-  childWorkspaceKey: ReturnType<typeof worktreeWorkspaceKey>
-): void {
-  if (!parentWorkspace) {
-    return
-  }
-  if (parentWorkspace === childWorkspaceKey) {
-    throw new Error('A worktree cannot be attached to itself.')
-  }
-  const parentScope = parseWorkspaceKey(parentWorkspace)
-  if (!parentScope) {
-    throw new Error(`Invalid parent workspace: ${parentWorkspace}`)
-  }
-  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
-    console.warn(`[worktree-create] parent folder workspace not found: ${parentWorkspace}`)
-    return
-  }
-  if (parentScope.type === 'worktree' && !store.getWorktreeMeta(parentScope.worktreeId)) {
-    console.warn(`[worktree-create] parent worktree workspace not found: ${parentWorkspace}`)
-  }
-}
-
-type CreatedWorktreeLineageRecords = {
-  lineage: CreateWorktreeResult['lineage']
-  workspaceLineage: CreateWorktreeResult['workspaceLineage']
-}
-
-const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
-  lineage: null,
-  workspaceLineage: null
-}
-
-/** Mirrors the projection's edge rule so we never persist a row the sidebar would silently drop.
- *  WorktreeMeta has no repoId, so the parent's comes from its `<repoId>::<path>` id. */
-function createdWorktreeSharesParentLineageBoundary(
-  worktree: Worktree,
-  parentWorktreeId: string,
-  parentMeta: WorktreeMeta
-): boolean {
-  return sharesWorktreeLineageBoundary(worktree, {
-    repoId: getRepoIdFromWorktreeId(parentWorktreeId),
-    hostId: parentMeta.hostId,
-    projectId: parentMeta.projectId
-  })
-}
-
-export function recordWorkspaceLineageForCreatedWorktree(
-  store: Store,
-  args: CreateWorktreeArgs,
-  worktree: Worktree,
-  createdAt: number
-): CreatedWorktreeLineageRecords {
-  if (!args.parentWorkspace || !worktree.instanceId) {
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-  const childWorkspaceKey = worktreeWorkspaceKey(worktree.id)
-  if (args.parentWorkspace === childWorkspaceKey) {
-    console.warn(`[worktree-create] refusing to attach ${worktree.id} to itself`)
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-  const parentScope = parseWorkspaceKey(args.parentWorkspace)
-  if (!parentScope) {
-    console.warn(`[worktree-create] ignoring invalid parent workspace ${args.parentWorkspace}`)
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-  if (parentScope.type === 'folder' && !store.getFolderWorkspace(parentScope.folderWorkspaceId)) {
-    console.warn(`[worktree-create] parent folder workspace disappeared: ${args.parentWorkspace}`)
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-  const parentWorktreeMeta =
-    parentScope.type === 'worktree' ? store.getWorktreeMeta(parentScope.worktreeId) : null
-  if (parentScope.type === 'worktree' && !parentWorktreeMeta) {
-    console.warn(`[worktree-create] parent worktree workspace disappeared: ${args.parentWorkspace}`)
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-
-  // Why: only a worktree parent produces sidebar nesting; a folder parent has no WorktreeLineage row.
-  let lineage: CreateWorktreeResult['lineage'] = null
-  let parentOutsideLineageBoundary = false
-  if (parentScope.type === 'worktree' && parentWorktreeMeta) {
-    if (!parentWorktreeMeta.instanceId) {
-      console.warn(
-        `[worktree-create] parent ${parentScope.worktreeId} has no instance identity; skipping lineage`
-      )
-    } else if (
-      !createdWorktreeSharesParentLineageBoundary(
-        worktree,
-        parentScope.worktreeId,
-        parentWorktreeMeta
-      )
-    ) {
-      parentOutsideLineageBoundary = true
-      console.warn(
-        `[worktree-create] parent ${parentScope.worktreeId} is outside ${worktree.id}'s repo/host/project boundary; skipping lineage`
-      )
-    } else {
-      lineage = store.setWorktreeLineage(worktree.id, {
-        worktreeId: worktree.id,
-        worktreeInstanceId: worktree.instanceId,
-        parentWorktreeId: parentScope.worktreeId,
-        parentWorktreeInstanceId: parentWorktreeMeta.instanceId,
-        origin: 'manual',
-        capture: { source: 'manual-action', confidence: 'explicit' },
-        createdAt
-      })
-    }
-  }
-
-  // Why: persisting a workspace row for an out-of-boundary worktree parent poisons the whole host —
-  // `filterLineageForHost` returns null for any owned row whose child and parent hosts differ, so
-  // every nesting on that host stops hydrating, and the row survives restarts.
-  if (parentOutsideLineageBoundary) {
-    return NO_CREATED_WORKTREE_LINEAGE
-  }
-
-  const workspaceLineage = store.setWorkspaceLineage({
-    childWorkspaceKey,
-    childInstanceId: worktree.instanceId,
-    parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
-    origin: 'manual',
-    capture: {
-      source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
-      confidence: 'explicit'
-    },
-    createdAt
-  })
-  return { lineage, workspaceLineage }
-}
-
-function countNonEmptyGitOutputLines(output: string): number {
-  return output.split(/\r?\n/).filter((line) => line.trim().length > 0).length
-}
-
-async function spawnLocalStartupAndSetupTerminals(args: {
-  runtime: OrcaRuntimeService | undefined
-  worktree: Pick<Worktree, 'id' | 'path'>
-  startup: CreateWorktreeArgs['startup']
-  setup: CreateWorktreeResult['setup']
-  defaultTabs: CreateWorktreeResult['defaultTabs']
-  settings: GlobalSettings
-  createdWithAgent: CreateWorktreeArgs['createdWithAgent']
-}): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, setup, defaultTabs, settings, createdWithAgent } = args
-  if (!runtime || !startup || defaultTabs?.tabs.length) {
-    return { didSpawnSetup: false }
-  }
-
-  let warning: string | undefined
-  let startupTerminalHandle: string | null = null
-  let startupTerminal: CreateWorktreeResult['startupTerminal']
-
-  let sequencedStartup = startup
-  let wrappedSetupCommandStr: string | undefined
-  if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForLaunch(
-      setup,
-      process.platform === 'win32' ? 'windows' : 'posix'
-    )
-    const sequenced = createSequencedSetupAgentCommands({
-      runnerScriptPath: setup.runnerScriptPath,
-      startupCommand: startup.command,
-      platform,
-      shell: setup.shell
-    })
-    sequencedStartup = {
-      ...startup,
-      command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
-    }
-    wrappedSetupCommandStr = sequenced.setupCommand
-  }
-
-  try {
-    // Why: only after `git worktree add` + metadata registration is the path safe for a runtime PTY to boot the agent while setup runs alongside.
-    if (isTuiAgent(createdWithAgent)) {
-      const preset = TUI_AGENT_CONFIG[createdWithAgent].preflightTrust
-      try {
-        if (preset === 'cursor') {
-          markCursorWorkspaceTrusted(worktree.path)
-        } else if (preset === 'copilot') {
-          markCopilotFolderTrusted(worktree.path)
-        } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
-        }
-      } catch {
-        // Best-effort: launch still proceeds and the agent can ask interactively.
-      }
-    }
-    const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-      command: sequencedStartup.command,
-      ...(setup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
-      env: sequencedStartup.env,
-      ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
-      ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
-      ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
-      startupCommandDelivery: sequencedStartup.startupCommandDelivery,
-      telemetry: sequencedStartup.telemetry,
-      activate: true
-    })
-    startupTerminalHandle = terminal.handle
-    startupTerminal = {
-      spawned: true,
-      surface: terminal.surface
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-    console.warn(`[worktree-create] ${warning}`)
-    return { didSpawnSetup: false, warning }
-  }
-
-  let didSpawnSetup = false
-  if (setup) {
-    try {
-      const setupCommand =
-        wrappedSetupCommandStr ??
-        buildSetupRunnerCommand(
-          setup.runnerScriptPath,
-          getSetupRunnerCommandPlatformForLaunch(
-            setup,
-            process.platform === 'win32' ? 'windows' : 'posix'
-          ),
-          setup.shell
-        )
-      const setupLaunchMode =
-        (settings as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-          .setupScriptLaunchMode ?? 'new-tab'
-      if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
-        if (!startupTerminalHandle) {
-          throw new Error('startup_terminal_missing')
-        }
-        await runtime.splitTerminal(startupTerminalHandle, {
-          direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-          command: setupCommand,
-          env: setup.envVars,
-          activate: false
-        })
-      } else {
-        await runtime.createTerminal(`id:${worktree.id}`, {
-          title: 'Setup',
-          command: setupCommand,
-          env: setup.envVars,
-          activate: false
-        })
-      }
-      didSpawnSetup = true
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const nextWarning = `failed to create the setup terminal for ${worktree.path}: ${message}`
-      warning = appendWorktreeCreateWarning(warning, nextWarning)
-      console.warn(`[worktree-create] ${warning}`)
-    }
-  }
-
-  return {
-    ...(setup && !didSpawnSetup
-      ? {
-          activationSetup: {
-            ...setup,
-            ...(startupTerminalHandle && wrappedSetupCommandStr
-              ? { command: wrappedSetupCommandStr }
-              : {})
-          }
-        }
-      : {}),
-    ...(startupTerminal ? { startupTerminal } : {}),
-    didSpawnSetup,
-    ...(warning ? { warning } : {})
-  }
-}
-
-function setBoundedSshWorktreeCreateFetchEntry(
-  map: Map<string, number>,
-  key: string,
-  value: number
-): void {
-  if (map.has(key)) {
-    map.delete(key)
-  }
-  map.set(key, value)
-  while (map.size > SSH_WORKTREE_CREATE_FETCH_CACHE_MAX) {
-    const oldest = map.keys().next()
-    if (oldest.done) {
-      return
-    }
-    map.delete(oldest.value)
-  }
-}
-
-function getSshWorktreeCreateBaseFetchKey(repo: Repo, base: RemoteTrackingBase): string {
-  return `${repo.connectionId ?? 'ssh'}::${repo.path}::base:${base.remote}:${base.branch}`
-}
-
-function getSshWorktreeCreateRemoteFetchKey(repo: Repo, remote: string): string {
-  return `${repo.connectionId ?? 'ssh'}::${repo.path}::remote:${remote}`
-}
-
-function getSshWorktreeCreateRemoteQueueKey(repo: Repo, remote: string): string {
-  return `${repo.connectionId ?? 'ssh'}::${repo.path}::queue:${remote}`
-}
-
-function getSshWorktreeCreateBasePlanKey(
-  repo: Repo,
-  requestedBaseBranch: string | undefined
-): string {
-  const baseKey = requestedBaseBranch || repo.worktreeBaseRef || 'default'
-  return `${repo.connectionId ?? 'ssh'}::${repo.path}::plan:${baseKey}`
-}
-
-function getFreshSshWorktreeCreateFetchCompletedAt(key: string): number | null {
-  const lastAt = sshWorktreeCreateFetchCompletedAt.get(key)
-  if (lastAt === undefined) {
-    return null
-  }
-  if (Date.now() - lastAt < SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS) {
-    setBoundedSshWorktreeCreateFetchEntry(sshWorktreeCreateFetchCompletedAt, key, lastAt)
-    return lastAt
-  }
-  sshWorktreeCreateFetchCompletedAt.delete(key)
-  return null
-}
-
-function rememberSshWorktreeCreateFetchCompletedAt(key: string): void {
-  setBoundedSshWorktreeCreateFetchEntry(sshWorktreeCreateFetchCompletedAt, key, Date.now())
-}
-
-function enqueueSshWorktreeCreateFetch(
-  queueKey: string,
-  fetch: () => Promise<void>
-): Promise<void> {
-  const previous = sshWorktreeCreateFetchQueueTail.get(queueKey)
-  const promise = previous ? previous.then(fetch, fetch) : fetch()
-  sshWorktreeCreateFetchQueueTail.set(queueKey, promise)
-  const clearQueueTail = (): void => {
-    if (sshWorktreeCreateFetchQueueTail.get(queueKey) === promise) {
-      sshWorktreeCreateFetchQueueTail.delete(queueKey)
-    }
-  }
-  promise.then(clearQueueTail, clearQueueTail)
-  return promise
-}
-
-async function getOrStartSshWorktreeCreateFetch(
-  key: string,
-  queueKey: string,
-  fetch: () => Promise<void>
-): Promise<void> {
-  if (getFreshSshWorktreeCreateFetchCompletedAt(key) !== null) {
-    return
-  }
-  const existing = sshWorktreeCreateFetchInflight.get(key)
-  if (existing) {
-    return existing
-  }
-  const promise = enqueueSshWorktreeCreateFetch(queueKey, async () => {
-    if (getFreshSshWorktreeCreateFetchCompletedAt(key) !== null) {
-      return
-    }
-    await fetch()
-    // Why: SSH creation has no OrcaRuntimeService to share; still reuse recent fetches for repeated creates on the same target.
-    rememberSshWorktreeCreateFetchCompletedAt(key)
-  }).finally(() => {
-    if (sshWorktreeCreateFetchInflight.get(key) === promise) {
-      sshWorktreeCreateFetchInflight.delete(key)
-    }
-  })
-  sshWorktreeCreateFetchInflight.set(key, promise)
-  return promise
-}
-
-async function refreshRemoteTrackingBaseForWorktreeCreate(
-  provider: SshGitProvider,
-  repo: Repo,
-  base: RemoteTrackingBase
-): Promise<void> {
-  return getOrStartSshWorktreeCreateFetch(
-    getSshWorktreeCreateBaseFetchKey(repo, base),
-    getSshWorktreeCreateRemoteQueueKey(repo, base.remote),
-    () =>
-      // Why: the exact-base refresh gates create; unrelated repo housekeeping must not extend it.
-      provider.fetchRemoteTrackingRef(repo.path, base.remote, base.branch, base.ref, {
-        skipAutoMaintenance: true
-      })
-  )
-}
-
-async function fetchRemoteForWorktreeCreate(
-  provider: SshGitProvider,
-  repo: Repo,
-  remote: string
-): Promise<void> {
-  return getOrStartSshWorktreeCreateFetch(
-    getSshWorktreeCreateRemoteFetchKey(repo, remote),
-    getSshWorktreeCreateRemoteQueueKey(repo, remote),
-    () => provider.exec(['fetch', remote], repo.path).then(() => undefined)
-  )
-}
-
-export function __resetSshWorktreeCreateFetchCacheForTests(): void {
-  sshWorktreeCreateFetchInflight.clear()
-  sshWorktreeCreateFetchCompletedAt.clear()
-  sshWorktreeCreateFetchQueueTail.clear()
-  sshWorktreeCreateBasePlanInflight.clear()
-}
+export {
+  assertAttachableParentWorkspace,
+  recordWorkspaceLineageForCreatedWorktree
+} from './created-worktree-lineage'
+export {
+  cleanupUnusedWorktreePushTargetRemote,
+  cleanupUnusedWorktreePushTargetRemoteSsh,
+  configureCreatedWorktreePushTarget,
+  prepareWorktreePushTarget
+} from './worktree-push-target-commands'
+export { resetSshWorktreeCreateFetchCache as __resetSshWorktreeCreateFetchCacheForTests } from './ssh-worktree-create-fetch-queue'
+export { prefetchRemoteWorktreeCreateBase } from './ssh-worktree-create-base-plan'
 
 async function unsetRemoteWorktreeCreationBase(
   provider: SshGitProvider,
@@ -623,427 +158,6 @@ async function unsetRemoteWorktreeCreationBase(
     )
   } catch {
     // Best-effort cleanup; keep the sparse setup error as the actionable failure.
-  }
-}
-
-async function resolveCreateBranchName(
-  repoPath: string,
-  branchNameOverride: string | undefined,
-  sanitizedName: string,
-  settings: BranchPrefixSettings,
-  username: string | null,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<string> {
-  if (!branchNameOverride) {
-    return computeValidatedBranchName(sanitizedName, settings, username)
-  }
-  if (branchNameOverride.startsWith('-')) {
-    throw new Error('Branch name must not start with "-"')
-  }
-  await gitExecFileAsync(['check-ref-format', '--branch', branchNameOverride], {
-    cwd: repoPath,
-    ...gitOptions
-  })
-  return branchNameOverride
-}
-
-async function resolveCreateBranchNameSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  branchNameOverride: string | undefined,
-  sanitizedName: string,
-  settings: BranchPrefixSettings,
-  username: string | null
-): Promise<string> {
-  if (!branchNameOverride) {
-    return computeValidatedBranchName(sanitizedName, settings, username)
-  }
-  if (branchNameOverride.startsWith('-')) {
-    throw new Error('Branch name must not start with "-"')
-  }
-  await provider.exec(['check-ref-format', '--branch', branchNameOverride], repoPath)
-  return branchNameOverride
-}
-
-function normalizeLocalBranchName(branchName: string | undefined): string {
-  return branchName?.replace(/^refs\/heads\//, '') ?? ''
-}
-
-async function canCheckoutExistingLocalBranch(
-  repoPath: string,
-  branchName: string,
-  baseBranch: string,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  let localHead = ''
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
-      {
-        cwd: repoPath,
-        ...gitOptions
-      }
-    )
-    localHead = stdout.trim()
-  } catch {
-    return false
-  }
-  if (normalizeLocalBranchName(baseBranch) !== branchName) {
-    if (!localHead) {
-      return false
-    }
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', '--quiet', `${baseBranch}^{commit}`],
-        { cwd: repoPath, ...gitOptions }
-      )
-      if (stdout.trim() !== localHead) {
-        return false
-      }
-    } catch {
-      return false
-    }
-  }
-  const worktrees = await listWorktrees(repoPath, gitOptions)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
-}
-
-function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
-  return Object.keys(gitOptions).length > 0
-}
-
-function hasLocalCommitObjectWithOptions(
-  repoPath: string,
-  ref: string,
-  gitOptions: { wslDistro?: string }
-): Promise<boolean> {
-  return hasCommitObjectViaGitExec(
-    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...gitOptions }),
-    ref
-  )
-}
-
-async function hasLocalWorktreeBaseRefWithOptions(
-  repoPath: string,
-  baseRef: string,
-  gitOptions: { wslDistro?: string }
-): Promise<boolean> {
-  const refExists = async (qualifiedRef: string) => {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
-        {
-          cwd: repoPath,
-          ...gitOptions
-        }
-      )
-      return stdout.trim().length > 0
-    } catch {
-      return false
-    }
-  }
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
-  if (resolvedBaseRef !== baseRef) {
-    return true
-  }
-  if (baseRef.startsWith('refs/')) {
-    return refExists(baseRef)
-  }
-  return hasLocalCommitObjectWithOptions(repoPath, baseRef, gitOptions)
-}
-
-function getLocalGitHubPrForBranch(
-  repoPath: string,
-  branchName: string,
-  gitOptions: { wslDistro?: string }
-): ReturnType<typeof getPRForBranch> {
-  return hasLocalGitOptions(gitOptions)
-    ? getPRForBranch(repoPath, branchName, null, null, null, { localGitExecOptions: gitOptions })
-    : getPRForBranch(repoPath, branchName)
-}
-
-function hasRemoteCommitObject(
-  provider: SshGitProvider,
-  repoPath: string,
-  ref: string
-): Promise<boolean> {
-  return hasCommitObjectViaGitExec((gitArgs) => provider.exec(gitArgs, repoPath), ref)
-}
-
-async function hasRemoteWorktreeBaseRef(
-  provider: SshGitProvider,
-  repoPath: string,
-  baseRef: string
-): Promise<boolean> {
-  const refExists = (qualifiedRef: string) => hasCommitRefSsh(provider, repoPath, qualifiedRef)
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
-  if (resolvedBaseRef !== baseRef) {
-    return true
-  }
-  if (baseRef.startsWith('refs/')) {
-    return refExists(baseRef)
-  }
-  return hasRemoteCommitObject(provider, repoPath, baseRef)
-}
-
-// Why: hasRemoteCommitObject resolves only SHAs, not symbolic refs; resolve any qualified ref (remote-tracking or local head) directly.
-async function hasCommitRefSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  ref: string
-): Promise<boolean> {
-  try {
-    const { stdout } = await provider.exec(
-      ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`],
-      repoPath
-    )
-    return stdout.trim().length > 0
-  } catch {
-    return false
-  }
-}
-
-async function canCheckoutExistingLocalBranchSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  branchName: string,
-  baseBranch: string
-): Promise<boolean> {
-  let localHead = ''
-  try {
-    const { stdout } = await provider.exec(
-      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
-      repoPath
-    )
-    localHead = stdout.trim()
-  } catch {
-    return false
-  }
-  if (normalizeLocalBranchName(baseBranch) !== branchName) {
-    if (!localHead) {
-      return false
-    }
-    try {
-      const { stdout } = await provider.exec(
-        ['rev-parse', '--verify', '--quiet', `${baseBranch}^{commit}`],
-        repoPath
-      )
-      if (stdout.trim() !== localHead) {
-        return false
-      }
-    } catch {
-      return false
-    }
-  }
-  const worktrees = await provider.listWorktrees(repoPath)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
-}
-
-async function listSshRemoteNames(provider: SshGitProvider, repoPath: string): Promise<string[]> {
-  try {
-    const { stdout } = await provider.exec(['remote'], repoPath)
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .sort((a, b) => b.length - a.length)
-  } catch {
-    return []
-  }
-}
-
-function isAllowedSshRemoteBaseRef(refName: string, allowedBaseRef: string): boolean {
-  if (!allowedBaseRef) {
-    return false
-  }
-  const normalizedAllowedRef = allowedBaseRef.startsWith('refs/remotes/')
-    ? allowedBaseRef
-    : `refs/remotes/${allowedBaseRef}`
-  return refName === normalizedAllowedRef
-}
-
-function resolveSshRemoteBranchName(refName: string, remoteNames: string[]): string {
-  const remotePrefix = 'refs/remotes/'
-  if (!refName.startsWith(remotePrefix)) {
-    return refName
-  }
-  const remoteAndBranch = refName.slice(remotePrefix.length)
-  const remote = remoteNames.find((candidate) => remoteAndBranch.startsWith(`${candidate}/`))
-  if (remote) {
-    return remoteAndBranch.slice(remote.length + 1)
-  }
-  return remoteAndBranch.split('/').slice(1).join('/') || remoteAndBranch
-}
-
-async function hasSshRemoteBranchConflict(
-  provider: SshGitProvider,
-  repoPath: string,
-  branchName: string,
-  allowedBaseRef: string
-): Promise<boolean> {
-  const remoteNames = await listSshRemoteNames(provider, repoPath)
-  try {
-    const { stdout } = await provider.exec(
-      ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
-      repoPath
-    )
-    return stdout.split(/\r?\n/).some((line) => {
-      const refName = line.trim()
-      if (!refName || /^refs\/remotes\/.+\/HEAD$/.test(refName)) {
-        return false
-      }
-      if (isAllowedSshRemoteBaseRef(refName, allowedBaseRef)) {
-        return false
-      }
-      // Why: `git branch --all --list feature/x` doesn't match `remotes/origin/feature/x`; parse remote refs directly.
-      return resolveSshRemoteBranchName(refName, remoteNames) === branchName
-    })
-  } catch {
-    return false
-  }
-}
-
-async function hasSshLocalBranchConflict(
-  provider: SshGitProvider,
-  repoPath: string,
-  branchName: string
-): Promise<boolean> {
-  try {
-    const { stdout } = await provider.exec(
-      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
-      repoPath
-    )
-    return stdout.trim().length > 0
-  } catch {
-    return false
-  }
-}
-
-async function getSshBranchConflictKind(
-  provider: SshGitProvider,
-  repoPath: string,
-  branchName: string,
-  allowedBaseRef: string
-): Promise<'local' | 'remote' | null> {
-  if (await hasSshLocalBranchConflict(provider, repoPath, branchName)) {
-    return 'local'
-  }
-  return (await hasSshRemoteBranchConflict(provider, repoPath, branchName, allowedBaseRef))
-    ? 'remote'
-    : null
-}
-
-type SelectedReviewBranchInput = Pick<
-  CreateWorktreeArgs,
-  | 'branchNameOverride'
-  | 'linkedPR'
-  | 'linkedGitLabMR'
-  | 'linkedBitbucketPR'
-  | 'linkedAzureDevOpsPR'
-  | 'linkedGiteaPR'
-  | 'pushTarget'
->
-
-type SelectedReviewBranch = {
-  provider: ForgeProviderId
-  number: number
-}
-
-function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
-  if (typeof args.linkedPR === 'number') {
-    return { provider: 'github', number: args.linkedPR }
-  }
-  if (typeof args.linkedGitLabMR === 'number') {
-    return { provider: 'gitlab', number: args.linkedGitLabMR }
-  }
-  if (typeof args.linkedBitbucketPR === 'number') {
-    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
-  }
-  if (typeof args.linkedAzureDevOpsPR === 'number') {
-    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
-  }
-  if (typeof args.linkedGiteaPR === 'number') {
-    return { provider: 'gitea', number: args.linkedGiteaPR }
-  }
-  return null
-}
-
-function isSelectedGitHubPrBranchOverride(
-  args: SelectedReviewBranchInput,
-  branchName: string
-): boolean {
-  return typeof args.linkedPR === 'number' && args.branchNameOverride === branchName
-}
-
-function isSelectedReviewBranchOverride(
-  args: SelectedReviewBranchInput,
-  branchName: string
-): boolean {
-  return getSelectedReviewBranch(args) !== null && args.branchNameOverride === branchName
-}
-
-function isMatchingSelectedGitHubPr(
-  existingPR: Awaited<ReturnType<typeof getPRForBranch>>,
-  args: SelectedReviewBranchInput,
-  branchName: string
-): boolean {
-  return Boolean(
-    existingPR &&
-    isSelectedGitHubPrBranchOverride(args, branchName) &&
-    existingPR.number === args.linkedPR
-  )
-}
-
-function isAllowedPushTargetRemoteConflict(
-  conflictKind: 'local' | 'remote' | null,
-  branchName: string,
-  args: SelectedReviewBranchInput
-): boolean {
-  return (
-    conflictKind === 'remote' &&
-    isSelectedReviewBranchOverride(args, branchName) &&
-    args.pushTarget?.branchName === branchName
-  )
-}
-
-function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
-  linkedGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-} {
-  return {
-    linkedGitHubPR: args.linkedPR ?? null,
-    linkedGitLabMR: args.linkedGitLabMR ?? null,
-    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: args.linkedGiteaPR ?? null
-  }
-}
-
-async function getSelectedHostedReviewForBranch(
-  repo: Pick<Repo, 'path' | 'connectionId'>,
-  branchName: string,
-  args: SelectedReviewBranchInput
-): Promise<{ matchesSelected: boolean; number: number } | null> {
-  const selectedReview = getSelectedReviewBranch(args)
-  if (!selectedReview) {
-    return null
-  }
-  const review = await getHostedReviewForBranch({
-    repoPath: repo.path,
-    connectionId: repo.connectionId ?? null,
-    branch: branchName,
-    ...getSelectedReviewLookupHints(args)
-  })
-  if (!review) {
-    return null
-  }
-  return {
-    matchesSelected:
-      review.provider === selectedReview.provider && review.number === selectedReview.number,
-    number: review.number
   }
 }
 
@@ -1062,176 +176,6 @@ async function remotePathExists(
       return false
     }
     throw error
-  }
-}
-
-export async function prepareWorktreePushTarget(
-  repoPath: string,
-  target: GitPushTarget,
-  store?: WorktreePushTargetStore,
-  repoId?: string,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<GitPushTarget> {
-  await validateGitPushTarget(repoPath, target, gitOptions)
-  return prepareWorktreePushTargetWithExec(
-    (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
-    repoPath,
-    target,
-    (existingRemote) =>
-      store
-        ? isPushTargetRemoteCreatedByKnownWorktree(
-            store,
-            { ...target, remoteName: existingRemote },
-            repoId
-          )
-        : false
-  )
-}
-
-function isPushTargetRemoteCreatedByKnownWorktree(
-  store: WorktreePushTargetStore,
-  target: GitPushTarget,
-  repoId?: string
-): boolean {
-  return Object.entries(store.getAllWorktreeMeta()).some(([worktreeId, meta]) => {
-    if (repoId && getRepoIdFromWorktreeId(worktreeId) !== repoId) {
-      return false
-    }
-    if (!meta.pushTarget?.remoteCreated) {
-      return false
-    }
-    const otherRemoteUrl = meta.pushTarget.remoteUrl
-    const targetRemoteUrl = target.remoteUrl
-    return (
-      meta.pushTarget.remoteName === target.remoteName ||
-      (typeof otherRemoteUrl === 'string' &&
-        typeof targetRemoteUrl === 'string' &&
-        sameGitHubRemoteUrl(otherRemoteUrl, targetRemoteUrl))
-    )
-  })
-}
-
-export async function cleanupUnusedWorktreePushTargetRemote(
-  repoPath: string,
-  removedWorktreeId: string,
-  target: GitPushTarget | undefined,
-  store: WorktreePushTargetStore,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<void> {
-  try {
-    await cleanupUnusedWorktreePushTargetRemoteWithExec(
-      repoPath,
-      removedWorktreeId,
-      target,
-      store,
-      (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
-    )
-  } catch (error) {
-    console.warn(`[worktrees] Failed to clean up fork PR remote for ${removedWorktreeId}`, error)
-  }
-}
-
-export async function configureCreatedWorktreePushTarget(
-  worktreePath: string,
-  branchName: string,
-  target: GitPushTarget,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<GitPushTarget> {
-  return configureCreatedWorktreePushTargetWithExec(
-    (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
-    worktreePath,
-    branchName,
-    target
-  )
-}
-
-async function prepareWorktreePushTargetSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  target: GitPushTarget,
-  store?: WorktreePushTargetStore,
-  repoId?: string
-): Promise<GitPushTarget> {
-  assertGitPushTargetShape(target)
-  const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
-  const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
-  await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
-  let remoteName = target.remoteName
-  let remoteCreated = false
-  // Why: ownership above is inherited from sibling worktrees, so it can be true
-  // for a remote this call did not create. Only rollback needs that distinction.
-  let remoteAddedHere = false
-  if (target.remoteUrl) {
-    const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
-    if (existingRemote) {
-      remoteName = existingRemote
-      // Why: a reused Orca-created fork remote must inherit ownership so deleting the final user can remove it.
-      remoteCreated = store
-        ? isPushTargetRemoteCreatedByKnownWorktree(
-            store,
-            {
-              ...target,
-              remoteName: existingRemote
-            },
-            repoId
-          )
-        : false
-    } else {
-      remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      try {
-        await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
-      } catch (error) {
-        // Why: relays predating fork-remote support reject this exec by policy; name the fix instead of surfacing their rule.
-        if (error instanceof Error && error.message.includes('Destructive git remote operations')) {
-          throw new Error(
-            'This SSH host is running an older Orca relay that cannot add a fork remote for a PR workspace. Reconnect to deploy the latest relay, then try again.'
-          )
-        }
-        throw error
-      }
-      remoteCreated = true
-      remoteAddedHere = true
-    }
-  }
-  try {
-    await provider.fetchRemoteTrackingRef(
-      repoPath,
-      remoteName,
-      target.branchName,
-      `refs/remotes/${remoteName}/${target.branchName}`
-    )
-  } catch (error) {
-    // Why: mirrors the local path — a fetch failure aborts the create, so the
-    // remote we just added on the host would be orphaned with no owner to clean it.
-    // A reused remote belongs to a live sibling worktree; removing it breaks that one.
-    if (remoteAddedHere) {
-      await provider.exec(['remote', 'remove', remoteName], repoPath).catch(() => {})
-    }
-    throw error
-  }
-  return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
-}
-
-export async function cleanupUnusedWorktreePushTargetRemoteSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  removedWorktreeId: string,
-  target: GitPushTarget | undefined,
-  store: WorktreePushTargetStore
-): Promise<void> {
-  try {
-    await cleanupUnusedWorktreePushTargetRemoteWithExec(
-      repoPath,
-      removedWorktreeId,
-      target,
-      store,
-      (args, cwd) => provider.exec(args, cwd)
-    )
-  } catch (error) {
-    console.warn(
-      `[worktrees] Failed to clean up remote fork PR remote for ${removedWorktreeId}`,
-      error
-    )
   }
 }
 
@@ -1289,278 +233,6 @@ async function createRemoteSetupRunnerScript(
     )
       ? { waitForAgentStartup: true }
       : {})
-  }
-}
-
-async function resolveRemoteTrackingBaseSsh(
-  provider: SshGitProvider,
-  repoPath: string,
-  baseBranch: string
-): Promise<RemoteTrackingBase | null> {
-  let remotes: string[]
-  try {
-    const { stdout } = await provider.exec(['remote'], repoPath)
-    remotes = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-  } catch {
-    return null
-  }
-
-  const remoteRefPrefix = 'refs/remotes/'
-  const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
-    ? baseBranch.slice(remoteRefPrefix.length)
-    : baseBranch
-  const remote = remotes
-    .filter((candidate) => shortBaseBranch.startsWith(`${candidate}/`))
-    .sort((a, b) => b.length - a.length)[0]
-  if (!remote) {
-    return null
-  }
-  const branch = shortBaseBranch.slice(remote.length + 1)
-  if (!branch) {
-    return null
-  }
-  return {
-    remote,
-    branch,
-    ref: `refs/remotes/${remote}/${branch}`,
-    base: `${remote}/${branch}`
-  }
-}
-
-async function resolveRemoteWorktreeCreateBasePlan(
-  provider: SshGitProvider,
-  repo: Repo,
-  requestedBaseBranch: string | undefined
-): Promise<RemoteWorktreeCreateBasePlan | null> {
-  const baseBranch = await resolveWorktreeCreateBase({
-    requestedBaseBranch,
-    repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () =>
-      resolveDefaultBaseRefViaExec((argv) => provider.exec(argv, repo.path)),
-    isBaseUsable: async (baseBranchCandidate) => {
-      const remoteTrackingBase = await resolveRemoteTrackingBaseSsh(
-        provider,
-        repo.path,
-        baseBranchCandidate
-      )
-      if (remoteTrackingBase) {
-        if (await hasCommitRefSsh(provider, repo.path, remoteTrackingBase.ref)) {
-          return true
-        }
-        return hasRemoteWorktreeBaseRef(provider, repo.path, baseBranchCandidate)
-      }
-      return hasRemoteWorktreeBaseRef(provider, repo.path, baseBranchCandidate)
-    }
-  })
-  if (!baseBranch) {
-    return null
-  }
-  return {
-    baseBranch,
-    remoteTrackingBase: await resolveRemoteTrackingBaseSsh(provider, repo.path, baseBranch)
-  }
-}
-
-function getOrStartRemoteWorktreeCreateBasePlan(
-  provider: SshGitProvider,
-  repo: Repo,
-  requestedBaseBranch: string | undefined
-): Promise<RemoteWorktreeCreateBasePlan | null> {
-  const key = getSshWorktreeCreateBasePlanKey(repo, requestedBaseBranch)
-  const existing = sshWorktreeCreateBasePlanInflight.get(key)
-  if (existing) {
-    return existing
-  }
-  const promise = resolveRemoteWorktreeCreateBasePlan(provider, repo, requestedBaseBranch).finally(
-    () => {
-      if (sshWorktreeCreateBasePlanInflight.get(key) === promise) {
-        sshWorktreeCreateBasePlanInflight.delete(key)
-      }
-    }
-  )
-  sshWorktreeCreateBasePlanInflight.set(key, promise)
-  return promise
-}
-
-export async function prefetchRemoteWorktreeCreateBase(
-  provider: SshGitProvider,
-  repo: Repo,
-  args: { baseBranch?: string }
-): Promise<void> {
-  // Why: base-plan probes use generic git.exec, and some relays require the repo root registered before probes can see refs.
-  await registerOptionalSshWorktreeCreateRoots(repo.connectionId!, [repo.path])
-  const basePlan = await getOrStartRemoteWorktreeCreateBasePlan(provider, repo, args.baseBranch)
-  if (!basePlan) {
-    return
-  }
-  if (basePlan.remoteTrackingBase) {
-    if (
-      (await hasCommitRefSsh(provider, repo.path, basePlan.remoteTrackingBase.ref)) ||
-      !(await hasRemoteWorktreeBaseRef(provider, repo.path, basePlan.baseBranch))
-    ) {
-      await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
-      return
-    }
-  }
-  if (await hasRemoteWorktreeBaseRef(provider, repo.path, basePlan.baseBranch)) {
-    // Why: PR/MR resolvers already fetched verified SHA start points; a broad fetch only updates unrelated refs.
-    return
-  }
-
-  // Why: mirrors createRemoteWorktree's legacy local-base fallback so prefetch and create share one process-local SSH fetch cache.
-  await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
-}
-
-async function refreshLocalBaseRefForRemoteWorktreeCreate(
-  provider: SshGitProvider,
-  repoPath: string,
-  remoteTrackingBase: RemoteTrackingBase
-): Promise<LocalBaseRefRefreshResult | undefined> {
-  const evaluation = await evaluateRemoteLocalBaseRefRefreshability(
-    provider,
-    repoPath,
-    remoteTrackingBase
-  )
-  if (!evaluation.refreshable) {
-    return evaluation.result
-  }
-
-  const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
-  try {
-    await provider.refreshLocalBaseRefForWorktreeCreate({
-      repoPath,
-      fullRef: evaluation.fullRef,
-      remoteTrackingRef: evaluation.remoteTrackingRef,
-      ...(evaluation.ownerWorktreePath ? { ownerWorktreePath: evaluation.ownerWorktreePath } : {})
-    })
-    return {
-      ...resultBase,
-      status: 'updated',
-      ...(evaluation.ownerWorktreePath ? { ownerWorktreePath: evaluation.ownerWorktreePath } : {})
-    }
-  } catch {
-    return { ...resultBase, status: 'skipped_error' }
-  }
-}
-
-async function evaluateRemoteLocalBaseRefRefreshability(
-  provider: SshGitProvider,
-  repoPath: string,
-  remoteTrackingBase: RemoteTrackingBase,
-  shouldInspectOwner: (behind: number) => boolean = () => true
-): Promise<RemoteLocalBaseRefRefreshability> {
-  const resultBase = {
-    baseRef: remoteTrackingBase.base,
-    localBranch: remoteTrackingBase.branch
-  }
-  const fullRef = `refs/heads/${remoteTrackingBase.branch}`
-
-  let behind = 0
-  try {
-    // Why: SSH generic git.exec is allowlisted — merge-base and log are permitted read-only probes; rev-list is intentionally not exposed.
-    await provider.exec(['merge-base', '--is-ancestor', fullRef, remoteTrackingBase.ref], repoPath)
-    const { stdout } = await provider.exec(
-      ['log', '--format=%H', `${fullRef}..${remoteTrackingBase.ref}`],
-      repoPath
-    )
-    behind = countNonEmptyGitOutputLines(stdout)
-    if (!shouldInspectOwner(behind)) {
-      // Why: no behind commits means no update to advise; skip remote worktree/status round trips.
-      return {
-        refreshable: true,
-        ...resultBase,
-        fullRef,
-        remoteTrackingRef: remoteTrackingBase.ref,
-        behind
-      }
-    }
-  } catch {
-    // Why (#15331): the probes above also fail when refs/heads/<branch> is simply absent; the relay's
-    // `worktree add -b` is about to create it, so there is nothing stale to warn about. Only a proven
-    // absence suppresses: a dropped relay connection is not evidence the branch is missing.
-    const presence = await probeWorktreeBaseRefPresence(
-      (args) => provider.exec(args, repoPath),
-      fullRef
-    )
-    if (presence === 'absent') {
-      return { refreshable: false, result: undefined }
-    }
-    return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
-  }
-
-  try {
-    const worktrees = await provider.listWorktrees(repoPath)
-    const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
-
-    if (ownerWorktree) {
-      const status = await provider.worktreeIsClean(ownerWorktree.path, {
-        includeUntracked: false
-      })
-      if (!status.clean) {
-        return {
-          refreshable: false,
-          result: {
-            ...resultBase,
-            status: 'skipped_dirty_worktree',
-            ownerWorktreePath: ownerWorktree.path
-          }
-        }
-      }
-      return {
-        refreshable: true,
-        ...resultBase,
-        fullRef,
-        remoteTrackingRef: remoteTrackingBase.ref,
-        behind,
-        ownerWorktreePath: ownerWorktree.path
-      }
-    }
-
-    // Why: not checked out anywhere, so a bare-ref fast-forward is safe; omitting ownerWorktreePath tells the relay to update-ref, not reset --hard.
-    return {
-      refreshable: true,
-      ...resultBase,
-      fullRef,
-      remoteTrackingRef: remoteTrackingBase.ref,
-      behind
-    }
-  } catch {
-    return { refreshable: false, result: { ...resultBase, status: 'skipped_error' } }
-  }
-}
-
-async function getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
-  provider: SshGitProvider,
-  repoPath: string,
-  remoteTrackingBase: RemoteTrackingBase
-): Promise<LocalBaseRefUpdateSuggestion | undefined> {
-  const evaluation = await evaluateRemoteLocalBaseRefRefreshability(
-    provider,
-    repoPath,
-    remoteTrackingBase,
-    (behind) => behind > 0
-  )
-  if (!evaluation.refreshable || evaluation.behind <= 0) {
-    return undefined
-  }
-  try {
-    await provider.refreshLocalBaseRefForWorktreeCreate({
-      repoPath,
-      fullRef: evaluation.fullRef,
-      remoteTrackingRef: evaluation.remoteTrackingRef,
-      ...(evaluation.ownerWorktreePath ? { ownerWorktreePath: evaluation.ownerWorktreePath } : {}),
-      checkOnly: true
-    })
-  } catch {
-    return undefined
-  }
-  return {
-    baseRef: evaluation.baseRef,
-    localBranch: evaluation.localBranch,
-    behind: evaluation.behind
   }
 }
 
@@ -1933,6 +605,7 @@ export async function createRemoteWorktree(
       preparedPushTarget
     )
   }
+
   const metaUpdates: Partial<WorktreeMeta> = {
     // Why: path-derived IDs get reused after external deletion; rotate instance identity so stale lineage can't attach to the new occupant.
     instanceId: randomUUID(),
