@@ -3224,777 +3224,13 @@ export class OrcaRuntimeService {
       resolveRepoSelector: (...args) => this.resolveRepoSelector(...args),
       requireStore: (...args) => this.requireStore(...args)
     })
-    this.agentClusterFacade = new RuntimeAgentClusterFacade({
-      assertLiveTerminalHandleTargetsPty: (...args) =>
-        this.assertLiveTerminalHandleTargetsPty(...args),
-      closeStructuredTuiOwner: (...args) => this.closeStructuredTuiOwner(...args),
-      closeTerminal: (...args) => this.closeTerminal(...args),
-      createTerminal: (...args) => this.createTerminal(...args),
-      emitMobileSessionTabsSnapshot: (...args: any[]) =>
-        this.mobileSessionFacade.emitMobileSessionTabsSnapshot(...args),
-      focusTerminal: (...args) => this.focusTerminal(...args),
-      getAgentLaunchPlatformForRepo: (repo) => this.getAgentLaunchPlatformForRepo(repo),
-      getAgentLaunchPlatformForWorkspace: (scope) => this.getAgentLaunchPlatformForWorkspace(scope),
-      getHeadlessMobileSessionGroupId: (...args: any[]) =>
-        this.mobileSessionFacade.getHeadlessMobileSessionGroupId(...args),
-      getKnownWorkspaceSessionWorktreeIds: (...args) =>
-        this.getKnownWorkspaceSessionWorktreeIds(...args),
-      getLeavesForPty: (...args) => this.getLeavesForPty(...args),
-      getLiveLeafForHandle: (...args) => this.getLiveLeafForHandle(...args),
-      getLivePtyForHandle: (...args) => this.getLivePtyForHandle(...args),
-      getLocalProvider: (...args) => this.getLocalProvider(...args),
-      getOrchestrationDbIfAvailable: (...args) => this.getOrchestrationDbIfAvailable(...args),
-      getPaneKeyForTerminalHandle: (...args) => this.getPaneKeyForTerminalHandle(...args),
-      getPrimaryLeafForPty: (...args) => this.getPrimaryLeafForPty(...args),
-      getPtyLifecycleGeneration: (...args) => this.getPtyLifecycleGeneration(...args),
-      getPtyOutputSequence: (...args) => this.getPtyOutputSequence(...args),
-      getPtyRecordForPaneKey: (...args) => this.getPtyRecordForPaneKey(...args),
-      getPtyWriteHostPlatform: (...args) => this.getPtyWriteHostPlatform(...args),
-      getSummaryForRuntimeWorktreeId: (...args: never[]) =>
-        (
-          this as unknown as { getSummaryForRuntimeWorktreeId: (...a: never[]) => unknown }
-        ).getSummaryForRuntimeWorktreeId(...args),
-      getTerminalHandleForPaneKey: (...args) => this.getTerminalHandleForPaneKey(...args),
-      getWorkspaceSessionForWorktree: (...args) => this.getWorkspaceSessionForWorktree(...args),
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
-        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
-      isLeafPtyProvenAbsent: (...args) => this.isLeafPtyProvenAbsent(...args),
-      issuePtyHandle: (...args) => this.issuePtyHandle(...args),
-      issueStructuredTuiPtyHandle: (...args) => this.issueStructuredTuiPtyHandle(...args),
-      makeRuntimePaneKey: (...args: never[]) =>
-        (this as unknown as { makeRuntimePaneKey: (...a: never[]) => unknown }).makeRuntimePaneKey(
-          ...args
-        ),
-      nextTitleObservationSequence: (...args) => this.nextTitleObservationSequence(...args),
-      proveRecoveredStructuredTuiPtyProcess: (...args) =>
-        this.proveRecoveredStructuredTuiPtyProcess(...args),
-      readTerminal: (...args) => this.readTerminal(...args),
-      refreshMobileSessionPtyRecords: (...args) => this.refreshMobileSessionPtyRecords(...args),
-      refreshStructuredTuiOwnerBinding: (...args) => this.refreshStructuredTuiOwnerBinding(...args),
-      requireStore: (...args) => this.requireStore(...args),
-      resolveConfiguredCodexStructuredArgs: (...args) =>
-        this.resolveConfiguredCodexStructuredArgs(...args),
-      resolveRecoveredStructuredTuiTranscript: (...args: never[]) =>
-        (
-          this as unknown as { resolveRecoveredStructuredTuiTranscript: (...a: never[]) => unknown }
-        ).resolveRecoveredStructuredTuiTranscript(...args),
-      resolveRuntimeFileTarget: (...args) => this.resolveRuntimeFileTarget(...args),
-      resolveTerminalWorkspaceLaunchScope: (...args) =>
-        this.resolveTerminalWorkspaceLaunchScope(...args),
-      resolveWorkspaceTerminalStartupCwd: (...args: never[]) =>
-        (
-          this as unknown as { resolveWorkspaceTerminalStartupCwd: (...a: never[]) => unknown }
-        ).resolveWorkspaceTerminalStartupCwd(...args),
-      resolveWorktreeSelector: (...args) => this.resolveWorktreeSelector(...args),
-      sendTerminal: (...args: never[]) =>
-        (this as unknown as { sendTerminal: (...a: never[]) => unknown }).sendTerminal(...args),
-      setPtyManagementTitleFromObservedTitle: (...args) =>
-        this.setPtyManagementTitleFromObservedTitle(...args),
-      showTerminal: (...args) => this.showTerminal(...args),
-      splitTerminal: (...args: never[]) =>
-        (this as unknown as { splitTerminal: (...a: never[]) => unknown }).splitTerminal(...args),
-      stopStructuredSessionProcess: (...args) => this.stopStructuredSessionProcess(...args),
-      structuredTuiStatus: (...args) => this.structuredTuiStatus(...args),
-      subscribeToTerminalData: (...args) => this.subscribeToTerminalData(...args),
-      terminalHasShellForegroundProcess: (...args) =>
-        this.terminalAgentStatusBinding.terminalHasShellForegroundProcess(...args),
-      waitForAdoptedStructuredTuiProof: (...args: never[]) =>
-        (
-          this as unknown as { waitForAdoptedStructuredTuiProof: (...a: never[]) => unknown }
-        ).waitForAdoptedStructuredTuiProof(...args),
-      waitForStructuredClaudeTuiProof: (...args: never[]) =>
-        (
-          this as unknown as { waitForStructuredClaudeTuiProof: (...a: never[]) => unknown }
-        ).waitForStructuredClaudeTuiProof(...args),
-      waitForStructuredTuiIdleOrExit: (...args) => this.waitForStructuredTuiIdleOrExit(...args),
-      waitForStructuredTuiOwnerExit: (...args) => this.waitForStructuredTuiOwnerExit(...args),
-      waitForStructuredTuiProof: (...args: never[]) =>
-        (
-          this as unknown as { waitForStructuredTuiProof: (...a: never[]) => unknown }
-        ).waitForStructuredTuiProof(...args),
-      waitForStructuredTuiPtyExit: (...args) => this.waitForStructuredTuiPtyExit(...args),
-      waitForTerminal: (...args: never[]) =>
-        (this as unknown as { waitForTerminal: (...a: never[]) => unknown }).waitForTerminal(
-          ...args
-        ),
-      agentSessionClaimSigner: () => this.agentSessionClaimSigner,
-      agentSessionCreateOperations: () => this.agentSessionCreateOperations,
-      claudeAgentTeams: () => this.claudeAgentTeams,
-      onTerminalAgentStatus: () => this.onTerminalAgentStatus,
-      getSshProviderFn: () => this.getSshProviderFn,
-      prepareCodexStructuredLaunchFn: () => this.prepareCodexStructuredLaunchFn,
-      getAgentProviderSessionRowsForPaneFn: () => this.getAgentProviderSessionRowsForPaneFn,
-      getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn,
-      runtimeId: () => this.runtimeId,
-      store: () => this.store,
-      ptysById: () => this.ptysById,
-      ptyController: () => this.ptyController,
-      tabs: () => this.tabs,
-      notifier: () => this.notifier,
-      mobileSessionTabsByWorktree: () => this.mobileSessionTabsByWorktree,
-      ptyWorktrees: () => this.ptyWorktrees,
-      skillArtifactCommands: () => this.skillArtifactCommands,
-      mobileSessionFacade: () => this.mobileSessionFacade,
-      hookAgentRowResolutionCommands: () => this.hookAgentRowResolutionCommands,
-      terminalAgentStatusBinding: () => this.terminalAgentStatusBinding,
-      getTerminalAgentStatusPtyId: () => this.getTerminalAgentStatusPtyId,
-      assertTerminalAgentStatusPtyBinding: () => this.assertTerminalAgentStatusPtyBinding,
-      getTerminalAgentStatusSnapshot: () => this.getTerminalAgentStatusSnapshot,
-      hasAuthoritativeTerminalWaitPermission: () => this.hasAuthoritativeTerminalWaitPermission,
-      getOrCreatePtyTitleTrackerEntry: () => this.getOrCreatePtyTitleTrackerEntry,
-      agentPromptLifecycleByPtyId: () => this.agentPromptLifecycleByPtyId,
-      agentPromptPermissionSequenceByPtyId: () => this.agentPromptPermissionSequenceByPtyId,
-      agentPromptExplicitStatusFloorByPtyId: () => this.agentPromptExplicitStatusFloorByPtyId,
-      agentPromptSubmissionTailByPtyId: () => this.agentPromptSubmissionTailByPtyId,
-      agentStatusOscProcessorsByPtyId: () => this.agentStatusOscProcessorsByPtyId,
-      latestAgentStatusByPaneKey: () => this.latestAgentStatusByPaneKey
-    })
-    this.mobileSessionFacade = new RuntimeMobileSessionFacade({
-      acceptedRendererMobileSnapshotByWorktree: () => this.acceptedRendererMobileSnapshotByWorktree,
-      accountCommands: () => this.accountCommands,
-      agentPromptExplicitStatusFloorByPtyId: () => this.agentPromptExplicitStatusFloorByPtyId,
-      agentStatusOscProcessorsByPtyId: () => this.agentStatusOscProcessorsByPtyId,
-      applyHeadlessSessionTabPropsToSnapshot: () => this.applyHeadlessSessionTabPropsToSnapshot,
-      applyHeadlessTerminalPaneLayoutToSnapshot: () =>
-        this.applyHeadlessTerminalPaneLayoutToSnapshot,
-      applyMobileSessionRetirementFences: (...args) =>
-        this.applyMobileSessionRetirementFences(...args),
-      applyNativeChatLaunchDraftResolutionFence: (...args) =>
-        this.applyNativeChatLaunchDraftResolutionFence(...args),
-      applyRemoteDesktopLayout: (...args) => this.applyRemoteDesktopLayout(...args),
-      assertSessionTabsInventoryRequestActive: (...args) =>
-        this.assertSessionTabsInventoryRequestActive(...args),
-      assertStableReadyGraph: (...args) => this.assertStableReadyGraph(...args),
-      authoritativeWindowId: () => this.authoritativeWindowId,
-      buildMaterializedHeadlessParentLayout: (...args: unknown[]) =>
-        this.terminalClusterFacade.buildMaterializedHeadlessParentLayout(...args),
-      cancelAllPendingFitRestoreTimers: (...args) => this.cancelAllPendingFitRestoreTimers(...args),
-      captureReadyGraphEpoch: (...args) => this.captureReadyGraphEpoch(...args),
-      claudeAgentTeams: () => this.claudeAgentTeams,
-      clearWaitBlockedCheckState: (...args) => this.clearWaitBlockedCheckState(...args),
-      clientEventPublishingCommands: () => this.clientEventPublishingCommands,
-      clientSessionTabSelections: () => this.clientSessionTabSelections,
-      collectReturnedSessionTabIds: (...args) => this.collectReturnedSessionTabIds(...args),
-      createTerminal: (...args) => this.createTerminal(...args),
-      currentDriver: () => this.currentDriver,
-      delayPtyBackedMobileSnapshotForForegroundAgent: () =>
-        this.delayPtyBackedMobileSnapshotForForegroundAgent,
-      deliverPendingStartupCommandToBareRendererPty: (...args) =>
-        this.deliverPendingStartupCommandToBareRendererPty(...args),
-      detachedPreAllocatedLeaves: () => this.detachedPreAllocatedLeaves,
-      disposeHeadlessTerminal: (...args) => this.disposeHeadlessTerminal(...args),
-      disposePtyTitleTracker: () => this.disposePtyTitleTracker,
-      earlyExitedPtyIncarnations: () => this.earlyExitedPtyIncarnations,
-      enqueueLayout: (...args) => this.enqueueLayout(...args),
-      findHandleForPtyRecord: (...args) => this.findHandleForPtyRecord(...args),
-      findLiveRegisteredPtyForRendererTab: (...args) =>
-        this.findLiveRegisteredPtyForRendererTab(...args),
-      forgetPtyLivenessVerdict: (...args) => this.forgetPtyLivenessVerdict(...args),
-      freshSubscribeGuard: () => this.freshSubscribeGuard,
-      getAgentLaunchPlatformForWorkspace: (scope) => this.getAgentLaunchPlatformForWorkspace(scope),
-      getAgentProviderSessionRowsForPaneFn: () => this.getAgentProviderSessionRowsForPaneFn,
-      getAgentProviderSessionSnapshotFn: () => this.getAgentProviderSessionSnapshotFn,
-      getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn,
-      getAuthoritativeSessionTabsInventoryEpoch: (...args) =>
-        this.getAuthoritativeSessionTabsInventoryEpoch(...args),
-      getAutoRestoreFitMs: (...args) => this.getAutoRestoreFitMs(...args),
-      getAvailableAuthoritativeWindow: (...args) => this.getAvailableAuthoritativeWindow(...args),
-      getDriver: (...args) => this.getDriver(...args),
-      getHookAgentRowForPane: (...args) => this.getHookAgentRowForPane(...args),
-      getKnownWorkspaceSessionWorktreeIds: (...args) =>
-        this.getKnownWorkspaceSessionWorktreeIds(...args),
-      getLeafKey: (...args) => this.getLeafKey(...args),
-      getLeavesForPty: (...args) => this.getLeavesForPty(...args),
-      getLiveBrowserTabsByPageId: (...args) => this.getLiveBrowserTabsByPageId(...args),
-      getLivePtyForHandle: (...args) => this.getLivePtyForHandle(...args),
-      getMobileSessionTopLevelTabId: () => this.getMobileSessionTopLevelTabId,
-      getTerminalSize: (...args) => this.getTerminalSize(...args),
-      getUnpersistedTrackedTitleForPty: () => this.getUnpersistedTrackedTitleForPty,
-      getValidatedExplicitWorktreeIdSelector: (...args) =>
-        this.getValidatedExplicitWorktreeIdSelector(...args),
-      getWorkspaceSessionHydrationTargets: (...args) =>
-        this.getWorkspaceSessionHydrationTargets(...args),
-      graphStatus: () => this.graphStatus,
-      graphSyncCallbacks: () => this.graphSyncCallbacks,
-      handleByLeafKey: () => this.handleByLeafKey,
-      handleByPtyId: () => this.handleByPtyId,
-      hasLiveShellForRendererTab: (...args) => this.hasLiveShellForRendererTab(...args),
-      hasRemoteDesktopLayoutState: (...args) => this.hasRemoteDesktopLayoutState(...args),
-      hasRemoteDesktopViewers: (...args) => this.hasRemoteDesktopViewers(...args),
-      hasServeOrSshOwnedBinding: (...args: unknown[]) =>
-        (this.hasServeOrSshOwnedBinding as (...a: unknown[]) => unknown)(...args),
-      headlessHydrationState: () => this.headlessHydrationState,
-      headlessSessionTabPersistenceCommands: () => this.headlessSessionTabPersistenceCommands,
-      headlessTerminals: () => this.headlessTerminals,
-      hookAgentRowResolutionCommands: () => this.hookAgentRowResolutionCommands,
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
-        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
-      isDeliberatelyParkedPane: (...args) => this.isDeliberatelyParkedPane(...args),
-      isHeadlessBuiltMobileSessionPublicationBase: (publicationEpoch) =>
-        this.isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch),
-      isHeadlessMobileSessionPublication: (publicationEpoch) =>
-        this.isHeadlessMobileSessionPublication(publicationEpoch),
-      isKnownUnattachedLocalDaemonPty: (...args) => this.isKnownUnattachedLocalDaemonPty(...args),
-      isMobileSessionSurfaceMembershipAllowed: (...args: any[]) =>
-        (this.isMobileSessionSurfaceMembershipAllowed as (...a: any[]) => any)(...args),
-      isTerminalAlternateScreen: (...args: any[]) =>
-        (this.isTerminalAlternateScreen as (...a: any[]) => any)(...args),
-      issuePtyHandle: (...args) => this.issuePtyHandle(...args),
-      lastRendererSizes: () => this.lastRendererSizes,
-      latestAgentStatusByPaneKey: () => this.latestAgentStatusByPaneKey,
-      layouts: () => this.layouts,
-      leaves: () => this.leaves,
-      legacyWorkerRecoveredPtys: () => this.legacyWorkerRecoveredPtys,
-      listMobileFiles: () => this.listMobileFiles,
-      listResolvedWorktrees: (...args) => this.listResolvedWorktrees(...args),
-      listRuntimeMarkdownDocuments: () => this.listRuntimeMarkdownDocuments,
-      managedWorktrees: () => this.managedWorktrees,
-      markWorkspaceTrustedForAgent: (...args) => this.markWorkspaceTrustedForAgent(...args),
-      mobileNotificationReplay: () => this.mobileNotificationReplay,
-      mobileSessionTabListeners: () => this.mobileSessionTabListeners,
-      mobileSessionTabsAgentStatusHeartbeat: () => this.mobileSessionTabsAgentStatusHeartbeat,
-      mobileSessionTabsByWorktree: () => this.mobileSessionTabsByWorktree,
-      nextMobileSessionTabsChangeSequence: () => {
-        const v = this.mobileSessionTabsChangeSequence + 1
-        this.mobileSessionTabsChangeSequence = v
-        return v
-      },
-      mobileSnapshotMerge: () => this.mobileSnapshotMerge,
-      mobileSubscribers: () => this.mobileSubscribers,
-      mobileTabSnapshots: () => this.mobileTabSnapshots,
-      notificationListeners: () => this.notificationListeners,
-      notifier: () => this.notifier,
-      notifyFitOverrideListeners: (...args) => this.notifyFitOverrideListeners(...args),
-      notifyMobileSessionTabsChanged: (...args) => this.notifyMobileSessionTabsChanged(...args),
-      notifyRemoteTerminalViewPresenceChanged: (...args) =>
-        this.notifyRemoteTerminalViewPresenceChanged(...args),
-      notifyTerminalResize: (...args) => this.notifyTerminalResize(...args),
-      offscreenBrowserBackend: () => this.offscreenBrowserBackend,
-      openMobileDiff: () => this.openMobileDiff,
-      openMobileFile: () => this.openMobileFile,
-      osc7ScanTailByPtyId: () => this.osc7ScanTailByPtyId,
-      oscTitleScanTailByPtyId: () => this.oscTitleScanTailByPtyId,
-      pairedRendererSessionOwnedPtyIds: () => this.pairedRendererSessionOwnedPtyIds,
-      pendingMobileTerminalCreatesByKey: () => this.pendingMobileTerminalCreatesByKey,
-      pendingPtyRegistrationIncarnations: () => this.pendingPtyRegistrationIncarnations,
-      pendingRestoreTimers: () => this.pendingRestoreTimers,
-      pendingSoftLeavers: () => this.pendingSoftLeavers,
-      persistHeadlessSessionTabProps: () => this.persistHeadlessSessionTabProps,
-      persistHeadlessTabGroups: (...args) => this.persistHeadlessTabGroups(...args),
-      persistHeadlessTerminalActiveLeaf: (...args) =>
-        this.persistHeadlessTerminalActiveLeaf(...args),
-      persistHeadlessTerminalPaneLayout: () => this.persistHeadlessTerminalPaneLayout,
-      persistHeadlessTerminalTabOrder: (...args: unknown[]) =>
-        (this.persistHeadlessTerminalTabOrder as (...a: unknown[]) => unknown)(...args),
-      pickEarliestRestoreTarget: (...args) => this.pickEarliestRestoreTarget(...args),
-      pickMostRecentActor: (...args) => this.pickMostRecentActor(...args),
-      providerBufferAcquisitionsByPtyId: () => this.providerBufferAcquisitionsByPtyId,
-      providerModeSnapshotScansByPtyId: () => this.providerModeSnapshotScansByPtyId,
-      providerModeTrackersByPtyId: () => this.providerModeTrackersByPtyId,
-      providerSequenceInitializedPtys: () => this.providerSequenceInitializedPtys,
-      providerSequenceOffsetByPtyId: () => this.providerSequenceOffsetByPtyId,
-      providerSnapshotPreferredPtys: () => this.providerSnapshotPreferredPtys,
-      providerSnapshotsWithLiveModeTransition: () => this.providerSnapshotsWithLiveModeTransition,
-      providerVisibleRetryAtByPtyId: () => this.providerVisibleRetryAtByPtyId,
-      providerVisibleStateByPtyId: () => this.providerVisibleStateByPtyId,
-      pruneDisconnectedPtyTranscript: (...args) => this.pruneDisconnectedPtyTranscript(...args),
-      ptyController: () => this.ptyController,
-      ptyDelayedForegroundSnapshotTitleObservations: () =>
-        this.ptyDelayedForegroundSnapshotTitleObservations,
-      ptyOutputSequenceById: () => this.ptyOutputSequenceById,
-      ptysById: () => this.ptysById,
-      rawTerminalViewSubscriberCounts: () => this.rawTerminalViewSubscriberCounts,
-      readMobileFile: () => this.readMobileFile,
-      readProviderTerminalTailLines: (...args) => this.readProviderTerminalTailLines(...args),
-      readVisibleTerminalState: (...args) => this.readVisibleTerminalState(...args),
-      recentPtyOutputById: () => this.recentPtyOutputById,
-      recentPtyPathCandidatesById: () => this.recentPtyPathCandidatesById,
-      reconcileNativeChatLaunchDraftResolutionTombstones: (...args) =>
-        this.reconcileNativeChatLaunchDraftResolutionTombstones(...args),
-      recordPtyWorktree: (...args) => this.recordPtyWorktree(...args),
-      refreshPtyWorktreeRecordsWithControllerInventory: (...args) =>
-        this.refreshPtyWorktreeRecordsWithControllerInventory(...args),
-      releaseRuntimeSessionOwnershipForRendererRetiredTabs: (...args: unknown[]) =>
-        (this.releaseRuntimeSessionOwnershipForRendererRetiredTabs as (...a: unknown[]) => unknown)(
-          ...args
-        ),
-      remoteDesktopHostReclaimTargets: () => this.remoteDesktopHostReclaimTargets,
-      remoteDesktopOwners: () => this.remoteDesktopOwners,
-      remoteDesktopViewerRevisions: () => this.remoteDesktopViewerRevisions,
-      remoteDesktopViewers: () => this.remoteDesktopViewers,
-      remoteTerminalViewSubscriberCounts: () => this.remoteTerminalViewSubscriberCounts,
-      removePersistedHeadlessTerminalTab: (...args: unknown[]) =>
-        (this.removePersistedHeadlessTerminalTab as (...a: unknown[]) => unknown)(...args),
-      rendererPublicationThrottle: () => this.rendererPublicationThrottle,
-      resizeListeners: () => this.resizeListeners,
-      resolveDesktopRestoreTarget: (...args) => this.resolveDesktopRestoreTarget(...args),
-      resolveExitWaiters: (...args) => this.resolveExitWaiters(...args),
-      resolvePtyExitWaiters: (...args) => this.resolvePtyExitWaiters(...args),
-      resolveTerminalWorkspaceLaunchScope: (...args) =>
-        this.resolveTerminalWorkspaceLaunchScope(...args),
-      resolveWorkspaceTerminalStartupCwd: (...args) =>
-        this.resolveWorkspaceTerminalStartupCwd(...args),
-      resolveWorktreeSelector: (...args) => this.resolveWorktreeSelector(...args),
-      retireMobileSessionSurfacesForPty: (...args) =>
-        this.retireMobileSessionSurfacesForPty(...args),
-      searchMobileFilePaths: () => this.searchMobileFilePaths,
-      seedHeadlessTerminal: (...args) => this.seedHeadlessTerminal(...args),
-      setDriver: (...args) => this.setDriver(...args),
-      setPairedRendererSessionOwnership: (...args) =>
-        this.setPairedRendererSessionOwnership(...args),
-      settleSessionTabsInventory: (...args) => this.settleSessionTabsInventory(...args),
-      setupCompletionTokenByPtyId: () => this.setupCompletionTokenByPtyId,
-      shouldDelayPtyBackedMobileSnapshotForForegroundAgent: () =>
-        this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent,
-      snapshotValueComparison: () => this.snapshotValueComparison,
-      store: () => this.store,
-      tabs: () => this.tabs,
-      terminalCwdByPtyId: () => this.terminalCwdByPtyId,
-      terminalFileUriHostnameByPtyId: () => this.terminalFileUriHostnameByPtyId,
-      terminalFitOverrides: () => this.terminalFitOverrides,
-      terminalSpawnCommandsByPtyId: () => this.terminalSpawnCommandsByPtyId,
-      trackHeadlessTerminalData: (...args) => this.trackHeadlessTerminalData(...args),
-      waitForSessionTabsInventoryPublication: (...args) =>
-        this.waitForSessionTabsInventoryPublication(...args),
-      withClientHostedPagesHold: (...args: unknown[]) =>
-        (this.withClientHostedPagesHold as (...a: unknown[]) => unknown)(...args),
-      wslDistroByPtyId: () => this.wslDistroByPtyId
-    })
+    this.agentClusterFacade = new RuntimeAgentClusterFacade(this.buildAgentClusterFacadeDeps())
+    this.mobileSessionFacade = new RuntimeMobileSessionFacade(this.buildMobileSessionFacadeDeps())
 
-    this.ptyWorktrees = new RuntimePtyWorktrees({
-      adoptTerminalOrphansFromInventory: (...args) =>
-        this.adoptTerminalOrphansFromInventory(...args),
-      agentPromptExplicitStatusFloorByPtyId: () => this.agentPromptExplicitStatusFloorByPtyId,
-      agentPromptLifecycleByPtyId: () => this.agentPromptLifecycleByPtyId,
-      agentPromptPermissionSequenceByPtyId: () => this.agentPromptPermissionSequenceByPtyId,
-      agentStatusOscProcessorsByPtyId: () => this.agentStatusOscProcessorsByPtyId,
-      assertGraphReady: (...args) => this.assertGraphReady(...args),
-      cancelPendingDriverMutations: (...args) => this.cancelPendingDriverMutations(...args),
-      claudeAgentTeams: () => this.claudeAgentTeams,
-      clearAgentRowSnapshotsForPty: (...args) => this.clearAgentRowSnapshotsForPty(...args),
-      clearWaitBlockedCheckState: (...args) => this.clearWaitBlockedCheckState(...args),
-      dataListeners: () => this.dataListeners,
-      disposeHeadlessTerminal: (...args) => this.disposeHeadlessTerminal(...args),
-      disposePtyTitleTracker: () => this.disposePtyTitleTracker,
-      earlyExitedPtyIncarnations: () => this.earlyExitedPtyIncarnations,
-      emitTerminalAgentStatusEvents: (...args) => this.emitTerminalAgentStatusEvents(...args),
-      ensurePtyBackedMobileSurfaceForRendererTab: (...args) =>
-        this.ensurePtyBackedMobileSurfaceForRendererTab(...args),
-      failActiveDispatchOnExit: (...args) => this.failActiveDispatchOnExit(...args),
-      flushPendingTerminalSideEffectFacts: (...args) =>
-        this.flushPendingTerminalSideEffectFacts(...args),
-      flushWorkspaceSessionOrThrowAsync: (...args) =>
-        this.flushWorkspaceSessionOrThrowAsync(...args),
-      folderWorkspaceToResolvedWorktree: (...args) =>
-        this.folderWorkspaceToResolvedWorktree(...args),
-      freshSubscribeGuard: () => this.freshSubscribeGuard,
-      getDriver: (...args) => this.getDriver(...args),
-      getLeafKey: (...args) => this.getLeafKey(...args),
-      getMobileSessionTabsForWorktree: (...args) => this.getMobileSessionTabsForWorktree(...args),
-      getMobileTerminalPaneKey: (...args) => this.getMobileTerminalPaneKey(...args),
-      getOrCreatePtyTitleTrackerEntry: (() => this.getOrCreatePtyTitleTrackerEntry) as never,
-      getOrchestrationDb: (...args) => this.getOrchestrationDb(...args),
-      getRendererTerminalSerializerGeneration: (...args) =>
-        this.getRendererTerminalSerializerGeneration(...args),
-      getWorkspaceSessionHostIdForWorktree: (...args) =>
-        this.getWorkspaceSessionHostIdForWorktree(...args),
-      graphStatus: () => this.graphStatus,
-      graphSyncCallbacks: () => this.graphSyncCallbacks,
-      handleByLeafKey: () => this.handleByLeafKey,
-      handleByPtyId: () => this.handleByPtyId,
-      handleByPtyIncarnation: () => this.handleByPtyIncarnation,
-      handles: () => this.handles,
-      headlessTerminals: () => this.headlessTerminals,
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
-        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
-      intentionalHandlelessPtyStops: () => this.intentionalHandlelessPtyStops,
-      isRecognizedForegroundAgentProcess: (...args) =>
-        this.isRecognizedForegroundAgentProcess(...args),
-      isRemoteDesktopResizeDriven: (...args) => this.isRemoteDesktopResizeDriven(...args),
-      layoutQueues: () => this.layoutQueues,
-      layouts: () => this.layouts,
-      leaves: () => this.leaves,
-      leavesByPtyId: () => this.leavesByPtyId,
-      legacyWorkerRecoveredPtys: () => this.legacyWorkerRecoveredPtys,
-      legacyWorkerTerminalRecoveryRetries: () => this.legacyWorkerTerminalRecoveryRetries,
-      makeRuntimePaneKey: (...args) => this.makeRuntimePaneKey(...args),
-      managedWorktrees: () => this.managedWorktrees,
-      maybeHydrateHeadlessFromRenderer: (...args) => this.maybeHydrateHeadlessFromRenderer(...args),
-      messageWaitersByHandle: () => this.messageWaitersByHandle,
-      mobileSessionTabsByWorktree: () => this.mobileSessionTabsByWorktree,
-      mobileTabSnapshots: () => this.mobileTabSnapshots,
-      notifier: () => this.notifier,
-      notifyMobileSessionTabsChanged: (...args) => this.notifyMobileSessionTabsChanged(...args),
-      osc7ScanTailByPtyId: () => this.osc7ScanTailByPtyId,
-      oscTitleScanTailByPtyId: () => this.oscTitleScanTailByPtyId,
-      pairedRendererSessionOwnedPtyIds: () => this.pairedRendererSessionOwnedPtyIds,
-      pathFlavorForPty: () => this.pathFlavorForPty,
-      pendingMobileTerminalCreatesByKey: () => this.pendingMobileTerminalCreatesByKey,
-      pendingPtyRegistrationIncarnations: () => this.pendingPtyRegistrationIncarnations,
-      processAgentStatusOscForPty: (...args) => this.processAgentStatusOscForPty(...args),
-      providerBufferAcquisitionsByPtyId: () => this.providerBufferAcquisitionsByPtyId,
-      providerModeSnapshotScansByPtyId: () => this.providerModeSnapshotScansByPtyId,
-      providerModeTrackersByPtyId: () => this.providerModeTrackersByPtyId,
-      providerSequenceInitializedPtys: () => this.providerSequenceInitializedPtys,
-      providerSequenceOffsetByPtyId: () => this.providerSequenceOffsetByPtyId,
-      providerSnapshotPreferredPtys: () => this.providerSnapshotPreferredPtys,
-      providerVisibleRetryAtByPtyId: () => this.providerVisibleRetryAtByPtyId,
-      providerVisibleStateByPtyId: () => this.providerVisibleStateByPtyId,
-      ptyExitListenersByPtyId: () => this.ptyExitListenersByPtyId,
-      ptyExit_notifyTabAndMobile: (...args) => this.ptyExit_notifyTabAndMobile(...args),
-      ptyLifecycleGenerationById: () => this.ptyLifecycleGenerationById,
-      ptyLivenessObservationSequence: () => this.ptyLivenessObservationSequence,
-      ptyLivenessVerdictByPtyId: () => this.ptyLivenessVerdictByPtyId,
-      ptyOutputSequenceById: () => this.ptyOutputSequenceById,
-      ptysById: () => this.ptysById,
-      recentPtyOutputById: () => this.recentPtyOutputById,
-      recentPtyPathCandidatesById: () => this.recentPtyPathCandidatesById,
-      reconcileAgentStatusForEndedProcessFn: () => this.reconcileAgentStatusForEndedProcessFn,
-      reconcileLegacyWorkerTerminalsNow: (...args) =>
-        this.reconcileLegacyWorkerTerminalsNow(...args),
-      recordOsc7MetadataForPty: () => this.recordOsc7MetadataForPty,
-      recordRecentPtyOutputForPathProvenance: (...args) =>
-        this.recordRecentPtyOutputForPathProvenance(...args),
-      refreshPtyForegroundAgent: () => this.refreshPtyForegroundAgent,
-      rendererGraphEpoch: () => this.rendererGraphEpoch,
-      replaceHeadlessTerminalAfterExecutionContextChange: (...args) =>
-        this.replaceHeadlessTerminalAfterExecutionContextChange(...args),
-      resetTrackedTerminalStateForProviderGeneration: () =>
-        this.resetTrackedTerminalStateForProviderGeneration,
-      resolvePaneAgentIdentityField: (...args) => this.resolvePaneAgentIdentityField(...args),
-      resolveTerminalWorkspaceLaunchScope: (...args) =>
-        this.resolveTerminalWorkspaceLaunchScope(...args),
-      resolveWorktreeSelector: (...args) => this.resolveWorktreeSelector(...args),
-      restoreAgentPromptLifecycleByteOrder: (...args) =>
-        this.restoreAgentPromptLifecycleByteOrder(...args),
-      restoredOrchestrationAuthorityByPtyId: () => this.restoredOrchestrationAuthorityByPtyId,
-      retireAgentHookCompatibilityAuthorityFn: () => this.retireAgentHookCompatibilityAuthorityFn,
-      retireOrchestrationMailboxDeliveryForPty: (...args) =>
-        this.retireOrchestrationMailboxDeliveryForPty(...args),
-      runtimeId: () => this.runtimeId,
-      scheduleWaitBlockedCheck: (...args) => this.scheduleWaitBlockedCheck(...args),
-      setupCompletionTokenByPtyId: () => this.setupCompletionTokenByPtyId,
-      shouldAnswerQueriesForLiveChunk: (...args) => this.shouldAnswerQueriesForLiveChunk(...args),
-      snapshotValueComparison: () => this.snapshotValueComparison,
-      spawnPublishedPtys: () => this.spawnPublishedPtys,
-      stopRequestedPtyIds: () => this.stopRequestedPtyIds,
-      store: () => this.store,
-      subscriberDrivenProviderAttachInventoryWaiters: () =>
-        this.subscriberDrivenProviderAttachInventoryWaiters,
-      subscriberDrivenProviderAttachesByPtyId: () => this.subscriberDrivenProviderAttachesByPtyId,
-      syntheticTerminalHandles: () => this.syntheticTerminalHandles,
-      tabs: () => this.tabs,
-      terminalCwdByPtyId: () => this.terminalCwdByPtyId,
-      terminalExecutionHostField: (...args) => this.terminalExecutionHostField(...args),
-      terminalFileUriHostnameByPtyId: () => this.terminalFileUriHostnameByPtyId,
-      terminalSpawnCommandsByPtyId: () => this.terminalSpawnCommandsByPtyId,
-      trackHeadlessTerminalData: (...args) => this.trackHeadlessTerminalData(...args),
-      tryGetWorkspaceSessionHostIdForWorktree: (...args) =>
-        this.tryGetWorkspaceSessionHostIdForWorktree(...args),
-      waitersByHandle: () => this.waitersByHandle,
-      wslDistroByPtyId: () => this.wslDistroByPtyId,
-      reconcileLegacyWorkerTerminals: (...args) => this.reconcileLegacyWorkerTerminals(...args),
-      nextPtyLifecycleGeneration: () => this.nextPtyLifecycleGeneration,
-      setNextPtyLifecycleGeneration: (value) => {
-        this.nextPtyLifecycleGeneration = value
-      },
-      setPtyLivenessObservationSequence: (value) => {
-        this.ptyLivenessObservationSequence = value
-      },
-      ptyController: () => this.ptyController,
-      livenessApi: () =>
-        // Why: the verdict helpers need earlyExited/pending maps plus the
-        // absence-probe caches, which now live on the facade itself.
-        ({
-          earlyExitedPtyIncarnations: this.earlyExitedPtyIncarnations,
-          pendingPtyRegistrationIncarnations: this.pendingPtyRegistrationIncarnations,
-          stopRequestedPtyIds: this.stopRequestedPtyIds,
-          provenAbsentLeafPtyVerdicts: this.ptyWorktrees.provenAbsentLeafPtyVerdicts,
-          leafPtyAbsenceProbes: this.ptyWorktrees.leafPtyAbsenceProbes,
-          ptyController: this.ptyController
-            ? {
-                probePtyLiveness: async (ptyId) =>
-                  Boolean(await this.ptyController?.probePtyLiveness?.(ptyId))
-              }
-            : undefined,
-          controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
-          forgetPtyLivenessVerdict: (ptyId, observedNoLaterThan) =>
-            this.forgetPtyLivenessVerdict(ptyId, observedNoLaterThan),
-          getOrCreatePtyWorktreeRecord: (ptyId) => this.getOrCreatePtyWorktreeRecord(ptyId),
-          getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
-          adoptPreAllocatedHandle: (leaf) =>
-            this.adoptPreAllocatedHandle(leaf as RuntimeLeafRecord),
-          recordPtyWorktree: (ptyId, worktreeId, opts) =>
-            this.recordPtyWorktree(ptyId, worktreeId, opts),
-          ensurePtyBackedMobileSurfaceForRendererTab: (worktreeId, tabId) =>
-            this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, tabId),
-          graphStatus: this.graphStatus,
-          spawnPublishedPtys: this.spawnPublishedPtys,
-          pendingMobileTerminalCreatesByKey: this.pendingMobileTerminalCreatesByKey as never,
-          ptysById: this.ptysById,
-          handleByPtyId: this.handleByPtyId,
-          leafExistsForPty: (ptyId) => this.leafExistsForPty(ptyId)
-        }),
-      setPtyControllerRef: (controller) => {
-        this.ptyController = controller
-      }
-    })
+    this.ptyWorktrees = new RuntimePtyWorktrees(this.buildPtyWorktreesDeps())
 
-    this.terminalClusterFacade = new RuntimeTerminalCluster({
-      resolveTerminalWorkspaceLaunchScopeHook: (selector) =>
-        this.resolveTerminalWorkspaceLaunchScope(selector),
-      ptyWorktrees: () => this.ptyWorktrees,
-      recentPtyOutputById: () => this.recentPtyOutputById,
-      recentPtyPathCandidatesById: () => this.recentPtyPathCandidatesById,
-      leaves: () => this.leaves,
-      mobileSessionTabsByWorktree: () => this.mobileSessionTabsByWorktree,
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
-        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
-      notifyMobileSessionTabsChanged: (...args) => this.notifyMobileSessionTabsChanged(...args),
-      layouts: () => this.layouts,
-      isFreshSubscribe: (...args) => this.isFreshSubscribe(...args),
-      terminalFitOverrides: () => this.terminalFitOverrides,
-      mobileSubscribers: () => this.mobileSubscribers,
-      pickEarliestRestoreTarget: (...args) => this.pickEarliestRestoreTarget(...args),
-      lastRendererSizes: () => this.lastRendererSizes,
-      suppressResizesForMs: (...args) => this.suppressResizesForMs(...args),
-      mobileSessionFacade: () => this.mobileSessionFacade,
-      activeRemoteDesktopViewport: (...args) => this.activeRemoteDesktopViewport(...args),
-      remoteDesktopViewerRevisions: () => this.remoteDesktopViewerRevisions,
-      remoteDesktopOwners: () => this.remoteDesktopOwners,
-      resolveRemoteDesktopHostReclaimTarget: (...args) =>
-        this.resolveRemoteDesktopHostReclaimTarget(...args),
-      freshSubscribeGuard: () => this.freshSubscribeGuard,
-      remoteDesktopHostReclaimTargets: () => this.remoteDesktopHostReclaimTargets,
-      graphStatus: () => this.graphStatus,
-      rendererGraphEpoch: () => this.rendererGraphEpoch,
-      mobileTabSnapshots: () => this.mobileTabSnapshots,
-      resolvedWorktreeCache: () => this.resolvedWorktreeCache,
-      listKnownExecutionHostIds: (...args) => this.listKnownExecutionHostIds(...args),
-      tryGetWorkspaceSessionHostIdForWorktree: (...args) =>
-        this.tryGetWorkspaceSessionHostIdForWorktree(...args),
-      tabs: () => this.tabs,
-      terminalExecutionHostField: (...args) => this.terminalExecutionHostField(...args),
-      resolvePaneAgentIdentityField: (...args) => this.resolvePaneAgentIdentityField(...args),
-      pendingRestoreTimers: () => this.pendingRestoreTimers,
-      pendingSoftLeavers: () => this.pendingSoftLeavers,
-      providerModeSnapshotScansByPtyId: () => this.providerModeSnapshotScansByPtyId,
-      providerModeTrackersByPtyId: () => this.providerModeTrackersByPtyId,
-      providerSequenceOffsetByPtyId: () => this.providerSequenceOffsetByPtyId,
-      preferTrackedLastTitle: () => this.preferTrackedLastTitle,
-      providerSnapshotsWithLiveModeTransition: () => this.providerSnapshotsWithLiveModeTransition,
-      headlessTerminals: () => this.headlessTerminals,
-      closeMobileSessionTab: (...args) => this.closeMobileSessionTab(...args),
-      clientEventPublishingCommands: () => this.clientEventPublishingCommands,
-      getAvailableAuthoritativeWindow: (...args) => this.getAvailableAuthoritativeWindow(...args),
-      assertPtyDidNotExitBeforeRegistration: (...args) =>
-        this.assertPtyDidNotExitBeforeRegistration(...args),
-      releaseRejectedPtyRegistrationFence: (...args) =>
-        this.releaseRejectedPtyRegistrationFence(...args),
-      registerPreAllocatedHandleForPty: (...args) => this.registerPreAllocatedHandleForPty(...args),
-      preparePtyExecutionContext: (...args) => this.preparePtyExecutionContext(...args),
-      registerPty: (...args) => this.registerPty(...args),
-      issuePtyHandle: (...args) => this.issuePtyHandle(...args),
-      handles: () => this.handles,
-      terminalCreateIdempotency: () => this.terminalCreateIdempotency,
-      getPtyLivenessVerdict: (...args) => this.getPtyLivenessVerdict(...args),
-      headlessHydrationState: () => this.headlessHydrationState,
-      terminalSideEffectConsumerAvailable: () => this.terminalSideEffectConsumerAvailable,
-      ptyOutputSequenceById: () => this.ptyOutputSequenceById,
-      terminalSideEffectLocalConsumerAvailable: () => this.terminalSideEffectLocalConsumerAvailable,
-      layoutQueues: () => this.layoutQueues,
-      coalescesWith: (...args) => this.coalescesWith(...args),
-      subscriberDrivenProviderAttachesByPtyId: () => this.subscriberDrivenProviderAttachesByPtyId,
-      isKnownUnattachedLocalDaemonPty: (...args) => this.isKnownUnattachedLocalDaemonPty(...args),
-      terminalFocusNavigationCoalescer: () => this.terminalFocusNavigationCoalescer,
-      currentDriver: () => this.currentDriver,
-      latestAgentStatusByPaneKey: () => this.latestAgentStatusByPaneKey,
-      orchestrationCommands: () => this.orchestrationCommands,
-      hookAgentRowResolutionCommands: () => this.hookAgentRowResolutionCommands,
-      agentPromptLifecycleByPtyId: () => this.agentPromptLifecycleByPtyId,
-      ptyTitleTrackersByPtyId: () => this.ptyTitleTrackersByPtyId,
-      terminalTopologyRevisionByRepoId: () => this.terminalTopologyRevisionByRepoId,
-      managedWorktrees: () => this.managedWorktrees,
-      rawTerminalViewSubscriberCounts: () => this.rawTerminalViewSubscriberCounts,
-      remoteTerminalViewSubscriberCounts: () => this.remoteTerminalViewSubscriberCounts,
-      providerSnapshotPreferredPtys: () => this.providerSnapshotPreferredPtys,
-      getPrimaryLeafForPty: (...args) => this.getPrimaryLeafForPty(...args),
-      isPtyRunningAgent: (...args) => this.ptyWorktrees.isPtyRunningAgent(...args),
-      isRecognizedForegroundAgentProcess: (...args) =>
-        this.isRecognizedForegroundAgentProcess(...args),
-      markRemoteWorkspaceTrustedForAgent: (...args) =>
-        this.markRemoteWorkspaceTrustedForAgent(...args),
-      markLocalWorkspaceTrustedForAgent: (...args) =>
-        this.markLocalWorkspaceTrustedForAgent(...args),
-      terminalSpawnCommandsByPtyId: () => this.terminalSpawnCommandsByPtyId,
-      fitOverrideListeners: () => this.fitOverrideListeners,
-      resizeListeners: () => this.resizeListeners,
-      waitBlockedCheckStateByPtyId: () => this.waitBlockedCheckStateByPtyId,
-      agentStatusOscProcessorsByPtyId: () => this.agentStatusOscProcessorsByPtyId,
-      providerVisibleStateByPtyId: () => this.providerVisibleStateByPtyId,
-      providerVisibleRetryAtByPtyId: () => this.providerVisibleRetryAtByPtyId,
-      reconcileLegacyWorkerTerminalsNow: (...args) =>
-        this.reconcileLegacyWorkerTerminalsNow(...args),
-      recordPtyWorktree: (...args) => this.recordPtyWorktree(...args),
-      recordAgentPromptPermissionObservation: (...args) =>
-        this.recordAgentPromptPermissionObservation(...args),
-      terminalPaneRecoveryByIdentity: () => this.terminalPaneRecoveryByIdentity,
-      terminalCwdByPtyId: () => this.terminalCwdByPtyId,
-      waitersByHandle: () => this.waitersByHandle,
-      folderWorkspaceToResolvedWorktree: (...args) =>
-        this.folderWorkspaceToResolvedWorktree(...args),
-      agentPromptSubmissionTailByPtyId: () => this.agentPromptSubmissionTailByPtyId,
-      providerBufferAcquisitionsByPtyId: () => this.providerBufferAcquisitionsByPtyId,
-      driverListeners: () => this.driverListeners,
-      setPairedRendererSessionOwnership: (...args) =>
-        this.setPairedRendererSessionOwnership(...args),
-      pairedRendererSessionOwnedPtyIds: () => this.pairedRendererSessionOwnedPtyIds,
-      dataListeners: () => this.dataListeners,
-      messageWaitersByHandle: () => this.messageWaitersByHandle,
-      graphSyncCallbacks: () => this.graphSyncCallbacks,
-      setupCompletionTokenByPtyId: () => this.setupCompletionTokenByPtyId,
-      getPtyWriteHostPlatform: (...args) => this.getPtyWriteHostPlatform(...args),
-      getAgentPromptActivity: (...args) => this.getAgentPromptActivity(...args),
-      assertAgentPromptPermissionSafe: (...args) =>
-        this.agentClusterFacade.assertAgentPromptPermissionSafe(...args),
-      createAgentPromptRenderGate: (...args) =>
-        this.agentClusterFacade.createAgentPromptRenderGate(...args),
-      getPtyAgent: (...args) => this.getPtyAgent(...args),
-      store: () => this.store,
-      ptyController: () => this.ptyController,
-      notifier: () => this.notifier,
-      ptysById: () => this.ptysById,
-      handleByPtyId: () => this.handleByPtyId,
-      claudeAgentTeams: () => this.claudeAgentTeams,
-      terminalAgentStatusBinding: () => this.terminalAgentStatusBinding,
-      onTerminalAgentStatus: () => this.onTerminalAgentStatus,
-      onTerminalSideEffects: () => this.onTerminalSideEffects,
-      getAgentStatusSnapshotFn: () => this.getAgentStatusSnapshotFn,
-      buildAgentHookPtyEnv: () => this.buildAgentHookPtyEnv,
-      onRemoteTerminalViewPresenceChanged: () => this.onRemoteTerminalViewPresenceChanged,
-      snapshotValueComparison: () => this.snapshotValueComparison,
-      getAgentLaunchPlatformForRepo: (repo) => this.getAgentLaunchPlatformForRepo(repo),
-      getAgentLaunchPlatformForWorkspace: (scope) => this.getAgentLaunchPlatformForWorkspace(scope),
-      getOrCreatePtyTitleTrackerEntry: (...args) => this.getOrCreatePtyTitleTrackerEntry(...args),
-      getTrackedRawTitleForPty: (...args) => this.getTrackedRawTitleForPty(...args),
-      recordOsc7MetadataForPty: (...args) => this.recordOsc7MetadataForPty(...args),
-      cloneTerminalLayoutSnapshot: (...args) => this.cloneTerminalLayoutSnapshot(...args),
-      collectPersistedTerminalLeafIds: (layout) =>
-        this.mobileTabSnapshots.collectPersistedTerminalLeafIds(layout),
-      getTerminalAgentStatusPtyId: (...args) => this.getTerminalAgentStatusPtyId(...args),
-      assertTerminalAgentStatusPtyBinding: (...args) =>
-        this.assertTerminalAgentStatusPtyBinding(...args),
-      getTerminalAgentStatusSnapshot: (...args) => this.getTerminalAgentStatusSnapshot(...args),
-      hasAuthoritativeTerminalWaitPermission: (...args) =>
-        this.hasAuthoritativeTerminalWaitPermission(...args)
-    })
-    this.managedWorktrees = new RuntimeManagedWorktrees({
-      _orchestrationDb: this._orchestrationDb,
-      acceptedRendererMobileSnapshotByWorktree: () => this.acceptedRendererMobileSnapshotByWorktree,
-      adoptControllerTerminalHandle: (...args) => this.adoptControllerTerminalHandle(...args),
-      agentBrowserBridge: this.agentBrowserBridge,
-      assertGraphReady: (...args) => this.assertGraphReady(...args),
-      assertStableReadyGraph: (...args) => this.assertStableReadyGraph(...args),
-      attachAgentRowsToSummaries: (...args) => this.attachAgentRowsToSummaries(...args),
-      authoritativeWindowId: () => this.authoritativeWindowId,
-      buildResolvedWorktreeFromId: (...args) => this.buildResolvedWorktreeFromId(...args),
-      buildStartupForAgent: (...args) => this.buildStartupForAgent(...args),
-      buildStartupForDraft: (...args) => this.buildStartupForDraft(...args),
-      captureReadyGraphEpoch: (...args) => this.captureReadyGraphEpoch(...args),
-      clientEventPublishingCommands: () => this.clientEventPublishingCommands,
-      createDefaultTabTerminals: (...args) => this.createDefaultTabTerminals(...args),
-      createTerminal: (...args) => this.createTerminal(...args),
-      emitClientEvent: (...args) => this.emitClientEvent(...args),
-      fetchRemoteWithCache: (...args) => this.fetchRemoteWithCache(...args),
-      forgetPtyLivenessVerdict: (...args) => this.forgetPtyLivenessVerdict(...args),
-      getAvailableAuthoritativeWindow: (...args) => this.getAvailableAuthoritativeWindow(...args),
-      getLeafKey: (...args) => this.getLeafKey(...args),
-      getLivePtyForHandle: (...args) => this.getLivePtyForHandle(...args),
-      getLocalProvider: (...args) => this.getLocalProvider(...args),
-      getOrStartRemoteFetch: (...args) => this.getOrStartRemoteFetch(...args),
-      getOrStartRemoteTrackingBaseRefresh: (...args) =>
-        this.getOrStartRemoteTrackingBaseRefresh(...args),
-      getPtyRecordForPaneKey: (...args) => this.getPtyRecordForPaneKey(...args),
-      getRecordedTerminalSleepHandles: (...args) => this.getRecordedTerminalSleepHandles(...args),
-      getResolvedWorktreeMap: (...args) => this.getResolvedWorktreeMap(...args),
-      getRuntimeId: (...args) => this.getRuntimeId(...args),
-      getSshProviderFn: () => this.getSshProviderFn,
-      getStartedAt: (...args) => this.getStartedAt(...args),
-      getTerminalHandlesForPtyId: (...args) => this.getTerminalHandlesForPtyId(...args),
-      graphStatus: () => this.graphStatus,
-      hasFreshResolvedWorktreeCache: (...args) => this.hasFreshResolvedWorktreeCache(...args),
-      hasRemoteTrackingRef: (...args) => this.hasRemoteTrackingRef(...args),
-      hookAgentRowResolutionCommands: () => this.hookAgentRowResolutionCommands,
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (...args) =>
-        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(...args),
-      intentionalHandlelessPtyStops: () => this.intentionalHandlelessPtyStops,
-      invalidatePtyIncarnationHandle: (...args) => this.invalidatePtyIncarnationHandle(...args),
-      invalidateResolvedWorktreeCache: (...args) => this.invalidateResolvedWorktreeCache(...args),
-      invalidateSshWorktreeScanCacheInternal: (...args) =>
-        this.invalidateSshWorktreeScanCacheInternal(...args),
-      invalidateWorktreeScanCacheForRepo: (...args) =>
-        this.invalidateWorktreeScanCacheForRepo(...args),
-      leafExistsForPty: (...args) => this.leafExistsForPty(...args),
-      leaves: () => this.leaves,
-      listResolvedWorktreeSnapshot: (...args) => this.listResolvedWorktreeSnapshot(...args),
-      listResolvedWorktrees: (...args) => this.listResolvedWorktrees(...args),
-      makeRuntimePaneKey: (...args) => this.makeRuntimePaneKey(...args),
-      markLocalWorkspaceTrustedForAgent: (...args) =>
-        this.markLocalWorkspaceTrustedForAgent(...args),
-      markPtyLivenessUnverifiable: (...args) => this.markPtyLivenessUnverifiable(...args),
-      markRemoteWorkspaceTrustedForAgent: (...args) =>
-        this.markRemoteWorkspaceTrustedForAgent(...args),
-      mobileSessionTabsAgentStatusHeartbeat: () => this.mobileSessionTabsAgentStatusHeartbeat,
-      mobileSessionTabsByWorktree: () => this.mobileSessionTabsByWorktree,
-      mobileTabSnapshots: () => this.mobileTabSnapshots,
-      nextTitleObservationSequence: (...args) => this.nextTitleObservationSequence(...args),
-      notifier: this.notifier,
-      notifyMobileSessionTabsChanged: (...args) => this.notifyMobileSessionTabsChanged(...args),
-      offscreenBrowserBackend: this.offscreenBrowserBackend,
-      onPtyStopped: () => this.onPtyStopped,
-      pasteStartupDraftWhenReady: (...args) => this.pasteStartupDraftWhenReady(...args),
-      projectMobileSessionTabsForClient: (...args) =>
-        this.projectMobileSessionTabsForClient(...args),
-      pruneDisconnectedPtyRecords: (...args) => this.pruneDisconnectedPtyRecords(...args),
-      ptyController: this.ptyController,
-      ptyLivenessVerdictByPtyId: () => this.ptyLivenessVerdictByPtyId,
-      ptyLivenessObservationSequence: () => this.ptyLivenessObservationSequence,
-      ptysById: () => this.ptysById,
-      reconcileSubscriberDrivenProviderAttach: (...args) =>
-        this.reconcileSubscriberDrivenProviderAttach(...args),
-      refreshFloatingWorkspacePtyLiveness: (...args) =>
-        this.refreshFloatingWorkspacePtyLiveness(...args),
-      refreshMobileSessionPtyRecords: (...args) => this.refreshMobileSessionPtyRecords(...args),
-      refreshPtyForegroundAgent: () => this.refreshPtyForegroundAgent,
-      rememberRestoredOrchestrationAuthority: (...args) =>
-        this.rememberRestoredOrchestrationAuthority(...args),
-      requireStore: (...args) => this.requireStore(...args),
-      resolveExplicitWorktreeIdScoped: (...args) => this.resolveExplicitWorktreeIdScoped(...args),
-      resolveFolderWorkspaceConnectionId: (...args) =>
-        this.resolveFolderWorkspaceConnectionId(...args),
-      resolveLineageCandidateForTaskId: (...args) => this.resolveLineageCandidateForTaskId(...args),
-      resolveRemoteTrackingBase: (...args) => this.resolveRemoteTrackingBase(...args),
-      resolveRepoSelector: (...args) => this.resolveRepoSelector(...args),
-      resolveWorkspaceParentSelector: (...args) => this.resolveWorkspaceParentSelector(...args),
-      restoredOrchestrationAuthorityByPtyId: () => this.restoredOrchestrationAuthorityByPtyId,
-      sendStartupFollowupWhenReady: (...args) => this.sendStartupFollowupWhenReady(...args),
-      setPtyManagementTitleFromObservedTitle: (...args) =>
-        this.setPtyManagementTitleFromObservedTitle(...args),
-      setupCompletionTokenByPtyId: () => this.setupCompletionTokenByPtyId,
-      showTerminal: (...args) => this.showTerminal(...args),
-      snapshotValueComparison: () => this.snapshotValueComparison,
-      splitTerminal: (...args) => this.splitTerminal(...args),
-      store: this.store,
-      tabs: () => this.tabs,
-      terminalMutationTailByWorktreeId: () => this.terminalMutationTailByWorktreeId,
-      terminalSleepByWorktreeId: () => this.terminalSleepByWorktreeId,
-      terminalSleepStateByWorktreeId: () => this.terminalSleepStateByWorktreeId,
-      toMobileSessionTabsResult: (...args) => this.toMobileSessionTabsResult(...args),
-      validateLineageParent: (...args) => this.validateLineageParent(...args),
-      wslDistroByPtyId: () => this.wslDistroByPtyId,
-      getHostedReviewExecutionOptions: (...args) => this.getHostedReviewExecutionOptions(...args),
-      getLocalGitExecutionOptionArgs: (...args) => this.getLocalGitExecutionOptionArgs(...args)
-    })
+    this.terminalClusterFacade = new RuntimeTerminalCluster(this.buildTerminalClusterFacadeDeps())
+    this.managedWorktrees = new RuntimeManagedWorktrees(this.buildManagedWorktreesDeps())
     this.resolvedWorktreeCache = new RuntimeResolvedWorktreeCache({
       store: () => this.store as Store | null,
       requireStore: () => this.requireStore(),
@@ -4478,6 +3714,7 @@ export class OrcaRuntimeService {
     this.mobileTabSnapshots = new RuntimeMobileSessionTabSnapshotCommands(
       mobileSessionTabSnapshotCommandsDeps
     )
+    this.wiringReferencedHostMembers()
   }
 
   /**
@@ -6359,6 +5596,207 @@ export class OrcaRuntimeService {
     for (const publish of [...this.sessionTabsInventoryWaiters]) {
       publish()
     }
+  }
+
+  // Why: the ctor deps-literals moved to *-wiring.ts read these members through a
+  // keyed view (Record<string, any>), which TS cannot attribute as usage. This
+  // explicit reference list keeps noUnusedLocals honest about real runtime reads.
+  private wiringReferencedHostMembers(): readonly unknown[] {
+    return [
+      this.hookAgentRowResolutionCommands,
+      this.disposalTree,
+      this.acceptedRendererMobileSnapshotByWorktree,
+      this.terminalCreateIdempotency,
+      this.terminalSleepByWorktreeId,
+      this.terminalMutationTailByWorktreeId,
+      this.terminalPaneRecoveryByIdentity,
+      this.earlyExitedPtyIncarnations,
+      this.pendingPtyRegistrationIncarnations,
+      this.intentionalHandlelessPtyStops,
+      this.terminalFocusNavigationCoalescer,
+      this.ptyRecordsById,
+      this.syntheticTerminalHandles,
+      this.ptyExitListenersByPtyId,
+      this.stopRequestedPtyIds,
+      this.dataListeners,
+      this.setupCompletionTokenByPtyId,
+      this.fitOverrideListeners,
+      this.ptyLivenessVerdictByPtyId,
+      this.ptyLivenessObservationSequence,
+      this.pairedRendererSessionOwnedPtyIds,
+      this.ptyOutputSequenceById,
+      this.agentPromptExplicitStatusFloorByPtyId,
+      this.agentPromptSubmissionTailByPtyId,
+      this.providerSequenceInitializedPtys,
+      this.providerSequenceOffsetByPtyId,
+      this.providerModeTrackersByPtyId,
+      this.providerModeSnapshotScansByPtyId,
+      this.providerBufferAcquisitionsByPtyId,
+      this.providerVisibleStateByPtyId,
+      this.providerVisibleRetryAtByPtyId,
+      this.providerSnapshotsWithLiveModeTransition,
+      this.ptyLifecycleGenerationById,
+      this.nextPtyLifecycleGeneration,
+      this.recentPtyPathCandidatesById,
+      this.remoteTerminalViewSubscriberCounts,
+      this.rawTerminalViewSubscriberCounts,
+      this.spawnPublishedPtys,
+      this.currentDriver,
+      this.resizeListeners,
+      this.layoutQueues,
+      this.onTerminalAgentStatus,
+      this.getAgentProviderSessionSnapshotFn,
+      this.getAgentProviderSessionRowsForPaneFn,
+      this.retireAgentHookCompatibilityAuthorityFn,
+      this.reconcileAgentStatusForEndedProcessFn,
+      this.buildAgentHookPtyEnv,
+      this.prepareCodexStructuredLaunchFn,
+      this.agentSessionClaimSigner,
+      this.agentSessionCreateOperations,
+      this.legacyWorkerTerminalRecoveryRetries,
+      this.skillTransactionRecovery,
+      this.claudeAgentTeams,
+      this.getAgentLaunchPlatformForWorkspace,
+      this.flushWorkspaceSessionOrThrowAsync,
+      this.reconcileLegacyWorkerTerminalsNow,
+      this.getWorkspaceSessionHostIdForWorktree,
+      this.getWorkspaceSessionHydrationTargets,
+      this.applyNativeChatLaunchDraftResolutionFence,
+      this.reconcileNativeChatLaunchDraftResolutionTombstones,
+      this.settleSessionTabsInventory,
+      this.waitForSessionTabsInventoryPublication,
+      this.isDeliberatelyParkedPane,
+      this.persistHeadlessTerminalActiveLeaf,
+      this.persistHeadlessSessionTabProps,
+      this.applyHeadlessSessionTabPropsToSnapshot,
+      this.getMobileSessionTopLevelTabId,
+      this.persistHeadlessTerminalPaneLayout,
+      this.applyHeadlessTerminalPaneLayoutToSnapshot,
+      this.persistHeadlessTabGroups,
+      this.resolveConfiguredCodexStructuredArgs,
+      this.proveRecoveredStructuredTuiPtyProcess,
+      this.closeStructuredTuiOwner,
+      this.waitForStructuredTuiIdleOrExit,
+      this.stopStructuredSessionProcess,
+      this.adoptControllerTerminalHandle,
+      this.assertPtyDidNotExitBeforeRegistration,
+      this.scheduleWaitBlockedCheck,
+      this.processAgentStatusOscForPty,
+      this.flushPendingTerminalSideEffectFacts,
+      this.isLiveCursorNativeTitle,
+      this.getTrackedDisplayTitleForPty,
+      this.getUnpersistedTrackedTitleForPty,
+      this.preferTrackedLastTitle,
+      this.applyTrackedPtyTitle,
+      this.disposePtyTitleTracker,
+      this.resetTrackedTerminalStateForProviderGeneration,
+      this.createTerminalSideEffectCommandCodeDetector,
+      this.extractLastOsc7CwdForPty,
+      this.pathFlavorForPty,
+      this.assertTerminalAgentStatusPtyBinding,
+      this.getTerminalAgentStatusSnapshot,
+      this.probeAgentStatusOncePerPty,
+      this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent,
+      this.refreshPtyForegroundAgent,
+      this.getPendingForegroundAgentRefreshForTitle,
+      this.delayPtyBackedMobileSnapshotForForegroundAgent,
+      this.refreshPtyForegroundAgentFromController,
+      this.hasAuthoritativeTerminalWaitPermission,
+      this.resolveAuthoritativeTerminalWaitPermission,
+      this.readPtyForegroundProcessFromController,
+      this.emitTerminalAgentStatusEvents,
+      this.restoreAgentPromptLifecycleByteOrder,
+      this.getPtyLifecycleGeneration,
+      this.isKnownUnattachedLocalDaemonPty,
+      this.reconcileSubscriberDrivenProviderAttach,
+      this.maybeHydrateHeadlessFromRenderer,
+      this.shouldAnswerQueriesForLiveChunk,
+      this.trackHeadlessTerminalData,
+      this.replaceHeadlessTerminalAfterExecutionContextChange,
+      this.readProviderTerminalTailLines,
+      this.readVisibleTerminalState,
+      this.disposeHeadlessTerminal,
+      this.rememberRestoredOrchestrationAuthority,
+      this.ptyExit_notifyTabAndMobile,
+      this.activeRemoteDesktopViewport,
+      this.resolveRemoteDesktopHostReclaimTarget,
+      this.hasRemoteDesktopLayoutState,
+      this.cancelPendingDriverMutations,
+      this.pickEarliestRestoreTarget,
+      this.isFreshSubscribe,
+      this.coalescesWith,
+      this.suppressResizesForMs,
+      this.notifyTerminalResize,
+      this.failActiveDispatchOnExit,
+      this.forgetPtyLivenessVerdict,
+      this.getPtyWriteHostPlatform,
+      this.buildStartupForDraft,
+      this.buildStartupForAgent,
+      this.markWorkspaceTrustedForAgent,
+      this.markLocalWorkspaceTrustedForAgent,
+      this.markRemoteWorkspaceTrustedForAgent,
+      this.pasteStartupDraftWhenReady,
+      this.sendStartupFollowupWhenReady,
+      this.createDefaultTabTerminals,
+      this.rememberPreservedBranchCleanupTarget,
+      this.preserveBranchHeadFallback,
+      this.ensurePtyBackedMobileSurfaceForRendererTab,
+      this.setPairedRendererSessionOwnership,
+      this.hasLiveShellForRendererTab,
+      this.deliverPendingStartupCommandToBareRendererPty,
+      this.listWorkspaceSessionPartitions,
+      this.stopPtysForDestructiveWorktreeRemoval,
+      this.getTerminalHandlesForPtyId,
+      this.getRecordedTerminalSleepHandles,
+      this.resolveWorkspaceTerminalStartupCwd,
+      this.resolveWorkspaceParentSelector,
+      this.validateLineageParent,
+      this.resolveLineageCandidateForTaskId,
+      this.buildResolvedWorktreeFromId,
+      this.hasFreshResolvedWorktreeCache,
+      this.resolveExplicitWorktreeIdScoped,
+      this.invalidateSshWorktreeScanCacheInternal,
+      this.getOrCreatePtyWorktreeRecord,
+      this.refreshFloatingWorkspacePtyLiveness,
+      this.pruneDisconnectedPtyTranscript,
+      this.pruneDisconnectedPtyRecords,
+      this.leafExistsForPty,
+      this.resolvePaneAgentIdentityField,
+      this.terminalExecutionHostField,
+      this.collectReturnedSessionTabIds,
+      this.getHookAgentRowForPane,
+      this.getMobileTerminalPaneKey,
+      this.getPtyRecordForPaneKey,
+      this.isRecognizedForegroundAgentProcess,
+      this.retireOrchestrationMailboxDeliveryForPty,
+      this.assertLiveTerminalHandleTargetsPty,
+      this.invalidatePtyIncarnationHandle,
+      this.findHandleForPtyRecord,
+      this.resolveExitWaiters,
+      this.resolvePtyExitWaiters,
+      this.isHeadlessMobileSessionPublication,
+      this.applyMobileSessionRetirementFences
+    ]
+  }
+
+  private buildMobileSessionFacadeDeps() {
+    return buildMobileSessionFacadeDepsImpl(this)
+  }
+
+  private buildPtyWorktreesDeps() {
+    return buildPtyWorktreesDepsImpl(this)
+  }
+
+  private buildTerminalClusterFacadeDeps() {
+    return buildTerminalClusterFacadeDepsImpl(this)
+  }
+
+  private buildManagedWorktreesDeps() {
+    return buildManagedWorktreesDepsImpl(this)
+  }
+
+  private buildAgentClusterFacadeDeps() {
+    return buildAgentClusterFacadeDepsImpl(this)
   }
 
   private hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -13180,6 +12618,11 @@ import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
 import { RuntimePtyWorktrees } from './runtime-pty-worktrees'
 import { RuntimeTerminalCluster } from './runtime-terminal-cluster-facade'
+import { buildMobileSessionFacadeDepsImpl } from './runtime-mobile-session-facade-wiring'
+import { buildPtyWorktreesDepsImpl } from './runtime-pty-worktrees-wiring'
+import { buildTerminalClusterFacadeDepsImpl } from './runtime-terminal-cluster-facade-wiring'
+import { buildManagedWorktreesDepsImpl } from './runtime-managed-worktrees-wiring'
+import { buildAgentClusterFacadeDepsImpl } from './runtime-agent-cluster-facade-wiring'
 import { RuntimeMobileSessionFacade } from './runtime-mobile-session-facade'
 import { RuntimeAgentClusterFacade } from './runtime-agent-cluster-facade'
 import { RuntimeManagedBaseCommands } from './runtime-managed-base-commands'
