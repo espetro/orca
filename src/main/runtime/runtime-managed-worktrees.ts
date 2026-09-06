@@ -1,11 +1,17 @@
 /* eslint-disable max-lines -- Why: extracted managed-worktree facade (bulk worktree cluster move); state-owner extraction can split further if it grows */
 import { omitUndefinedProperties, ownerSurfacing } from './runtime-terminal-surface-shared'
+import { RuntimeManagedWorktreeSleepCommands } from './runtime-managed-worktree-sleep-commands'
+import { RuntimeWorktreeLineageCommands } from './runtime-worktree-lineage-commands'
+import { RuntimeWorktreeResolutionCommands } from './runtime-worktree-resolution-commands'
+import { RuntimePtyWorktreeRecordCommands } from './runtime-pty-worktree-record-commands'
+import { RuntimeWorktreeDriftCommands } from './runtime-worktree-drift-commands'
+import { RuntimeWorktreeNotifyCommands } from './runtime-worktree-notify-commands'
+import { RuntimeWorktreeSummaryCommands } from './runtime-worktree-summary-commands'
 import {
   canCheckoutExistingLocalBranch,
   getLocalGitHubPrForBranch,
   getSelectedHostedReviewForBranch,
   hasLocalGitOptions,
-  parseExactWorktreeIdSelector,
   pathExists,
   resolveCreateBranchName
 } from './runtime-worktree-git-shared'
@@ -17,16 +23,13 @@ import type { getPRForBranch } from '../github/client/lookup/get-pr-for-branch'
 import {
   RuntimeLineageError,
   WORKTREE_CREATE_RESULT_TTL_MS,
-  WorktreeIdRequiresFullPathError,
-  extractOrchestrationTaskId,
   getSetupRunnerCommandPlatformForLaunch,
   hasLocalWorktreeBaseRef
 } from './orca-runtime'
 import type {
   OrchestrationCompatibilityTerminalAuthority,
-  WorktreeLineageInput,
   PtyControllerInventory,
-  PtyControllerTerminalIdentity,
+  WorktreeLineageInput,
   RemoteFetchResult,
   RemoteTrackingBase,
   ResolvedWorkspaceParent,
@@ -50,32 +53,20 @@ import type {
 } from './orca-runtime'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
-import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
-  getWorktreeExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
-import { NO_OBSERVING_PROVIDER_REASON } from '../../shared/pty-liveness-verdict'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
-import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
 import type {
   RuntimeGraphStatus,
-  RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf,
@@ -86,27 +77,17 @@ import type {
   RuntimeWorktreePsSummary,
   RuntimeWorktreeTerminalSleepResult
 } from '../../shared/runtime-types'
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../shared/runtime-types'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
-import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TaskSourceContext } from '../../shared/task-source-context'
-import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type { WorktreeBaseStatusEvent } from '../../shared/worktree/base-ref-drift-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import {
-  WORKTREE_ID_SEPARATOR,
-  getRepoIdFromWorktreeId,
-  splitWorktreeId,
-  splitWorktreeIdForFilesystem,
-  worktreeIdComparisonKey
-} from '../../shared/worktree/id'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   WorkspaceLineage,
@@ -115,7 +96,6 @@ import type {
 } from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
@@ -123,7 +103,6 @@ import type {
   WorkspaceLinkedItem,
   Worktree
 } from '../../shared/worktree/types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
@@ -131,11 +110,8 @@ import { resolveLocalGitUsername } from '../git/git-username'
 import {
   getBaseRefDefault,
   getBranchConflictKind,
-  getRecentDriftSubjects,
-  getRemoteDrift,
   resolveDefaultBaseRefWithLocalGit
 } from '../git/repo'
-import { gitExecFileAsync } from '../git/runner'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
@@ -165,15 +141,12 @@ import {
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from '../ipc/worktree-symlinks'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../../main/local-project-runtime-resolution'
 import type { Store } from '../persistence'
-import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
 } from '../project-runtime-git-options'
 import type { IPtyProvider } from '../providers/types'
-import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import {
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS,
@@ -193,41 +166,17 @@ import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 import type { MobileSessionTabsAgentStatusHeartbeat } from './mobile-session-tabs-agent-status-heartbeat'
 import type { OrchestrationDb } from './orchestration/db'
 import { buildObservedSetupCommand } from './orchestration/setup-completion-signal'
-import { resolveRuntimeBrowserNetworkExecutionHost } from './runtime-browser-network-execution-host'
 import {
   getRuntimeFolderWorkspaceInstanceId,
   mergeRuntimeFolderWorkspace
 } from './runtime-folder-workspace'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-tail-projection'
-import {
-  DRIFT_PROBE_SUBJECT_LIMIT,
-  PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
-  PTY_CONTROLLER_LIST_TIMEOUT_MS,
-  WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS,
-  branchSelectorMatches,
-  createIncrementalResolvedWorktreeLookup,
-  findResolvedWorktreeIdForPath,
-  findRuntimeWorktreeSummaryByPath,
-  getExplicitWorktreeIdSelector,
-  includeTargetResolvedWorktree,
-  indexPersistedPtySurfaceBindings,
-  indexPersistedPtyWorktreeBindings,
-  inferWorktreeIdFromPtyId,
-  maxTimestamp,
-  parseRuntimeWorktreeId,
-  runtimePathsEqual,
-  runtimeWorktreeIdentityKey,
-  runtimeWorktreeIdsEqual,
-  setsEqual,
-  waitForWorktreeTerminalMutation,
-  withTimeoutResult
-} from './runtime-tail-projection'
+import { runtimeWorktreeIdsEqual } from './runtime-tail-projection'
 import {
   getSelectedReviewBranch,
   isAllowedPushTargetRemoteConflict,
   isMatchingSelectedGitHubPr
 } from './selected-review-branch'
-import { teardownRpcDeadline } from './worktree-teardown'
 import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 
@@ -518,82 +467,384 @@ export type RuntimeManagedWorktreeCreateArgs = {
 }
 
 export class RuntimeManagedWorktrees {
-  ptyControllerAggregateInventoryGeneration = 0
-  terminalSleepGeneration = 0
-  ptyControllerInventoryGenerationByProvider = new Map<string, number>()
-  ptyControllerInventorySequence = 0
-
   private readonly deps: RuntimeManagedWorktreesDeps
   private worktreeCreateByMutationId = new Map<string, Promise<unknown>>()
   readonly worktreeLifecycleListeners = new Set<(event: RuntimeWorktreeLifecycleEvent) => void>()
-  readonly optimisticReconcileTokens = new Map<string, string>()
   readonly clientSessionTabSelections = new ClientSessionTabSelectionStore()
 
   constructor(deps: RuntimeManagedWorktreesDeps) {
     this.deps = deps
+    this.sleepCommands = new RuntimeManagedWorktreeSleepCommands(deps, this)
+    this.lineageCommands = new RuntimeWorktreeLineageCommands(deps, this)
+    this.resolutionCommands = new RuntimeWorktreeResolutionCommands(deps)
+    this.ptyRecordCommands = new RuntimePtyWorktreeRecordCommands(deps)
+    this.driftCommands = new RuntimeWorktreeDriftCommands(deps, this)
+    this.summaryCommands = new RuntimeWorktreeSummaryCommands(deps)
+    this.notifyCommands = new RuntimeWorktreeNotifyCommands(deps, {
+      worktreeLifecycleListeners: this.worktreeLifecycleListeners,
+      clientSessionTabSelections: this.clientSessionTabSelections,
+      notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
+      notifyWorktreesChangedForRemoteClients: (repoId) =>
+        this.notifyWorktreesChangedForRemoteClients(repoId),
+      notifyHostActivateWorktree: (...args) => this.notifyHostActivateWorktree(...args),
+      notifyClientsActivateWorktree: (...args) => this.notifyClientsActivateWorktree(...args)
+    })
+  }
+
+  private readonly sleepCommands: RuntimeManagedWorktreeSleepCommands
+  private readonly lineageCommands: RuntimeWorktreeLineageCommands
+  private readonly resolutionCommands: RuntimeWorktreeResolutionCommands
+  private readonly ptyRecordCommands: RuntimePtyWorktreeRecordCommands
+  private readonly driftCommands: RuntimeWorktreeDriftCommands
+  private readonly notifyCommands: RuntimeWorktreeNotifyCommands
+  private readonly summaryCommands: RuntimeWorktreeSummaryCommands
+
+  async refreshPtyWorktreeRecordsFromController(
+    resolvedWorktrees: ResolvedWorktree[],
+    targetWorktreeId: string | null = null,
+    deadline?: number
+  ): Promise<Set<string> | null> {
+    return this.ptyRecordCommands.refreshPtyWorktreeRecordsFromController(
+      resolvedWorktrees,
+      targetWorktreeId,
+      deadline
+    )
+  }
+
+  async refreshPtyWorktreeRecordsWithControllerInventory(
+    resolvedWorktrees: ResolvedWorktree[],
+    targetWorktreeId: string | null = null,
+    deadline?: number,
+    connectionId?: string | null
+  ): Promise<PtyControllerInventory | null> {
+    return this.ptyRecordCommands.refreshPtyWorktreeRecordsWithControllerInventory(
+      resolvedWorktrees,
+      targetWorktreeId,
+      deadline,
+      connectionId
+    )
+  }
+
+  get optimisticReconcileTokens(): Map<string, string> {
+    return this.driftCommands.optimisticReconcileTokens
+  }
+
+  getMobileSessionTabsForWorktree(
+    worktreeId: string,
+    clientNavigationId?: string
+  ): RuntimeMobileSessionTabsResult {
+    return this.summaryCommands.getMobileSessionTabsForWorktree(worktreeId, clientNavigationId)
+  }
+
+  collectMobileVisibleGraphChangedWorktrees(
+    previousTabs: Map<string, RuntimeSyncedTab>,
+    previousLeaves: Map<string, RuntimeLeafRecord>
+  ): Set<string> {
+    return this.summaryCommands.collectMobileVisibleGraphChangedWorktrees(
+      previousTabs,
+      previousLeaves
+    )
+  }
+
+  getSummaryForRuntimeWorktreeId(
+    summaries: Map<string, RuntimeWorktreePsSummary>,
+    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
+    missingRuntimeWorktreeIds: Set<string>,
+    runtimeWorktreeId: string
+  ): RuntimeWorktreePsSummary | null {
+    return this.summaryCommands.getSummaryForRuntimeWorktreeId(
+      summaries,
+      runtimeWorktreeSummaryPathIndex,
+      missingRuntimeWorktreeIds,
+      runtimeWorktreeId
+    )
+  }
+
+  emitWorktreeBaseStatus(event: WorktreeBaseStatusEvent): void {
+    return this.notifyCommands.emitWorktreeBaseStatus(event)
+  }
+
+  emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+    return this.notifyCommands.emitWorktreeLifecycle(event)
+  }
+
+  notifyActivateWorktree(
+    repoId: string,
+    worktreeId: string,
+    launch: {
+      setup?: CreateWorktreeResult['setup']
+      startup?: WorktreeStartupLaunch
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
+      navigationTarget: RuntimeNavigationTarget | undefined
+    }
+  ): void {
+    return this.notifyCommands.notifyActivateWorktree(repoId, worktreeId, launch)
+  }
+
+  notifyClientsActivateWorktree(
+    repoId: string,
+    worktreeId: string,
+    setup?: CreateWorktreeResult['setup'],
+    startup?: WorktreeStartupLaunch,
+    defaultTabs?: CreateWorktreeResult['defaultTabs']
+  ): void {
+    return this.notifyCommands.notifyClientsActivateWorktree(
+      repoId,
+      worktreeId,
+      setup,
+      startup,
+      defaultTabs
+    )
+  }
+
+  notifyHostActivateWorktree(
+    repoId: string,
+    worktreeId: string,
+    setup?: CreateWorktreeResult['setup'],
+    startup?: WorktreeStartupLaunch,
+    defaultTabs?: CreateWorktreeResult['defaultTabs']
+  ): void {
+    return this.notifyCommands.notifyHostActivateWorktree(
+      repoId,
+      worktreeId,
+      setup,
+      startup,
+      defaultTabs
+    )
+  }
+
+  notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
+    return this.notifyCommands.notifyWorktreeCatalogChangedForRemoteClients(repoId)
+  }
+
+  notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
+    return this.notifyCommands.notifyWorktreeFolderRenamed(repoId, oldWorktreeId, newWorktreeId)
+  }
+
+  notifyWorktreesChanged(repoId: string): void {
+    return this.notifyCommands.notifyWorktreesChanged(repoId)
+  }
+
+  notifyWorktreesChangedForRemoteClients(repoId: string): void {
+    return this.notifyCommands.notifyWorktreesChangedForRemoteClients(repoId)
+  }
+
+  onWorktreeLifecycle(listener: (event: RuntimeWorktreeLifecycleEvent) => void): () => void {
+    return this.notifyCommands.onWorktreeLifecycle(listener)
+  }
+
+  persistManagedWorktreeSortOrder(orderedIds: string[]): { updated: number } {
+    return this.notifyCommands.persistManagedWorktreeSortOrder(orderedIds)
+  }
+
+  async probeWorktreeDrift(worktreeSelector: string): Promise<{
+    base: string
+    behind: number
+    recentSubjects: string[]
+  } | null> {
+    return this.driftCommands.probeWorktreeDrift(worktreeSelector)
+  }
+
+  async reconcileWorktreeBaseStatus(args: {
+    repoId: string
+    repoPath: string
+    worktreeId: string
+    base: RemoteTrackingBase
+    branchName: string
+    createdBaseSha: string
+    token: string
+    fetchPromise: Promise<RemoteFetchResult>
+  }): Promise<void> {
+    return this.driftCommands.reconcileWorktreeBaseStatus(args)
+  }
+
+  getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {
+    return this.ptyRecordCommands.getOrCreatePtyWorktreeRecord(ptyId)
+  }
+
+  recordPtyWorktree(
+    ptyId: string,
+    worktreeId: string,
+    state: Partial<
+      Pick<
+        RuntimePtyWorktreeRecord,
+        | 'connected'
+        | 'lastOutputAt'
+        | 'preview'
+        | 'tabId'
+        | 'paneKey'
+        | 'title'
+        | 'connectionId'
+        | 'runtimeSessionOwned'
+        | 'isWsl'
+        | 'wslDistro'
+        | 'incarnationId'
+        | 'agentSessionOwners'
+      >
+    > = {}
+  ): RuntimePtyWorktreeRecord {
+    return this.ptyRecordCommands.recordPtyWorktree(ptyId, worktreeId, state)
   }
 
   async acquireWorktreeTerminalMutation(
     worktreeId: string,
     deadline?: number
   ): Promise<() => void> {
-    const key = runtimeWorktreeIdentityKey(worktreeId)
-    const previous = this.deps.terminalMutationTailByWorktreeId().get(key) ?? Promise.resolve()
-    let releaseCurrent = (): void => {}
-    const current = new Promise<void>((resolve) => {
-      releaseCurrent = resolve
-    })
-    const tail = previous.catch(() => {}).then(() => current)
-    this.deps.terminalMutationTailByWorktreeId().set(key, tail)
-    try {
-      await waitForWorktreeTerminalMutation(
-        previous.catch(() => {}),
-        deadline
-      )
-    } catch (error) {
-      // Why: resolve this abandoned queue node now so it can never acquire later and stop a terminal after the caller timed out.
-      releaseCurrent()
-      void tail.finally(() => {
-        if (this.deps.terminalMutationTailByWorktreeId().get(key) === tail) {
-          this.deps.terminalMutationTailByWorktreeId().delete(key)
-        }
-      })
-      throw error
-    }
-    let released = false
-    return () => {
-      if (released) {
-        return
-      }
-      released = true
-      releaseCurrent()
-      void tail.finally(() => {
-        if (this.deps.terminalMutationTailByWorktreeId().get(key) === tail) {
-          this.deps.terminalMutationTailByWorktreeId().delete(key)
-        }
-      })
-    }
+    return this.sleepCommands.acquireWorktreeTerminalMutation(worktreeId, deadline)
   }
 
   async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
-    if (!worktreeId) {
-      return () => {}
-    }
-    const release = await this.acquireWorktreeTerminalMutation(worktreeId)
-    const key = runtimeWorktreeIdentityKey(worktreeId)
-    const sleepState = this.deps.terminalSleepStateByWorktreeId().get(key)
-    if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
-      this.deps.terminalSleepStateByWorktreeId().delete(key)
-      this.deps.emitClientEvent({
-        type: 'worktreeTerminalSleepState',
-        worktreeId: sleepState.worktreeId,
-        generation: sleepState.generation,
-        phase: 'woken',
-        ptyIds: sleepState.ptyIds,
-        terminalHandles: sleepState.terminalHandles
-      })
-    }
-    return release
+    return this.sleepCommands.acquireWorktreeTerminalSpawn(worktreeId)
+  }
+
+  commitWorktreeTerminalSleepPtys(args: {
+    worktreeId: string
+    generation: number
+    ptyIds: readonly string[]
+    pendingPtyIds: Set<string>
+    committedPtyIds: Set<string>
+    terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
+  }): void {
+    return this.sleepCommands.commitWorktreeTerminalSleepPtys(args)
+  }
+
+  async sleepManagedWorktree(worktreeSelector: string): Promise<{ worktreeId: string }> {
+    return this.sleepCommands.sleepManagedWorktree(worktreeSelector)
+  }
+
+  async sleepResolvedWorktreeTerminals(
+    worktree: ResolvedWorktree
+  ): Promise<RuntimeWorktreeTerminalSleepResult> {
+    return this.sleepCommands.sleepResolvedWorktreeTerminals(worktree)
+  }
+
+  async sleepTerminalsForWorktree(
+    worktreeSelector: string
+  ): Promise<RuntimeWorktreeTerminalSleepResult> {
+    return this.sleepCommands.sleepTerminalsForWorktree(worktreeSelector)
+  }
+
+  async stopExactTerminalsForWorktree(
+    worktreeSelector: string,
+    expectedPtyIds: readonly string[],
+    opts: { keepHistory?: boolean; targetOnly?: boolean } = {}
+  ): Promise<{
+    stopped: number
+    stoppedPtyIds: string[]
+    livePtyIds: string[]
+    postStopVerified: boolean
+    postStopFailure?: string
+    remainingLivePtyIds?: string[]
+  }> {
+    return this.sleepCommands.stopExactTerminalsForWorktree(worktreeSelector, expectedPtyIds, opts)
+  }
+
+  async stopTerminalsForWorktree(
+    worktreeSelector: string,
+    options: {
+      deadline?: number
+      stopPty?: (
+        ptyId: string,
+        stop: () => boolean | Promise<boolean>
+      ) => Promise<{ stopped: boolean; owner: boolean }>
+      /** Authoritative id for an orphan whose selector no longer resolves. */
+      resolvedWorktreeId?: string
+      resolvedConnectionId?: string
+      resolvedRuntimeEnvironmentId?: string
+    } = {}
+  ): Promise<{ stopped: number }> {
+    return this.sleepCommands.stopTerminalsForWorktree(worktreeSelector, options)
+  }
+
+  async hydrateInferredWorktreeLineage(): Promise<void> {
+    return this.lineageCommands.hydrateInferredWorktreeLineage()
+  }
+
+  async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
+    return this.lineageCommands.listWorktreeLineage()
+  }
+
+  recordCreatedWorktreeLineage(
+    worktree: Pick<Worktree, 'id' | 'instanceId'>,
+    lineageResolution: WorktreeLineageResolution
+  ): {
+    lineage: WorktreeLineage | null
+    workspaceLineage: WorkspaceLineage | null
+    warnings: WorktreeLineageWarning[]
+  } {
+    return this.lineageCommands.recordCreatedWorktreeLineage(worktree, lineageResolution)
+  }
+
+  async resolveLineageForWorktreeCreate(
+    input?: WorktreeLineageInput
+  ): Promise<WorktreeLineageResolution> {
+    return this.lineageCommands.resolveLineageForWorktreeCreate(input)
+  }
+
+  getKnownWorkspaceSessionWorktreeIds(): Set<string> {
+    return this.resolutionCommands.getKnownWorkspaceSessionWorktreeIds()
+  }
+
+  async resolveActiveWorktreeContext(): Promise<{
+    worktreeId: string
+    path: string
+    branch: string
+    displayName: string
+  } | null> {
+    return this.resolutionCommands.resolveActiveWorktreeContext()
+  }
+
+  resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
+    id: string
+    repoId?: string
+    hostId?: ExecutionHostId
+  }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost> {
+    return this.resolutionCommands.resolveBrowserNetworkExecutionHostForWorktree(worktree)
+  }
+
+  async resolveMobileMarkdownWorktreeId(worktreeSelector: string, tabId: string): Promise<string> {
+    return this.resolutionCommands.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
+  }
+
+  resolveProjectRuntimeForWorktree(
+    worktreeId: string | null | undefined
+  ): ProjectExecutionRuntimeResolution | undefined {
+    return this.resolutionCommands.resolveProjectRuntimeForWorktree(worktreeId)
+  }
+
+  async resolveWorktreeRemovalTarget(
+    worktreeSelector: string,
+    requiredHostId?: ExecutionHostId
+  ): Promise<RuntimeWorktreeRemovalTarget> {
+    return this.resolutionCommands.resolveWorktreeRemovalTarget(worktreeSelector, requiredHostId)
+  }
+
+  async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+    return this.resolutionCommands.resolveWorktreeSelector(selector)
+  }
+
+  setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
+    return this.resolutionCommands.setWorkspaceSessionForWorktree(worktreeId, session)
+  }
+
+  tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
+    return this.resolutionCommands.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+  }
+
+  getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
+    return this.resolutionCommands.getWorkspaceSessionForWorktree(worktreeId)
+  }
+
+  getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
+    return this.resolutionCommands.getWorkspaceSessionHostIdForWorktree(worktreeId)
+  }
+
+  getValidatedExplicitWorktreeIdSelector(selector: string | undefined): string | null {
+    return this.resolutionCommands.getValidatedExplicitWorktreeIdSelector(selector)
+  }
+
+  folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
+    return this.resolutionCommands.folderWorkspaceToResolvedWorktree(folderWorkspace)
   }
 
   async activateManagedWorktree(
@@ -675,72 +926,6 @@ export class RuntimeManagedWorktrees {
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
-  }
-
-  collectMobileVisibleGraphChangedWorktrees(
-    previousTabs: Map<string, RuntimeSyncedTab>,
-    previousLeaves: Map<string, RuntimeLeafRecord>
-  ): Set<string> {
-    const changed = new Set<string>()
-    for (const [tabId, tab] of this.deps.tabs()) {
-      const prev = previousTabs.get(tabId)
-      if (!prev || prev.title !== tab.title) {
-        changed.add(tab.worktreeId)
-      }
-    }
-    for (const [tabId, tab] of previousTabs) {
-      if (!this.deps.tabs().has(tabId)) {
-        changed.add(tab.worktreeId)
-      }
-    }
-    for (const [leafKey, leaf] of this.deps.leaves()) {
-      const prev = previousLeaves.get(leafKey)
-      if (
-        !prev ||
-        prev.ptyId !== leaf.ptyId ||
-        prev.connected !== leaf.connected ||
-        prev.paneTitle !== leaf.paneTitle
-      ) {
-        changed.add(leaf.worktreeId)
-      }
-    }
-    for (const [leafKey, leaf] of previousLeaves) {
-      if (!this.deps.leaves().has(leafKey)) {
-        changed.add(leaf.worktreeId)
-      }
-    }
-    return changed
-  }
-
-  commitWorktreeTerminalSleepPtys(args: {
-    worktreeId: string
-    generation: number
-    ptyIds: readonly string[]
-    pendingPtyIds: Set<string>
-    committedPtyIds: Set<string>
-    terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
-  }): void {
-    const newlyCommittedPtyIds = [...new Set(args.ptyIds)]
-      .filter((ptyId) => !args.committedPtyIds.has(ptyId))
-      .sort()
-    for (const ptyId of newlyCommittedPtyIds) {
-      args.pendingPtyIds.delete(ptyId)
-      args.committedPtyIds.add(ptyId)
-    }
-    if (newlyCommittedPtyIds.length === 0) {
-      return
-    }
-    this.deps.emitClientEvent({
-      type: 'worktreeTerminalSleepState',
-      worktreeId: args.worktreeId,
-      generation: args.generation,
-      phase: 'committed',
-      ptyIds: newlyCommittedPtyIds,
-      terminalHandles: this.deps.getRecordedTerminalSleepHandles(
-        newlyCommittedPtyIds,
-        args.terminalHandlesByPtyId
-      )
-    })
   }
 
   async createManagedRemoteWorktree(
@@ -2219,50 +2404,6 @@ export class RuntimeManagedWorktrees {
     return created
   }
 
-  emitWorktreeBaseStatus(event: WorktreeBaseStatusEvent): void {
-    this.deps.notifier?.worktreeBaseStatus?.(event)
-  }
-
-  emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
-    this.deps.clientEventPublishingCommands().emitWorktreeLifecycle(event)
-  }
-
-  folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
-    const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    return {
-      ...worktree,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git: {
-        path: worktree.path,
-        head: worktree.head,
-        branch: worktree.branch,
-        isBare: worktree.isBare,
-        isMainWorktree: worktree.isMainWorktree
-      }
-    }
-  }
-
-  getKnownWorkspaceSessionWorktreeIds(): Set<string> {
-    const repos = this.deps.store?.getRepos?.() ?? []
-    const repoIds = new Set(repos.map((repo) => repo.id))
-    const hostIds = new Set<ExecutionHostId>(['local'])
-    for (const repo of repos) {
-      hostIds.add(getRepoExecutionHostId(repo))
-    }
-    const worktreeIds = new Set<string>()
-    for (const hostId of hostIds) {
-      const session = this.deps.store?.getWorkspaceSession?.(hostId)
-      for (const worktreeId of Object.keys(session?.tabsByWorktree ?? {})) {
-        if (repoIds.has(getRepoIdFromWorktreeId(worktreeId))) {
-          worktreeIds.add(worktreeId)
-        }
-      }
-    }
-    return worktreeIds
-  }
-
   getLivePtyIdsForWorktree(worktreeId: string, freshPtyIds?: ReadonlySet<string>): Set<string> {
     const ptyIds = new Set<string>()
     for (const leaf of this.deps.leaves().values()) {
@@ -2287,81 +2428,11 @@ export class RuntimeManagedWorktrees {
     return ptyIds
   }
 
-  getMobileSessionTabsForWorktree(
-    worktreeId: string,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult {
-    const snapshot = this.deps.mobileSessionTabsByWorktree().get(worktreeId)
-    if (!snapshot) {
-      return this.deps.projectMobileSessionTabsForClient(
-        {
-          worktree: worktreeId,
-          publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
-          snapshotVersion: 0,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        },
-        clientNavigationId
-      )
-    }
-    return this.deps.projectMobileSessionTabsForClient(
-      this.deps.toMobileSessionTabsResult(snapshot),
-      clientNavigationId
-    )
-  }
-
   // eslint-disable @typescript-eslint/no-explicit-any -- Delegation methods use any to forward arbitrary arguments
   getMobileSessionWorktreeIdsForPty() {
     return (this.deps.mobileTabSnapshots() as any).getMobileSessionWorktreeIdsForPty(
       ...(arguments as any)
     )
-  }
-
-  getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {
-    const existing = this.deps.ptysById().get(ptyId)
-    if (existing) {
-      return existing
-    }
-    const inferredWorktreeId = inferWorktreeIdFromPtyId(ptyId)
-    if (!inferredWorktreeId) {
-      return null
-    }
-    // Why: daemon-backed PTY session IDs are prefixed with the worktree ID so mobile summaries survive renderer graph gaps and reloads.
-    return this.recordPtyWorktree(ptyId, inferredWorktreeId)
-  }
-
-  getSummaryForRuntimeWorktreeId(
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingRuntimeWorktreeIds: Set<string>,
-    runtimeWorktreeId: string
-  ): RuntimeWorktreePsSummary | null {
-    const exact = summaries.get(runtimeWorktreeId)
-    if (exact) {
-      return exact
-    }
-    if (missingRuntimeWorktreeIds.has(runtimeWorktreeId)) {
-      return null
-    }
-    const parsed = parseRuntimeWorktreeId(runtimeWorktreeId)
-    if (!parsed) {
-      return null
-    }
-    const comparisonPlatform =
-      runtimeWorktreeSummaryPathIndex.platformByRepoId.get(parsed.repoId) ?? process.platform
-    const indexed = findRuntimeWorktreeSummaryByPath(
-      runtimeWorktreeSummaryPathIndex,
-      parsed.repoId,
-      parsed.worktreePath,
-      comparisonPlatform
-    )
-    if (indexed) {
-      return indexed
-    }
-    missingRuntimeWorktreeIds.add(runtimeWorktreeId)
-    return null
   }
 
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null {
@@ -2370,32 +2441,6 @@ export class RuntimeManagedWorktrees {
       ? this.deps.leaves().get(this.deps.getLeafKey(parsed.tabId, parsed.leafId))
       : null
     return leaf?.worktreeId ?? this.deps.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
-  }
-
-  getValidatedExplicitWorktreeIdSelector(selector: string | undefined): string | null {
-    const worktreeId = getExplicitWorktreeIdSelector(selector)
-    if (
-      worktreeId &&
-      !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
-      this.deps.store?.getRepo(worktreeId)
-    ) {
-      // Why: a registered repo id is a known-invalid worktree id; reject early before fast paths or Git/SSH scans hide the mistake.
-      throw new WorktreeIdRequiresFullPathError()
-    }
-    return worktreeId
-  }
-
-  getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-    return hostId ? (this.deps.store?.getWorkspaceSession?.(hostId) ?? null) : null
-  }
-
-  getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
-    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-    if (!hostId) {
-      throw new Error('folder_workspace_not_found')
-    }
-    return hostId
   }
 
   getWorktreeIdForTerminalHandle(handle: string): string | null {
@@ -2419,229 +2464,8 @@ export class RuntimeManagedWorktrees {
     return false
   }
 
-  async hydrateInferredWorktreeLineage(): Promise<void> {
-    const store = this.deps.store
-    if (
-      !store ||
-      typeof store.getWorktreeLineage !== 'function' ||
-      typeof store.setWorktreeLineage !== 'function'
-    ) {
-      return
-    }
-
-    const worktrees = await this.deps.listResolvedWorktrees()
-    for (const worktree of worktrees) {
-      if (store.getWorktreeLineage(worktree.id) || !worktree.instanceId) {
-        continue
-      }
-      const taskId = extractOrchestrationTaskId(worktree.comment)
-      if (!taskId) {
-        continue
-      }
-      const candidate = await this.deps.resolveLineageCandidateForTaskId(taskId)
-      if (
-        !candidate?.parent.instanceId ||
-        candidate.parent.type !== 'worktree' ||
-        candidate.parent.worktree.id === worktree.id
-      ) {
-        continue
-      }
-      try {
-        this.deps.validateLineageParent(worktree, candidate.parent.worktree)
-      } catch {
-        continue
-      }
-      store.setWorktreeLineage(worktree.id, {
-        worktreeId: worktree.id,
-        worktreeInstanceId: worktree.instanceId,
-        parentWorktreeId: candidate.parent.worktree.id,
-        parentWorktreeInstanceId: candidate.parent.instanceId,
-        origin: 'orchestration',
-        capture: { source: 'orchestration-context', confidence: 'inferred' },
-        taskId,
-        createdAt: Date.now()
-      })
-    }
-  }
-
   invalidateSshWorktreeScanCache(targetId: string): void {
     this.deps.invalidateSshWorktreeScanCacheInternal(targetId)
-  }
-
-  async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
-    await this.hydrateInferredWorktreeLineage()
-    return this.deps.store?.getAllWorktreeLineage?.() ?? {}
-  }
-
-  notifyActivateWorktree(
-    repoId: string,
-    worktreeId: string,
-    launch: {
-      setup?: CreateWorktreeResult['setup']
-      startup?: WorktreeStartupLaunch
-      defaultTabs?: CreateWorktreeResult['defaultTabs']
-      navigationTarget: RuntimeNavigationTarget | undefined
-    }
-  ): void {
-    const { setup, startup, defaultTabs } = launch
-    const navigation = launch.navigationTarget ?? 'all'
-    if (navigationTargetsHost(navigation)) {
-      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
-    }
-    if (navigationTargetsClients(navigation)) {
-      this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
-    }
-  }
-
-  notifyClientsActivateWorktree(
-    repoId: string,
-    worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
-  ): void {
-    this.deps.emitClientEvent(
-      toRuntimeActivateWorktreeEvent(repoId, worktreeId, setup, startup, defaultTabs)
-    )
-  }
-
-  notifyHostActivateWorktree(
-    repoId: string,
-    worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
-  ): void {
-    this.deps.notifier?.activateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
-  }
-
-  notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
-    this.deps.invalidateWorktreeScanCacheForRepo(repoId)
-    const matchingRepos = this.deps.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
-    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
-      return
-    }
-    this.notifyWorktreesChangedForRemoteClients(repoId)
-  }
-
-  notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
-    this.clientSessionTabSelections.migrateWorktree(oldWorktreeId, newWorktreeId)
-    this.deps.invalidateResolvedWorktreeCache()
-    this.deps.invalidateWorktreeScanCacheForRepo(repoId)
-    this.deps.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
-    // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
-    this.deps.emitClientEvent({ type: 'worktreesChanged', repoId })
-  }
-
-  notifyWorktreesChanged(repoId: string): void {
-    this.deps.clientEventPublishingCommands().notifyWorktreesChanged(repoId)
-  }
-
-  notifyWorktreesChangedForRemoteClients(repoId: string): void {
-    this.deps.invalidateResolvedWorktreeCache()
-    this.deps.emitClientEvent({ type: 'worktreesChanged', repoId })
-  }
-
-  onWorktreeLifecycle(listener: (event: RuntimeWorktreeLifecycleEvent) => void): () => void {
-    this.worktreeLifecycleListeners.add(listener)
-    return () => {
-      this.worktreeLifecycleListeners.delete(listener)
-    }
-  }
-
-  persistManagedWorktreeSortOrder(orderedIds: string[]): { updated: number } {
-    if (!this.deps.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const store = this.deps.store
-    const updates = planWorktreeSortOrderUpdates(
-      orderedIds,
-      (worktreeId) => store.getWorktreeMeta(worktreeId),
-      Date.now()
-    )
-    for (const update of updates) {
-      store.setWorktreeMeta(update.worktreeId, { sortOrder: update.sortOrder })
-    }
-    if (updates.length === 0) {
-      return { updated: 0 }
-    }
-    this.deps.invalidateResolvedWorktreeCache()
-    const changedRepoIds = new Set(
-      updates.flatMap((update) => {
-        const parsed = splitWorktreeId(update.worktreeId)
-        return parsed ? [parsed.repoId] : []
-      })
-    )
-    for (const repoId of changedRepoIds) {
-      this.notifyWorktreesChanged(repoId)
-    }
-    return { updated: updates.length }
-  }
-
-  async probeWorktreeDrift(worktreeSelector: string): Promise<{
-    base: string
-    behind: number
-    recentSubjects: string[]
-  } | null> {
-    const wt = await this.resolveWorktreeSelector(worktreeSelector)
-    if (!this.deps.store) {
-      return null
-    }
-    const repo = this.deps.store.getRepos().find((r) => r.id === wt.repoId)
-    if (!repo) {
-      return null
-    }
-    if (repo.connectionId) {
-      // Why: the drift probe uses local git helpers. Until the SSH provider
-      // exposes equivalent remote refs/log plumbing, fail closed to "unknown"
-      // instead of probing a server path on the desktop filesystem.
-      return null
-    }
-    const localGitExecOptions = getLocalProjectGitExecOptions(this.deps.requireStore(), repo)
-    const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(
-      this.deps.requireStore(),
-      repo
-    )
-    const meta = this.deps.store.getWorktreeMeta(wt.id)
-    const base =
-      meta?.baseRef ||
-      meta?.sparseBaseRef ||
-      repo.worktreeBaseRef ||
-      (await getBaseRefDefault(repo.path, localWorktreeGitOptions))
-    if (!base) {
-      // Why: brand-new repo with no remote primary — nothing to compare
-      // against, so there's no meaningful drift to report. Dispatch should
-      // not block on a probe that cannot form an opinion.
-      return null
-    }
-    const remoteTrackingBase = await this.deps.resolveRemoteTrackingBase(
-      repo.path,
-      base,
-      localWorktreeGitOptions
-    )
-    if (!remoteTrackingBase) {
-      return null
-    }
-    const remote = remoteTrackingBase.remote
-    // Why: fetch failures are non-fatal; we proceed with whatever the
-    // last-known remote ref points at. `fetchRemoteWithCache` never throws.
-    await this.deps.fetchRemoteWithCache(repo.path, remote, localWorktreeGitOptions)
-    const drift = await getRemoteDrift(wt.path, 'HEAD', base, localGitExecOptions)
-    if (!drift) {
-      return null
-    }
-    // Why: behind=0 proves HEAD..base is empty, so git log cannot add subjects.
-    const recentSubjects =
-      drift.behind > 0
-        ? await getRecentDriftSubjects(
-            wt.path,
-            'HEAD',
-            base,
-            DRIFT_PROBE_SUBJECT_LIMIT,
-            localGitExecOptions
-          )
-        : []
-    return { base, behind: drift.behind, recentSubjects }
   }
 
   async provisionManagedWorktreeTerminals(args: {
@@ -2740,1683 +2564,12 @@ export class RuntimeManagedWorktrees {
     return { setupSpawned, setupTerminalHandle }
   }
 
-  async reconcileWorktreeBaseStatus(args: {
-    repoId: string
-    repoPath: string
-    worktreeId: string
-    base: RemoteTrackingBase
-    branchName: string
-    createdBaseSha: string
-    token: string
-    fetchPromise: Promise<RemoteFetchResult>
-  }): Promise<void> {
-    const stillCurrent = (): boolean =>
-      this.optimisticReconcileTokens.get(args.worktreeId) === args.token
-    const emit = (event: Omit<WorktreeBaseStatusEvent, 'repoId' | 'worktreeId' | 'base'>): void => {
-      if (!stillCurrent()) {
-        return
-      }
-      this.deps.notifier?.worktreeBaseStatus?.({
-        repoId: args.repoId,
-        worktreeId: args.worktreeId,
-        base: args.base.base,
-        remote: args.base.remote,
-        ...event
-      })
-    }
-    const resolvePublishRemote = async (): Promise<string> => {
-      // Why: repos whose canonical publish remote is named differently (e.g.
-      // `upstream`, a forked `myfork`, or any non-`origin` configuration —
-      // including multi-segment names like `foo/bar` that this PR's resolver
-      // explicitly supports) would otherwise silently skip the conflict
-      // signal. Resolve from git config in priority order:
-      //   1) branch.<name>.pushRemote (explicit per-branch override)
-      //   2) remote.pushDefault (workspace-wide override)
-      //   3) branch.<name>.remote (tracked remote)
-      //   4) the base ref's own remote (matches resolveRemoteTrackingBase)
-      //   5) `origin` as a final fallback.
-      const tryConfig = async (key: string): Promise<string | null> => {
-        try {
-          const { stdout } = await gitExecFileAsync(['config', '--get', key], {
-            cwd: args.repoPath
-          })
-          const value = stdout.trim()
-          return value || null
-        } catch {
-          return null
-        }
-      }
-      return (
-        (await tryConfig(`branch.${args.branchName}.pushRemote`)) ??
-        (await tryConfig('remote.pushDefault')) ??
-        (await tryConfig(`branch.${args.branchName}.remote`)) ??
-        args.base.remote ??
-        'origin'
-      )
-    }
-    const checkPublishRemoteConflict = async (): Promise<void> => {
-      const publishRemote = await resolvePublishRemote()
-      try {
-        if (publishRemote !== args.base.remote) {
-          const result = await this.deps.getOrStartRemoteFetch(args.repoPath, publishRemote)
-          if (!result.ok) {
-            return
-          }
-        }
-        await gitExecFileAsync(
-          ['rev-parse', '--verify', `refs/remotes/${publishRemote}/${args.branchName}^{commit}`],
-          { cwd: args.repoPath }
-        )
-        if (stillCurrent()) {
-          this.deps.notifier?.worktreeRemoteBranchConflict?.({
-            repoId: args.repoId,
-            worktreeId: args.worktreeId,
-            remote: publishRemote,
-            branchName: args.branchName
-          })
-        }
-      } catch {
-        // No publish-remote conflict is the common case; stay quiet.
-      }
-    }
-
-    try {
-      const fetchResult = await args.fetchPromise
-      if (!stillCurrent()) {
-        return
-      }
-      if (!fetchResult.ok) {
-        emit({ status: 'unknown' })
-        return
-      }
-
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', `${args.base.ref}^{commit}`],
-        { cwd: args.repoPath }
-      )
-      const postFetchSha = stdout.trim()
-      if (postFetchSha === args.createdBaseSha) {
-        emit({ status: 'current' })
-        await checkPublishRemoteConflict()
-        return
-      }
-
-      try {
-        await gitExecFileAsync(['merge-base', '--is-ancestor', args.createdBaseSha, postFetchSha], {
-          cwd: args.repoPath
-        })
-      } catch {
-        emit({ status: 'base_changed' })
-        await checkPublishRemoteConflict()
-        return
-      }
-
-      const { stdout: countStdout } = await gitExecFileAsync(
-        ['rev-list', '--count', `${args.createdBaseSha}..${postFetchSha}`],
-        { cwd: args.repoPath }
-      )
-      const behind = Number(countStdout.trim())
-      if (!Number.isFinite(behind) || behind <= 0) {
-        emit({ status: 'current' })
-        await checkPublishRemoteConflict()
-        return
-      }
-      const { stdout: logStdout } = await gitExecFileAsync(
-        ['log', '--format=%s', '-n', '5', `${args.createdBaseSha}..${postFetchSha}`],
-        { cwd: args.repoPath }
-      )
-      emit({
-        status: 'drift',
-        behind,
-        recentSubjects: logStdout.split('\n').filter((line) => line.trim().length > 0)
-      })
-      await checkPublishRemoteConflict()
-    } catch (err) {
-      console.warn(`[worktree-base-status] reconcile failed for ${args.worktreeId}:`, err)
-      emit({ status: 'unknown' })
-    } finally {
-      // Why: reconcile is one-shot; clear the token so long-lived sessions
-      // that create many worktrees without removing them don't grow the
-      // optimisticReconcileTokens map monotonically. Removal still no-ops
-      // because the entry is already gone.
-      if (this.optimisticReconcileTokens.get(args.worktreeId) === args.token) {
-        this.optimisticReconcileTokens.delete(args.worktreeId)
-      }
-    }
-  }
-
-  recordCreatedWorktreeLineage(
-    worktree: Pick<Worktree, 'id' | 'instanceId'>,
-    lineageResolution: WorktreeLineageResolution
-  ): {
-    lineage: WorktreeLineage | null
-    workspaceLineage: WorkspaceLineage | null
-    warnings: WorktreeLineageWarning[]
-  } {
-    const warnings = lineageResolution.kind === 'none' ? [...lineageResolution.warnings] : []
-    let lineage: WorktreeLineage | null = null
-    let workspaceLineage: WorkspaceLineage | null = null
-    if (lineageResolution.kind !== 'lineage') {
-      return { lineage, workspaceLineage, warnings }
-    }
-
-    const childInstanceId = worktree.instanceId
-    const parentInstanceId = lineageResolution.parent.instanceId
-    const createdAt = Date.now()
-    if (
-      lineageResolution.parent.type === 'worktree' &&
-      childInstanceId &&
-      parentInstanceId &&
-      this.deps.store?.setWorktreeLineage
-    ) {
-      lineage = this.deps.store.setWorktreeLineage(worktree.id, {
-        worktreeId: worktree.id,
-        worktreeInstanceId: childInstanceId,
-        parentWorktreeId: lineageResolution.parent.worktree.id,
-        parentWorktreeInstanceId: parentInstanceId,
-        origin: lineageResolution.origin,
-        capture: lineageResolution.capture,
-        ...(lineageResolution.orchestrationRunId
-          ? { orchestrationRunId: lineageResolution.orchestrationRunId }
-          : {}),
-        ...(lineageResolution.taskId ? { taskId: lineageResolution.taskId } : {}),
-        ...(lineageResolution.coordinatorHandle
-          ? { coordinatorHandle: lineageResolution.coordinatorHandle }
-          : {}),
-        ...(lineageResolution.createdByTerminalHandle
-          ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
-          : {}),
-        createdAt
-      })
-    } else if (lineageResolution.parent.type === 'worktree') {
-      warnings.push({
-        code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-        message:
-          'Worktree created, but Orca could not record lineage because instance identity was unavailable.',
-        details: {
-          childHasInstanceId: Boolean(childInstanceId),
-          parentHasInstanceId: Boolean(parentInstanceId),
-          storeSupportsLineage: Boolean(this.deps.store?.setWorktreeLineage)
-        }
-      })
-    }
-    if (childInstanceId && this.deps.store?.setWorkspaceLineage) {
-      workspaceLineage = this.deps.store.setWorkspaceLineage({
-        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-        childInstanceId,
-        parentWorkspaceKey: lineageResolution.parent.workspaceKey,
-        parentInstanceId,
-        origin: lineageResolution.origin,
-        capture: lineageResolution.capture,
-        ...(lineageResolution.taskId ? { taskId: lineageResolution.taskId } : {}),
-        ...(lineageResolution.orchestrationRunId
-          ? { orchestrationRunId: lineageResolution.orchestrationRunId }
-          : {}),
-        ...(lineageResolution.coordinatorHandle
-          ? { coordinatorHandle: lineageResolution.coordinatorHandle }
-          : {}),
-        ...(lineageResolution.createdByTerminalHandle
-          ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
-          : {}),
-        createdAt
-      })
-    }
-    return { lineage, workspaceLineage, warnings }
-  }
-
-  recordPtyWorktree(
-    ptyId: string,
-    worktreeId: string,
-    state: Partial<
-      Pick<
-        RuntimePtyWorktreeRecord,
-        | 'connected'
-        | 'lastOutputAt'
-        | 'preview'
-        | 'tabId'
-        | 'paneKey'
-        | 'title'
-        | 'connectionId'
-        | 'runtimeSessionOwned'
-        | 'isWsl'
-        | 'wslDistro'
-        | 'incarnationId'
-        | 'agentSessionOwners'
-      >
-    > = {}
-  ): RuntimePtyWorktreeRecord {
-    let pty = this.deps.ptysById().get(ptyId)
-    if (!pty) {
-      const titleObservedAt = state.title ? this.deps.nextTitleObservationSequence() : null
-      const connectionId = state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null
-      const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-      const fallbackWslDistro =
-        process.platform === 'win32' && connectionId === null && worktreePath
-          ? parseWslUncPath(worktreePath)?.distro
-          : undefined
-      const wslDistro =
-        connectionId === null
-          ? (state.wslDistro ??
-            this.deps.wslDistroByPtyId().get(ptyId) ??
-            fallbackWslDistro ??
-            null)
-          : null
-      pty = {
-        ptyId,
-        incarnationId: state.incarnationId ?? null,
-        worktreeId,
-        connectionId,
-        runtimeSessionOwned: state.runtimeSessionOwned ?? false,
-        isWsl: state.isWsl ?? null,
-        wslDistro,
-        tabId: state.tabId ?? null,
-        paneKey: state.paneKey ?? null,
-        launchConfig: null,
-        launchToken: null,
-        launchIncarnationId: null,
-        launchAgent: null,
-        agentSessionOwners: (state.agentSessionOwners ?? []).map(cloneAgentSessionOwnerBinding),
-        foregroundAgent: null,
-        connected: state.connected ?? true,
-        disconnectedAt: state.connected === false ? Date.now() : null,
-        lastExitCode: null,
-        lastExitCause: null,
-        lastAgentStatus: null,
-        lastAgentStatusObservedLive: false,
-        lastAgentStatusStartedAtEpochMs: null,
-        lastAgentStatusRichInvalidatedAtEpochMs: null,
-        lastOscTitle: null,
-        lastOscTitleAt: null,
-        lastOscTitleEpochMs: null,
-        managementTitle: null,
-        managementTitleAt: null,
-        controllerTitle: null,
-        title: state.title ?? null,
-        titleUpdatedAt: titleObservedAt,
-        lastOutputAt: state.lastOutputAt ?? null,
-        tailBuffer: [],
-        tailTranscriptBuffer: [],
-        tailTranscriptChars: 0,
-        tailPartialLine: '',
-        tailPendingAnsi: '',
-        tailRedrawCursor: null,
-        tailTruncated: false,
-        tailLinesTotal: 0,
-        preview: state.preview ?? '',
-        waitBlockedAt: null
-      }
-      if (state.title) {
-        this.deps.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
-      }
-      this.deps.ptysById().set(ptyId, pty)
-      if (wslDistro) {
-        this.deps.wslDistroByPtyId().set(ptyId, wslDistro)
-      } else if (connectionId !== null) {
-        // Why: restored SSH IDs can collide with stale local parser state; connection ownership must win before their first output is parsed.
-        this.deps.wslDistroByPtyId().delete(ptyId)
-      }
-      // Why: restored/controller-discovered PTYs learn their worktree here without registerPty(), so URL enrichment must bind at this source.
-      advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-      return pty
-    }
-
-    pty.worktreeId = worktreeId
-    if (
-      state.incarnationId !== undefined &&
-      pty.incarnationId !== null &&
-      state.incarnationId !== pty.incarnationId
-    ) {
-      pty.agentSessionOwners = []
-    }
-    if (state.incarnationId !== undefined) {
-      if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
-        this.deps.invalidatePtyIncarnationHandle(ptyId)
-      }
-      pty.incarnationId = state.incarnationId
-    }
-    if (state.agentSessionOwners !== undefined) {
-      pty.agentSessionOwners = state.agentSessionOwners.map(cloneAgentSessionOwnerBinding)
-    }
-    if (state.connectionId !== undefined) {
-      pty.connectionId = state.connectionId
-      if (state.connectionId !== null) {
-        pty.wslDistro = null
-        this.deps.wslDistroByPtyId().delete(ptyId)
-      }
-    }
-    if (state.runtimeSessionOwned !== undefined) {
-      pty.runtimeSessionOwned = state.runtimeSessionOwned
-    }
-    if (state.isWsl !== undefined) {
-      pty.isWsl = state.isWsl
-    }
-    if (state.wslDistro !== undefined) {
-      pty.wslDistro = state.wslDistro
-      if (state.wslDistro) {
-        this.deps.wslDistroByPtyId().set(ptyId, state.wslDistro)
-      } else {
-        this.deps.wslDistroByPtyId().delete(ptyId)
-      }
-    }
-    if (state.tabId !== undefined) {
-      pty.tabId = state.tabId
-    }
-    if (state.paneKey !== undefined) {
-      pty.paneKey = state.paneKey
-    }
-    if (state.connected !== undefined) {
-      pty.connected = state.connected
-      pty.disconnectedAt = state.connected ? null : (pty.disconnectedAt ?? Date.now())
-    }
-    if (state.lastOutputAt !== undefined) {
-      pty.lastOutputAt = maxTimestamp(pty.lastOutputAt, state.lastOutputAt)
-    }
-    if (state.preview !== undefined && state.preview.length > 0) {
-      pty.preview = state.preview
-    }
-    if (state.title !== undefined && state.title !== null && state.title.length > 0) {
-      const observedAt = this.deps.nextTitleObservationSequence()
-      pty.title = state.title
-      pty.titleUpdatedAt = observedAt
-      this.deps.setPtyManagementTitleFromObservedTitle(pty, state.title, observedAt)
-    }
-    // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
-    advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-    return pty
-  }
-
-  async refreshPtyWorktreeRecordsFromController(
-    resolvedWorktrees: ResolvedWorktree[],
-    targetWorktreeId: string | null = null,
-    deadline?: number
-  ): Promise<Set<string> | null> {
-    const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-      resolvedWorktrees,
-      targetWorktreeId,
-      deadline
-    )
-    return inventory ? new Set(inventory.livePtyIds) : null
-  }
-
-  async refreshPtyWorktreeRecordsWithControllerInventory(
-    resolvedWorktrees: ResolvedWorktree[],
-    targetWorktreeId: string | null = null,
-    deadline?: number,
-    connectionId?: string | null
-  ): Promise<PtyControllerInventory | null> {
-    if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-      const targetedLiveness = this.deps.refreshFloatingWorkspacePtyLiveness()
-      if (targetedLiveness !== null) {
-        return {
-          livePtyIds: targetedLiveness,
-          allLivePtyIds: targetedLiveness,
-          terminalIdentityByPtyId: new Map(),
-          queriedHostIds: new Set([LOCAL_EXECUTION_HOST_ID])
-        }
-      }
-    }
-    if (!this.deps.ptyController?.listProcesses) {
-      return null
-    }
-    const inventoryGeneration = this.ptyControllerInventorySequence + 1
-    this.ptyControllerInventorySequence = inventoryGeneration
-    const livenessObservationAtStart = this.deps.ptyLivenessObservationSequence()
-    const providerKey = typeof connectionId === 'string' ? `ssh:${connectionId}` : 'local'
-    if (connectionId === undefined) {
-      this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
-    } else {
-      this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
-    }
-    const listBudgetMs =
-      deadline === undefined
-        ? PTY_CONTROLLER_LIST_TIMEOUT_MS
-        : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
-    // Why: give each provider a deadline strictly inside our own, so a relay that
-    // never answers still leaves the aggregate time to return the providers that did
-    // — expiring at the same instant would discard the whole inventory instead.
-    const providerListOpts = {
-      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS)
-    }
-    const processInventory =
-      connectionId === undefined && this.deps.ptyController.listProcessesWithHostScope
-        ? this.deps.ptyController.listProcessesWithHostScope(providerListOpts)
-        : this.deps.ptyController
-            .listProcesses(connectionId, providerListOpts)
-            .then((processes) => {
-              const hostIds = new Set<ExecutionHostId>()
-              if (connectionId === undefined || connectionId === null) {
-                hostIds.add(LOCAL_EXECUTION_HOST_ID)
-              } else {
-                hostIds.add(toSshExecutionHostId(connectionId))
-              }
-              if (connectionId === undefined) {
-                for (const process of processes) {
-                  const hostId = getPtyExecutionHost(process.id)
-                  if (
-                    hostId &&
-                    hostId !== 'foreign' &&
-                    parseExecutionHostId(hostId)?.kind === 'ssh'
-                  ) {
-                    hostIds.add(hostId)
-                  }
-                }
-              }
-              return { processes, hostIds: [...hostIds] }
-            })
-    const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
-    if (!sessionsResult.ok) {
-      // Why: a transient controller failure is not evidence that retained PTYs exited.
-      return null
-    }
-    const isCurrentInventory =
-      connectionId === undefined
-        ? this.ptyControllerAggregateInventoryGeneration === inventoryGeneration &&
-          ![...this.ptyControllerInventoryGenerationByProvider.values()].some(
-            (generation) => generation > inventoryGeneration
-          )
-        : this.ptyControllerInventoryGenerationByProvider.get(providerKey) ===
-            inventoryGeneration &&
-          this.ptyControllerAggregateInventoryGeneration <= inventoryGeneration
-    if (!isCurrentInventory) {
-      return null
-    }
-    const sessions = sessionsResult.value.processes
-    const queriedHostIds = new Set(sessionsResult.value.hostIds)
-    const controllerIdentityByPtyId = new Map<string, PtyControllerTerminalIdentity>()
-    const ptyIdByControllerHandle = new Map<string, string>()
-    const ambiguousControllerPtyIds = new Set<string>()
-    for (const session of sessions) {
-      const handle = session.terminalHandle?.trim()
-      const incarnationId = session.incarnationId?.trim()
-      if (!handle?.startsWith('term_') || !incarnationId) {
-        continue
-      }
-      const priorPtyId = ptyIdByControllerHandle.get(handle)
-      if (priorPtyId && priorPtyId !== session.id) {
-        ambiguousControllerPtyIds.add(priorPtyId)
-        ambiguousControllerPtyIds.add(session.id)
-        controllerIdentityByPtyId.delete(priorPtyId)
-        continue
-      }
-      if (controllerIdentityByPtyId.has(session.id)) {
-        ambiguousControllerPtyIds.add(session.id)
-        controllerIdentityByPtyId.delete(session.id)
-        continue
-      }
-      ptyIdByControllerHandle.set(handle, session.id)
-      controllerIdentityByPtyId.set(session.id, {
-        handle,
-        incarnationId,
-        ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {})
-      })
-    }
-    for (const ptyId of ambiguousControllerPtyIds) {
-      controllerIdentityByPtyId.delete(ptyId)
-    }
-    const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(resolvedWorktrees)
-    const persistedIndexesByHostId = new Map<
-      ExecutionHostId,
-      {
-        worktreeIdByPtyId: ReadonlyMap<string, string>
-        surfaceByPtyId: ReturnType<typeof indexPersistedPtySurfaceBindings>
-      }
-    >()
-    const getPersistedIndexes = (hostId: ExecutionHostId) => {
-      const existing = persistedIndexesByHostId.get(hostId)
-      if (existing) {
-        return existing
-      }
-      const persistedSession = this.deps.store?.getWorkspaceSession?.(hostId)
-      const indexes = {
-        worktreeIdByPtyId: indexPersistedPtyWorktreeBindings(persistedSession),
-        surfaceByPtyId: indexPersistedPtySurfaceBindings(persistedSession)
-      }
-      persistedIndexesByHostId.set(hostId, indexes)
-      return indexes
-    }
-    const allLivePtyIds = new Set(sessions.map((session) => session.id))
-    const selectedLivePtyIds = new Set<string>()
-    for (const session of sessions) {
-      // The owning inventory positively observed this PTY again; prior lost-contact doubt is stale.
-      this.deps.forgetPtyLivenessVerdict(session.id, livenessObservationAtStart)
-      const sessionConnectionId =
-        parseAppSshPtyId(session.id)?.connectionId ??
-        (typeof connectionId === 'string' ? connectionId : null)
-      const persistedIndexes = getPersistedIndexes(
-        sessionConnectionId ? toSshExecutionHostId(sessionConnectionId) : LOCAL_EXECUTION_HOST_ID
-      )
-      const controllerIdentity = controllerIdentityByPtyId.get(session.id)
-      const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
-      const providerWorktree = session.worktreeId
-        ? findResolvedWorktree(session.worktreeId)
-        : undefined
-      const inferredWorktreeId = inferWorktreeIdFromPtyId(session.id)
-      const persistedWorktree = persistedWorktreeId
-        ? findResolvedWorktree(persistedWorktreeId)
-        : undefined
-      const hasMigrationEvidence =
-        Boolean(session.worktreeId) &&
-        !providerWorktree &&
-        Boolean(persistedWorktree) &&
-        Boolean(inferredWorktreeId) &&
-        runtimeWorktreeIdsEqual(session.worktreeId as string, inferredWorktreeId as string)
-      // Why: an unresolved explicit provider owner remains authoritative unless the session id proves it was frozen before a persisted rename migration.
-      const worktreeId = providerWorktree
-        ? providerWorktree.id
-        : hasMigrationEvidence
-          ? (persistedWorktree?.id ?? null)
-          : (session.worktreeId ??
-            persistedWorktree?.id ??
-            inferredWorktreeId ??
-            findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
-      const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
-      const restoresExactSurface =
-        persistedSurface &&
-        session.incarnationId &&
-        persistedSurface.incarnationId === session.incarnationId &&
-        Boolean(worktreeId) &&
-        runtimeWorktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
-      this.deps.adoptControllerTerminalHandle(
-        session.id,
-        controllerIdentity?.handle ?? session.terminalHandle,
-        controllerIdentity?.incarnationId ?? session.incarnationId,
-        { exactRestoredSurface: Boolean(restoresExactSurface && controllerIdentity) }
-      )
-      if (
-        !targetWorktreeId ||
-        (worktreeId && runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
-        selectedLivePtyIds.add(session.id)
-      }
-      if (
-        targetWorktreeId &&
-        (!worktreeId || !runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
-        const receipt = this.deps.restoredOrchestrationAuthorityByPtyId().get(session.id)
-        if (receipt && runtimeWorktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
-          this.deps.restoredOrchestrationAuthorityByPtyId().delete(session.id)
-        }
-        continue
-      }
-      this.deps.restoredOrchestrationAuthorityByPtyId().delete(session.id)
-      if (worktreeId) {
-        const pty = this.recordPtyWorktree(session.id, worktreeId, {
-          connected: true,
-          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
-          agentSessionOwners: session.incarnationId ? (session.agentSessionOwners ?? []) : [],
-          ...(session.wslDistro !== undefined
-            ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }
-            : {}),
-          ...(restoresExactSurface
-            ? { tabId: persistedSurface.tabId, paneKey: persistedSurface.paneKey }
-            : {})
-        })
-        if (restoresExactSurface && controllerIdentity) {
-          this.deps.rememberRestoredOrchestrationAuthority(
-            pty,
-            controllerIdentity.handle,
-            controllerIdentity.incarnationId
-          )
-        } else {
-          this.deps.restoredOrchestrationAuthorityByPtyId().delete(session.id)
-        }
-        pty.controllerTitle = session.title?.trim() || null
-        this.deps.reconcileSubscriberDrivenProviderAttach(session.id)
-      }
-      // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
-      this.deps.refreshPtyForegroundAgent()(session.id)
-    }
-    for (const pty of this.deps.ptysById().values()) {
-      if (connectionId !== undefined && pty.connectionId !== connectionId) {
-        continue
-      }
-      if (!allLivePtyIds.has(pty.ptyId) && !this.deps.leafExistsForPty(pty.ptyId)) {
-        const currentVerdict = this.deps.ptyLivenessVerdictByPtyId().get(pty.ptyId)
-        if (
-          currentVerdict &&
-          currentVerdict.observedAt > livenessObservationAtStart &&
-          currentVerdict.verdict.status === 'unverifiable'
-        ) {
-          pty.connected = false
-          pty.disconnectedAt ??= Date.now()
-          continue
-        }
-        const observed = this.deps.ptyController.hasPty?.(pty.ptyId)
-        if (observed === true) {
-          // Why: an SSH spawn can become addressable before an overlapping relay list includes it.
-          allLivePtyIds.add(pty.ptyId)
-          if (
-            !targetWorktreeId ||
-            (pty.worktreeId && runtimeWorktreeIdsEqual(pty.worktreeId, targetWorktreeId))
-          ) {
-            selectedLivePtyIds.add(pty.ptyId)
-          }
-          pty.connected = true
-          pty.disconnectedAt = null
-          this.deps.forgetPtyLivenessVerdict(pty.ptyId)
-          continue
-        }
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
-        pty.agentSessionOwners = []
-        // Why: this list only enumerates registered providers, so a dropped relay
-        // clears `connected` for every one of its PTYs at once. Only `false` here
-        // is an observed absence; `null` means no provider could be asked.
-        if (observed === false) {
-          this.deps.forgetPtyLivenessVerdict(pty.ptyId)
-        } else if (observed === null) {
-          this.deps.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)
-        }
-      }
-    }
-    // Why: runs after the hasPty rescue so a still-addressable pane keeps its receipt.
-    // A provider that failed to list is absent from `sessions`, and dropping authority on
-    // that silence would retire an orchestration handle the relay can still reach.
-    for (const [ptyId, receipt] of this.deps.restoredOrchestrationAuthorityByPtyId()) {
-      const inScope =
-        connectionId === undefined ||
-        (connectionId === null && receipt.hostScope.kind !== 'ssh') ||
-        (typeof connectionId === 'string' &&
-          receipt.hostScope.kind === 'ssh' &&
-          receipt.hostScope.targetId === connectionId)
-      if (inScope && !allLivePtyIds.has(ptyId)) {
-        this.deps.restoredOrchestrationAuthorityByPtyId().delete(ptyId)
-      }
-    }
-    this.deps.pruneDisconnectedPtyRecords()
-    return {
-      livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
-      allLivePtyIds,
-      terminalIdentityByPtyId: controllerIdentityByPtyId,
-      queriedHostIds
-    }
-  }
-
-  async resolveActiveWorktreeContext(): Promise<{
-    worktreeId: string
-    path: string
-    branch: string
-    displayName: string
-  } | null> {
-    let worktreeId = this.deps.store?.getWorkspaceSession?.()?.activeWorktreeId ?? null
-    if (!worktreeId && this.deps.graphStatus() === 'ready') {
-      for (const tab of this.deps.tabs().values()) {
-        if (tab.activeLeafId && tab.worktreeId) {
-          worktreeId = tab.worktreeId
-          break
-        }
-      }
-    }
-    if (!worktreeId) {
-      return null
-    }
-    try {
-      const resolved = await this.resolveWorktreeSelector(`id:${worktreeId}`)
-      return {
-        worktreeId: resolved.id,
-        path: resolved.git.path,
-        branch: resolved.git.branch,
-        displayName: resolved.displayName
-      }
-    } catch {
-      return null
-    }
-  }
-
-  resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
-    id: string
-    repoId?: string
-    hostId?: ExecutionHostId
-  }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost> {
-    const repo = worktree?.repoId ? this.deps.requireStore().getRepo(worktree.repoId) : undefined
-    const executionHostId = worktree
-      ? getWorktreeExecutionHostId(worktree, repo)
-      : LOCAL_EXECUTION_HOST_ID
-    const parsedHost = parseExecutionHostId(executionHostId)
-    return resolveRuntimeBrowserNetworkExecutionHost({
-      runtimeId: this.deps.getRuntimeId(),
-      runtimeRevision: this.deps.getStartedAt(),
-      executionHostId,
-      ...(worktree
-        ? {
-            projectRuntime: resolveLocalProjectRuntimeForWorktreeId(
-              this.deps.requireStore(),
-              worktree.id
-            )
-          }
-        : {}),
-      ...(parsedHost?.kind === 'ssh'
-        ? { sshState: getRegisteredSshState(parsedHost.targetId) }
-        : {})
-    })
-  }
-
-  async resolveLineageForWorktreeCreate(
-    input?: WorktreeLineageInput
-  ): Promise<WorktreeLineageResolution> {
-    const parentSelectorNextSteps = [
-      'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-      'Retry with --no-parent to create without lineage.'
-    ]
-    const parentSelectorNotFoundMessage = (err: unknown): string =>
-      err instanceof WorktreeIdRequiresFullPathError
-        ? err.message
-        : 'Parent selector was not found.'
-
-    if (!input) {
-      return { kind: 'none', warnings: [] }
-    }
-
-    if (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Choose either one parent selector or --no-parent.'
-      )
-    }
-    if (input.parentWorkspace && input.parentWorktree) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Choose either one parent selector or --no-parent.'
-      )
-    }
-
-    if (input.noParent === true) {
-      return { kind: 'none', warnings: [] }
-    }
-
-    if (input.parentWorkspace) {
-      try {
-        const parent = await this.deps.resolveWorkspaceParentSelector(input.parentWorkspace)
-        // Why: a picker in the app must record the same provenance as a local create, or the same
-        // user action would carry different cleanup semantics depending on where the repo lives.
-        return {
-          kind: 'lineage',
-          parent,
-          origin: input.parentWorkspaceOrigin === 'manual' ? 'manual' : 'cli',
-          capture:
-            input.parentWorkspaceOrigin === 'manual'
-              ? {
-                  source: parent.type === 'worktree' ? 'manual-action' : 'active-workspace',
-                  confidence: 'explicit'
-                }
-              : { source: 'explicit-cli-flag', confidence: 'explicit' }
-        }
-      } catch (err) {
-        throw new RuntimeLineageError(
-          'LINEAGE_PARENT_NOT_FOUND',
-          parentSelectorNotFoundMessage(err),
-          {
-            nextSteps: parentSelectorNextSteps
-          }
-        )
-      }
-    }
-
-    if (input.parentWorktree) {
-      try {
-        const parent = await this.resolveWorktreeSelector(input.parentWorktree)
-        return {
-          kind: 'lineage',
-          parent: {
-            type: 'worktree',
-            workspaceKey: worktreeWorkspaceKey(parent.id),
-            worktree: parent,
-            instanceId: parent.instanceId ?? null
-          },
-          origin: 'cli',
-          capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
-        }
-      } catch (err) {
-        throw new RuntimeLineageError(
-          'LINEAGE_PARENT_NOT_FOUND',
-          parentSelectorNotFoundMessage(err),
-          {
-            nextSteps: parentSelectorNextSteps
-          }
-        )
-      }
-    }
-
-    const warnings: WorktreeLineageWarning[] = []
-    const candidates: WorktreeLineageCandidate[] = []
-    let cwdCandidate: WorktreeLineageCandidate | null = null
-    let terminalContextResolved = false
-
-    if (input.envParentWorkspace) {
-      try {
-        candidates.push({
-          source: 'env-workspace',
-          parent: await this.deps.resolveWorkspaceParentSelector(input.envParentWorkspace)
-        })
-      } catch {
-        warnings.push({
-          code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message: 'Worktree created, but Orca could not validate the environment parent context.',
-          details: { envParentWorkspace: input.envParentWorkspace }
-        })
-      }
-    }
-
-    if (input.orchestrationContext?.parentWorktreeId) {
-      try {
-        const parent = await this.resolveWorktreeSelector(
-          `id:${input.orchestrationContext.parentWorktreeId}`
-        )
-        candidates.push({
-          source: 'orchestration-context',
-          parent: {
-            type: 'worktree',
-            workspaceKey: worktreeWorkspaceKey(parent.id),
-            worktree: parent,
-            instanceId: parent.instanceId ?? null
-          }
-        })
-      } catch {
-        // Keep creation recoverable; the warning below covers missing inferred context.
-      }
-    }
-
-    const commentTaskId = extractOrchestrationTaskId(input.comment)
-    if (commentTaskId) {
-      const candidate = await this.deps.resolveLineageCandidateForTaskId(commentTaskId)
-      if (candidate) {
-        candidates.push(candidate)
-      }
-    }
-
-    if (input.callerTerminalHandle) {
-      try {
-        const terminal = await this.deps.showTerminal(input.callerTerminalHandle)
-        const terminalParent = await this.deps.resolveWorkspaceParentSelector(
-          `id:${terminal.worktreeId}`
-        )
-        const activeDispatch = this.deps._orchestrationDb?.getActiveDispatchForTerminal(
-          input.callerTerminalHandle
-        )
-        const activeRun = this.deps._orchestrationDb?.getActiveCoordinatorRun()
-        if (activeDispatch) {
-          candidates.push({
-            source: 'orchestration-context',
-            parent: terminalParent,
-            taskId: activeDispatch.task_id,
-            ...(activeRun
-              ? {
-                  orchestrationRunId: activeRun.id,
-                  coordinatorHandle: activeRun.coordinator_handle
-                }
-              : {})
-          })
-        } else {
-          candidates.push({
-            source: 'terminal-context',
-            parent: terminalParent
-          })
-        }
-        terminalContextResolved = true
-      } catch {
-        // Why: a stale terminal handle (reload/SSH reconnect) shouldn't drop lineage; keep resolving other inferred candidates.
-        warnings.push({
-          code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message:
-            'Worktree created, but Orca could not validate the caller terminal as a parent context.',
-          details: { callerTerminalHandle: input.callerTerminalHandle }
-        })
-      }
-    }
-
-    if (input.cwdParentWorktree) {
-      try {
-        cwdCandidate = {
-          source: 'cwd-context',
-          parent: await this.deps.resolveWorkspaceParentSelector(input.cwdParentWorktree)
-        }
-      } catch {
-        warnings.push({
-          code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message:
-            'Worktree created, but Orca could not validate the current directory as a parent context.',
-          details: { cwdParentWorktree: input.cwdParentWorktree }
-        })
-      }
-    }
-
-    if (candidates.length === 0 && cwdCandidate) {
-      candidates.push(cwdCandidate)
-    }
-
-    if (candidates.length === 0) {
-      return { kind: 'none', warnings }
-    }
-
-    const [first] = candidates
-    const conflict = candidates.find(
-      (candidate) => candidate.parent.workspaceKey !== first.parent.workspaceKey
-    )
-    if (conflict) {
-      return {
-        kind: 'none',
-        warnings: [
-          {
-            code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
-            message: 'Worktree created, but Orca could not prove which parent context caused it.',
-            details: {
-              terminalParentWorkspaceKey: candidates.find((c) => c.source === 'terminal-context')
-                ?.parent.workspaceKey,
-              envParentWorkspaceKey: candidates.find((c) => c.source === 'env-workspace')?.parent
-                .workspaceKey,
-              orchestrationParentWorkspaceKey: candidates.find(
-                (c) => c.source === 'orchestration-context'
-              )?.parent.workspaceKey
-            }
-          }
-        ]
-      }
-    }
-
-    const preferred =
-      candidates.find((candidate) => candidate.source === 'env-workspace') ??
-      candidates.find((candidate) => candidate.source === 'orchestration-context') ??
-      first
-    return {
-      kind: 'lineage',
-      parent: preferred.parent,
-      origin: preferred.source === 'orchestration-context' ? 'orchestration' : 'cli',
-      capture: { source: preferred.source, confidence: 'inferred' },
-      ...((preferred.orchestrationRunId ?? input.orchestrationContext?.orchestrationRunId)
-        ? {
-            orchestrationRunId:
-              preferred.orchestrationRunId ?? input.orchestrationContext?.orchestrationRunId
-          }
-        : {}),
-      ...((preferred.taskId ?? input.orchestrationContext?.taskId)
-        ? { taskId: preferred.taskId ?? input.orchestrationContext?.taskId }
-        : {}),
-      ...((preferred.coordinatorHandle ?? input.orchestrationContext?.coordinatorHandle)
-        ? {
-            coordinatorHandle:
-              preferred.coordinatorHandle ?? input.orchestrationContext?.coordinatorHandle
-          }
-        : {}),
-      ...(terminalContextResolved && input.callerTerminalHandle
-        ? { createdByTerminalHandle: input.callerTerminalHandle }
-        : {})
-    }
-  }
-
-  async resolveMobileMarkdownWorktreeId(worktreeSelector: string, tabId: string): Promise<string> {
-    const worktreeId =
-      this.getValidatedExplicitWorktreeIdSelector(worktreeSelector) ??
-      (await this.resolveWorktreeSelector(worktreeSelector)).id
-    const snapshot = this.deps.mobileSessionTabsByWorktree().get(worktreeId)
-    const tab = snapshot?.tabs.find(
-      (candidate): candidate is RuntimeMobileSessionMarkdownTab =>
-        candidate.type === 'markdown' && candidate.id === tabId
-    )
-    if (!tab) {
-      throw new Error('tab_not_found')
-    }
-    return worktreeId
-  }
-
-  resolveProjectRuntimeForWorktree(
-    worktreeId: string | null | undefined
-  ): ProjectExecutionRuntimeResolution | undefined {
-    return this.deps.store && worktreeId
-      ? resolveLocalProjectRuntimeForWorktreeId(this.deps.requireStore(), worktreeId)
-      : undefined
-  }
-
-  async resolveWorktreeRemovalTarget(
-    worktreeSelector: string,
-    requiredHostId?: ExecutionHostId
-  ): Promise<RuntimeWorktreeRemovalTarget> {
-    try {
-      const exactTarget = parseExactWorktreeIdSelector(worktreeSelector)
-      const worktree =
-        exactTarget && requiredHostId
-          ? ((await this.deps.resolveExplicitWorktreeIdScoped(exactTarget.id, requiredHostId)) ??
-            (() => {
-              throw new Error('selector_not_found')
-            })())
-          : await this.resolveWorktreeSelector(worktreeSelector)
-      const removalTarget = {
-        id: worktree.id,
-        repoId: worktree.repoId,
-        path: worktree.path
-      }
-      return worktree.pushTarget
-        ? { ...removalTarget, pushTarget: worktree.pushTarget }
-        : removalTarget
-    } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
-        throw error
-      }
-      const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
-      const meta = removalTarget ? this.deps.store?.getWorktreeMeta(removalTarget.id) : undefined
-      if (
-        !removalTarget ||
-        !meta ||
-        (requiredHostId !== undefined && meta.hostId !== requiredHostId)
-      ) {
-        throw error
-      }
-      // Why: delete requests can arrive after Git no longer lists the worktree.
-      // Only exact IDs with persisted Orca metadata are accepted here so
-      // branch/path selectors cannot resolve to an arbitrary missing path.
-      return meta.pushTarget ? { ...removalTarget, pushTarget: meta.pushTarget } : removalTarget
-    }
-  }
-
-  async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    // Why only `id:`: every other selector kind is matched across the whole fleet, and their
-    // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
-    // winner where today they correctly refuse. An `id:` selector already names its repo.
-    if (explicitWorktreeId && !this.deps.hasFreshResolvedWorktreeCache()) {
-      const scoped = await this.deps.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
-      if (scoped) {
-        return scoped
-      }
-    }
-    const worktrees = await this.deps.listResolvedWorktrees()
-    let candidates: ResolvedWorktree[]
-
-    if (selector === 'active') {
-      throw new Error('selector_not_found')
-    }
-
-    if (selector.startsWith('identity:')) {
-      const identityKey = selector.slice('identity:'.length)
-      candidates = worktrees.filter((worktree) => worktree.identity?.key === identityKey)
-    } else if (selector.startsWith('id:')) {
-      const worktreeId = explicitWorktreeId ?? selector.slice(3)
-      candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
-      if (candidates.length === 0) {
-        // Why (#16243): `id:` is the only shape the renderer can send, and a stored id can spell
-        // its path differently from the scan — the divergence `path:` has always absorbed.
-        // The bare unprefixed branch below stays byte-exact on purpose: only `id:` reaches a
-        // renderer caller, so `id:repo::p/` folds here while bare `repo::p/` still misses.
-        const comparisonKey = worktreeIdComparisonKey(worktreeId)
-        candidates = comparisonKey
-          ? worktrees.filter((worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey)
-          : candidates
-      }
-      if (candidates.length === 0) {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        const repo = parsed ? this.deps.store?.getRepo(parsed.repoId) : null
-        const fallback =
-          repo?.connectionId && this.deps.store?.getWorktreeMeta(worktreeId)
-            ? this.deps.buildResolvedWorktreeFromId(worktreeId)
-            : null
-        if (fallback !== null) {
-          candidates = [fallback]
-        }
-      }
-    } else if (selector.startsWith('path:')) {
-      candidates = worktrees.filter((worktree) =>
-        runtimePathsEqual(worktree.path, selector.slice(5))
-      )
-      if (candidates.length > 1) {
-        const hostIds = new Set(
-          candidates.map((worktree) => {
-            const repo = this.deps.store?.getRepo(worktree.repoId)
-            return getWorktreeExecutionHostId(worktree, repo)
-          })
-        )
-        // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
-        if (hostIds.size === 1) {
-          candidates = [candidates[0]]
-        }
-      }
-    } else if (selector.startsWith('branch:')) {
-      const branchSelector = selector.slice(7)
-      candidates = worktrees.filter((worktree) =>
-        branchSelectorMatches(worktree.branch, branchSelector)
-      )
-    } else if (selector.startsWith('name:')) {
-      // Keep display-name matching exact so duplicate names hit the same ambiguity path as other selectors.
-      candidates = worktrees.filter((worktree) => worktree.displayName === selector.slice(5))
-    } else if (selector.startsWith('issue:')) {
-      candidates = worktrees.filter(
-        (worktree) =>
-          worktree.linkedIssue !== null && String(worktree.linkedIssue) === selector.slice(6)
-      )
-    } else {
-      candidates = worktrees.filter(
-        (worktree) =>
-          worktree.id === selector ||
-          runtimePathsEqual(worktree.path, selector) ||
-          branchSelectorMatches(worktree.branch, selector)
-      )
-    }
-
-    if (candidates.length === 1) {
-      return candidates[0]
-    }
-    if (candidates.length > 1) {
-      throw new Error('selector_ambiguous')
-    }
-    throw new Error('selector_not_found')
-  }
-
-  setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
-    this.deps.store?.setWorkspaceSession?.(
-      session,
-      this.getWorkspaceSessionHostIdForWorktree(worktreeId)
-    )
-  }
-
   async showManagedWorktree(worktreeSelector: string) {
     return await this.resolveWorktreeSelector(worktreeSelector)
   }
 
-  async sleepManagedWorktree(worktreeSelector: string): Promise<{ worktreeId: string }> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    // Why: sleep is renderer-initiated on desktop (it tears down tab state
-    // before killing PTYs). The notifier tells the renderer to run its own
-    // sleep flow so all cleanup happens in the correct order.
-    this.deps.notifier?.sleepWorktree(worktree.id)
-    return { worktreeId: worktree.id }
-  }
-
-  async sleepResolvedWorktreeTerminals(
-    worktree: ResolvedWorktree
-  ): Promise<RuntimeWorktreeTerminalSleepResult> {
-    const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
-    const releaseMutation = await this.acquireWorktreeTerminalMutation(worktree.id, sleepDeadline)
-    const key = runtimeWorktreeIdentityKey(worktree.id)
-    const existingSleepState = this.deps.terminalSleepStateByWorktreeId().get(key)
-    if (existingSleepState?.phase === 'sleeping') {
-      try {
-        const resolvedWorktrees = includeTargetResolvedWorktree(
-          [...(await this.deps.getResolvedWorktreeMap()).values()],
-          worktree
-        )
-        const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
-          resolvedWorktrees,
-          worktree.id,
-          sleepDeadline
-        )
-        if (!refreshedPtyLiveness) {
-          throw new Error('terminal_liveness_unavailable')
-        }
-        if (this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness).size === 0) {
-          releaseMutation()
-          return {
-            stopped: 0,
-            stoppedPtyIds: [],
-            livePtyIds: [],
-            postStopVerified: true
-          }
-        }
-        this.deps.emitClientEvent({
-          type: 'worktreeTerminalSleepState',
-          worktreeId: existingSleepState.worktreeId,
-          generation: existingSleepState.generation,
-          phase: 'woken',
-          ptyIds: existingSleepState.ptyIds,
-          terminalHandles: existingSleepState.terminalHandles
-        })
-        this.deps.terminalSleepStateByWorktreeId().delete(key)
-      } catch (error) {
-        releaseMutation()
-        throw error
-      }
-    }
-    const priorPartialState = existingSleepState?.phase === 'partial' ? existingSleepState : null
-    const committedPtyIds = new Set(priorPartialState?.ptyIds ?? [])
-    const terminalHandlesByPtyId = { ...priorPartialState?.terminalHandlesByPtyId }
-    const pendingPtyIds = new Set<string>()
-    let generation = 0
-    let fullyCommitted = false
-    let releaseReversibleRendererStops = (): void => {}
-    try {
-      const resolvedWorktrees = includeTargetResolvedWorktree(
-        [...(await this.deps.getResolvedWorktreeMap()).values()],
-        worktree
-      )
-      const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
-        resolvedWorktrees,
-        worktree.id,
-        sleepDeadline
-      )
-      if (!refreshedPtyLiveness) {
-        throw new Error('terminal_liveness_unavailable')
-      }
-      const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
-      generation = ++this.terminalSleepGeneration
-      for (const ptyId of livePtyIds) {
-        pendingPtyIds.add(ptyId)
-        terminalHandlesByPtyId[ptyId] = this.deps.getTerminalHandlesForPtyId(ptyId)
-      }
-      const liveTerminalHandles = this.deps.getRecordedTerminalSleepHandles(
-        livePtyIds,
-        terminalHandlesByPtyId
-      )
-      this.deps.terminalSleepStateByWorktreeId().set(key, {
-        worktreeId: worktree.id,
-        generation,
-        phase: 'stopping',
-        ptyIds: [...committedPtyIds].sort(),
-        terminalHandles: this.deps.getRecordedTerminalSleepHandles(
-          committedPtyIds,
-          terminalHandlesByPtyId
-        ),
-        terminalHandlesByPtyId
-      })
-      this.deps.emitClientEvent({
-        type: 'worktreeTerminalSleepState',
-        worktreeId: worktree.id,
-        generation,
-        phase: 'started',
-        ptyIds: [...livePtyIds].sort(),
-        terminalHandles: liveTerminalHandles
-      })
-      if (committedPtyIds.size > 0) {
-        this.deps.emitClientEvent({
-          type: 'worktreeTerminalSleepState',
-          worktreeId: worktree.id,
-          generation,
-          phase: 'committed',
-          ptyIds: [...committedPtyIds].sort(),
-          terminalHandles: this.deps.getRecordedTerminalSleepHandles(
-            committedPtyIds,
-            terminalHandlesByPtyId
-          )
-        })
-      }
-      if (livePtyIds.size === 0) {
-        const terminalHandles = this.deps.getRecordedTerminalSleepHandles(
-          committedPtyIds,
-          terminalHandlesByPtyId
-        )
-        this.deps.terminalSleepStateByWorktreeId().set(key, {
-          worktreeId: worktree.id,
-          generation,
-          phase: 'sleeping',
-          ptyIds: [...committedPtyIds].sort(),
-          terminalHandles,
-          terminalHandlesByPtyId
-        })
-        fullyCommitted = true
-        return {
-          stopped: 0,
-          stoppedPtyIds: [],
-          livePtyIds: [],
-          postStopVerified: true
-        }
-      }
-      const ptyController = this.deps.ptyController
-      if (!ptyController?.stopAndWait) {
-        throw new Error('terminal_worktree_sleep_unavailable')
-      }
-      const stopAndWait = ptyController.stopAndWait.bind(ptyController)
-
-      const orderedLivePtyIds = [...livePtyIds].sort()
-      releaseReversibleRendererStops =
-        ptyController.markReversibleStops?.(orderedLivePtyIds) ?? (() => {})
-      const stopResults = await Promise.allSettled(
-        orderedLivePtyIds.map(async (ptyId) => ({
-          ptyId,
-          stopped: await stopAndWait(ptyId, {
-            keepHistory: true,
-            deadlineMs: teardownRpcDeadline(sleepDeadline)
-          })
-        }))
-      )
-      const successfulStopPtyIds = orderedLivePtyIds.filter((_, index) => {
-        const result = stopResults[index]
-        return result?.status === 'fulfilled' && result.value.stopped
-      })
-      const failedStopIndex = stopResults.findIndex((result) =>
-        result.status === 'rejected' ? true : !result.value.stopped
-      )
-
-      const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(
-        resolvedWorktrees,
-        worktree.id,
-        sleepDeadline
-      )
-      if (!postStopLiveness) {
-        this.commitWorktreeTerminalSleepPtys({
-          worktreeId: worktree.id,
-          generation,
-          ptyIds: successfulStopPtyIds,
-          pendingPtyIds,
-          committedPtyIds,
-          terminalHandlesByPtyId
-        })
-        if (failedStopIndex !== -1) {
-          const failedStop = stopResults[failedStopIndex]
-          throw Object.assign(new Error('terminal_worktree_sleep_failed'), {
-            ptyId: orderedLivePtyIds[failedStopIndex],
-            ...(failedStop.status === 'rejected' ? { cause: failedStop.reason } : {})
-          })
-        }
-        return {
-          stopped: successfulStopPtyIds.length,
-          stoppedPtyIds: successfulStopPtyIds,
-          livePtyIds: [...livePtyIds].sort(),
-          postStopVerified: false,
-          postStopFailure: 'terminal_liveness_unavailable'
-        }
-      }
-      const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
-      const provenStoppedPtyIds = orderedLivePtyIds.filter(
-        (ptyId) => !remainingLivePtyIds.has(ptyId)
-      )
-      this.commitWorktreeTerminalSleepPtys({
-        worktreeId: worktree.id,
-        generation,
-        ptyIds: provenStoppedPtyIds,
-        pendingPtyIds,
-        committedPtyIds,
-        terminalHandlesByPtyId
-      })
-      if (failedStopIndex !== -1 && remainingLivePtyIds.size > 0) {
-        const failedStop = stopResults[failedStopIndex]
-        console.error('[runtime] worktree terminal sleep physical stop failed', {
-          worktreeId: worktree.id,
-          ptyId: orderedLivePtyIds[failedStopIndex],
-          cause: failedStop.status === 'rejected' ? failedStop.reason : 'stop_not_acknowledged'
-        })
-        throw Object.assign(new Error('terminal_worktree_sleep_failed'), {
-          ptyId: orderedLivePtyIds[failedStopIndex],
-          remainingLivePtyIds: [...remainingLivePtyIds].sort(),
-          ...(failedStop.status === 'rejected' ? { cause: failedStop.reason } : {})
-        })
-      }
-      if (remainingLivePtyIds.size > 0) {
-        return {
-          stopped: successfulStopPtyIds.length,
-          stoppedPtyIds: successfulStopPtyIds,
-          livePtyIds: [...livePtyIds].sort(),
-          postStopVerified: false,
-          postStopFailure: 'terminal_worktree_sleep_still_live',
-          remainingLivePtyIds: [...remainingLivePtyIds].sort()
-        }
-      }
-      const terminalHandles = this.deps.getRecordedTerminalSleepHandles(
-        committedPtyIds,
-        terminalHandlesByPtyId
-      )
-      this.deps.terminalSleepStateByWorktreeId().set(key, {
-        worktreeId: worktree.id,
-        generation,
-        phase: 'sleeping',
-        ptyIds: [...committedPtyIds].sort(),
-        terminalHandles,
-        terminalHandlesByPtyId
-      })
-      fullyCommitted = true
-      return {
-        stopped: provenStoppedPtyIds.length,
-        stoppedPtyIds: provenStoppedPtyIds,
-        livePtyIds: [...livePtyIds].sort(),
-        postStopVerified: true
-      }
-    } finally {
-      releaseReversibleRendererStops()
-      if (!fullyCommitted && generation > 0) {
-        const cancelledPtyIds = [...pendingPtyIds].sort()
-        if (cancelledPtyIds.length > 0) {
-          this.deps.emitClientEvent({
-            type: 'worktreeTerminalSleepState',
-            worktreeId: worktree.id,
-            generation,
-            phase: 'cancelled',
-            ptyIds: cancelledPtyIds,
-            terminalHandles: this.deps.getRecordedTerminalSleepHandles(
-              cancelledPtyIds,
-              terminalHandlesByPtyId
-            )
-          })
-        }
-        if (committedPtyIds.size > 0) {
-          const terminalHandles = this.deps.getRecordedTerminalSleepHandles(
-            committedPtyIds,
-            terminalHandlesByPtyId
-          )
-          this.deps.terminalSleepStateByWorktreeId().set(key, {
-            worktreeId: worktree.id,
-            generation,
-            phase: 'partial',
-            ptyIds: [...committedPtyIds].sort(),
-            terminalHandles,
-            terminalHandlesByPtyId
-          })
-        } else {
-          this.deps.terminalSleepStateByWorktreeId().delete(key)
-        }
-      }
-      releaseMutation()
-    }
-  }
-
-  async sleepTerminalsForWorktree(
-    worktreeSelector: string
-  ): Promise<RuntimeWorktreeTerminalSleepResult> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const existing = this.deps.terminalSleepByWorktreeId().get(worktree.id)
-    if (existing) {
-      return await existing
-    }
-
-    const sleeping = this.sleepResolvedWorktreeTerminals(worktree)
-    this.deps.terminalSleepByWorktreeId().set(worktree.id, sleeping)
-    try {
-      return await sleeping
-    } finally {
-      if (this.deps.terminalSleepByWorktreeId().get(worktree.id) === sleeping) {
-        this.deps.terminalSleepByWorktreeId().delete(worktree.id)
-      }
-    }
-  }
-
-  async stopExactTerminalsForWorktree(
-    worktreeSelector: string,
-    expectedPtyIds: readonly string[],
-    opts: { keepHistory?: boolean; targetOnly?: boolean } = {}
-  ): Promise<{
-    stopped: number
-    stoppedPtyIds: string[]
-    livePtyIds: string[]
-    postStopVerified: boolean
-    postStopFailure?: string
-    remainingLivePtyIds?: string[]
-  }> {
-    // Why: exact stop hibernates one known pane; worktree sleep discovers its complete host-owned set separately.
-    const graphEpoch = this.deps.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    this.deps.assertStableReadyGraph(graphEpoch)
-    const expected = new Set(expectedPtyIds.filter((ptyId) => ptyId.length > 0))
-    if (expected.size !== 1) {
-      throw new Error('terminal_exact_stop_requires_single_pty')
-    }
-    const resolvedWorktrees = [...(await this.deps.getResolvedWorktreeMap()).values()]
-    const refreshedPtyLiveness =
-      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    if (!refreshedPtyLiveness) {
-      throw new Error('terminal_liveness_unavailable')
-    }
-    const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
-    const targetOnly = opts.targetOnly === true
-    const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
-    if (targetOnly ? !expectedIsLive : !setsEqual(livePtyIds, expected)) {
-      const error = Object.assign(new Error('terminal_stop_pty_set_mismatch'), {
-        livePtyIds: [...livePtyIds].sort(),
-        expectedPtyIds: [...expected].sort()
-      })
-      throw error
-    }
-
-    if (!this.deps.ptyController?.stopAndWait) {
-      throw new Error('terminal_exact_stop_unavailable')
-    }
-
-    const stoppedPtyIds: string[] = []
-    for (const ptyId of [...expected].sort()) {
-      if (opts.keepHistory) {
-        this.deps
-          .intentionalHandlelessPtyStops()
-          .set(ptyId, this.deps.ptysById().get(ptyId)?.incarnationId ?? null)
-      }
-      try {
-        if (
-          !(await this.deps.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory }))
-        ) {
-          throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
-        }
-      } finally {
-        this.deps.intentionalHandlelessPtyStops().delete(ptyId)
-      }
-      stoppedPtyIds.push(ptyId)
-    }
-    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    if (!postStopLiveness) {
-      return {
-        stopped: stoppedPtyIds.length,
-        stoppedPtyIds,
-        livePtyIds: [...livePtyIds].sort(),
-        postStopVerified: false,
-        postStopFailure: 'terminal_liveness_unavailable'
-      }
-    }
-    const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
-    const stoppedTargetsStillLive = [...expected].filter((ptyId) => remainingLivePtyIds.has(ptyId))
-    if (targetOnly ? stoppedTargetsStillLive.length > 0 : remainingLivePtyIds.size > 0) {
-      return {
-        stopped: stoppedPtyIds.length,
-        stoppedPtyIds,
-        livePtyIds: [...livePtyIds].sort(),
-        postStopVerified: false,
-        postStopFailure: 'terminal_exact_stop_still_live',
-        remainingLivePtyIds: [...remainingLivePtyIds].sort()
-      }
-    }
-    return {
-      stopped: stoppedPtyIds.length,
-      stoppedPtyIds,
-      livePtyIds: [...livePtyIds].sort(),
-      postStopVerified: true,
-      ...(targetOnly && remainingLivePtyIds.size > 0
-        ? { remainingLivePtyIds: [...remainingLivePtyIds].sort() }
-        : {})
-    }
-  }
-
-  async stopTerminalsForWorktree(
-    worktreeSelector: string,
-    options: {
-      deadline?: number
-      stopPty?: (
-        ptyId: string,
-        stop: () => boolean | Promise<boolean>
-      ) => Promise<{ stopped: boolean; owner: boolean }>
-      /** Authoritative id for an orphan whose selector no longer resolves. */
-      resolvedWorktreeId?: string
-      resolvedConnectionId?: string
-      resolvedRuntimeEnvironmentId?: string
-    } = {}
-  ): Promise<{ stopped: number }> {
-    // Why: this mutates live PTYs, so reject while the graph is reloading rather than act on cached leaf ownership.
-    const graphEpoch = this.deps.captureReadyGraphEpoch()
-    const worktree = options.resolvedWorktreeId
-      ? { id: options.resolvedWorktreeId }
-      : await this.resolveWorktreeSelector(worktreeSelector)
-    this.deps.assertStableReadyGraph(graphEpoch)
-    if (options.deadline !== undefined && Date.now() >= options.deadline) {
-      return { stopped: 0 }
-    }
-    // Preserve folder-instance suffixes while normalizing cross-platform path spelling.
-    const ownsWorktree = options.resolvedWorktreeId
-      ? (candidate: string | undefined): boolean =>
-          candidate ? runtimeWorktreeIdsEqual(candidate, worktree.id) : false
-      : (candidate: string | undefined): boolean => candidate === worktree.id
-    const ownsHost = (ptyId: string, connectionId?: string | null): boolean => {
-      if (options.resolvedRuntimeEnvironmentId !== undefined) {
-        return ptyId.startsWith(
-          `remote:${encodeURIComponent(options.resolvedRuntimeEnvironmentId)}@@`
-        )
-      }
-      return (
-        options.resolvedConnectionId === undefined || connectionId === options.resolvedConnectionId
-      )
-    }
-    const ptyIds = new Set<string>()
-    for (const leaf of this.deps.leaves().values()) {
-      if (
-        ownsWorktree(leaf.worktreeId) &&
-        leaf.ptyId &&
-        ownsHost(leaf.ptyId, this.deps.ptysById().get(leaf.ptyId)?.connectionId)
-      ) {
-        ptyIds.add(leaf.ptyId)
-      }
-    }
-    for (const pty of this.deps.ptysById().values()) {
-      if (ownsWorktree(pty.worktreeId) && pty.connected && ownsHost(pty.ptyId, pty.connectionId)) {
-        ptyIds.add(pty.ptyId)
-      }
-    }
-
-    let stopped = 0
-    for (const ptyId of ptyIds) {
-      if (options.deadline !== undefined && Date.now() >= options.deadline) {
-        break
-      }
-      const stop = (): boolean | Promise<boolean> => {
-        if (options.deadline !== undefined && Date.now() >= options.deadline) {
-          return false
-        }
-        if (options.stopPty) {
-          // Why: destructive worktree cleanup must not let its cross-surface
-          // dedupe treat fire-and-forget controller.kill as physical exit.
-          // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep
-          // deadline so a wedged daemon yields the accurate stop failure; no deadline
-          // (non-destructive) keeps the provider default RPC timeout.
-          if (options.deadline !== undefined) {
-            return (
-              this.deps.ptyController?.stopAndWait?.(ptyId, {
-                deadlineMs: teardownRpcDeadline(options.deadline)
-              }) ?? false
-            )
-          }
-          return this.deps.ptyController?.stopAndWait?.(ptyId) ?? false
-        }
-        return Boolean(this.deps.ptyController?.kill(ptyId))
-      }
-      const stopResult = options.stopPty
-        ? await options.stopPty(ptyId, stop)
-        : { stopped: stop(), owner: true }
-      if (stopResult.owner && stopResult.stopped) {
-        stopped += 1
-      }
-    }
-    return { stopped }
-  }
-
   touchMobileSessionTabsForWorktree(worktreeId: string, options?: { immediate?: boolean }): void {
     return this.deps.mobileTabSnapshots().touchMobileSessionTabsForWorktree(worktreeId, options)
-  }
-
-  tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
-    const scope = parseWorkspaceKey(worktreeId)
-    if (scope?.type === 'folder') {
-      const workspace = this.deps.store
-        ?.getFolderWorkspaces?.()
-        .find((entry) => entry.id === scope.folderWorkspaceId)
-      if (!workspace) {
-        return null
-      }
-      if (workspace.executionHostId != null) {
-        return parseExecutionHostId(workspace.executionHostId)?.id ?? null
-      }
-      const connectionId = this.deps.resolveFolderWorkspaceConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-    }
-    const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = this.deps.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
-    return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   }
 
   async updateManagedWorktreeMeta(
