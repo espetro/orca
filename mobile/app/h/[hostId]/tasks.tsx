@@ -33,7 +33,6 @@ import {
   X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
-import type { RpcSuccess } from '../../../src/transport/types'
 import { useHostClient } from '../../../src/transport/client-context'
 import {
   useLastConnectedAt,
@@ -70,7 +69,6 @@ import {
   type WorkspaceAgentChoice
 } from '../../../src/tasks/workspace-agent-selection'
 import { shouldResolveHostedReviewStartPoint } from '../../../src/tasks/hosted-review-start-point'
-import { getLinkedWorkItemSuggestedName } from '../../../src/tasks/mobile-workspace-name'
 import {
   dropFailedGitHubRepoSlugEntries,
   filterGitHubProjectRowsForRepos,
@@ -108,14 +106,9 @@ import { colors, radii, spacing, typography } from '../../../src/theme/mobile-th
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import {
   groupRows,
-  isIterationCurrent,
   sortRows,
   type ProjectGroup
 } from '../../../../src/shared/github/project-group-sort'
-import type {
-  GitHubProjectSortDirection,
-  GitHubProjectTable as SharedGitHubProjectTable
-} from '../../../../src/shared/github/project-types'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -157,11 +150,9 @@ import {
   type GitHubAssignableUser,
   type GitHubDetailCheck,
   type GitHubDetailFile,
-  type GitHubMode,
   type GitHubPreset,
   type GitHubPRFileContents,
   type GitHubPRReviewSummary,
-  type GitHubPRReviewerRow,
   type GitHubRepoSources,
   type GitHubTaskKind,
   type GitHubWorkItem,
@@ -170,7 +161,6 @@ import {
   type GitLabView,
   type GitLabWorkItem,
   type GitPushTarget,
-  type HostedReviewItem,
   type HostedReviewMergeMethod,
   type LinearFilter,
   type LinearIssue,
@@ -197,12 +187,10 @@ import {
   type TasksSupportState,
   type WorkspaceCreateDraft,
   type WorkspaceSparseDraft,
-  optimisticProjectFieldValue,
   sortSparsePresetsByName,
   workspaceAgentIconId,
   type GitHubIssueType,
   type GitHubProjectField,
-  type GitHubProjectFieldValue,
   type GitHubProjectFieldMutationValue,
   type GitHubProjectRow,
   type GitHubProjectTable,
@@ -211,1270 +199,125 @@ import {
   type LinearOrderBy,
   type LinearViewMode
 } from './tasks-types-all'
+import {
+  EMPTY_GITHUB_PROJECT_SETTINGS,
+  GITHUB_REPO_CONCURRENCY,
+  GITLAB_PER_PAGE,
+  LINEAR_LIMIT,
+  PROJECT_VIEW_DEFAULT_SORT,
+  SHOW_MOBILE_COMMENT_THREAD_TOOLS,
+  SHOW_MOBILE_DETAIL_LABEL_CHIPS,
+  SHOW_MOBILE_DETAIL_METADATA_EDITORS,
+  SHOW_MOBILE_DETAIL_REVIEW_PANELS,
+  SHOW_MOBILE_LINEAR_DETAIL_TOOLS,
+  SHOW_MOBILE_PROJECT_METADATA_EDITORS,
+  SHOW_MOBILE_PROJECT_REVIEW_PANELS,
+  TASK_SECONDARY_DRAWER_Z_INDEX
+} from './tasks-screen-constants'
 import { GitHubPrFileDiff } from './github-pr-file-diff-view'
 
-const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
-  {
-    value: 'github',
-    label: 'GitHub',
-    subtitle: 'Issues and pull requests',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="github"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'gitlab',
-    label: 'GitLab',
-    subtitle: 'Issues and merge requests',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="gitlab"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'linear',
-    label: 'Linear',
-    subtitle: 'Assigned and team issues',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="linear"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  }
-]
-
-const GITLAB_FILTER_OPTIONS: PickerOption<GitLabFilter>[] = [
-  { value: 'opened', label: 'Open', subtitle: 'Open issues and merge requests' },
-  { value: 'merged', label: 'Merged', subtitle: 'Merged merge requests' },
-  { value: 'closed', label: 'Closed', subtitle: 'Closed issues and merge requests' },
-  { value: 'all', label: 'All', subtitle: 'Any GitLab state' }
-]
-
-const LINEAR_FILTER_OPTIONS: PickerOption<LinearFilter>[] = [
-  { value: 'all', label: 'All', subtitle: 'Open issues across connected workspaces' },
-  { value: 'assigned', label: 'My Issues', subtitle: 'Issues assigned to you' },
-  { value: 'created', label: 'Created', subtitle: 'Issues created by you' },
-  { value: 'completed', label: 'Completed', subtitle: 'Recently completed issues' }
-]
-
-const LINEAR_VIEW_OPTIONS: PickerOption<LinearViewMode>[] = [
-  { value: 'list', label: 'List', subtitle: 'Compact issue rows' },
-  { value: 'board', label: 'Board', subtitle: 'Grouped columns' }
-]
-
-function taskWorkspaceFallback(item: ActionableTaskItem): string {
-  if (item.provider === 'github' || item.provider === 'gitlab') {
-    return `${item.source.type}-${item.source.number}`
-  }
-  return item.source.identifier.toLowerCase()
-}
-
-function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
-  return getLinkedWorkItemSuggestedName(item) || taskWorkspaceFallback(item)
-}
-
-const COMMENT_REACTION_EMOJI: Record<
-  NonNullable<DetailComment['reactions']>[number]['content'],
-  string
-> = {
-  thumbs_up: '+1',
-  thumbs_down: '-1',
-  laugh: 'laugh',
-  confused: 'confused',
-  heart: 'heart',
-  hooray: 'hooray',
-  rocket: 'rocket',
-  eyes: 'eyes'
-}
-
-const LINEAR_GROUP_OPTIONS: PickerOption<LinearGroupBy>[] = [
-  { value: 'none', label: 'No grouping' },
-  { value: 'status', label: 'Status' },
-  { value: 'assignee', label: 'Assignee' },
-  { value: 'priority', label: 'Priority' },
-  { value: 'team', label: 'Team' }
-]
-
-const LINEAR_ORDER_OPTIONS: PickerOption<LinearOrderBy>[] = [
-  { value: 'priority', label: 'Priority' },
-  { value: 'updated', label: 'Updated' },
-  { value: 'identifier', label: 'Identifier' }
-]
-
-const LINEAR_DISPLAY_OPTIONS: PickerOption<LinearDisplayProperty>[] = [
-  { value: 'state', label: 'Status' },
-  { value: 'priority', label: 'Priority' },
-  { value: 'assignee', label: 'Assignee' },
-  { value: 'team', label: 'Team' },
-  { value: 'labels', label: 'Labels' },
-  { value: 'updated', label: 'Updated' }
-]
-
-const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
-  'state',
-  'priority',
-  'assignee',
-  'team',
-  'labels',
-  'updated'
-]
-
-const GITHUB_KIND_OPTIONS: PickerOption<GitHubMode>[] = [
-  { value: 'issues', label: 'Issues', subtitle: 'GitHub issues' },
-  { value: 'prs', label: 'PRs', subtitle: 'GitHub pull requests' },
-  { value: 'project', label: 'Projects', subtitle: 'GitHub Projects views' }
-]
-
-const ISSUE_PRESETS: PickerOption<GitHubPreset>[] = [
-  { value: 'issues', label: 'Open', subtitle: 'Open GitHub issues' },
-  { value: 'my-issues', label: 'Assigned to me', subtitle: 'Open issues assigned to you' }
-]
-
-const PR_PRESETS: PickerOption<GitHubPreset>[] = [
-  { value: 'prs', label: 'Open', subtitle: 'Open pull requests' },
-  { value: 'my-prs', label: 'Mine', subtitle: 'Pull requests authored by you' },
-  { value: 'review', label: 'Needs review', subtitle: 'Review requests assigned to you' }
-]
-
-const GITLAB_VIEW_OPTIONS: PickerOption<GitLabView>[] = [
-  { value: 'project', label: 'Project MRs', subtitle: 'Merge requests and issues by repository' },
-  { value: 'todos', label: 'My Todos', subtitle: 'Pending GitLab todos' }
-]
-
-const SORT_OPTIONS: PickerOption<TaskSort>[] = [
-  { value: 'updated', label: 'Updated', subtitle: 'Newest activity first' },
-  {
-    value: 'repository',
-    label: 'Repository',
-    subtitle: 'Group by repository, then newest activity'
-  }
-]
-
-type ProjectSortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
-type ProjectListEntry =
-  | { type: 'group'; group: ProjectGroup; collapsed: boolean }
-  | { type: 'row'; row: GitHubProjectRow }
-type LinearIssueSection = { key: string; label: string; color: string; issues: LinearIssue[] }
-type LinearListEntry =
-  | { type: 'section'; section: LinearIssueSection }
-  | { type: 'issue'; issue: LinearIssue }
-
-const PROJECT_VIEW_DEFAULT_SORT = '__view_default__'
-const GITHUB_REPO_CONCURRENCY = 3
-const GITLAB_PER_PAGE = 50
-const LINEAR_LIMIT = 50
-// Why: task detail drawers can launch child sheets; children must layer above
-// the still-mounted parent while its dismissal animation/state remains alive.
-const TASK_SECONDARY_DRAWER_Z_INDEX = 1100
-// Why: the mobile detail drawer should support quick triage and core actions.
-// Desktop keeps the broad metadata editing surface for dense issue/PR work.
-const SHOW_MOBILE_DETAIL_LABEL_CHIPS = false
-const SHOW_MOBILE_DETAIL_METADATA_EDITORS = false
-const SHOW_MOBILE_DETAIL_REVIEW_PANELS = false
-const SHOW_MOBILE_LINEAR_DETAIL_TOOLS = false
-const SHOW_MOBILE_COMMENT_THREAD_TOOLS = false
-const SHOW_MOBILE_PROJECT_METADATA_EDITORS = false
-const SHOW_MOBILE_PROJECT_REVIEW_PANELS = false
-const EMPTY_GITHUB_PROJECT_SETTINGS: GitHubProjectSettings = {
-  pinned: [],
-  recent: [],
-  lastViewByProject: {},
-  activeProject: null
-}
-
-function isSuccess(response: unknown): response is RpcSuccess {
-  return Boolean(response && typeof response === 'object' && (response as RpcSuccess).ok)
-}
-
-function taskTime(value: string): number {
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
-}
-
-function formatUpdatedAt(value: string): string {
-  const time = taskTime(value)
-  if (!time) {
-    return ''
-  }
-  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000))
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h`
-  }
-  return `${Math.floor(hours / 24)}d`
-}
-
-function getTaskPresetQuery(preset: GitHubPreset): string {
-  switch (preset) {
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case 'issues':
-    default:
-      return 'is:issue is:open'
-  }
-}
-
-function isTaskProvider(value: unknown): value is TaskProvider {
-  return value === 'github' || value === 'gitlab' || value === 'linear'
-}
-
-function normalizeGitHubPreset(value: unknown): GitHubPreset {
-  return value === 'my-issues' ||
-    value === 'prs' ||
-    value === 'my-prs' ||
-    value === 'review' ||
-    value === 'issues'
-    ? value
-    : 'issues'
-}
-
-function normalizeLinearFilter(value: unknown): LinearFilter {
-  return value === 'assigned' || value === 'created' || value === 'completed' || value === 'all'
-    ? value
-    : 'all'
-}
-
-function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset): GitHubTaskKind {
-  if (/\bis:pr\b/i.test(query)) {
-    return 'prs'
-  }
-  if (/\bis:issue\b/i.test(query)) {
-    return 'issues'
-  }
-  return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
-    ? 'prs'
-    : 'issues'
-}
-
-function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
-  if (row.itemType === 'ISSUE') {
-    return 'issue'
-  }
-  if (row.itemType === 'PULL_REQUEST') {
-    return 'pr'
-  }
-  return null
-}
-
-function canCreateWorkspaceFromProjectRow(row: GitHubProjectRow): boolean {
-  // Why: desktop only exposes Project "Start work" for backed issue/PR rows
-  // with enough GitHub identity to build the linked work item.
-  return projectRowType(row) !== null && row.content.number != null && Boolean(row.content.url)
-}
-
-function splitRepositorySlug(slug: string | null): { owner: string; repo: string } | null {
-  const [owner, repo] = slug?.split('/') ?? []
-  return owner && repo ? { owner, repo } : null
-}
-
-function projectRowGitHubRepository(row: GitHubProjectRow, host: string): GitHubOwnerRepo | null {
-  const slug = splitRepositorySlug(row.content.repository)
-  return slug ? { ...slug, host } : null
-}
-
-const GITHUB_PROJECT_OPTION_COLORS: Record<string, string> = {
-  GRAY: '#8b949e',
-  RED: '#f85149',
-  ORANGE: '#db6d28',
-  YELLOW: '#d29922',
-  GREEN: '#3fb950',
-  BLUE: '#58a6ff',
-  PURPLE: '#bc8cff',
-  PINK: '#db61a2'
-}
-
-function githubProjectOptionColor(color: string | null | undefined): string {
-  if (!color) {
-    return colors.textMuted
-  }
-  const upper = color.toUpperCase()
-  const mapped = GITHUB_PROJECT_OPTION_COLORS[upper]
-  if (mapped) {
-    return mapped
-  }
-  const hex = color.startsWith('#') ? color : `#${color}`
-  return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : colors.textMuted
-}
-
-function projectRowStatusLabel(row: GitHubProjectRow): string {
-  if (row.itemType === 'DRAFT_ISSUE') {
-    return 'Draft'
-  }
-  if (row.itemType === 'REDACTED') {
-    return 'Redacted'
-  }
-  if (row.content.isDraft) {
-    return 'Draft'
-  }
-  if (row.content.state === 'MERGED') {
-    return 'Merged'
-  }
-  if (row.content.state === 'CLOSED') {
-    return 'Closed'
-  }
-  return 'Open'
-}
-
-function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
-  }
-  if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
-    return trimmed
-  }
-  return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
-}
-
-function gitHubStatusLabel(item: GitHubWorkItem): string {
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'draft') {
-    return 'Draft'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Open'
-}
-
-function gitHubTaskSubtitle(item: GitHubWorkItem): string {
-  return `${item.repoName} ${item.type === 'pr' ? '#' : '#'}${item.number}`
-}
-
-function createGitHubTask(repo: RepoSummary, item: Omit<GitHubWorkItem, 'repoId' | 'repoName'>) {
-  const source: GitHubWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
-  return {
-    key: `github:${repo.id}:${item.type}:${item.number}`,
-    provider: 'github' as const,
-    title: item.title,
-    subtitle: gitHubTaskSubtitle(source),
-    status: gitHubStatusLabel(source),
-    updatedAt: item.updatedAt,
-    source
-  }
-}
-
-function gitLabStatusLabel(item: GitLabWorkItem): string {
-  if (item.state === 'opened') {
-    return 'Open'
-  }
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'draft') {
-    return 'Draft'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Locked'
-}
-
-function createGitLabTask(repo: RepoSummary, item: Omit<GitLabWorkItem, 'repoId' | 'repoName'>) {
-  const source: GitLabWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
-  return {
-    key: `gitlab:${repo.id}:${item.type}:${item.number}`,
-    provider: 'gitlab' as const,
-    title: item.title,
-    subtitle: `${repo.displayName} ${item.type === 'mr' ? '!' : '#'}${item.number}`,
-    status: gitLabStatusLabel(source),
-    updatedAt: item.updatedAt,
-    source
-  }
-}
-
-function gitLabTodoTargetLabel(todo: Pick<GitLabTodo, 'targetType'>): string {
-  if (todo.targetType === 'MergeRequest') {
-    return 'Merge request'
-  }
-  if (todo.targetType === 'Issue') {
-    return 'Issue'
-  }
-  return 'GitLab todo'
-}
-
-function gitLabTodoTargetRef(todo: Pick<GitLabTodo, 'targetType' | 'targetIid'>): string {
-  if (!todo.targetIid) {
-    return ''
-  }
-  if (todo.targetType === 'MergeRequest') {
-    return `!${todo.targetIid}`
-  }
-  if (todo.targetType === 'Issue') {
-    return `#${todo.targetIid}`
-  }
-  return String(todo.targetIid)
-}
-
-function createGitLabTodoTask(todo: GitLabTodo): TaskItem {
-  const targetRef = gitLabTodoTargetRef(todo)
-  return {
-    key: `gitlab-todo:${todo.id}`,
-    provider: 'gitlabTodo',
-    title: todo.targetTitle || todo.targetUrl,
-    subtitle: `${todo.projectPath}${targetRef ? ` ${targetRef}` : ''}`,
-    status: todo.actionName.replace(/_/g, ' ') || 'Todo',
-    updatedAt: todo.updatedAt,
-    source: todo
-  }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = []
-  let nextIndex = 0
-  async function run(): Promise<void> {
-    while (nextIndex < items.length) {
-      const index = nextIndex
-      nextIndex += 1
-      results[index] = await worker(items[index]!)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()))
-  return results
-}
-
-function createLinearTask(issue: LinearIssue): TaskItem {
-  return {
-    key: `linear:${issue.workspaceId ?? 'workspace'}:${issue.id}`,
-    provider: 'linear',
-    title: issue.title,
-    subtitle: `${issue.identifier} · ${issue.team.name}`,
-    status: issue.state.name,
-    updatedAt: issue.updatedAt,
-    source: issue
-  }
-}
-
-const LINEAR_PRIORITY_LABELS: Record<number, string> = {
-  0: 'None',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low'
-}
-
-function getLinearPriorityLabel(priority: number): string {
-  return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
-}
-
-function getLinearPriorityRank(priority: number): number {
-  return priority === 0 ? 5 : priority
-}
-
-function formatGitHubReviewState(state: string | null | undefined): string {
-  switch (state) {
-    case 'APPROVED':
-      return 'Approved'
-    case 'CHANGES_REQUESTED':
-      return 'Changes requested'
-    case 'COMMENTED':
-      return 'Commented'
-    case 'DISMISSED':
-      return 'Dismissed'
-    case 'PENDING':
-      return 'Pending'
-    default:
-      return 'Reviewed'
-  }
-}
-
-function getGitHubReviewerRows(item: {
-  reviewRequests?: GitHubAssignableUser[]
-  latestReviews?: GitHubPRReviewSummary[]
-}): GitHubPRReviewerRow[] {
-  const byLogin = new Map<string, GitHubPRReviewerRow>()
-  for (const user of item.reviewRequests ?? []) {
-    const login = user.login.trim()
-    if (!login) {
-      continue
-    }
-    byLogin.set(login.toLowerCase(), {
-      login,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      stateLabel: 'Requested'
-    })
-  }
-  for (const review of item.latestReviews ?? []) {
-    const login = review.login.trim()
-    const key = login.toLowerCase()
-    if (!login || byLogin.has(key)) {
-      continue
-    }
-    byLogin.set(key, {
-      login,
-      name: null,
-      avatarUrl: review.avatarUrl,
-      stateLabel: formatGitHubReviewState(review.state)
-    })
-  }
-  return Array.from(byLogin.values())
-}
-
-function getGitHubReviewSummary(item: {
-  reviewDecision?: string | null
-  reviewRequests?: GitHubAssignableUser[]
-  latestReviews?: GitHubPRReviewSummary[]
-}): string {
-  if (item.reviewDecision === 'APPROVED') {
-    return 'Approved'
-  }
-  if (item.reviewDecision === 'CHANGES_REQUESTED') {
-    return 'Changes requested'
-  }
-  const rows = getGitHubReviewerRows(item)
-  if (rows.length === 0) {
-    return 'No reviewers'
-  }
-  if (rows.length === 1) {
-    return `${rows[0]!.login} - ${rows[0]!.stateLabel}`
-  }
-  return `${rows[0]!.login} +${rows.length - 1}`
-}
-
-function formatGitHubPRDelta(item: GitHubWorkItem): string | null {
-  const parts: string[] = []
-  if (typeof item.additions === 'number') {
-    parts.push(`+${item.additions}`)
-  }
-  if (typeof item.deletions === 'number') {
-    parts.push(`-${item.deletions}`)
-  }
-  if (typeof item.changedFiles === 'number') {
-    parts.push(`${item.changedFiles} ${item.changedFiles === 1 ? 'file' : 'files'}`)
-  }
-  return parts.length > 0 ? parts.join(' ') : null
-}
-
-function hostedBranchSummary(item: TaskItem): { head: string; base: string } | null {
-  if (item.provider === 'github' && item.source.type === 'pr') {
-    return {
-      head: item.source.branchName?.trim() || 'unknown head',
-      base: item.source.baseRefName?.trim() || 'base'
-    }
-  }
-  if (item.provider === 'gitlab' && item.source.type === 'mr') {
-    return {
-      head: item.source.branchName?.trim() || 'unknown head',
-      base: item.source.baseRefName?.trim() || 'base'
-    }
-  }
-  return null
-}
-
-function getGitHubMergeLabel(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge'
-  }
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'closed') {
-    return 'Closed'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'Conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Behind'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'Blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
-  }
-  return 'Unknown'
-}
-
-function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {
-  if (method === 'squash') {
-    return 'Squash and merge'
-  }
-  if (method === 'rebase') {
-    return 'Rebase and merge'
-  }
-  return 'Create merge commit'
-}
-
-function hostedReviewMergeTargetLabel(item: HostedReviewItem): string {
-  return item.provider === 'gitlab' ? 'merge request' : 'PR'
-}
-
-function getHostedMergeConfirmMessage(pending: PendingHostedMerge): string {
-  const target = hostedReviewMergeTargetLabel(pending.item)
-  if (pending.method === 'squash') {
-    return `Squash and merge ${target} #${pending.item.source.number}?`
-  }
-  const action = pending.method === 'rebase' ? 'Rebase and merge' : 'Merge'
-  return `${action} ${target} #${pending.item.source.number}?`
-}
-
-function getProjectGitHubMergeConfirmMessage(pending: PendingProjectGitHubMerge): string {
-  const number = pending.row.content.number
-  if (pending.method === 'squash') {
-    return `Squash and merge PR #${number}?`
-  }
-  const action = pending.method === 'rebase' ? 'Rebase and merge' : 'Merge'
-  return `${action} PR #${number}?`
-}
-
-function hostedStateChangeAction(nextState: PendingHostedStateChange['nextState']): string {
-  return nextState === 'closed' ? 'Close' : 'Reopen'
-}
-
-function hostedStateChangeTarget(pending: PendingHostedStateChange): {
-  titleTarget: string
-  labelTarget: string
-  number: number | null
-} {
-  if (pending.source === 'project') {
-    const type = projectRowType(pending.row)
-    return {
-      titleTarget: type === 'pr' ? 'Pull Request' : 'Issue',
-      labelTarget: type === 'pr' ? 'PR' : 'Issue',
-      number: pending.row.content.number
-    }
-  }
-  if (pending.item.provider === 'gitlab') {
-    return {
-      titleTarget: pending.item.source.type === 'mr' ? 'Merge Request' : 'Issue',
-      labelTarget: pending.item.source.type === 'mr' ? 'MR' : 'Issue',
-      number: pending.item.source.number
-    }
-  }
-  return {
-    titleTarget: pending.item.source.type === 'pr' ? 'Pull Request' : 'Issue',
-    labelTarget: pending.item.source.type === 'pr' ? 'PR' : 'Issue',
-    number: pending.item.source.number
-  }
-}
-
-function getHostedStateConfirmTitle(pending: PendingHostedStateChange): string {
-  const target = hostedStateChangeTarget(pending)
-  return `${hostedStateChangeAction(pending.nextState)} ${target.titleTarget}`
-}
-
-function getHostedStateConfirmMessage(pending: PendingHostedStateChange): string {
-  const target = hostedStateChangeTarget(pending)
-  return `${hostedStateChangeAction(pending.nextState)} ${target.labelTarget} #${target.number}?`
-}
-
-function getHostedStateConfirmLabel(pending: PendingHostedStateChange): string {
-  const target = hostedStateChangeTarget(pending)
-  return `${hostedStateChangeAction(pending.nextState)} ${target.labelTarget}`
-}
-
-function mergeGitHubAssignableUsers(
-  users: GitHubAssignableUser[],
-  seeds: GitHubAssignableUser[]
-): GitHubAssignableUser[] {
-  const byLogin = new Map<string, GitHubAssignableUser>()
-  for (const user of [...users, ...seeds]) {
-    const login = user.login.trim()
-    if (!login || byLogin.has(login.toLowerCase())) {
-      continue
-    }
-    byLogin.set(login.toLowerCase(), { ...user, login })
-  }
-  return [...byLogin.values()]
-}
-
-function getGitHubReviewerSeedUsers(item: {
-  reviewRequests?: GitHubAssignableUser[]
-  latestReviews?: GitHubPRReviewSummary[]
-  author?: string | null
-}): GitHubAssignableUser[] {
-  const byLogin = new Map<string, GitHubAssignableUser>()
-  const add = (user: GitHubAssignableUser): void => {
-    const login = user.login.trim()
-    if (!login || byLogin.has(login.toLowerCase())) {
-      return
-    }
-    byLogin.set(login.toLowerCase(), { ...user, login })
-  }
-  for (const user of item.reviewRequests ?? []) {
-    add(user)
-  }
-  for (const review of item.latestReviews ?? []) {
-    add({
-      login: review.login,
-      name: null,
-      avatarUrl: review.avatarUrl ?? null
-    })
-  }
-  if (item.author) {
-    add({ login: item.author, name: null, avatarUrl: null })
-  }
-  return [...byLogin.values()]
-}
-
-function sameGitHubOwnerRepo(
-  a: GitHubOwnerRepo | null | undefined,
-  b: GitHubOwnerRepo | null | undefined
-): boolean {
-  return (
-    !!a &&
-    !!b &&
-    a.owner.toLowerCase() === b.owner.toLowerCase() &&
-    a.repo.toLowerCase() === b.repo.toLowerCase()
-  )
-}
-
-function hasGitHubIssueSourceChoice(sources: GitHubRepoSources | undefined): boolean {
-  return Boolean(
-    sources?.prs &&
-    sources.upstreamCandidate &&
-    !sameGitHubOwnerRepo(sources.prs, sources.upstreamCandidate)
-  )
-}
-
-function issueSourceSlug(source: GitHubOwnerRepo | null | undefined): string {
-  return source ? `${source.owner}/${source.repo}` : 'Unknown'
-}
-
-function compareLinearIssues(a: LinearIssue, b: LinearIssue, orderBy: LinearOrderBy): number {
-  if (orderBy === 'updated') {
-    return taskTime(b.updatedAt) - taskTime(a.updatedAt)
-  }
-  if (orderBy === 'identifier') {
-    return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
-  }
-  const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
-  return priorityDelta || taskTime(b.updatedAt) - taskTime(a.updatedAt)
-}
-
-function getLinearIssueGroup(
-  issue: LinearIssue,
-  groupBy: LinearGroupBy
-): {
-  key: string
-  label: string
-  color: string
-} {
-  if (groupBy === 'status') {
-    return { key: `status:${issue.state.name}`, label: issue.state.name, color: issue.state.color }
-  }
-  if (groupBy === 'assignee') {
-    return {
-      key: `assignee:${issue.assignee?.id ?? issue.assignee?.displayName ?? 'unassigned'}`,
-      label: issue.assignee?.displayName ?? 'Unassigned',
-      color: colors.accentBlue
-    }
-  }
-  if (groupBy === 'priority') {
-    return {
-      key: `priority:${issue.priority}`,
-      label: getLinearPriorityLabel(issue.priority),
-      color: issue.priority === 1 ? colors.statusRed : colors.accentBlue
-    }
-  }
-  if (groupBy === 'team') {
-    return { key: `team:${issue.team.id}`, label: issue.team.name, color: issue.state.color }
-  }
-  return { key: 'all', label: 'Issues', color: colors.accentBlue }
-}
-
-function groupLinearIssues(
-  issues: LinearIssue[],
-  groupBy: LinearGroupBy,
-  orderBy: LinearOrderBy
-): LinearIssueSection[] {
-  const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
-  if (groupBy === 'none') {
-    return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
-  }
-  const sections = new Map<
-    string,
-    { key: string; label: string; color: string; issues: LinearIssue[] }
-  >()
-  for (const issue of sorted) {
-    const group = getLinearIssueGroup(issue, groupBy)
-    const section = sections.get(group.key)
-    if (section) {
-      section.issues.push(issue)
-    } else {
-      sections.set(group.key, { ...group, issues: [issue] })
-    }
-  }
-  return [...sections.values()]
-}
-
-function linearIssueSecondaryParts(
-  issue: LinearIssue,
-  displayProperties: ReadonlySet<LinearDisplayProperty>
-): string[] {
-  const parts = [issue.identifier]
-  if (displayProperties.has('priority')) {
-    parts.push(getLinearPriorityLabel(issue.priority))
-  }
-  if (displayProperties.has('assignee') && issue.assignee?.displayName) {
-    parts.push(issue.assignee.displayName)
-  }
-  if (displayProperties.has('team')) {
-    parts.push(issue.team.name)
-  }
-  if (displayProperties.has('labels') && issue.labels.length > 0) {
-    parts.push(issue.labels.slice(0, 2).join(', '))
-  }
-  if (displayProperties.has('updated')) {
-    parts.push(formatUpdatedAt(issue.updatedAt))
-  }
-  return parts
-}
-
-function reconcileTeamSelection(
-  teams: LinearTeam[],
-  saved: string[] | null | undefined
-): Set<string> {
-  if (!saved) {
-    return new Set(teams.map((team) => team.id))
-  }
-  const available = new Set(teams.map((team) => team.id))
-  const next = new Set(saved.filter((id) => available.has(id)))
-  return next.size === 0 ? new Set(teams.map((team) => team.id)) : next
-}
-
-function splitCommaList(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-}
-
-function splitReviewerList(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-}
-
-function editableProjectFields(table: GitHubProjectTable | null): GitHubProjectField[] {
-  return (
-    table?.selectedView.fields?.filter((field) =>
-      ['TEXT', 'NUMBER', 'DATE', 'SINGLE_SELECT', 'ITERATION'].includes(field.dataType)
-    ) ?? []
-  )
-}
-
-function projectFieldValueLabel(row: GitHubProjectRow, field: GitHubProjectField): string {
-  const value = row.fieldValuesByFieldId?.[field.id]
-  if (!value) {
-    return 'Empty'
-  }
-  if (value.kind === 'single-select') {
-    return value.name
-  }
-  if (value.kind === 'iteration') {
-    return value.title
-  }
-  if (value.kind === 'text') {
-    return value.text || 'Empty'
-  }
-  if (value.kind === 'number') {
-    return String(value.number)
-  }
-  if (value.kind === 'date') {
-    return value.date
-  }
-  if (value.kind === 'labels') {
-    return value.labels.map((label) => label.name).join(', ') || 'Empty'
-  }
-  if (value.kind === 'users') {
-    return value.users.map((user) => user.login).join(', ') || 'Empty'
-  }
-  return 'Empty'
-}
-
-function projectFieldDisplayLabel(row: GitHubProjectRow, field: GitHubProjectField): string {
-  if (field.dataType === 'ASSIGNEES') {
-    return row.content.assignees.map((user) => user.login).join(', ') || 'Empty'
-  }
-  if (field.dataType === 'LABELS') {
-    return row.content.labels.map((label) => label.name).join(', ') || 'Empty'
-  }
-  if (field.dataType === 'REPOSITORY') {
-    return row.content.repository ?? 'Empty'
-  }
-  if (field.dataType === 'PARENT_ISSUE') {
-    return row.content.parentIssue ? `#${row.content.parentIssue.number}` : 'Empty'
-  }
-  if (field.dataType === 'ISSUE_TYPE') {
-    return row.content.issueType?.name ?? 'Empty'
-  }
-  if (field.dataType === 'TITLE') {
-    return row.content.title
-  }
-  return projectFieldValueLabel(row, field)
-}
-
-function projectSummaryFields(table: GitHubProjectTable | null): GitHubProjectField[] {
-  return (
-    table?.selectedView.fields?.filter(
-      (field) => field.dataType !== 'TITLE' && field.dataType !== 'REPOSITORY'
-    ) ?? []
-  )
-}
-
-function projectFieldVisibilityKey(table: GitHubProjectTable | null): string | null {
-  if (!table) {
-    return null
-  }
-  // Why: desktop scopes column visibility to project + view; matching that
-  // avoids hiding fields across unrelated Project views with colliding IDs.
-  return `${table.project.id}:${table.selectedView.id}`
-}
-
-function projectFieldDraftValue(row: GitHubProjectRow, field: GitHubProjectField): string {
-  const value = row.fieldValuesByFieldId?.[field.id]
-  if (!value) {
-    return ''
-  }
-  if (value.kind === 'text') {
-    return value.text
-  }
-  if (value.kind === 'number') {
-    return String(value.number)
-  }
-  if (value.kind === 'date') {
-    return value.date
-  }
-  return ''
-}
-
-function normalizeProjectTableForMobileSort(
-  table: GitHubProjectTable,
-  rows: GitHubProjectRow[],
-  sortOverride: ProjectSortOverride | null
-): SharedGitHubProjectTable {
-  const fields = table.selectedView.fields ?? []
-  const overrideField = sortOverride
-    ? fields.find((field) => field.id === sortOverride.fieldId)
-    : undefined
-  const normalizedRows = rows.map((row, index) => ({
-    ...row,
-    content: {
-      ...row.content,
-      stateReason: row.content.stateReason ?? null,
-      parentIssue: row.content.parentIssue ?? null,
-      issueType: row.content.issueType ?? null
-    },
-    fieldValuesByFieldId: row.fieldValuesByFieldId ?? {},
-    position: row.position ?? index
-  }))
-
-  return {
-    ...table,
-    selectedView: {
-      ...table.selectedView,
-      fields,
-      groupByFields: table.selectedView.groupByFields ?? [],
-      sortByFields:
-        sortOverride && overrideField
-          ? [{ field: overrideField, direction: sortOverride.direction }]
-          : (table.selectedView.sortByFields ?? [])
-    },
-    rows: normalizedRows,
-    parentFieldDropped: table.parentFieldDropped === true
-  } as unknown as SharedGitHubProjectTable
-}
-
-function projectGroupMeta(group: ProjectGroup): string {
-  const parts = [`${group.rows.length}`]
-  if (group.iteration) {
-    const endDate = new Date(`${group.iteration.startDate}T00:00:00Z`)
-    if (!Number.isNaN(endDate.getTime())) {
-      endDate.setUTCDate(endDate.getUTCDate() + group.iteration.duration - 1)
-      parts.push(`${group.iteration.startDate} - ${endDate.toISOString().slice(0, 10)}`)
-    }
-    if (isIterationCurrent(group.iteration)) {
-      parts.push('Current')
-    }
-  }
-  return parts.join(' · ')
-}
-
-function optimisticProjectFieldValue(
-  field: GitHubProjectField,
-  value: GitHubProjectFieldMutationValue
-): GitHubProjectFieldValue {
-  if (value.kind === 'single-select' && field.kind === 'single-select') {
-    const option = field.options.find((entry) => entry.id === value.optionId)
-    return {
-      kind: 'single-select',
-      fieldId: field.id,
-      optionId: value.optionId,
-      name: option?.name ?? 'Selected',
-      color: option?.color ?? 'GRAY'
-    }
-  }
-  if (value.kind === 'iteration' && field.kind === 'iteration') {
-    const iteration = field.iterations.find((entry) => entry.id === value.iterationId)
-    return {
-      kind: 'iteration',
-      fieldId: field.id,
-      iterationId: value.iterationId,
-      title: iteration?.title ?? 'Iteration',
-      startDate: iteration?.startDate ?? '',
-      duration: iteration?.duration ?? 0
-    }
-  }
-  if (value.kind === 'number') {
-    return { kind: 'number', fieldId: field.id, number: value.number }
-  }
-  if (value.kind === 'date') {
-    return { kind: 'date', fieldId: field.id, date: value.date }
-  }
-  return { kind: 'text', fieldId: field.id, text: value.kind === 'text' ? value.text : '' }
-}
-
-function taskKindLabel(item: TaskItem): string {
-  if (item.provider === 'github') {
-    return item.source.type === 'pr' ? 'Pull request' : 'Issue'
-  }
-  if (item.provider === 'gitlab') {
-    return item.source.type === 'mr' ? 'Merge request' : 'Issue'
-  }
-  if (item.provider === 'gitlabTodo') {
-    return `${gitLabTodoTargetLabel(item.source)} todo`
-  }
-  return 'Linear ticket'
-}
-
-function taskExternalOpenLabel(item: TaskItem): string {
-  if (item.provider === 'github') {
-    return 'Open in GitHub'
-  }
-  if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') {
-    return 'Open in GitLab'
-  }
-  return 'Open in Linear'
-}
-
-function taskStatusActionLabel(item: TaskItem): string {
-  const verb =
-    item.provider === 'github' || item.provider === 'gitlab'
-      ? item.source.state === 'closed'
-        ? 'Reopen'
-        : 'Close'
-      : ''
-  return verb ? `${verb} ${taskKindLabel(item).toLowerCase()}` : ''
-}
-
-function isGitHubPrMergeBlocked(item: Extract<TaskItem, { provider: 'github' }>): boolean {
-  return item.source.type === 'pr' && item.source.mergeable === 'CONFLICTING'
-}
-
-function commentAuthor(comment: DetailComment): string {
-  return comment.author ?? comment.user?.displayName ?? 'unknown'
-}
-
-function commentDate(value: string | undefined): string {
-  if (!value) {
-    return ''
-  }
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? new Date(time).toLocaleDateString() : ''
-}
-
-function formatDurationSeconds(value: number | null | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return ''
-  }
-  const seconds = Math.max(0, Math.floor(value))
-  if (seconds >= 60) {
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-  }
-  return `${seconds}s`
-}
-
-function commentSourceLabel(comment: DetailComment): string {
-  if (comment.path) {
-    const line =
-      typeof comment.line === 'number'
-        ? typeof comment.startLine === 'number' && comment.startLine !== comment.line
-          ? `${comment.startLine}-${comment.line}`
-          : String(comment.line)
-        : ''
-    const location = line ? `${comment.path}:${line}` : comment.path
-    return `${comment.isResolved ? 'Resolved review' : 'Review'} · ${location}`
-  }
-  if (comment.threadId) {
-    return comment.isResolved ? 'Resolved review thread' : 'Review thread'
-  }
-  return 'Top-level comment'
-}
-
-function groupDetailComments(comments: DetailComment[]): DetailCommentGroup[] {
-  const threads = new Map<string, { root: DetailComment; replies: DetailComment[] }>()
-  const groups: DetailCommentGroup[] = []
-  const emittedThreads = new Set<string>()
-
-  for (const comment of comments) {
-    if (!comment.threadId) {
-      continue
-    }
-    const existing = threads.get(comment.threadId)
-    if (existing) {
-      existing.replies.push(comment)
-    } else {
-      threads.set(comment.threadId, { root: comment, replies: [] })
-    }
-  }
-
-  for (const comment of comments) {
-    if (!comment.threadId) {
-      groups.push({ kind: 'standalone', comment })
-      continue
-    }
-    if (emittedThreads.has(comment.threadId)) {
-      continue
-    }
-    emittedThreads.add(comment.threadId)
-    const thread = threads.get(comment.threadId)
-    if (thread) {
-      groups.push({ kind: 'thread', threadId: comment.threadId, ...thread })
-    }
-  }
-
-  return groups
-}
-
-function detailCommentGroupId(group: DetailCommentGroup): string {
-  return group.kind === 'thread' ? `thread:${group.threadId}` : `comment:${group.comment.id}`
-}
-
-function detailCommentGroupRoot(group: DetailCommentGroup): DetailComment {
-  return group.kind === 'thread' ? group.root : group.comment
-}
-
-function detailCommentGroupCount(group: DetailCommentGroup): number {
-  return group.kind === 'thread' ? 1 + group.replies.length : 1
-}
-
-function isResolvedDetailCommentGroup(group: DetailCommentGroup): boolean {
-  return detailCommentGroupRoot(group).isResolved === true
-}
-
-function discussionSummary(count: number): string {
-  if (count === 0) {
-    return 'No comments yet'
-  }
-  return `${count} ${count === 1 ? 'comment' : 'comments'}`
-}
-
-function renderCommentReactions(comment: DetailComment): ReactNode {
-  const reactions = (comment.reactions ?? []).filter((reaction) => reaction.count > 0)
-  if (reactions.length === 0) {
-    return null
-  }
-  return (
-    <View style={styles.reactionRow}>
-      {reactions.map((reaction) => (
-        <View key={reaction.content} style={styles.reactionChip}>
-          <Text style={styles.reactionText}>
-            {COMMENT_REACTION_EMOJI[reaction.content]} {reaction.count}
-          </Text>
-        </View>
-      ))}
-    </View>
-  )
-}
-
-function isFailedGitHubCheck(check: { conclusion?: string | null }): boolean {
-  return ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
-}
-
-function repositoryCount(count: number): string {
-  return `${count} ${count === 1 ? 'repository' : 'repositories'}`
-}
-
-function buildPartialRepositoryNotice(failedCount: number, totalCount: number): string {
-  return `${failedCount} of ${repositoryCount(totalCount)} failed to load.`
-}
-
-function repoColor(name: string): string {
-  const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0
-  }
-  return palette[Math.abs(hash) % palette.length]!
-}
-
-function getRepoBadgeColor(repo: RepoSummary | undefined, fallbackName: string): string {
-  return repo?.badgeColor || repoColor(repo?.displayName ?? fallbackName)
-}
-
-function setupSourceLabel(source: string | null): string {
-  if (source === 'orca.yaml') {
-    return 'orca.yaml'
-  }
-  if (source === 'legacy') {
-    return 'local hooks'
-  }
-  return 'repository hooks'
-}
-
-function taskRepositoryMeta(
-  item: TaskItem,
-  reposById: Map<string, RepoSummary>
-): { key: string; label: string; color: string } {
-  if (item.provider === 'github' || item.provider === 'gitlab') {
-    const repo = reposById.get(item.source.repoId)
-    return {
-      key: item.source.repoId,
-      label: repo?.displayName ?? item.source.repoName,
-      color: getRepoBadgeColor(repo, item.source.repoName)
-    }
-  }
-  if (item.provider === 'gitlabTodo') {
-    return {
-      key: item.source.projectPath,
-      label: item.source.projectPath,
-      color: repoColor(item.source.projectPath)
-    }
-  }
-  return {
-    key: item.source.team.id,
-    label: item.source.team.name,
-    color: item.source.state.color || colors.accentBlue
-  }
-}
-
-function compareTasksByUpdated(a: TaskItem, b: TaskItem): number {
-  return taskTime(b.updatedAt) - taskTime(a.updatedAt)
-}
-
-function compareTasksByRepository(
-  a: TaskItem,
-  b: TaskItem,
-  reposById: Map<string, RepoSummary>
-): number {
-  const aRepo = taskRepositoryMeta(a, reposById)
-  const bRepo = taskRepositoryMeta(b, reposById)
-  const repoComparison = aRepo.label.localeCompare(bRepo.label, undefined, { sensitivity: 'base' })
-  return repoComparison || compareTasksByUpdated(a, b)
-}
-
+import {
+  DEFAULT_LINEAR_DISPLAY_PROPERTIES,
+  GITHUB_KIND_OPTIONS,
+  GITLAB_FILTER_OPTIONS,
+  GITLAB_VIEW_OPTIONS,
+  ISSUE_PRESETS,
+  LINEAR_DISPLAY_OPTIONS,
+  LINEAR_FILTER_OPTIONS,
+  LINEAR_GROUP_OPTIONS,
+  LINEAR_ORDER_OPTIONS,
+  LINEAR_VIEW_OPTIONS,
+  PR_PRESETS,
+  PROVIDER_OPTIONS,
+  SORT_OPTIONS
+} from './tasks-picker-options'
+import {
+  compareLinearIssues,
+  createGitLabTask,
+  createGitLabTodoTask,
+  createGitHubTask,
+  createLinearTask,
+  formatUpdatedAt,
+  groupLinearIssues,
+  linearIssueSecondaryParts,
+  mapWithConcurrency,
+  reconcileTeamSelection,
+  taskTime,
+  taskWorkspaceSuggestedName,
+  type LinearListEntry
+} from './tasks-work-item-tasks'
+import {
+  formatGitHubPRDelta,
+  getGitHubMergeLabel,
+  getGitHubReviewerRows,
+  getGitHubReviewerSeedUsers,
+  getGitHubReviewSummary,
+  getHostedMergeConfirmMessage,
+  getHostedReviewMergeMethodLabel,
+  getHostedStateConfirmLabel,
+  getHostedStateConfirmMessage,
+  getHostedStateConfirmTitle,
+  getProjectGitHubMergeConfirmMessage,
+  hasGitHubIssueSourceChoice,
+  hostedBranchSummary,
+  issueSourceSlug,
+  mergeGitHubAssignableUsers
+} from './tasks-github-review'
+import {
+  canCreateWorkspaceFromProjectRow,
+  editableProjectFields,
+  githubProjectOptionColor,
+  normalizeProjectTableForMobileSort,
+  optimisticProjectFieldValue,
+  projectFieldDisplayLabel,
+  projectFieldDraftValue,
+  projectFieldVisibilityKey,
+  projectGroupMeta,
+  projectRowGitHubRepository,
+  projectFieldValueLabel,
+  projectRowStatusLabel,
+  projectRowType,
+  projectSummaryFields,
+  splitRepositorySlug,
+  type ProjectListEntry,
+  type ProjectSortOverride
+} from './tasks-github-project-fields'
+import {
+  commentAuthor,
+  commentDate,
+  commentSourceLabel,
+  detailCommentGroupCount,
+  detailCommentGroupId,
+  detailCommentGroupRoot,
+  discussionSummary,
+  formatDurationSeconds,
+  groupDetailComments,
+  isResolvedDetailCommentGroup,
+  renderCommentReactions
+} from './tasks-detail-comments'
+import {
+  buildPartialRepositoryNotice,
+  compareTasksByRepository,
+  compareTasksByUpdated,
+  getRepoBadgeColor,
+  getTaskPresetQuery,
+  githubKindFromQuery,
+  isFailedGitHubCheck,
+  isGitHubPrMergeBlocked,
+  isTaskProvider,
+  isSuccess,
+  normalizeGitHubPreset,
+  normalizeLinearFilter,
+  scopeGitHubTaskSearch,
+  setupSourceLabel,
+  splitCommaList,
+  splitReviewerList,
+  repositoryCount,
+  taskExternalOpenLabel,
+  taskKindLabel,
+  taskRepositoryMeta,
+  taskStatusActionLabel
+} from './tasks-list-meta'
 export default function MobileTasksScreen() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
   const router = useRouter()
@@ -7622,7 +6465,7 @@ export default function MobileTasksScreen() {
         {commentDate(comment.createdAt) ? ` · ${commentDate(comment.createdAt)}` : ''}
       </Text>
       <MobileMarkdown content={comment.body} />
-      {renderCommentReactions(comment)}
+      {renderCommentReactions(styles, comment)}
       {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
       actionItem?.provider === 'github' &&
       detailPayload?.provider === 'github' ? (
@@ -11874,7 +10717,7 @@ export default function MobileTasksScreen() {
                                 ) : (
                                   <>
                                     <MobileMarkdown content={comment.body} />
-                                    {renderCommentReactions(comment)}
+                                    {renderCommentReactions(styles, comment)}
                                     {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
                                       <View style={styles.inlineActionRow}>
                                         {projectRowType(projectRowItem) === 'pr' &&
