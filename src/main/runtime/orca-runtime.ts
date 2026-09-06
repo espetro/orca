@@ -231,7 +231,6 @@ import {
   installGitCommandDelegations,
   installLinearCommandDelegations
 } from './runtime-browser-emulator-delegations'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -249,15 +248,11 @@ import type {
 } from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type {
-  AutomationWorkspaceProvenance,
-  CliWorkspaceProvenance,
   GitHubPrStartPoint,
   GitPushTarget,
   GitWorktreeInfo,
-  WorkspaceLinkedItem,
   Worktree
 } from '../../shared/worktree/types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -9021,55 +9016,9 @@ export class OrcaRuntimeService {
     })
   }
 
-  async createManagedWorktree(args: {
-    repoSelector: string
-    name: string
-    /** True only when `name` came from Orca's creature-name generator; gates retirement so a name
-     *  the user typed stays reusable. Absent for CLI and automation callers. */
-    nameWasGenerated?: boolean
-    baseBranch?: string
-    compareBaseRef?: string
-    branchNameOverride?: string
-    linkedIssue?: number | null
-    linkedPR?: number | null
-    linkedLinearIssue?: string
-    linkedLinearIssueWorkspaceId?: string | null
-    linkedLinearIssueOrganizationUrlKey?: string | null
-    linkedGitLabMR?: number | null
-    linkedGitLabIssue?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
-    linkedWorkItem?: WorkspaceLinkedItem | null
-    linkedTaskSourceContext?: TaskSourceContext | null
-    comment?: string
-    displayName?: string
-    telemetrySource?: WorkspaceCreateTelemetrySource
-    workspaceStatus?: string
-    manualOrder?: number
-    sparseCheckout?: { directories: string[]; presetId?: string }
-    pushTarget?: GitPushTarget
-    runHooks?: boolean
-    activate?: boolean
-    /** Who the create's activation is addressed to. Defaults to 'all' so host/CLI callers keep
-     *  revealing on every surface; the RPC layer narrows it to 'caller' for paired clients. */
-    navigation?: RuntimeNavigationTarget
-    setupDecision?: 'run' | 'skip' | 'inherit'
-    awaitTerminalProvisioning?: boolean
-    observeSetupCompletion?: boolean
-    createdWithAgent?: TuiAgent
-    startupAgent?: TuiAgent
-    startupLaunchPreferences?: AgentLaunchPreferences
-    startupPrompt?: string
-    pendingFirstAgentMessageRename?: boolean
-    automationProvenance?: AutomationWorkspaceProvenance
-    cliProvenance?: CliWorkspaceProvenance
-    creatorProvenance?: Worktree['creatorProvenance']
-    startup?: WorktreeStartupLaunch
-    startupDraft?: string
-    startupDraftPaste?: WorktreeStartupDraftPaste
-    lineage?: WorktreeLineageInput
-  }): Promise<CreateWorktreeResult> {
+  async createManagedWorktree(
+    args: RuntimeManagedWorktreeCreateArgs
+  ): Promise<CreateWorktreeResult> {
     return this.managedWorktrees.createManagedWorktree(args)
   }
 
@@ -10964,7 +10913,10 @@ import {
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-tail-projection'
 import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
-import { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
+import {
+  RuntimeManagedWorktrees,
+  type RuntimeManagedWorktreeCreateArgs
+} from './runtime-managed-worktrees'
 import { RuntimePtyWorktrees } from './runtime-pty-worktrees'
 import { RuntimeTerminalCluster } from './runtime-terminal-cluster-facade'
 import { buildMobileSessionFacadeDepsImpl } from './runtime-mobile-session-facade-wiring'
