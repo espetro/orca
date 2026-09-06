@@ -6,7 +6,6 @@ import {
   isCursorNativeAgentTitle,
   isOpenCodeNativeTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
-  isShellProcess,
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
@@ -139,10 +138,7 @@ import {
 import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import type { ClaudeAgentTeamsService } from './claude-agent-teams-service'
-import {
-  buildHeadlessTerminalSplitLayout,
-  terminalLayoutContainsLeaf
-} from './headless-terminal-split-layout'
+import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
 import type { MobileSessionTabCloseOutcome } from './mobile-session-tab-close-outcome'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
 import type { OrchestrationDb } from './orchestration/db'
@@ -170,8 +166,6 @@ import {
   MOBILE_AUTO_RESTORE_FIT_MIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS,
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
-  TUI_IDLE_POLL_INTERVAL_MS,
-  TUI_IDLE_QUIESCENCE_MS,
   agentTitleProvesAgentPresence,
   applyRestoredTerminalTailSeed,
   assertTerminalInputWithinLimitWithYield,
@@ -189,7 +183,6 @@ import {
   detectTerminalWaitBlockedReason,
   expandTerminalInteractiveWait,
   getLatestLeafTitle,
-  getLatestPtyTitle,
   getTerminalState,
   includeTargetResolvedWorktree,
   inferWorktreeIdFromPtyId,
@@ -227,6 +220,13 @@ import {
 } from './runtime-terminal-layout-commands'
 import type { RuntimeTerminalLayoutCtx } from './runtime-terminal-layout-commands'
 import {
+  focusTerminal,
+  startTuiIdleFallbackPoll,
+  resolveAgentTerminalCreateOptions,
+  resolveTerminalSplitSourceAuthority,
+  startPtyTuiIdleFallbackPoll
+} from './runtime-terminal-focus-commands'
+import {
   adoptTerminalOrphansFromInventory,
   createTerminal
 } from './runtime-terminal-create-commands'
@@ -253,8 +253,6 @@ import {
 } from './runtime-terminal-surface-shared'
 import {
   assertAgentPromptRequestActive,
-  copySleepingAgentLaunchConfig,
-  resolveBareAgentLaunchCommand,
   waitForAgentPromptDelay,
   waitForAgentPromptPromise,
   yieldBetweenTerminalInputChunks
@@ -764,6 +762,36 @@ export class RuntimeTerminalCluster {
     opts: TerminalCreateOptions = {}
   ): Promise<RuntimeTerminalCreate> {
     return createTerminal(this, worktreeSelector, opts)
+  }
+
+  async focusTerminal(
+    handle: string,
+    options: { navigateHost?: boolean } = {}
+  ): Promise<RuntimeTerminalFocus> {
+    return focusTerminal(this, handle, options)
+  }
+
+  startTuiIdleFallbackPoll(
+    waiter: TerminalWaiter,
+    leaf: RuntimeLeafRecord,
+    waiterTimeoutMs: number
+  ): void {
+    return startTuiIdleFallbackPoll(this, waiter, leaf, waiterTimeoutMs)
+  }
+
+  async resolveAgentTerminalCreateOptions(
+    workspace: TerminalWorkspaceLaunchScope,
+    opts: TerminalCreateOptions
+  ): Promise<TerminalCreateOptions> {
+    return resolveAgentTerminalCreateOptions(this, workspace, opts)
+  }
+
+  startPtyTuiIdleFallbackPoll(
+    waiter: TerminalWaiter,
+    pty: RuntimePtyWorktreeRecord,
+    waiterTimeoutMs: number
+  ): void {
+    return startPtyTuiIdleFallbackPoll(this, waiter, pty, waiterTimeoutMs)
   }
 
   maybeHydrateHeadlessFromRenderer(ptyId: string): void {
@@ -1760,164 +1788,6 @@ export class RuntimeTerminalCluster {
       return
     }
     throw new Error('workspace_session_persistence_unavailable')
-  }
-
-  async focusTerminal(
-    handle: string,
-    options: { navigateHost?: boolean } = {}
-  ): Promise<RuntimeTerminalFocus> {
-    const navigateHost = options.navigateHost !== false
-    const livePtyIdentity = (): RuntimeTerminalFocus => {
-      const live = this.getLivePtyForHandle(handle)
-      if (!live?.pty.connected) {
-        throw new Error('terminal_exited')
-      }
-      return {
-        handle,
-        tabId: live.pty.tabId ?? live.record.tabId,
-        worktreeId: live.pty.worktreeId,
-        navigated: false
-      }
-    }
-    const liveLeafIdentity = (): RuntimeTerminalFocus => {
-      this.assertGraphReady()
-      const { leaf: current } = this.getLiveLeafForHandle(handle)
-      return {
-        handle,
-        tabId: current.tabId,
-        worktreeId: current.worktreeId,
-        navigated: false
-      }
-    }
-
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected) {
-        throw new Error('terminal_exited')
-      }
-      if (!navigateHost || !this.deps.notifier()?.revealTerminalSession) {
-        return {
-          handle,
-          tabId: pty.pty.tabId ?? pty.record.tabId,
-          worktreeId: pty.pty.worktreeId,
-          navigated: false
-        }
-      }
-      // Coalesce concurrent host navigations: only the latest full reveal claims navigated.
-      return this.deps.terminalFocusNavigationCoalescer().run({
-        key: handle,
-        resolveSuperseded: (completed) =>
-          completed ? { ...completed, navigated: false } : livePtyIdentity(),
-        run: async (ctx) => {
-          const live = this.getLivePtyForHandle(handle)
-          if (!live?.pty.connected) {
-            throw new Error('terminal_exited')
-          }
-          if (!ctx.isCurrent()) {
-            return {
-              handle,
-              tabId: live.pty.tabId ?? live.record.tabId,
-              worktreeId: live.pty.worktreeId,
-              navigated: false
-            }
-          }
-          const notifier = this.deps.notifier()
-          if (!notifier?.revealTerminalSession) {
-            return {
-              handle,
-              tabId: live.pty.tabId ?? live.record.tabId,
-              worktreeId: live.pty.worktreeId,
-              navigated: false
-            }
-          }
-          const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
-          const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
-            ptyId: live.pty.ptyId,
-            title: getLatestPtyTitle(live.pty),
-            ...(live.pty.launchConfig
-              ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
-              : {}),
-            ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
-            ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
-            ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
-            ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
-          })
-          if (!ctx.isCurrent() || this.deps.notifier() !== notifier) {
-            return {
-              handle,
-              tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
-              worktreeId: live.pty.worktreeId,
-              navigated: false
-            }
-          }
-          return {
-            handle,
-            tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
-            worktreeId: live.pty.worktreeId,
-            navigated: true
-          }
-        }
-      })
-    }
-    this.assertGraphReady()
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!navigateHost) {
-      return {
-        handle,
-        tabId: leaf.tabId,
-        worktreeId: leaf.worktreeId,
-        navigated: false
-      }
-    }
-    if (!this.deps.notifier()?.focusTerminal) {
-      return {
-        handle,
-        tabId: leaf.tabId,
-        worktreeId: leaf.worktreeId,
-        navigated: false
-      }
-    }
-    return this.deps.terminalFocusNavigationCoalescer().run({
-      key: handle,
-      resolveSuperseded: (completed) =>
-        completed ? { ...completed, navigated: false } : liveLeafIdentity(),
-      run: async (ctx) => {
-        this.assertGraphReady()
-        const { leaf: liveLeaf } = this.getLiveLeafForHandle(handle)
-        if (!ctx.isCurrent()) {
-          return {
-            handle,
-            tabId: liveLeaf.tabId,
-            worktreeId: liveLeaf.worktreeId,
-            navigated: false
-          }
-        }
-        const notifier = this.deps.notifier()
-        if (!notifier?.focusTerminal) {
-          return {
-            handle,
-            tabId: liveLeaf.tabId,
-            worktreeId: liveLeaf.worktreeId,
-            navigated: false
-          }
-        }
-        notifier.focusTerminal(liveLeaf.tabId, liveLeaf.worktreeId, liveLeaf.leafId)
-        if (!ctx.isCurrent() || this.deps.notifier() !== notifier) {
-          return {
-            handle,
-            tabId: liveLeaf.tabId,
-            worktreeId: liveLeaf.worktreeId,
-            navigated: false
-          }
-        }
-        return {
-          handle,
-          tabId: liveLeaf.tabId,
-          worktreeId: liveLeaf.worktreeId,
-          navigated: true
-        }
-      }
-    })
   }
 
   getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
@@ -3671,94 +3541,6 @@ export class RuntimeTerminalCluster {
       })
   }
 
-  async resolveAgentTerminalCreateOptions(
-    workspace: TerminalWorkspaceLaunchScope,
-    opts: TerminalCreateOptions
-  ): Promise<TerminalCreateOptions> {
-    // Why: raw shell commands like `codex exec` must remain user-authored shell.
-    // Only unmanaged, repo-backed, bare agent launches get Settings defaults.
-    const callerSuppliedLaunch =
-      opts.env ||
-      opts.launchConfig ||
-      opts.launchAgent ||
-      opts.startupCommandDelivery ||
-      opts.claudeAgentTeamsSourceCommand
-    const store = this.deps.store()
-    if (opts.startupAgent) {
-      // Why: falling through unresolved would spawn a bare shell that can only time
-      // out waiting for an agent. A caller-supplied launch contradicts the agent:
-      // `command` would be overwritten, `resumeProviderSession` would pair resume
-      // identity with a fresh launch.
-      if (callerSuppliedLaunch || opts.command || opts.resumeProviderSession) {
-        throw new Error(
-          `startupAgent ${opts.startupAgent} cannot combine with a caller-supplied launch.`
-        )
-      }
-      if (!store) {
-        throw new Error('runtime_unavailable')
-      }
-    } else if (callerSuppliedLaunch || !store || !opts.command || !workspace.repo) {
-      return opts
-    }
-
-    const settings = store.getSettings()
-    const platform = this.deps.getAgentLaunchPlatformForWorkspace(workspace)
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
-    const queuedShell = resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    if (opts.startupAgent && !isTuiAgentEnabled(opts.startupAgent, settings.disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
-    }
-    const agent =
-      opts.startupAgent ??
-      resolveBareAgentLaunchCommand({
-        command: opts.command,
-        settings,
-        platform,
-        isRemote
-      })
-    if (!agent) {
-      return opts
-    }
-
-    const sessionOptions = this.toAgentSessionOptions(opts.launchPreferences)
-    const startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: '',
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-      sessionOptions,
-      sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
-      platform,
-      shell: queuedShell,
-      isRemote,
-      allowEmptyPromptLaunch: true
-    })
-    if (!startupPlan) {
-      // Why: an explicit agent that yields no plan would otherwise spawn a bare
-      // shell that never reaches agent readiness.
-      if (opts.startupAgent) {
-        throw new Error(`Could not build launch command for ${opts.startupAgent}.`)
-      }
-      return opts
-    }
-
-    await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
-
-    return {
-      ...opts,
-      command: startupPlan.launchCommand,
-      ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      launchConfig: startupPlan.launchConfig,
-      launchAgent: agent,
-      startupCommandDelivery: startupPlan.startupCommandDelivery
-    }
-  }
-
   resolveAiVaultSessionTitles(
     requests: AiVaultSessionTitleRequest[],
     signal?: AbortSignal
@@ -3962,11 +3744,6 @@ export class RuntimeTerminalCluster {
     return {}
   }
 
-  resolveTerminalSplitSourceAuthorityLegacy(handle: string): Promise<string | null> {
-    const ptyId = this.deps.handleByPtyId().get(handle)
-    return Promise.resolve(ptyId ? (this.deps.ptysById().get(ptyId)?.worktreeId ?? null) : null)
-  }
-
   resolveTerminalSplitSourceAuthority(
     worktreeId: string,
     tabId: string,
@@ -3979,69 +3756,12 @@ export class RuntimeTerminalCluster {
     persistedIncarnationId: string | null
     liveIncarnationId: string | null
   } | null {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
-    const persistedTab = sessionWorktreeId
-      ? session?.tabsByWorktree[sessionWorktreeId]?.find(
-          (tab) => tab.id === tabId && runtimeWorktreeIdsEqual(tab.worktreeId, worktreeId)
-        )
-      : undefined
-    const persistedLayout = session?.terminalLayoutsByTabId?.[tabId]
-    const persistedIncarnationId =
-      session?.terminalPtyIncarnationsByPaneKey?.[makePaneKey(tabId, leafId)] ?? null
-    const liveIncarnationId = this.deps.ptysById().get(ptyId)?.incarnationId ?? null
-    if (
-      persistedIncarnationId &&
-      liveIncarnationId &&
-      persistedIncarnationId !== liveIncarnationId
-    ) {
-      return null
-    }
-    const persisted = Boolean(
-      persistedTab &&
-      persistedLayout?.ptyIdsByLeafId?.[leafId] === ptyId &&
-      terminalLayoutContainsLeaf(persistedLayout.root, leafId)
-    )
-    const rendererTab = this.deps.tabs().get(tabId)
-    const rendererLeaf = this.deps.leaves().get(this.getLeafKey(tabId, leafId))
-    const rendererMounted = Boolean(
-      rendererTab &&
-      rendererLeaf &&
-      runtimeWorktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
-      runtimeWorktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
-      rendererLeaf.ptyId === ptyId
-    )
-    if (persisted && persistedLayout) {
-      return {
-        persisted: true,
-        rendererMounted,
-        persistedWorktreeId: sessionWorktreeId,
-        persistedIncarnationId,
-        liveIncarnationId
-      }
-    }
-    // Why: renderer adoption can precede graph sync; this path still requires reveal success before commit.
-    const projected = [...this.deps.mobileSessionTabsByWorktree().entries()].some(
-      ([candidateWorktreeId, snapshot]) =>
-        runtimeWorktreeIdsEqual(candidateWorktreeId, worktreeId) &&
-        snapshot.tabs.some(
-          (tab) =>
-            tab.type === 'terminal' &&
-            tab.parentTabId === tabId &&
-            tab.leafId === leafId &&
-            (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[leafId] === ptyId)
-        )
-    )
-    if (!rendererMounted && !projected) {
-      return null
-    }
-    return {
-      persisted: false,
-      rendererMounted,
-      persistedWorktreeId: null,
-      persistedIncarnationId: null,
-      liveIncarnationId
-    }
+    return resolveTerminalSplitSourceAuthority(this, worktreeId, tabId, leafId, ptyId)
+  }
+
+  resolveTerminalSplitSourceAuthorityLegacy(handle: string): Promise<string | null> {
+    const ptyId = this.deps.handleByPtyId().get(handle)
+    return Promise.resolve(ptyId ? (this.deps.ptysById().get(ptyId)?.worktreeId ?? null) : null)
   }
 
   async resolveTerminalWorkspaceLaunchScope(
@@ -5013,177 +4733,6 @@ export class RuntimeTerminalCluster {
 
     const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
     return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
-  }
-
-  startPtyTuiIdleFallbackPoll(
-    waiter: TerminalWaiter,
-    pty: RuntimePtyWorktreeRecord,
-    waiterTimeoutMs: number
-  ): void {
-    let foregroundPollInFlight = false
-    waiter.pollInterval = setInterval(async () => {
-      if (!waiter.pollInterval) {
-        return
-      }
-      let startedForegroundPoll = false
-      try {
-        if (pty.lastAgentStatus === 'idle') {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-          return
-        }
-        const ptyWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-        const blockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
-        if (blockedReason) {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(
-            waiter,
-            buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
-          )
-          return
-        }
-        // Why: adopted background PTY handles use their live xterm title as the same readiness signal as leaf handles.
-        if (
-          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText)
-        ) {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-          return
-        }
-        if (pty.lastAgentStatus === null && this.deps.ptyController() && !foregroundPollInFlight) {
-          foregroundPollInFlight = true
-          startedForegroundPoll = true
-          const fg = await this.deps.ptyController()!.getForegroundProcess(pty.ptyId)
-          if (fg && !isShellProcess(fg)) {
-            const quietMs = pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0
-            if (quietMs >= TUI_IDLE_QUIESCENCE_MS) {
-              if (waiter.pollInterval) {
-                clearInterval(waiter.pollInterval)
-                waiter.pollInterval = null
-              }
-              this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-            }
-          }
-        }
-      } catch {
-        // Swallow transient PTY inspection errors and keep polling.
-      } finally {
-        if (startedForegroundPoll) {
-          foregroundPollInFlight = false
-        }
-      }
-    }, TUI_IDLE_POLL_INTERVAL_MS)
-    const retainedWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    if (pty.lastAgentStatus === null && retainedWaitText.length === 0) {
-      this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
-    }
-  }
-
-  startTuiIdleFallbackPoll(
-    waiter: TerminalWaiter,
-    leaf: RuntimeLeafRecord,
-    waiterTimeoutMs: number
-  ): void {
-    let foregroundPollInFlight = false
-    waiter.pollInterval = setInterval(async () => {
-      if (!waiter.pollInterval) {
-        return
-      }
-      let startedForegroundPoll = false
-      try {
-        if (leaf.lastAgentStatus === 'idle') {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-          return
-        }
-        // Why: the renderer-synced title is the only path where OSC titles are visible for daemon-hosted terminals.
-        const pollTitle = leaf.paneTitle ?? this.deps.tabs().get(leaf.tabId)?.title
-        if (pollTitle) {
-          const titleStatus = detectExplicitIdleStatusFromTitle(pollTitle)
-          if (titleStatus === 'idle') {
-            if (waiter.pollInterval) {
-              clearInterval(waiter.pollInterval)
-              waiter.pollInterval = null
-            }
-            this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-            return
-          }
-        }
-        const leafWaitText = buildTerminalWaitText(
-          leaf.tailBuffer,
-          leaf.tailPartialLine,
-          leaf.preview
-        )
-        const blockedReason = detectTerminalWaitBlockedReason(leafWaitText)
-        if (blockedReason) {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(
-            waiter,
-            buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
-          )
-          return
-        }
-        if (isKnownReadyPromptPreview(leafWaitText)) {
-          if (waiter.pollInterval) {
-            clearInterval(waiter.pollInterval)
-            waiter.pollInterval = null
-          }
-          this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-          return
-        }
-        // Foreground fallback: a reported non-shell process with quiet output is treated as idle.
-        if (
-          leaf.lastAgentStatus === null &&
-          leaf.ptyId &&
-          this.deps.ptyController() &&
-          !foregroundPollInFlight
-        ) {
-          foregroundPollInFlight = true
-          startedForegroundPoll = true
-          const fg = await this.deps.ptyController()!.getForegroundProcess(leaf.ptyId)
-          if (fg && !isShellProcess(fg)) {
-            const quietMs = leaf.lastOutputAt ? Date.now() - leaf.lastOutputAt : 0
-            if (quietMs >= TUI_IDLE_QUIESCENCE_MS) {
-              if (waiter.pollInterval) {
-                clearInterval(waiter.pollInterval)
-                waiter.pollInterval = null
-              }
-              this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-            }
-          }
-        }
-      } catch {
-        // Swallow transient PTY inspection errors and keep polling.
-      } finally {
-        if (startedForegroundPoll) {
-          foregroundPollInFlight = false
-        }
-      }
-    }, TUI_IDLE_POLL_INTERVAL_MS)
-    const retainedWaitText = buildTerminalWaitText(
-      leaf.tailBuffer,
-      leaf.tailPartialLine,
-      leaf.preview
-    )
-    if (leaf.lastAgentStatus === null && retainedWaitText.length === 0) {
-      this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
-    }
   }
 
   async stopExactTerminalsForWorktree(
