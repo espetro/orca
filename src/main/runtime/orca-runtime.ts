@@ -302,9 +302,7 @@ import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
 import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
 import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
-import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
+import { waitForStartupDraftReady } from './runtime-startup-draft-ready-wait'
 
 import { RuntimeFileCommands } from './orca-runtime-files'
 import type { AgentSessionCreateOperation } from './agent-session-terminal-operations'
@@ -542,7 +540,6 @@ import type {
 import {
   BRACKETED_PASTE_BEGIN,
   BRACKETED_PASTE_END,
-  BRACKETED_PASTE_QUIET_MS,
   listRuntimeFolderWorkspaces,
   MAX_NATIVE_CHAT_LAUNCH_DRAFT_RESOLUTION_TOMBSTONES
 } from './runtime-contracts'
@@ -7325,60 +7322,15 @@ export class OrcaRuntimeService {
   }
 
   private waitForStartupDraftReady(handle: string, agent: TuiAgent): Promise<string | null> {
-    const livePty = this.getLivePtyForHandle(handle)
-    const ptyId = livePty?.pty.ptyId
-    if (!ptyId) {
-      return Promise.resolve(null)
-    }
-    const readySignal =
-      TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-    return new Promise<string | null>((resolve) => {
-      let settled = false
-      const scanner = createDraftPasteReadyScanner(readySignal)
-      let quietTimer: NodeJS.Timeout | null = null
-      let hardTimer: NodeJS.Timeout | null = null
-      let unsubscribe: (() => void) | null = null
-
-      const finish = (value: string | null): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        if (quietTimer) {
-          clearTimeout(quietTimer)
-        }
-        if (hardTimer) {
-          clearTimeout(hardTimer)
-        }
-        unsubscribe?.()
-        resolve(value)
-      }
-
-      const armQuietTimer = (): void => {
-        if (quietTimer) {
-          clearTimeout(quietTimer)
-        }
-        quietTimer = setTimeout(() => finish(ptyId), BRACKETED_PASTE_QUIET_MS)
-      }
-
-      const observeData = (data: string): void => {
-        const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
-        if (ready) {
-          finish(ptyId)
-          return
-        }
-        if (shouldArm) {
-          armQuietTimer()
-        }
-      }
-
-      unsubscribe = this.subscribeToTerminalData(ptyId, observeData)
-      const replay = this.recentPtyOutputById.get(ptyId)?.read()
-      if (replay) {
-        observeData(replay)
-      }
-      hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
-    })
+    return waitForStartupDraftReady(
+      {
+        getLivePtyForHandle: (h) => this.getLivePtyForHandle(h),
+        subscribeToTerminalData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
+        recentPtyOutputById: this.recentPtyOutputById
+      },
+      handle,
+      agent
+    )
   }
 
   async createManagedWorktree(
