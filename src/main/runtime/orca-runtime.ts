@@ -289,12 +289,8 @@ import {
   isDeliberateTerminalExit,
   type TerminalExitCause
 } from '../../shared/terminal-exit-cause'
-import { runtimeTerminalDegradation } from './native-terminal-availability'
 import {
-  BROWSER_UNAVAILABLE_ERROR_CODE,
-  browserUnavailableMessage,
   HEADLESS_RUNTIME_WINDOW_ID,
-  type RuntimeDegradation,
   type RuntimeDesktopWindowStatus,
   type RuntimeGraphStatus,
   type RuntimeTerminalRead,
@@ -393,17 +389,8 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
 import {
-  BROWSER_HEADLESS_RUNTIME_CAPABILITY,
-  BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
-  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_VERSION,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
-  RUNTIME_CAPABILITIES,
-  RUNTIME_PROTOCOL_VERSION,
-  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
-  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
-  type RuntimeCapability
+  ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/protocol-version'
 import {
   configureAiVaultSessionSources,
@@ -431,11 +418,7 @@ import {
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
 import type { AutomationService } from '../automations/service'
-import {
-  createRuntimeBrowserCommands,
-  runtimeBrowserCommandsFactoryIsHeadless,
-  runtimeBrowserUnavailableCause
-} from './runtime-browser-commands-factory'
+import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
@@ -2440,6 +2423,7 @@ export class OrcaRuntimeService {
   private readonly managedBaseCommands: RuntimeManagedBaseCommands
   private readonly remoteDesktopCommands: RuntimeRemoteDesktopCommands
   private readonly clientConnectionCommands: RuntimeClientConnectionCommands
+  private readonly windowGraphClientCommands: RuntimeWindowGraphClientCommands
   private readonly worktreePs: RuntimeWorktreePs
   private readonly mobileTabOperations: RuntimeMobileTabOperations
   private readonly agentClusterFacade: RuntimeAgentClusterFacade
@@ -3122,6 +3106,97 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.windowGraphClientCommands = new RuntimeWindowGraphClientCommands({
+      adoptFirstPtyForLeafHandle: (...args) => this.adoptFirstPtyForLeafHandle(...args),
+      adoptPreAllocatedHandle: (...args) => this.adoptPreAllocatedHandle(...args),
+      applyRemoteDesktopLayout: (...args) => this.applyRemoteDesktopLayout(...args),
+      attachWindow: (...args) => this.attachWindow(...args),
+      buildAgentOrchestrationByPaneKey: (...args) => this.buildAgentOrchestrationByPaneKey(...args),
+      cancelMobileDictationForClient: (...args) => this.cancelMobileDictationForClient(...args),
+      collectMobileVisibleGraphChangedWorktrees: (...args) =>
+        this.collectMobileVisibleGraphChangedWorktrees(...args),
+      deliverPendingMessagesForLeaf: (...args) => this.deliverPendingMessagesForLeaf(...args),
+      enqueueLayout: (...args) => this.enqueueLayout(...args),
+      getAutoRestoreFitMs: (...args) => this.getAutoRestoreFitMs(...args),
+      getAvailableAuthoritativeWindow: (...args) => this.getAvailableAuthoritativeWindow(...args),
+      getDriver: (...args) => this.getDriver(...args),
+      getLeafKey: (...args) => this.getLeafKey(...args),
+      getMobileDisplayMode: (...args) => this.getMobileDisplayMode(...args),
+      getNativeChatLaunchDraftResolutionClientEventSnapshot: (...args) =>
+        this.getNativeChatLaunchDraftResolutionClientEventSnapshot(...args),
+      getStatus: (...args) => this.getStatus(...args),
+      getTerminalSize: (...args) => this.getTerminalSize(...args),
+      hasRemoteDesktopViewers: (...args) => this.hasRemoteDesktopViewers(...args),
+      invalidateLeafHandle: (...args) => this.invalidateLeafHandle(...args),
+      makeRuntimePaneKey: (...args) => this.makeRuntimePaneKey(...args),
+      markGraphReady: (...args) => this.markGraphReady(...args),
+      markSessionTabsInventoryPublished: (...args) =>
+        this.markSessionTabsInventoryPublished(...args),
+      mobileTookFloor: (...args) => this.mobileTookFloor(...args),
+      nextTitleObservationSequence: (...args) => this.nextTitleObservationSequence(...args),
+      notifyFitOverrideListeners: (...args) => this.notifyFitOverrideListeners(...args),
+      notifyRemoteTerminalViewPresenceChanged: (...args) =>
+        this.notifyRemoteTerminalViewPresenceChanged(...args),
+      pickMostRecentActor: (...args) => this.pickMostRecentActor(...args),
+      rebuildLeafPtyIndex: (...args) => this.rebuildLeafPtyIndex(...args),
+      reconcileMobileSessionRetirementFences: (...args) =>
+        this.reconcileMobileSessionRetirementFences(...args),
+      reconcilePtyIncarnationHandles: (...args) => this.reconcilePtyIncarnationHandles(...args),
+      recordPtyWorktree: (...args) => this.recordPtyWorktree(...args),
+      resolveDesktopRestoreTarget: (...args) => this.resolveDesktopRestoreTarget(...args),
+      scheduleMobileSessionTabsChanged: (...args) => this.scheduleMobileSessionTabsChanged(...args),
+      setDriver: (...args) => this.setDriver(...args),
+      syncMobileSessionTabs: (...args) => this.syncMobileSessionTabs(...args),
+      _orchestrationDb: () => this._orchestrationDb,
+      authoritativeWindowId: () => this.authoritativeWindowId,
+      authoritativeWindowIdSet: (windowId) => {
+        this.authoritativeWindowId = windowId
+      },
+      detachedPreAllocatedLeaves: this.detachedPreAllocatedLeaves,
+      freshSubscribeGuard: this.freshSubscribeGuard,
+      getDesktopWindowStatusFn: () => this.getDesktopWindowStatusFn(),
+      graphStatus: () => this.graphStatus,
+      graphSyncCallbacks: this.graphSyncCallbacks,
+      handleByLeafKey: this.handleByLeafKey,
+      handleByPtyId: this.handleByPtyId,
+      handleByPtyIncarnation: this.handleByPtyIncarnation,
+      headlessGraphFallbackAvailable: this.headlessGraphFallbackAvailable,
+      headlessGraphFallbackAvailableSet: (value) => {
+        this.headlessGraphFallbackAvailable = value
+      },
+      lastRendererSizes: this.lastRendererSizes,
+      layouts: this.layouts,
+      leaves: () => this.leaves,
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      mobileSubscribers: this.mobileSubscribers,
+      offscreenBrowserBackend: () => this.offscreenBrowserBackend,
+      pendingHeadlessPromotionWindowId: () => this.pendingHeadlessPromotionWindowId,
+      pendingRestoreTimers: this.pendingRestoreTimers,
+      pendingSoftLeavers: this.pendingSoftLeavers,
+      ptysById: this.ptysById,
+      remoteDesktopHostReclaimTargets: this.remoteDesktopHostReclaimTargets,
+      rendererGeneration: () => this.rendererGeneration,
+      rendererGenerationSet: (generation) => {
+        this.rendererGeneration = generation
+      },
+      rendererGraphEpoch: () => this.rendererGraphEpoch,
+      revokeTerminalFileGrantsForClient: (...args) =>
+        this.revokeTerminalFileGrantsForClient(...args),
+      runtimeId: this.runtimeId,
+      sessionTabsInventoryPublicationEpoch: () => this.sessionTabsInventoryPublicationEpoch,
+      sessionTabsInventoryPublicationEpochSet: (epoch) => {
+        this.sessionTabsInventoryPublicationEpoch = epoch
+      },
+      store: this.store,
+      tabs: () => this.tabs,
+      tabsSet: (next) => {
+        this.tabs = next
+      },
+      leavesSet: (next) => {
+        this.leaves = next
+      },
+      terminalFitOverrides: this.terminalFitOverrides
+    })
     this.worktreePs = new RuntimeWorktreePs({
       attachAgentRowsToSummaries: (...args) => this.attachAgentRowsToSummaries(...args),
       buildRuntimeVisibilitySourceMatchersByRepoId: (...args) =>
@@ -4799,78 +4874,7 @@ export class OrcaRuntimeService {
   }
 
   getStatus(): RuntimeStatus {
-    // Why: browser panes need a backend that can create and stream a page. A
-    // desktop renderer provides one via <webview>; a headless serve provides one
-    // via the offscreen backend. Either way the same browser.screencast.v1 path
-    // works, so advertise it when either is present. browser.headless.v1
-    // additionally tells clients this host owns browser pages with no renderer,
-    // so they must not fall back to a local desktop browser tab.
-    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
-    const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
-    const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
-    const canBrowse = hasRenderer || hasOffscreen
-    const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
-      (capability) =>
-        (capability !== 'browser.screencast.v1' || canBrowse) &&
-        // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
-        (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||
-          capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
-        (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
-          capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY) &&
-        (process.env.ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY !== '1' ||
-          capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY)
-    )
-    if (hasOffscreen || hasHeadlessCommands) {
-      capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
-    }
-    // Why: certificate proceed is owned by the browser-hosting process for both
-    // desktop webviews and offscreen pages. Advertise whenever either backend
-    // can host a page so remote clients can surface Proceed Anyway (Unsafe).
-    if (canBrowse) {
-      capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
-    }
-    // Why the cause and not one fixed sentence: the operator can only act on the reason
-    // that actually applies, and a host that says "set ORCA_BROWSER_EXECUTABLE" to someone
-    // who already set it sends them to fix a thing that is not broken.
-    const cause = canBrowse || hasHeadlessCommands ? null : runtimeBrowserUnavailableCause()
-    const degradations: RuntimeDegradation[] = cause
-      ? [
-          {
-            code: BROWSER_UNAVAILABLE_ERROR_CODE,
-            capability: BROWSER_HEADLESS_RUNTIME_CAPABILITY,
-            message: browserUnavailableMessage(cause.reason, cause.detail),
-            reason: cause.reason,
-            ...(cause.detail ? { detail: cause.detail } : {})
-          }
-        ]
-      : []
-    // Why appended rather than merged into the ternary: PTY loss and browser loss are
-    // independent, and a host can be degraded on both at once.
-    const terminalDegradation = runtimeTerminalDegradation()
-    if (terminalDegradation) {
-      degradations.push(terminalDegradation)
-    }
-    return {
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      graphStatus: this.graphStatus,
-      authoritativeWindowId: this.authoritativeWindowId,
-      desktopWindowStatus: hasRenderer ? 'available' : this.getDesktopWindowStatusFn(),
-      liveTabCount: this.tabs.size,
-      liveLeafCount: this.leaves.size,
-      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-      // Why: headless orca serve cannot create/stream BrowserViews, so clients
-      // must not treat browser panes as supported just because runtime RPC is up.
-      capabilities,
-      ...(degradations.length > 0 ? { degradations } : {}),
-      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
-      hostPlatform: process.platform,
-      terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
-      floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
-      protocolVersion: RUNTIME_PROTOCOL_VERSION,
-      minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-    }
+    return this.windowGraphClientCommands.getStatus()
   }
 
   // Why: scans the transcript-owning host's disk (correct by construction over
@@ -5184,272 +5188,7 @@ export class OrcaRuntimeService {
     windowId: number,
     graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
   ): RuntimeSyncWindowGraphResult {
-    if (
-      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      this.headlessGraphFallbackAvailable
-    ) {
-      if (windowId !== this.pendingHeadlessPromotionWindowId) {
-        throw new Error('Runtime graph publisher does not match the pending desktop promotion')
-      }
-      // Why: a renderer may publish after a failed promotion was restored to
-      // headless authority; accepting that late healthy graph is self-healing.
-      this.attachWindow(windowId)
-    }
-    if (this.authoritativeWindowId === null) {
-      this.authoritativeWindowId = windowId
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      throw new Error('Runtime graph publisher does not match the authoritative window')
-    }
-    const rendererGeneration =
-      windowId === HEADLESS_RUNTIME_WINDOW_ID
-        ? null
-        : 'rendererGeneration' in graph && typeof graph.rendererGeneration === 'string'
-          ? graph.rendererGeneration
-          : undefined
-    if (
-      typeof rendererGeneration === 'string' &&
-      rendererGeneration === this.rendererGeneration &&
-      this.graphStatus !== 'ready'
-    ) {
-      throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
-    }
-    if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
-      this.headlessGraphFallbackAvailable = true
-      this.rendererGeneration = null
-    }
-
-    const graphWasReady = this.graphStatus === 'ready'
-    const previousTabs = this.tabs
-    const previousLeaves = this.leaves
-    this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
-    const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
-    const mobileSessionResyncWorktrees = new Set<string>()
-    const changedMobileWorktrees = this.syncMobileSessionTabs(
-      graph.mobileSessionTabs,
-      graph.unchangedMobileSessionWorktrees,
-      mobileSessionResyncWorktrees
-    )
-    const nextLeaves = new Map<string, RuntimeLeafRecord>()
-    const graphSyncedAt = this.nextTitleObservationSequence()
-
-    // Why: renderer reloads can briefly republish the same leaf with no ptyId;
-    // keep live CLI handles usable while the UI graph rebuilds.
-    const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
-    for (const leaf of lifecycleLeaves) {
-      const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-      const existing = this.leaves.get(leafKey)
-      const ptyId =
-        preserveLivePtysDuringReload && leaf.ptyId === null && existing?.ptyId
-          ? existing.ptyId
-          : leaf.ptyId
-      const ptyGeneration =
-        existing && existing.ptyId !== ptyId
-          ? existing.ptyGeneration + 1
-          : (existing?.ptyGeneration ?? 0)
-      const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
-      const tailSource = existing?.ptyId === ptyId ? existing : existingPty
-
-      nextLeaves.set(leafKey, {
-        ...leaf,
-        ptyId,
-        ptyGeneration,
-        connected: ptyId !== null,
-        writable: this.graphStatus === 'ready' && ptyId !== null,
-        lastOutputAt: tailSource?.lastOutputAt ?? null,
-        lastExitCode: tailSource?.lastExitCode ?? null,
-        lastExitCause: tailSource?.lastExitCause ?? null,
-        tailBuffer: tailSource?.tailBuffer ?? [],
-        tailTranscriptBuffer: tailSource?.tailTranscriptBuffer ?? [],
-        tailTranscriptChars: tailSource?.tailTranscriptChars ?? 0,
-        tailPartialLine: tailSource?.tailPartialLine ?? '',
-        tailPendingAnsi: tailSource?.tailPendingAnsi ?? '',
-        tailRedrawCursor: tailSource?.tailRedrawCursor ?? null,
-        tailTruncated: tailSource?.tailTruncated ?? false,
-        tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
-        preview: tailSource?.preview ?? '',
-        waitBlockedAt: tailSource?.waitBlockedAt ?? null,
-        lastAgentStatus: tailSource?.lastAgentStatus ?? null,
-        lastAgentStatusObservedLive: tailSource?.lastAgentStatusObservedLive ?? false,
-        lastOscTitle: tailSource?.lastOscTitle ?? null,
-        lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
-        paneTitleUpdatedAt:
-          existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
-            ? existing.paneTitleUpdatedAt
-            : graphSyncedAt
-      })
-
-      if (leaf.ptyId) {
-        this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {
-          connected: true,
-          lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,
-          preview: existing?.ptyId === leaf.ptyId ? existing.preview : '',
-          tabId: leaf.tabId,
-          paneKey: this.makeRuntimePaneKey(leaf)
-        })
-      }
-
-      if (existing && (existing.ptyId !== ptyId || existing.ptyGeneration !== ptyGeneration)) {
-        // Why: mobile can subscribe while the pane is waiting for its first PTY.
-        // Keep that handle usable after the recovery mount binds it.
-        const adoptedFirstPty =
-          existing.ptyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
-        if (!adoptedFirstPty) {
-          this.invalidateLeafHandle(leafKey)
-        }
-      }
-    }
-
-    // Why: computed BEFORE preserving stale leaves so preservation can refuse a
-    // leaf whose PTY the incoming graph already rebound to a live leaf. Two
-    // leaves on one PTY resolve to the same handle (handles are ptyId-keyed) and
-    // crash paired clients with a duplicate React key.
-    const nextPtyIds = new Set(
-      [...nextLeaves.values()].map((leaf) => leaf.ptyId).filter((ptyId): ptyId is string => !!ptyId)
-    )
-    for (const oldLeafKey of this.leaves.keys()) {
-      if (!nextLeaves.has(oldLeafKey)) {
-        const oldLeaf = this.leaves.get(oldLeafKey)
-        const retainedIncarnation = oldLeaf?.ptyId
-          ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
-          : undefined
-        if (
-          preserveLivePtysDuringReload &&
-          oldLeaf?.ptyId &&
-          (this.handleByPtyId.has(oldLeaf.ptyId) ||
-            (retainedIncarnation &&
-              retainedIncarnation.incarnationId ===
-                this.ptysById.get(oldLeaf.ptyId)?.incarnationId)) &&
-          !nextPtyIds.has(oldLeaf.ptyId)
-        ) {
-          // Why: the first reload graph can precede pane rebinding; the live PTY incarnation still owns its handle.
-          nextLeaves.set(oldLeafKey, oldLeaf)
-          nextPtyIds.add(oldLeaf.ptyId)
-        } else if (oldLeaf?.ptyId && nextPtyIds.has(oldLeaf.ptyId)) {
-          // Why: the incoming graph already rebound this PTY to a live leaf (e.g.
-          // a woken agent re-keyed to a new leaf during renderer reload). Keeping
-          // the old leaf too would put two leaves on ONE PTY, which emit the same
-          // terminal handle and crash paired clients. Drop the stale leaf; if its
-          // handle is the shared ptyId-keyed one it belongs to the live leaf now,
-          // so release only this dead leaf key's alias. A leaf-unique handle has
-          // no next owner — invalidate it so in-flight CLI waiters fail fast
-          // instead of hanging on a dead leaf.
-          const oldHandle = this.handleByLeafKey.get(oldLeafKey)
-          const incarnationHandle = retainedIncarnation?.handle
-          if (
-            oldHandle !== undefined &&
-            (oldHandle === this.handleByPtyId.get(oldLeaf.ptyId) || oldHandle === incarnationHandle)
-          ) {
-            this.handleByLeafKey.delete(oldLeafKey)
-          } else {
-            this.invalidateLeafHandle(oldLeafKey)
-          }
-        } else {
-          this.invalidateLeafHandle(oldLeafKey)
-        }
-      }
-    }
-
-    for (const [ptyId, leaf] of this.detachedPreAllocatedLeaves) {
-      if (nextPtyIds.has(ptyId) || !this.handleByPtyId.has(ptyId)) {
-        this.detachedPreAllocatedLeaves.delete(ptyId)
-        continue
-      }
-      nextLeaves.set(this.getLeafKey(leaf.tabId, leaf.leafId), leaf)
-      nextPtyIds.add(ptyId)
-    }
-
-    this.leaves = nextLeaves
-    this.rebuildLeafPtyIndex()
-    this.reconcilePtyIncarnationHandles()
-    // Why: the emitted client payload is a function of the stored snapshot AND
-    // the tab/leaf graph (handles/titles/connected resolve from leaf state), so
-    // a graph-only change — e.g. a restored leaf binding its ptyId while the
-    // snapshot pair is unchanged — must also fan out, or a paired client stays
-    // on pending-handle forever. Schedule the union on the same 50ms trailing
-    // edge as the OSC-title path; the coalescer emit reads the latest state at
-    // fire time so no final version is ever lost.
-    for (const worktreeId of this.collectMobileVisibleGraphChangedWorktrees(
-      previousTabs,
-      previousLeaves
-    )) {
-      if (changedMobileWorktrees.has(worktreeId)) {
-        continue
-      }
-      const stored = this.mobileSessionTabsByWorktree.get(worktreeId)
-      if (!stored) {
-        continue
-      }
-      // Why: web clients drop same-epoch frames whose version isn't strictly
-      // newer, so a graph-only change must mint a fresh stored version (like
-      // the PTY touch path does) or the re-emitted payload — e.g. the
-      // pending-handle → ready flip — is discarded and the client stays stale.
-      // The accepted-renderer tracking is untouched: this is a main-local bump.
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
-        ...stored,
-        snapshotVersion: stored.snapshotVersion + 1
-      })
-      changedMobileWorktrees.add(worktreeId)
-    }
-    for (const worktreeId of changedMobileWorktrees) {
-      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
-        this.scheduleMobileSessionTabsChanged(worktreeId)
-      }
-    }
-    // Why: only the authoritative window grants inventory authority; headless qualifies because it becomes authoritative before its next sync.
-    const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
-    this.markGraphReady(windowId)
-    if (
-      isAuthoritativeGraphPublisher &&
-      (windowId === HEADLESS_RUNTIME_WINDOW_ID || graph.mobileSessionTabs !== undefined)
-    ) {
-      if (mobileSessionResyncWorktrees.size === 0) {
-        this.markSessionTabsInventoryPublished()
-      } else {
-        this.sessionTabsInventoryPublicationEpoch = null
-      }
-    }
-    if (rendererGeneration !== undefined) {
-      this.rendererGeneration = rendererGeneration
-    }
-    for (const leaf of this.leaves.values()) {
-      this.adoptPreAllocatedHandle(leaf)
-      const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-      if (
-        this._orchestrationDb &&
-        leaf.lastAgentStatus === 'idle' &&
-        leaf.lastAgentStatusObservedLive &&
-        leaf.writable &&
-        (!graphWasReady ||
-          previousLeaf?.ptyId !== leaf.ptyId ||
-          !previousLeaf.writable ||
-          previousLeaf.lastAgentStatus !== 'idle' ||
-          !previousLeaf.lastAgentStatusObservedLive)
-      ) {
-        this.deliverPendingMessagesForLeaf(leaf)
-      }
-    }
-
-    // Why: createTerminal waits for the renderer's graph sync to populate the
-    // new leaf so it can return a handle. Drain callbacks after leaves update.
-    for (const cb of [...this.graphSyncCallbacks]) {
-      cb()
-    }
-
-    const agentOrchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
-    const nativeChatLaunchDraftResolutions =
-      this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
-        ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
-      )
-    return {
-      ...this.getStatus(),
-      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
-      ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
-      ...(mobileSessionResyncWorktrees.size > 0
-        ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
-        : {})
-    }
+    return this.windowGraphClientCommands.syncWindowGraph(windowId, graph)
   }
 
   // Why: toMobileSessionTabsResult resolves handles/titles from this.tabs and
@@ -8198,95 +7937,7 @@ export class OrcaRuntimeService {
     previousRows: number | null
     mode: 'mobile-fit' | 'desktop-fit'
   }> {
-    if (mode === 'mobile-fit') {
-      if (cols == null || rows == null || !Number.isFinite(cols) || !Number.isFinite(rows)) {
-        throw new Error('invalid_dimensions')
-      }
-      const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(cols, rows)
-
-      const currentSize = this.getTerminalSize(ptyId)
-      const existing = this.terminalFitOverrides.get(ptyId)
-      // Capture baseline cols/rows for the return value (existing override's
-      // baseline wins over current size to preserve original desktop dims
-      // across multiple re-fits).
-      const previousCols = existing?.previousCols ?? currentSize?.cols ?? null
-      const previousRows = existing?.previousRows ?? currentSize?.rows ?? null
-
-      // Why: legacy resizeForClient callers bypass handleMobileSubscribe, so
-      // mobileSubscribers stays empty and resolveDesktopRestoreTarget's step-1
-      // (per-subscriber baseline) never matches. Stash the pre-fit PTY size
-      // into lastRendererSizes so restore lands on step 2 (renderer geometry)
-      // instead of step 3 (current phone-fit dims = no-op restore).
-      if (currentSize && !existing) {
-        this.lastRendererSizes.set(ptyId, {
-          cols: currentSize.cols,
-          rows: currentSize.rows
-        })
-      }
-
-      this.freshSubscribeGuard.add(ptyId)
-      let result: ApplyLayoutResult
-      try {
-        result = await this.enqueueLayout(ptyId, {
-          kind: 'phone',
-          cols: clampedCols,
-          rows: clampedRows,
-          ownerClientId: clientId
-        })
-      } finally {
-        this.freshSubscribeGuard.delete(ptyId)
-      }
-      if (!result.ok) {
-        throw new Error('resize_failed')
-      }
-
-      // Why: mobile-fit via resizeForClient is a deliberate mobile action;
-      // the actor takes the floor (updates lastActedAt; mode-flip case is
-      // already handled by enqueueLayout above).
-      await this.mobileTookFloor(ptyId, clientId)
-
-      return {
-        cols: clampedCols,
-        rows: clampedRows,
-        previousCols,
-        previousRows,
-        mode: 'mobile-fit'
-      }
-    }
-
-    // restore mode
-    const override = this.terminalFitOverrides.get(ptyId)
-    if (!override) {
-      throw new Error('no_active_override')
-    }
-    // Only the owning client can restore — prevents one phone from undoing
-    // another phone's active fit.
-    if (override.clientId !== clientId) {
-      throw new Error('not_override_owner')
-    }
-
-    const restore = this.resolveDesktopRestoreTarget(ptyId)
-    const result = await this.enqueueLayout(ptyId, {
-      kind: 'desktop',
-      cols: restore.cols,
-      rows: restore.rows
-    })
-    if (!result.ok) {
-      throw new Error('resize_failed')
-    }
-
-    // Why: legacy mobile clients on the resizeForClient path also need a
-    // fit-override-listener notification (the renderer-side terminalFitOverrideChanged
-    // is already emitted by applyLayout's mode-flip path).
-    this.notifyFitOverrideListeners(ptyId, 'desktop-fit', restore.cols, restore.rows)
-
-    return {
-      cols: restore.cols,
-      rows: restore.rows,
-      previousCols: null,
-      previousRows: null,
-      mode: 'desktop-fit'
-    }
+    return this.windowGraphClientCommands.resizeForClient(ptyId, mode, clientId, cols, rows)
   }
 
   getTerminalFitOverride(ptyId: string) {
@@ -8330,170 +7981,7 @@ export class OrcaRuntimeService {
   }
 
   onClientDisconnected(clientId: string): void {
-    this.revokeTerminalFileGrantsForClient(clientId)
-    this.cancelMobileDictationForClient(clientId)
-
-    // (1) Cancel pending restore-debounce timers owned by this client.
-    for (const [ptyId, entry] of this.pendingRestoreTimers) {
-      if (entry.clientId === clientId) {
-        clearTimeout(entry.timer)
-        this.pendingRestoreTimers.delete(ptyId)
-      }
-    }
-
-    // (2) Promote any soft-leave grace owned by this client into immediate
-    // finalization. Grace existed to absorb a quick re-subscribe; a real
-    // disconnect kills any chance of re-subscribe.
-    //
-    // Note: this is mode-decoupled (matches docs/mobile-terminal-layout-state-machine.md
-    // sub-case 2). Today's pre-rewrite code only restored when
-    // `mode === 'auto' && wasResizedToPhone`; the new design restores
-    // whenever the layout is currently `phone`. This is an intentional
-    // behavior fix — `mode === 'phone'` with no subscribers is a degenerate
-    // state nothing in product depends on.
-    for (const [ptyId, soft] of this.pendingSoftLeavers) {
-      if (soft.clientId !== clientId) {
-        continue
-      }
-      clearTimeout(soft.timer)
-      this.pendingSoftLeavers.delete(ptyId)
-
-      // Cancel any in-flight 300ms restore timer too — we'll handle it inline.
-      const pending = this.pendingRestoreTimers.get(ptyId)
-      if (pending) {
-        clearTimeout(pending.timer)
-        this.pendingRestoreTimers.delete(ptyId)
-      }
-
-      const cur = this.layouts.get(ptyId)
-      // Why: Indefinite hold (mobileAutoRestoreFitMs == null) keeps the PTY
-      // at phone dims after the phone disconnects; the desktop banner's
-      // Restore button is the explicit return path. See
-      // docs/mobile-fit-hold.md.
-      if (this.hasRemoteDesktopViewers(ptyId)) {
-        this.setDriver(ptyId, { kind: 'idle' })
-        void this.applyRemoteDesktopLayout(ptyId)
-        continue
-      } else if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
-        if (this.remoteDesktopHostReclaimTargets.has(ptyId)) {
-          this.setDriver(ptyId, { kind: 'idle' })
-          void this.applyRemoteDesktopLayout(ptyId)
-          continue
-        }
-        // Use the soft-leaver's snapshot baseline as a hint, falling
-        // through to resolveDesktopRestoreTarget for missing values.
-        const fallback = this.resolveDesktopRestoreTarget(ptyId)
-        const cols = soft.record.previousCols ?? fallback.cols
-        const rows = soft.record.previousRows ?? fallback.rows
-        void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
-      }
-      this.setDriver(ptyId, { kind: 'idle' })
-    }
-
-    // (3) Immediate restore for PTYs where this client was the last
-    // mobile subscriber. With multi-mobile, peer subscribers keep the
-    // floor; only when the inner map empties do we transition to desktop.
-    const ptysWithSurvivingPeers: string[] = []
-    const ptysToRestore: { ptyId: string; baseline: { cols: number; rows: number } | null }[] = []
-    for (const [ptyId, inner] of this.mobileSubscribers) {
-      const subscriber = inner.get(clientId)
-      if (!subscriber) {
-        continue
-      }
-      // Snapshot baseline before deleting — needed once mobileSubscribers
-      // entry is gone for the resolveDesktopRestoreTarget chain.
-      const baseline =
-        subscriber.previousCols != null && subscriber.previousRows != null
-          ? { cols: subscriber.previousCols, rows: subscriber.previousRows }
-          : null
-      inner.delete(clientId)
-      this.notifyRemoteTerminalViewPresenceChanged(ptyId)
-      if (inner.size > 0) {
-        ptysWithSurvivingPeers.push(ptyId)
-      } else {
-        this.mobileSubscribers.delete(ptyId)
-        ptysToRestore.push({ ptyId, baseline })
-      }
-    }
-    for (const { ptyId, baseline } of ptysToRestore) {
-      const cur = this.layouts.get(ptyId)
-      // Why: Indefinite hold gate — see soft-leaver branch above.
-      if (this.hasRemoteDesktopViewers(ptyId)) {
-        this.setDriver(ptyId, { kind: 'idle' })
-        void this.applyRemoteDesktopLayout(ptyId)
-        continue
-      } else if (cur?.kind === 'phone' && this.getAutoRestoreFitMs() != null) {
-        if (this.remoteDesktopHostReclaimTargets.has(ptyId)) {
-          this.setDriver(ptyId, { kind: 'idle' })
-          void this.applyRemoteDesktopLayout(ptyId)
-          continue
-        }
-        const fallback = this.resolveDesktopRestoreTarget(ptyId)
-        const cols = baseline?.cols ?? fallback.cols
-        const rows = baseline?.rows ?? fallback.rows
-        void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
-      }
-      this.setDriver(ptyId, { kind: 'idle' })
-    }
-
-    // (4) Driver re-election where peers survived. If the disconnecting
-    // client was the active driver, the most-recent surviving actor takes
-    // the floor.
-    for (const ptyId of ptysWithSurvivingPeers) {
-      const driver = this.getDriver(ptyId)
-      if (driver.kind !== 'mobile' || driver.clientId !== clientId) {
-        continue
-      }
-      const inner = this.mobileSubscribers.get(ptyId)
-      const next = inner ? this.pickMostRecentActor(inner) : null
-      if (!next) {
-        continue
-      }
-      this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
-
-      const mode = this.getMobileDisplayMode(ptyId)
-      if (mode === 'desktop') {
-        continue
-      }
-      const nextSub = inner!.get(next.clientId)
-      const nextViewport = nextSub?.viewport
-      if (!nextViewport) {
-        continue
-      }
-      void this.enqueueLayout(ptyId, {
-        kind: 'phone',
-        cols: nextViewport.cols,
-        rows: nextViewport.rows,
-        ownerClientId: next.clientId
-      })
-    }
-
-    // (5) Legacy-callers fallback. Older mobile builds use resizeForClient
-    // directly and never populate mobileSubscribers. For those PTYs the
-    // override carries the owning clientId; restore the layout when the
-    // owner disconnects. resolveDesktopRestoreTarget reads lastRendererSizes
-    // (which the legacy mobile-fit branch stashes the pre-fit size into).
-    for (const [ptyId, override] of this.terminalFitOverrides) {
-      if (override.clientId !== clientId) {
-        continue
-      }
-      if (this.mobileSubscribers.has(ptyId)) {
-        continue
-      }
-      const cur = this.layouts.get(ptyId)
-      if (cur?.kind !== 'phone') {
-        continue
-      }
-      // Why: Indefinite hold gate — see soft-leaver branch above. Legacy
-      // mobile clients (resizeForClient path) honor the same setting.
-      if (this.getAutoRestoreFitMs() == null) {
-        continue
-      }
-      const fallback = this.resolveDesktopRestoreTarget(ptyId)
-      const cols = override.previousCols ?? fallback.cols
-      const rows = override.previousRows ?? fallback.rows
-      void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
-    }
+    return this.windowGraphClientCommands.onClientDisconnected(clientId)
   }
 
   onPtyExit(
@@ -12235,6 +11723,7 @@ import { RuntimeRemoteDesktopCommands } from './runtime-remote-desktop-commands'
 import { RuntimeClientConnectionCommands } from './runtime-client-connection-commands'
 import { RuntimeMobileTabOperations } from './runtime-mobile-tab-operations'
 import { RuntimeWorktreePs } from './runtime-worktree-ps'
+import { RuntimeWindowGraphClientCommands } from './runtime-window-graph-client-commands'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,
