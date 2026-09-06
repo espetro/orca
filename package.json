@@ -28,6 +28,7 @@
     "test:changed": "node config/scripts/ensure-native-runtime.ts --runtime=node && NODE_COMPILE_CACHE=.cache/v8-compile-cache NODE_OPTIONS=--max-old-space-size=8192 vitest related --config config/vitest.config.ts --run=false",
     "test:skill-sharing:release": "vitest run --config config/vitest.config.ts src/main/skills src/main/runtime/rpc/methods/skills.test.ts src/relay/skill-install-handler.test.ts src/shared/skill-bundle-install-contract.test.ts src/shared/skill-install-contract.test.ts src/shared/skill-install-failure.test.ts src/shared/skill-package-manifest.test.ts",
     "test:repro:remote-agent-session": "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
+    "bench:serve-gpu-memory": "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/serve-gpu-memory-probe.mjs",
     "check:reliability-gates": "node config/scripts/check-reliability-gates.ts",
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.ts",
     "check:trivial-test-ratchet": "node config/scripts/check-trivial-test-ratchet.ts",
