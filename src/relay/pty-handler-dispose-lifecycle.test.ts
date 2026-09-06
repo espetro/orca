@@ -31,7 +31,8 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { IMMEDIATE_PTY_EXIT_TIMEOUT_MS, type PtyHandler } from './pty-handler'
+import { IMMEDIATE_PTY_EXIT_TIMEOUT_MS } from './pty-shutdown-reaper'
+import type { PtyHandler } from './pty-handler'
 import { beginPtyHandlerTest, endPtyHandlerTest } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
 

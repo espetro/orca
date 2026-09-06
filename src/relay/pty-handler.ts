@@ -1,4 +1,5 @@
-/* oxlint-disable max-lines */
+/* oxlint-disable max-lines -- Pre-existing exemption; split extraction is tracked separately. */
+import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
@@ -20,9 +21,7 @@ import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
-import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
-import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -30,17 +29,7 @@ import {
 } from '../shared/cross-platform-path'
 import { splitWorktreeId } from '../shared/worktree/id'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
-import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
-import {
-  createShellStartupOutputScanState,
-  drainShellStartupOutputScanState,
-  scanShellStartupOutput,
-  type ShellStartupOutputScanState
-} from '../main/shell-startup-output-scanner'
-import {
-  createShellPromptReadinessProbe,
-  type ShellPromptReadinessProbe
-} from '../main/shell-prompt-readiness-probe'
+import { createShellStartupOutputScanState } from '../main/shell-startup-output-scanner'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
   gitCredentialPromptGuardEnv,
@@ -48,7 +37,27 @@ import {
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/tui-agent'
-import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import {
+  PtyStartupCommandDelivery,
+  RENDERER_SHELL_READY_RETENTION_MS,
+  STARTUP_COMMAND_SHELL_READY_FALLBACK_MS,
+  STARTUP_COMMAND_WRITE_DELAY_MS,
+  type ManagedStartupCommand
+} from './pty-startup-command-delivery'
+import {
+  SHUTDOWN_REAP_MAX_SWEEPS,
+  IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
+  PtyShutdownReaper
+} from './pty-shutdown-reaper'
+import {
+  MAX_RELAY_PTY_SESSIONS,
+  REPLAY_BUFFER_MAX,
+  PtyOutputFlushQueue
+} from './pty-output-flush-queue'
+import {
+  PtyAgentSessionCreateOperations,
+  type RelayAgentSessionCreateResult
+} from './pty-agent-session-create-operations'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import { dropIncoherentCondaActivationEnv } from '../main/pty/conda-activation-env'
@@ -67,7 +76,6 @@ import {
   agentSessionOwnerBindingsEqual,
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
-import type { RelayPtySourceOutput } from './relay-pty-source-output'
 import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
@@ -83,7 +91,6 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
-import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 import {
   deleteRelayFishHistory,
   deleteRelayHistory,
@@ -142,7 +149,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
   })
 }
 
-type ManagedPty = {
+export type ManagedPty = {
   id: string
   incarnationId: string
   pty: IPty
@@ -187,48 +194,6 @@ type ManagedPty = {
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
-type RelayAgentSessionCreateResult = {
-  id: string
-  incarnationId: string
-  replay?: string
-  agentSessionEnsure?: unknown
-  sourceActivation?: PtySourceReceivingActivation
-}
-
-const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
-const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
-const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
-
-type PendingPtyOutput = RelayPtySourceOutput & {
-  data: string
-  interactive?: boolean
-  sourceChunk?: RelayPtySourceOutput
-}
-
-type ManagedStartupCommand = {
-  command: string | null
-  providerDelivery: boolean
-  delivered: boolean
-  waitForShellReady: boolean
-  outputScanState: ShellStartupOutputScanState | null
-  shellPid: number | null
-  promptProbe: ShellPromptReadinessProbe | null
-  timer: ReturnType<typeof setTimeout> | null
-}
-
-// Why: Windows ConPTY rejects signals; forward them only on POSIX.
-function killPtyProcess(pty: IPty, signal: string): void {
-  if (process.platform === 'win32') {
-    pty.kill()
-    return
-  }
-  if (signal === 'SIGKILL') {
-    forceKillPosixPtyProcessGroups(pty.pid, () => pty.kill(signal))
-    return
-  }
-  pty.kill(signal)
-}
-
 function finishPtyCreationOperations(operations: readonly (() => void)[]): void {
   // Why: the relay still targets Node 18, which lacks Array.prototype.toReversed.
   for (let index = operations.length - 1; index >= 0; index--) {
@@ -264,28 +229,6 @@ function disposeManagedPty(managed: ManagedPty): void {
     /* swallow */
   }
 }
-const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
-export const IMMEDIATE_PTY_EXIT_TIMEOUT_MS = 8_000
-/** Longer than the 5s armed SIGKILL fallback, so the first sweep observes the post-kill state. */
-export const SHUTDOWN_REAP_VERIFY_DELAY_MS = 6_000
-export const SHUTDOWN_REAP_MAX_SWEEPS = 3
-export const MAX_RELAY_PTY_SESSIONS = 50
-export const REPLAY_BUFFER_MAX = 100 * 1024
-const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
-const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
-const PTY_OUTPUT_FLUSH_CHUNK_CHARS = 16 * 1024
-const PTY_OUTPUT_FLUSH_MAX_WRITES = 2
-const PTY_OUTPUT_PRODUCER_HIGH_BYTES = 128 * 1024
-const PTY_OUTPUT_PRODUCER_LOW_BYTES = 64 * 1024
-const INTERACTIVE_OUTPUT_WINDOW_MS = 100
-const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
-const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
-const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
-const STARTUP_COMMAND_WRITE_DELAY_MS = 50
-const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
-const RENDERER_SHELL_READY_RETENTION_MS = 15_000
-const PTY_FORCE_KILL_RETRY_DELAY_MS = 250
-const PTY_FORCE_KILL_MAX_ATTEMPTS = 2
 const ALLOWED_SIGNALS = new Set([
   'SIGINT',
   'SIGTERM',
@@ -438,15 +381,8 @@ export class PtyHandler {
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
-  private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
-  private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
-  private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
-  private pausedOutputPtys = new Set<string>()
-  private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
   private sourcePublication: RelayPtySourcePublication | null = null
-  private lastInputAtByPty = new Map<string, number>()
-  private interactiveOutputCharsByPty = new Map<string, number>()
   private pendingSpawnCount = 0
   private pendingReviveIds = new Set<string>()
   private creationFenced = false
@@ -465,31 +401,36 @@ export class PtyHandler {
   // Why: augment environment on every spawn so PTYs receive current hook coordinates.
   private envAugmenters: PtyEnvAugmenter[] = []
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
-  private readonly agentSessionCreateOperations = new Map<
-    string,
-    Promise<RelayAgentSessionCreateResult>
-  >()
+  private readonly agentSessionCreateOperations = new PtyAgentSessionCreateOperations()
+  private readonly outputQueue: PtyOutputFlushQueue
+  private readonly startupDelivery: PtyStartupCommandDelivery
+  private readonly shutdownReaper: PtyShutdownReaper
 
-  constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
+  constructor(
+    dispatcher: RelayDispatcher,
+    // Why kept here: relay.startGrace reads configuredGraceTimeMs to pick the grace branch.
+    graceTimeMs = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+  ) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
+    this.outputQueue = new PtyOutputFlushQueue(dispatcher, (id) => this.ptys.get(id))
+    this.startupDelivery = new PtyStartupCommandDelivery()
+    this.shutdownReaper = new PtyShutdownReaper({
+      getManaged: (id) => this.ptys.get(id),
+      reapExitedPty: (managed) => this.reapExitedPty(managed)
+    })
     this.registerHandlers()
     this.removeLegacyCapacityListener =
-      this.dispatcher.onLegacyPtyCapacity?.(() => this.handleLegacyCapacity()) ?? null
+      this.dispatcher.onLegacyPtyCapacity?.(() => this.outputQueue.handleLegacyCapacity()) ?? null
   }
 
   setConsumerDeliveryPaused(id: string, paused: boolean): void {
-    if (paused) {
-      this.consumerPausedOutputPtys.add(id)
-      this.pausePtyOutput(id)
-      return
-    }
-    this.consumerPausedOutputPtys.delete(id)
-    this.maybeResumePtyOutput(id)
+    this.outputQueue.setConsumerDeliveryPaused(id, paused)
   }
 
   setSourcePublication(publication: RelayPtySourcePublication): void {
     this.sourcePublication = publication
+    this.outputQueue.setSourcePublication(publication)
   }
 
   handleSourceCreditAvailable(id: string): void {
@@ -497,11 +438,7 @@ export class PtyHandler {
   }
 
   handleSourcePublicationCapacity(id: string): void {
-    if (this.pendingOutputByPty.has(id)) {
-      this.scheduleOutputFlush(0)
-    }
-    this.maybeResumePtyOutput(id)
-    this.publishPendingExit(id)
+    this.outputQueue.handleSourcePublicationCapacity(id)
   }
 
   private async loadPty(): Promise<typeof NodePty | null> {
@@ -732,13 +669,6 @@ export class PtyHandler {
     return result
   }
 
-  private clearStartupCommandTimer(managed: ManagedPty): void {
-    if (managed.startupCommand?.timer) {
-      clearTimeout(managed.startupCommand.timer)
-      managed.startupCommand.timer = null
-    }
-  }
-
   private appendReplayBuffer(managed: ManagedPty, data: string): void {
     if (data.length === 0) {
       return
@@ -747,69 +677,7 @@ export class PtyHandler {
   }
 
   private releaseStartupCommand(managed: ManagedPty): void {
-    this.clearStartupCommandTimer(managed)
-    managed.startupCommand?.promptProbe?.dispose()
-    managed.startupCommand = undefined
-  }
-
-  private drainStartupScanBytes(startup: ManagedStartupCommand): string {
-    if (!startup.outputScanState) {
-      return ''
-    }
-    const heldBytes = drainShellStartupOutputScanState(startup.outputScanState)
-    startup.outputScanState = null
-    return heldBytes
-  }
-
-  private scheduleStartupCommandResolution(managed: ManagedPty, delayMs: number): void {
-    const startup = managed.startupCommand
-    if (!startup || startup.delivered || managed.disposed) {
-      return
-    }
-    this.clearStartupCommandTimer(managed)
-    startup.timer = setTimeout(() => {
-      startup.timer = null
-      if (startup.providerDelivery) {
-        this.deliverStartupCommand(managed)
-      } else {
-        this.signalRendererShellReady(managed)
-      }
-    }, delayMs)
-  }
-
-  private deliverStartupCommand(managed: ManagedPty): void {
-    const startup = managed.startupCommand
-    if (!startup?.providerDelivery || !startup.command || startup.delivered || managed.disposed) {
-      return
-    }
-    startup.delivered = true
-    this.clearStartupCommandTimer(managed)
-    startup.promptProbe?.dispose()
-    const heldBytes = this.drainStartupScanBytes(startup)
-    if (heldBytes) {
-      managed.startupIngress?.accept(heldBytes)
-    }
-    const submit = process.platform === 'win32' ? '\r' : '\n'
-    // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
-    const payload = buildStartupCommandSubmission(startup.command, {
-      submit,
-      bracketedPasteSafe: startup.waitForShellReady
-    })
-    managed.startupCommand = undefined
-    managed.pty.write(payload)
-  }
-
-  private signalRendererShellReady(managed: ManagedPty): void {
-    const startup = managed.startupCommand
-    if (!startup || startup.providerDelivery || startup.delivered || managed.disposed) {
-      return
-    }
-    startup.delivered = true
-    this.clearStartupCommandTimer(managed)
-    startup.promptProbe?.dispose()
-    managed.startupIngress?.accept(this.drainStartupScanBytes(startup))
-    managed.startupIngress?.accept(`${SHELL_READY_MARKER_PREFIX}\x07`)
-    managed.startupCommand = undefined
+    this.startupDelivery.releaseStartupCommand(managed)
   }
 
   /** Wire onData/onExit listeners for a managed PTY and store it. */
@@ -827,7 +695,7 @@ export class PtyHandler {
     const emitIngressData = (emission: PtyIngressEmission): void => {
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
       this.appendReplayBuffer(managed, emission.data)
-      this.enqueuePtyOutput(
+      this.outputQueue.enqueuePtyOutput(
         managed.id,
         emission.data,
         emission.transformed || rawLength !== emission.data.length
@@ -841,43 +709,11 @@ export class PtyHandler {
       write: (data) => managed.pty.write(data),
       onEmission: emitIngressData
     })
-    const startup = managed.startupCommand
-    if (startup?.waitForShellReady) {
-      startup.promptProbe = createShellPromptReadinessProbe({
-        slavePath: readPtySlavePath(managed.pty),
-        shellPath: managed.shellPath,
-        shellCwd: managed.shellCwd,
-        shellPathEnv: managed.shellPathEnv,
-        getShellPid: () => startup.shellPid,
-        onPromptReady: () => {
-          if (startup.providerDelivery) {
-            this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
-          } else {
-            this.signalRendererShellReady(managed)
-          }
-        }
-      })
-    }
+    this.startupDelivery.armPromptProbe(managed)
     managed.pty.onData((data: string) => {
-      const startup = managed.startupCommand
-      if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
-        const scanned = scanShellStartupOutput(startup.outputScanState, data)
-        data = scanned.output
-        if (scanned.shellPid) {
-          startup.shellPid = scanned.shellPid
-        }
-        if (scanned.ready) {
-          if (startup.providerDelivery) {
-            this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
-          } else {
-            this.signalRendererShellReady(managed)
-          }
-        }
-      }
+      data = this.startupDelivery.scanStartupOutput(managed, data)
       managed.startupIngress?.accept(data)
-      if (startup && !startup.delivered && data.length > 0) {
-        startup.promptProbe?.notifyOutput(data)
-      }
+      this.startupDelivery.notifyStartupOutput(managed, data)
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       managed.physicalExit?.markExited()
@@ -893,33 +729,26 @@ export class PtyHandler {
         clearTimeout(managed.killTimer)
         managed.killTimer = undefined
       }
-      this.clearStartupCommandTimer(managed)
+      this.startupDelivery.clearStartupCommandTimer(managed)
       this.releaseRelayIngress(managed)
-      this.pausedOutputPtys.delete(managed.id)
-      this.consumerPausedOutputPtys.delete(managed.id)
-      this.flushPtyOutput(managed.id)
-      this.pendingExitByPty.set(managed.id, {
+      this.outputQueue.flushPtyOutput(managed.id)
+      this.outputQueue.recordPendingExit({
         id: managed.id,
         code: exitCode,
         incarnationId: managed.incarnationId
       })
-      this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       this.removePty(managed.id)
-      this.clearPtyInputState(managed.id)
+      this.outputQueue.clearPtyFlowState(managed.id)
       // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
     })
   }
 
   private releaseRelayIngress(managed: ManagedPty): void {
-    const startupCommand = managed.startupCommand
-    if (startupCommand) {
-      this.clearStartupCommandTimer(managed)
-      startupCommand.promptProbe?.dispose()
-      managed.startupIngress?.accept(this.drainStartupScanBytes(startupCommand))
-      managed.startupCommand = undefined
+    if (managed.startupCommand) {
+      this.startupDelivery.releaseStartupCommand(managed)
     }
     managed.startupIngress?.drainAndClose()
   }
@@ -939,6 +768,17 @@ export class PtyHandler {
         )
       }
     }
+  }
+
+  private async closeStartupQueryAuthority(
+    params: Record<string, unknown>
+  ): Promise<{ appliedSeq: number }> {
+    const id = params.id as string
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed) {
+      throw new Error(`PTY "${id}" not found`)
+    }
+    return { appliedSeq: managed.startupIngress?.closeQueryAuthority() ?? 0 }
   }
 
   private registerHandlers(): void {
@@ -976,395 +816,6 @@ export class PtyHandler {
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
-  }
-
-  private isLikelyInteractiveRedraw(data: string): boolean {
-    if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
-      return true
-    }
-    return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
-  }
-
-  private async closeStartupQueryAuthority(
-    params: Record<string, unknown>
-  ): Promise<{ appliedSeq: number }> {
-    const id = params.id as string
-    const managed = this.ptys.get(id)
-    if (!managed || managed.disposed) {
-      throw new Error(`PTY "${id}" not found`)
-    }
-    return { appliedSeq: managed.startupIngress?.closeQueryAuthority() ?? 0 }
-  }
-
-  private shouldSendInteractiveOutputNow(id: string, data: string): boolean {
-    const lastInputAt = this.lastInputAtByPty.get(id)
-    const now = performance.now()
-    if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_OUTPUT_WINDOW_MS) {
-      this.interactiveOutputCharsByPty.delete(id)
-      return false
-    }
-    if (!this.isLikelyInteractiveRedraw(data)) {
-      this.interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
-      return false
-    }
-    const usedChars = this.interactiveOutputCharsByPty.get(id) ?? 0
-    if (usedChars + data.length > INTERACTIVE_OUTPUT_BUDGET_CHARS) {
-      this.interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
-      return false
-    }
-    this.interactiveOutputCharsByPty.set(id, usedChars + data.length)
-    return true
-  }
-
-  private enqueuePtyOutput(
-    id: string,
-    data: string,
-    meta: { rawLength?: number; transformed?: boolean; seq?: number } = {}
-  ): void {
-    const queue = this.pendingOutputByPty.get(id) ?? []
-    if (this.sourcePublication?.accepts(id)) {
-      queue.push({ data, ...meta })
-      this.pendingOutputByPty.set(id, queue)
-      if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, data)) {
-        queue[0].interactive = true
-        if (this.flushPtyOutput(id)) {
-          return
-        }
-      }
-      if (this.pendingProducerBytes(id) >= PTY_OUTPUT_PRODUCER_HIGH_BYTES) {
-        this.pausePtyOutput(id)
-      }
-      this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
-      return
-    }
-    const existing = queue.at(-1)
-    if (meta.transformed === true) {
-      if (queue.length === 0) {
-        const transformed = { data, ...meta }
-        if (this.publishPtyOutput(id, transformed, false)) {
-          return
-        }
-        queue.push(transformed)
-      } else if (existing?.transformed) {
-        existing.data += data
-        existing.rawLength = (existing.rawLength ?? 0) + (meta.rawLength ?? data.length)
-        existing.seq = meta.seq
-      } else {
-        queue.push({ data, ...meta })
-      }
-      this.pendingOutputByPty.set(id, queue)
-      this.pausePtyOutput(id)
-      return
-    }
-    const pending: PendingPtyOutput = existing && !existing.transformed ? existing : { data: '' }
-    const previousLength = pending.data.length
-    pending.data += data
-    if (pending.rawLength !== undefined || meta.rawLength !== undefined) {
-      pending.rawLength = (pending.rawLength ?? previousLength) + (meta.rawLength ?? data.length)
-    }
-    if (meta.seq !== undefined) {
-      pending.seq = meta.seq
-    }
-    if (!existing || existing.transformed) {
-      queue.push(pending)
-    }
-    this.pendingOutputByPty.set(id, queue)
-    if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, pending.data)) {
-      pending.interactive = true
-      if (this.flushPtyOutput(id)) {
-        return
-      }
-    }
-    if (this.pendingProducerBytes(id) >= PTY_OUTPUT_PRODUCER_HIGH_BYTES) {
-      this.pausePtyOutput(id)
-    }
-    this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
-  }
-
-  private scheduleOutputFlush(delayMs: number): void {
-    if (this.outputFlushTimer !== null) {
-      return
-    }
-    this.outputFlushTimer = setTimeout(() => this.flushPendingOutput(), delayMs)
-  }
-
-  private flushPendingOutput(): void {
-    this.outputFlushTimer = null
-    // Why batch before the first send: a re-entrant sink must read the values a whole-map snapshot
-    // would have frozen. Why the raw iterator: `for...of` would consume one entry past the limit.
-    const pendingEntries = this.pendingOutputByPty[Symbol.iterator]()
-    const batch: [string, PendingPtyOutput[]][] = []
-    while (batch.length < PTY_OUTPUT_FLUSH_MAX_WRITES) {
-      const next = pendingEntries.next()
-      if (next.done === true) {
-        break
-      }
-      batch.push([next.value[0], next.value[1].map((pending) => ({ ...pending }))])
-    }
-    let writes = 0
-    for (const [id, queue] of batch) {
-      this.pendingOutputByPty.delete(id)
-      if (this.flushPtyOutput(id, queue)) {
-        writes++
-      }
-    }
-    if (this.pendingOutputByPty.size > 0 && writes > 0) {
-      // Why: yield between slices of a large chunk so client input and control frames can interleave.
-      this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
-    }
-  }
-
-  private flushPtyOutput(id: string, capturedQueue?: PendingPtyOutput[]): boolean {
-    const queue = capturedQueue ?? this.pendingOutputByPty.get(id)
-    const pending = queue?.[0]
-    if (!queue || !pending) {
-      this.publishPendingExit(id)
-      return true
-    }
-    const desiredChars = pending.transformed
-      ? pending.data.length
-      : Math.min(pending.data.length, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
-    const sourceOnlyEmission =
-      pending.transformed === true && pending.data.length === 0 && (pending.rawLength ?? 0) > 0
-    const paramsWithoutData = {
-      id,
-      ...(pending.seq === undefined ? {} : { seq: pending.seq }),
-      ...(pending.rawLength === undefined ? {} : { rawLength: pending.rawLength }),
-      ...(pending.transformed ? { transformed: true } : {})
-    }
-    // Why: a failed publish may already have reserved this exact span (source-ledger append,
-    // partial legacy fan-out), so a retry must resend it verbatim and slice the remainder at
-    // the memo boundary — capacity and coalesced data can both have changed since. The capacity
-    // search is skipped on retry: its result is discarded, and publish re-checks capacity.
-    let chunkChars =
-      pending.transformed || pending.sourceChunk
-        ? desiredChars
-        : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
-          desiredChars)
-    if (
-      chunkChars > 0 &&
-      chunkChars < pending.data.length &&
-      pending.data.charCodeAt(chunkChars - 1) >= 0xd800 &&
-      pending.data.charCodeAt(chunkChars - 1) <= 0xdbff
-    ) {
-      chunkChars--
-    }
-    if (
-      (!sourceOnlyEmission && chunkChars <= 0) ||
-      (pending.transformed && chunkChars !== pending.data.length)
-    ) {
-      this.pendingOutputByPty.set(id, queue)
-      this.pausePtyOutput(id)
-      return false
-    }
-    const chunk = pending.sourceChunk?.data ?? pending.data.slice(0, chunkChars)
-    const remaining = pending.data.slice(chunk.length)
-    const chunkRawLength = pending.transformed
-      ? pending.rawLength
-      : pending.rawLength === undefined
-        ? undefined
-        : chunk.length
-    const chunkSeq =
-      pending.seq === undefined ? undefined : pending.seq - (pending.data.length - chunk.length)
-    const sourceChunk =
-      pending.sourceChunk ??
-      ({
-        data: chunk,
-        ...(chunkSeq === undefined ? {} : { seq: chunkSeq }),
-        ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
-        ...(pending.transformed ? { transformed: true } : {})
-      } satisfies RelayPtySourceOutput)
-    pending.sourceChunk = sourceChunk
-    const published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
-    if (!published) {
-      this.pendingOutputByPty.set(id, queue)
-      this.pausePtyOutput(id)
-      return false
-    }
-    // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
-    const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
-    const remainingRawLength = pending.transformed
-      ? (pending.rawLength ?? 0) - publishedRawLength
-      : remaining.length
-    if (remaining || (pending.transformed && remainingRawLength > 0)) {
-      queue[0] = {
-        data: remaining,
-        ...(pending.transformed ? { transformed: true } : {}),
-        ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
-        seq: pending.seq
-      }
-    } else {
-      queue.shift()
-    }
-    if (queue.length === 0) {
-      this.pendingOutputByPty.delete(id)
-      this.publishPendingExit(id)
-    } else {
-      this.pendingOutputByPty.set(id, queue)
-    }
-    this.maybeResumePtyOutput(id)
-    this.clearOutputFlushTimerIfIdle()
-    return true
-  }
-
-  private clearOutputFlushTimerIfIdle(): void {
-    if (this.pendingOutputByPty.size > 0 || this.outputFlushTimer === null) {
-      return
-    }
-    clearTimeout(this.outputFlushTimer)
-    this.outputFlushTimer = null
-  }
-
-  private clearPtyFlowState(id: string): void {
-    this.pendingOutputByPty.delete(id)
-    this.pendingExitByPty.delete(id)
-    this.pausedOutputPtys.delete(id)
-    this.consumerPausedOutputPtys.delete(id)
-    this.clearPtyInputState(id)
-    this.clearOutputFlushTimerIfIdle()
-  }
-
-  private clearPtyInputState(id: string): void {
-    this.lastInputAtByPty.delete(id)
-    this.interactiveOutputCharsByPty.delete(id)
-  }
-
-  private publishPtyOutput(
-    id: string,
-    output: RelayPtySourceOutput,
-    interactive: boolean
-  ): boolean {
-    if (this.sourcePublication?.accepts(id)) {
-      return this.sourcePublication.publish(id, output, interactive)
-    }
-    if (this.dispatcher.tryNotifyPtyData) {
-      return this.dispatcher.tryNotifyPtyData(
-        {
-          id,
-          data: output.data,
-          ...(output.seq === undefined ? {} : { seq: output.seq }),
-          ...(output.rawLength === undefined ? {} : { rawLength: output.rawLength }),
-          ...(output.transformed ? { transformed: true } : {})
-        },
-        { interactive }
-      )
-    }
-    this.dispatcher.notify('pty.data', {
-      id,
-      data: output.data,
-      ...(output.seq === undefined ? {} : { seq: output.seq }),
-      ...(output.rawLength === undefined ? {} : { rawLength: output.rawLength }),
-      ...(output.transformed ? { transformed: true } : {})
-    })
-    return true
-  }
-
-  private publishPendingExit(id: string): void {
-    if (this.pendingOutputByPty.has(id)) {
-      return
-    }
-    const exit = this.pendingExitByPty.get(id)
-    if (!exit) {
-      return
-    }
-    if (this.sourcePublication?.accepts(id)) {
-      try {
-        // Why: after the exit settlement, re-entering sealAndPublishExit would pump a closed
-        // ledger delivery; the settled state alone decides completion.
-        if (this.sourcePublication.exitPublicationSettled(id)) {
-          this.pendingExitByPty.delete(id)
-          return
-        }
-        if (!this.sourcePublication.sealAndPublishExit(exit)) {
-          return
-        }
-        if (
-          this.sourcePublication.accepts(id) &&
-          !this.sourcePublication.exitPublicationSettled(id)
-        ) {
-          return
-        }
-        this.pendingExitByPty.delete(id)
-        return
-      } catch (err) {
-        // Why: a source-publication fault must never escape onExit — it reaches
-        // uncaughtException and kills the whole relay daemon. Fall back to the legacy exit.
-        process.stderr.write(
-          `[pty-handler] pty source exit publication failed for ${id}: ${
-            err instanceof Error ? (err.stack ?? err.message) : String(err)
-          }\n`
-        )
-      }
-    }
-    // Why: a retired record can already have projected this exit to the legacy subscribers, and
-    // the broadcast below would hand them a second copy.
-    let retiredExitPublished: boolean | null | undefined
-    try {
-      retiredExitPublished = this.sourcePublication?.publishExitAfterRetire?.(exit)
-    } catch (err) {
-      process.stderr.write(
-        `[pty-handler] retired pty exit publication failed for ${id}: ${
-          err instanceof Error ? (err.stack ?? err.message) : String(err)
-        }\n`
-      )
-    }
-    const published =
-      retiredExitPublished ??
-      (this.dispatcher.tryNotifyPtyExit
-        ? this.dispatcher.tryNotifyPtyExit(exit)
-        : (this.dispatcher.notify('pty.exit', exit), true))
-    if (!published) {
-      return
-    }
-    this.pendingExitByPty.delete(id)
-  }
-
-  private pendingProducerBytes(id: string): number {
-    return (this.pendingOutputByPty.get(id) ?? []).reduce(
-      (total, pending) =>
-        total + Math.max(Buffer.byteLength(pending.data, 'utf8'), 2 * pending.data.length) + 128,
-      0
-    )
-  }
-
-  private pausePtyOutput(id: string): void {
-    if (this.pausedOutputPtys.has(id)) {
-      return
-    }
-    const managed = this.ptys.get(id)
-    if (!managed || managed.disposed) {
-      return
-    }
-    this.pausedOutputPtys.add(id)
-    managed.pty.pause()
-  }
-
-  private maybeResumePtyOutput(id: string): void {
-    if (
-      !this.pausedOutputPtys.has(id) ||
-      this.consumerPausedOutputPtys.has(id) ||
-      this.pendingProducerBytes(id) > PTY_OUTPUT_PRODUCER_LOW_BYTES ||
-      this.dispatcher.legacyRetentionBelowLowWater === false
-    ) {
-      return
-    }
-    const managed = this.ptys.get(id)
-    this.pausedOutputPtys.delete(id)
-    if (managed && !managed.disposed) {
-      managed.pty.resume()
-    }
-  }
-
-  private handleLegacyCapacity(): void {
-    if (this.pendingOutputByPty.size > 0) {
-      this.scheduleOutputFlush(0)
-    }
-    for (const id of Array.from(this.pendingExitByPty.keys())) {
-      this.publishPendingExit(id)
-    }
-    for (const id of Array.from(this.pausedOutputPtys)) {
-      this.maybeResumePtyOutput(id)
-    }
   }
 
   private beginPtyCreation(operationPaths: readonly (string | undefined)[]): () => void {
@@ -1429,64 +880,22 @@ export class PtyHandler {
     })
   }
 
-  private async spawn(
+  private spawn(
     params: Record<string, unknown>,
     context?: RequestContext
   ): Promise<RelayAgentSessionCreateResult> {
-    const operationId = params.agentSessionCreateOperationId
-    if (operationId === undefined) {
-      return await this.spawnOnce(params, context)
-    }
-    if (
-      typeof operationId !== 'string' ||
-      !AGENT_SESSION_CREATE_OPERATION_ID_PATTERN.test(operationId)
-    ) {
-      throw new Error('agent_session_operation_invalid')
-    }
-    const existing = this.agentSessionCreateOperations.get(operationId)
-    if (existing) {
-      const result = await existing
-      this.sourcePublication?.activate(result.id, result.incarnationId, context)
-      const sourceActivation =
-        context && this.sourcePublication?.receivingActivation?.(result.id, context.clientId)
-      const { sourceActivation: _staleActivation, ...stableResult } = result
-      return { ...stableResult, ...(sourceActivation ? { sourceActivation } : {}) }
-    }
-    if (this.agentSessionCreateOperations.size >= AGENT_SESSION_CREATE_OPERATION_LIMIT) {
-      throw new Error('agent_session_operation_capacity')
-    }
-    const operation = this.spawnOnce(params, context)
-    this.agentSessionCreateOperations.set(operationId, operation)
-    try {
-      const result = await operation
-      this.expireAgentSessionCreateOperation(operationId, operation)
-      return result
-    } catch (error) {
-      const outcomeUnknown =
-        typeof error === 'object' &&
-        error !== null &&
-        'agentSessionOperationOutcome' in error &&
-        error.agentSessionOperationOutcome === 'unknown'
-      if (outcomeUnknown) {
-        // Why: the native PTY may be live; replay the same failure instead of spawning again.
-        this.expireAgentSessionCreateOperation(operationId, operation)
-      } else if (this.agentSessionCreateOperations.get(operationId) === operation) {
-        this.agentSessionCreateOperations.delete(operationId)
+    return this.agentSessionCreateOperations.claim(
+      params.agentSessionCreateOperationId,
+      context,
+      () => this.spawnOnce(params, context),
+      (result, ctx) => {
+        this.sourcePublication?.activate(result.id, result.incarnationId, ctx)
+        const sourceActivation =
+          ctx && this.sourcePublication?.receivingActivation?.(result.id, ctx.clientId)
+        const { sourceActivation: _staleActivation, ...stableResult } = result
+        return { ...stableResult, ...(sourceActivation ? { sourceActivation } : {}) }
       }
-      throw error
-    }
-  }
-
-  private expireAgentSessionCreateOperation(
-    operationId: string,
-    operation: Promise<RelayAgentSessionCreateResult>
-  ): void {
-    const timer = setTimeout(() => {
-      if (this.agentSessionCreateOperations.get(operationId) === operation) {
-        this.agentSessionCreateOperations.delete(operationId)
-      }
-    }, AGENT_SESSION_CREATE_OPERATION_RETENTION_MS)
-    timer.unref?.()
+    )
   }
 
   private async spawnOnce(
@@ -1780,7 +1189,7 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'terminate stale')
     } else if (managed.startupCommand) {
-      this.scheduleStartupCommandResolution(
+      this.startupDelivery.scheduleStartupCommandResolution(
         managed,
         managed.startupCommand.providerDelivery
           ? managed.startupCommand.waitForShellReady
@@ -1890,9 +1299,7 @@ export class PtyHandler {
     const replay = managed.buffered.read()
     if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
-      this.pendingOutputByPty.delete(id)
-      this.clearOutputFlushTimerIfIdle()
-      this.maybeResumePtyOutput(id)
+      this.outputQueue.clearPendingOutputForReplay(id)
       if (params.suppressReplayNotification) {
         return {
           incarnationId: managed.incarnationId,
@@ -1916,8 +1323,7 @@ export class PtyHandler {
     }
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
-      this.lastInputAtByPty.set(id, performance.now())
-      this.interactiveOutputCharsByPty.set(id, 0)
+      this.outputQueue.noteInput(id)
       // Relay PTYs need the local provider's cooked-echo containment (#13137).
       // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
       if (managed.startupIngress?.answerLiveQueryReply(data)) {
@@ -1963,12 +1369,12 @@ export class PtyHandler {
     // outliving its tab; a PTY with no pane surface has nothing to outlive, so its long-standing
     // teardown contract is left exactly as it was.
     if (this.retirePaneSurface(managed)) {
-      this.armShutdownReapSweep(managed, SHUTDOWN_REAP_MAX_SWEEPS)
+      this.shutdownReaper.armShutdownReapSweep(managed, SHUTDOWN_REAP_MAX_SWEEPS)
     }
 
     if (immediate) {
       this.releaseStartupCommand(managed)
-      this.flushPtyOutput(id)
+      this.outputQueue.flushPtyOutput(id)
       this.requestForceKill(managed)
       // Why: preserve timed-out entries so onExit/retry owns native handles.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
@@ -2001,68 +1407,17 @@ export class PtyHandler {
     return true
   }
 
-  /**
-   * After a retirement, verify the host actually reaped the shell rather than trusting the kill
-   * request. Two outcomes matter and both are bookkeeping the relay previously never did:
-   *
-   * - the pid is gone but node-pty never produced `onExit` — retire the record here, so the entry
-   *   and its agent-session owners stop being published by `pty.listProcesses`;
-   * - the pid is still alive — re-issue the force kill instead of leaving a detached shell (and the
-   *   agent inside it) outliving its tab for the life of the daemon.
-   *
-   * Bounded: after {@link SHUTDOWN_REAP_MAX_SWEEPS} the owner claim is deliberately *retained*.
-   * Releasing a claim we cannot prove dead is what lets a reopened project spawn a second agent
-   * over one transcript; keeping it makes the next `pty.spawn` adopt this PTY instead.
-   */
-  private armShutdownReapSweep(managed: ManagedPty, attemptsRemaining: number): void {
-    if (managed.reapTimer) {
-      return
-    }
-    const timer = setTimeout(() => {
-      managed.reapTimer = undefined
-      if (this.ptys.get(managed.id) !== managed || managed.disposed) {
-        return
-      }
-      const pid = managed.pty.pid
-      if (pid && !isProcessAlive(pid)) {
-        this.reapExitedPty(managed)
-        return
-      }
-      if (attemptsRemaining <= 0) {
-        process.stderr.write(
-          `[pty-handler] retired pane PTY ${managed.id} still alive after force kill; ownership retained as unverifiable\n`
-        )
-        return
-      }
-      // Why POSIX-only: a SIGKILL that returned success is not proof of death there — the group
-      // probe can degrade to a root-pid kill, leaving the agent running under a shell nobody is
-      // watching. On Windows ConPTY's kill is already force-final and closing its handle twice is
-      // the hazard disposeManagedPty guards against, so the probe above is the whole sweep.
-      if (process.platform !== 'win32') {
-        managed.forceKillSent = false
-        try {
-          this.requestForceKill(managed)
-        } catch {
-          /* Re-probed on the next sweep; a transient failure must not end the escalation. */
-        }
-      }
-      this.armShutdownReapSweep(managed, attemptsRemaining - 1)
-    }, SHUTDOWN_REAP_VERIFY_DELAY_MS)
-    timer.unref?.()
-    managed.reapTimer = timer
-  }
-
   /** Retire every record for a PTY whose process is proven gone. Shared by the attach probe, the
    *  listing probe and the post-shutdown sweep so the three cannot drift on what "gone" retires. */
   private reapExitedPty(managed: ManagedPty): void {
     managed.physicalExit?.markExited()
     this.releaseRelayIngress(managed)
-    this.flushPtyOutput(managed.id)
+    this.outputQueue.flushPtyOutput(managed.id)
     this.notifyExitListener(managed)
     this.agentSessionOwners.release(managed.id)
     disposeManagedPty(managed)
     this.removePty(managed.id)
-    this.clearPtyFlowState(managed.id)
+    this.outputQueue.clearPtyFlowState(managed.id)
   }
 
   private async sendSignal(params: Record<string, unknown>): Promise<void> {
@@ -2090,84 +1445,18 @@ export class PtyHandler {
   }
 
   private waitForPhysicalExit(managed: ManagedPty, timeoutMs: number): Promise<void> {
-    const physicalExit = managed.physicalExit
-    if (!physicalExit) {
-      return Promise.reject(new Error(`PTY "${managed.id}" exit tracking unavailable`))
-    }
-    return physicalExit.waitForExit(
-      timeoutMs,
-      () => new Error(`Timed out waiting for PTY process exit: ${managed.id}`)
-    )
+    return this.shutdownReaper.waitForPhysicalExit(managed, timeoutMs)
   }
 
   private requestGracefulKill(
     managed: ManagedPty,
     fallbackAction: 'terminate stale' | 'force-kill'
   ): void {
-    if (managed.gracefulKillSent) {
-      return
-    }
-    managed.gracefulKillSent = true
-    if (process.platform === 'win32') {
-      // Why: ConPTY's bare kill is already force-final; block any later close of the handle.
-      managed.forceKillSent = true
-    }
-    try {
-      killPtyProcess(managed.pty, 'SIGTERM')
-    } catch (error) {
-      managed.gracefulKillSent = false
-      managed.forceKillSent = false
-      throw error
-    }
-    if (process.platform === 'win32') {
-      return
-    }
-    // Why: POSIX children may ignore SIGTERM; arm a bounded SIGKILL fallback.
-    this.armForceKillFallback(managed, fallbackAction, 5000, PTY_FORCE_KILL_MAX_ATTEMPTS)
-  }
-
-  private armForceKillFallback(
-    managed: ManagedPty,
-    fallbackAction: 'terminate stale' | 'force-kill',
-    delayMs: number,
-    attemptsRemaining: number
-  ): void {
-    managed.killTimer = setTimeout(() => {
-      managed.killTimer = undefined
-      const still = this.ptys.get(managed.id)
-      if (!still || still.disposed) {
-        return
-      }
-      try {
-        this.requestForceKill(still)
-      } catch (error) {
-        process.stderr.write(
-          `[pty-handler] failed to ${fallbackAction} PTY ${managed.id}: ${error instanceof Error ? error.message : String(error)}\n`
-        )
-        // Why: a transient SIGKILL failure must not strand an unreachable remote shell.
-        if (attemptsRemaining > 1 && this.ptys.get(still.id) === still && !still.disposed) {
-          this.armForceKillFallback(
-            still,
-            fallbackAction,
-            PTY_FORCE_KILL_RETRY_DELAY_MS,
-            attemptsRemaining - 1
-          )
-        }
-      }
-    }, delayMs)
+    this.shutdownReaper.requestGracefulKill(managed, fallbackAction)
   }
 
   private requestForceKill(managed: ManagedPty): void {
-    if (managed.forceKillSent || (process.platform === 'win32' && managed.gracefulKillSent)) {
-      return
-    }
-    managed.forceKillSent = true
-    try {
-      killPtyProcess(managed.pty, 'SIGKILL')
-    } catch (error) {
-      managed.forceKillSent = false
-      throw error
-    }
+    this.shutdownReaper.requestForceKill(managed)
   }
 
   private async getCwd(params: Record<string, unknown>): Promise<string> {
@@ -2498,18 +1787,9 @@ export class PtyHandler {
     await this.waitForPendingPtyCreations()
     for (const managed of this.ptys.values()) {
       this.releaseRelayIngress(managed)
-      this.flushPtyOutput(managed.id)
+      this.outputQueue.flushPtyOutput(managed.id)
     }
-    if (this.outputFlushTimer !== null) {
-      clearTimeout(this.outputFlushTimer)
-      this.outputFlushTimer = null
-    }
-    this.pendingOutputByPty.clear()
-    this.pendingExitByPty.clear()
-    this.pausedOutputPtys.clear()
-    this.consumerPausedOutputPtys.clear()
-    this.lastInputAtByPty.clear()
-    this.interactiveOutputCharsByPty.clear()
+    this.outputQueue.dispose()
     this.sourcePublication?.dispose()
     this.sourcePublication = null
     const results = await Promise.allSettled(
@@ -2533,7 +1813,7 @@ export class PtyHandler {
       clearTimeout(managed.killTimer)
       managed.killTimer = undefined
     }
-    this.clearStartupCommandTimer(managed)
+    this.startupDelivery.clearStartupCommandTimer(managed)
     this.releaseRelayIngress(managed)
     // Why: retain the native owner until SIGKILL is accepted (one bounded retry) or onExit proves it gone.
     await this.requestForceKillForRelayShutdown(managed)
@@ -2549,39 +1829,12 @@ export class PtyHandler {
       this.agentSessionOwners.release(managed.id)
       disposeManagedPty(managed)
       this.removePty(managed.id)
-      this.clearPtyFlowState(managed.id)
+      this.outputQueue.clearPtyFlowState(managed.id)
     }
   }
 
-  private async requestForceKillForRelayShutdown(managed: ManagedPty): Promise<void> {
-    let lastError: unknown
-    for (let attempt = 0; attempt < PTY_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
-      if (this.ptys.get(managed.id) !== managed || managed.disposed) {
-        return
-      }
-      try {
-        this.requestForceKill(managed)
-        return
-      } catch (error) {
-        lastError = error
-      }
-      if (attempt + 1 < PTY_FORCE_KILL_MAX_ATTEMPTS) {
-        const tracker = managed.physicalExit
-        if (!tracker) {
-          throw lastError
-        }
-        try {
-          await tracker.waitForExit(
-            PTY_FORCE_KILL_RETRY_DELAY_MS,
-            () => new Error(`Retrying force-kill for PTY ${managed.id}`)
-          )
-          return
-        } catch {
-          // The bounded waiter detached; retry the still-owned native handle.
-        }
-      }
-    }
-    throw lastError
+  private requestForceKillForRelayShutdown(managed: ManagedPty): Promise<void> {
+    return this.shutdownReaper.requestForceKillForRelayShutdown(managed)
   }
 
   get activePtyCount(): number {

@@ -32,7 +32,8 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { MAX_RELAY_PTY_SESSIONS, PtyHandler, formatNodePtyUnavailableMessage } from './pty-handler'
+import { MAX_RELAY_PTY_SESSIONS } from './pty-output-flush-queue'
+import { PtyHandler, formatNodePtyUnavailableMessage } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 import {
   beginPtyHandlerTest,

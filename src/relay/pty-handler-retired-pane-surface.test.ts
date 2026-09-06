@@ -34,7 +34,7 @@ import {
   IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
   SHUTDOWN_REAP_MAX_SWEEPS,
   SHUTDOWN_REAP_VERIFY_DELAY_MS
-} from './pty-handler'
+} from './pty-shutdown-reaper'
 import {
   beginPtyHandlerTest,
   createPtyRequestHelpers,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
-import { REPLAY_BUFFER_MAX } from './pty-handler'
+import { REPLAY_BUFFER_MAX } from './pty-output-flush-queue'
 
 // Reference: the pre-change replay buffer, a rolling string sliced per append.
 function appendStringTail(previous: string, data: string): string {
