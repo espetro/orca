@@ -149,7 +149,6 @@ import type { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import { buildClaudeAgentTeamsLaunchPlan } from './claude-agent-teams-shim-env'
 import {
   buildHeadlessTerminalSplitLayout,
-  countTerminalLayoutLeaves,
   terminalLayoutContainsLeaf
 } from './headless-terminal-split-layout'
 import type { MobileSessionTabCloseOutcome } from './mobile-session-tab-close-outcome'
@@ -250,6 +249,13 @@ import {
   runLayoutSlot
 } from './runtime-terminal-layout-commands'
 import type { RuntimeTerminalLayoutCtx } from './runtime-terminal-layout-commands'
+import {
+  closeTerminal,
+  stopExplicitlyClosedTabPtys,
+  describeTerminalClose,
+  getPtyIdsForExplicitTabClose
+} from './runtime-terminal-close-commands'
+import type { RuntimeTerminalCloseCtx } from './runtime-terminal-close-commands'
 import { addListenerToMap } from './runtime-worktree-git-shared'
 import {
   ownerSurfacing,
@@ -1184,6 +1190,44 @@ export class RuntimeTerminalCluster {
     }
   }
 
+  async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
+    return closeTerminal(this.closeCtx(), handle)
+  }
+
+  async stopExplicitlyClosedTabPtys(ptyIds: string[], addressedPtyId: string): Promise<boolean> {
+    return stopExplicitlyClosedTabPtys(this.closeCtx(), ptyIds, addressedPtyId)
+  }
+
+  describeTerminalClose(
+    handle: string,
+    tabId: string,
+    ptyId: string | null,
+    ptyKilled: boolean
+  ): RuntimeTerminalClose {
+    return describeTerminalClose(this.closeCtx(), handle, tabId, ptyId, ptyKilled)
+  }
+
+  getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
+    return getPtyIdsForExplicitTabClose(this.closeCtx(), worktreeId, tabId)
+  }
+
+  private closeCtx(): RuntimeTerminalCloseCtx {
+    return {
+      deps: this.deps,
+      assertGraphReady: () => this.assertGraphReady(),
+      countLeavesInTab: (tabId) => this.countLeavesInTab(tabId),
+      findMobileTerminalSurface: (worktreeId, tabId) =>
+        this.findMobileTerminalSurface(worktreeId, tabId),
+      findMobileTerminalSurfaceForPty: (worktreeId, ptyId) =>
+        this.findMobileTerminalSurfaceForPty(worktreeId, ptyId),
+      getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle),
+      getLivePtyForHandle: (handle) => this.getLivePtyForHandle(handle),
+      describeTerminalClose,
+      getPtyIdsForExplicitTabClose,
+      stopExplicitlyClosedTabPtys
+    }
+  }
+
   async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
     return applyLayout(this.layoutCtx(), ptyId, target)
   }
@@ -1850,95 +1894,6 @@ export class RuntimeTerminalCluster {
       .closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, options)
   }
 
-  async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
-    const pty = this.getLivePtyForHandle(handle)
-    this.deps.claudeAgentTeams().removeTeamForLeaderHandle(handle)
-    if (pty) {
-      // Why: PTY exit can immediately replace a ready SSH publication with a pending one, so capture its durable HUB surface before killing it.
-      const surface =
-        (pty.pty.tabId
-          ? this.findMobileTerminalSurface(pty.pty.worktreeId, pty.pty.tabId)
-          : null) ?? this.findMobileTerminalSurfaceForPty(pty.pty.worktreeId, pty.pty.ptyId)
-      const tabId = surface?.tab.parentTabId ?? pty.pty.tabId ?? pty.record.tabId
-      // Why: relay recovery can leave stale renderer leaves; the persisted HUB layout defines whether closing this PTY closes the whole surface.
-      const siblingCount = surface?.tab.parentLayout
-        ? countTerminalLayoutLeaves(surface.tab.parentLayout.root)
-        : this.countLeavesInTab(tabId)
-      if (
-        siblingCount <= 1 &&
-        surface &&
-        this.deps.tabs().has(tabId) &&
-        this.deps.notifier()?.closeTerminalTab
-      ) {
-        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
-        try {
-          await this.deps.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
-            localPtyTeardownOwnedExternally: true
-          })
-        } catch (error) {
-          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
-            throw error
-          }
-          this.deps.notifier()!.closeTerminal?.(tabId)
-        }
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
-      }
-      if (
-        siblingCount <= 1 &&
-        !surface &&
-        pty.pty.tabId &&
-        this.deps.notifier()?.closeTerminalTab
-      ) {
-        const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
-        await this.deps
-          .notifier()!
-          .closeTerminalTab?.(tabId, { localPtyTeardownOwnedExternally: true })
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
-      }
-      const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-      if (!ptyKilled || siblingCount <= 1) {
-        if (surface) {
-          // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
-          try {
-            await this.deps.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId)
-          } catch (error) {
-            if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
-              throw error
-            }
-            this.deps.notifier()?.closeTerminal(tabId)
-          }
-        } else {
-          this.deps.notifier()?.closeTerminal(tabId)
-        }
-      }
-      return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
-    }
-    this.assertGraphReady()
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    // Why: in a multi-pane tab, killing the PTY is enough (renderer's exit handler closes the pane); an extra IPC close would race it and close the whole tab.
-    const siblingCount = this.countLeavesInTab(leaf.tabId)
-    const ptyIdsToKill =
-      siblingCount <= 1
-        ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
-        : leaf.ptyId
-          ? [leaf.ptyId]
-          : []
-    if (siblingCount <= 1 && this.deps.notifier()?.closeTerminalTab) {
-      await this.deps.notifier()!.closeTerminalTab?.(leaf.tabId, {
-        localPtyTeardownOwnedExternally: true
-      })
-    }
-    const ptyKilled = leaf.ptyId
-      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
-      : false
-    if (siblingCount > 1 ? !ptyKilled : !this.deps.notifier()?.closeTerminalTab) {
-      this.deps.notifier()?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
-    }
-    return this.describeTerminalClose(handle, leaf.tabId, leaf.ptyId ?? null, ptyKilled)
-  }
-
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -2546,31 +2501,6 @@ export class RuntimeTerminalCluster {
       })
   }
 
-  describeTerminalClose(
-    handle: string,
-    tabId: string,
-    ptyId: string | null,
-    ptyKilled: boolean
-  ): RuntimeTerminalClose {
-    if (ptyKilled || !ptyId) {
-      return { handle, tabId, ptyKilled }
-    }
-    const verdict = this.deps.getPtyLivenessVerdict(ptyId)
-    if (verdict?.status === 'unverifiable') {
-      return {
-        handle,
-        tabId,
-        ptyKilled,
-        ptyStopVerdict: 'unverifiable',
-        ptyStopReason: verdict.reason
-      }
-    }
-    if (verdict?.status === 'live') {
-      return { handle, tabId, ptyKilled, ptyStopVerdict: 'live' }
-    }
-    return { handle, tabId, ptyKilled }
-  }
-
   disposeHeadlessTerminal(ptyId: string): void {
     this.deps.headlessHydrationState().delete(ptyId)
     const state = this.deps.headlessTerminals().get(ptyId)
@@ -3155,10 +3085,6 @@ export class RuntimeTerminalCluster {
     ptyId: string | null
   ): Pick<RuntimeTerminalCreate, 'executionHostId' | 'hostPlatform'> {
     return this.deps.ptyWorktrees().getPtyExecutionHostMetadata(ptyId)
-  }
-
-  getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
-    return this.deps.ptyWorktrees().getPtyIdsForExplicitTabClose(worktreeId, tabId)
   }
 
   getPtyLifecycleGeneration(ptyId: string): number {
@@ -6548,13 +6474,6 @@ export class RuntimeTerminalCluster {
     return this.deps
       .managedWorktrees()
       .stopExactTerminalsForWorktree(worktreeSelector, expectedPtyIds, opts)
-  }
-
-  async stopExplicitlyClosedTabPtys(
-    ptyIds: readonly string[],
-    addressedPtyId: string
-  ): Promise<boolean> {
-    return this.deps.ptyWorktrees().stopExplicitlyClosedTabPtys(ptyIds, addressedPtyId)
   }
 
   async stopTerminalsForWorktree(
