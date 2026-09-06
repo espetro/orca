@@ -5,8 +5,6 @@ import {
   Linking,
   type AppStateStatus,
   BackHandler,
-  FlatList,
-  Image,
   View,
   Text,
   ScrollView,
@@ -16,8 +14,7 @@ import {
   Platform,
   ActivityIndicator,
   type KeyboardEvent,
-  type LayoutChangeEvent,
-  type ListRenderItem
+  type LayoutChangeEvent
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -37,12 +34,10 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
-  MessageSquare,
   Monitor,
   MoreHorizontal,
   Plus,
   RefreshCw,
-  Send,
   Smartphone,
   SquareTerminal,
   X
@@ -104,7 +99,6 @@ import {
 } from '../../../../src/platform/haptics'
 import type {
   TerminalKeyboardAvoidanceMetrics,
-  TerminalModes,
   TerminalWebViewHandle
 } from '../../../../src/terminal/terminal-webview-contract'
 import { isTerminalOscLinkRanges } from '../../../../../src/shared/terminal-osc-link-ranges'
@@ -130,7 +124,6 @@ import { useTerminalLiveInputFocus } from '../../../../src/terminal/use-terminal
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
-import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
@@ -147,7 +140,6 @@ import {
   appendBufferedDictation,
   routeDictationTranscript
 } from '../../../../src/terminal/terminal-live-dictation-routing'
-import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
@@ -160,7 +152,7 @@ import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileMarkdownReader } from '../../../../src/session/MobileMarkdownReader'
-import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
+import { MobileSessionFileReader } from '../../../../src/session/MobileSessionFileReader'
 import {
   CustomKeyModal,
   loadCustomKeys,
@@ -174,12 +166,6 @@ import {
   removeDeliveredMobileDiffComments,
   removeMobileDiffComments
 } from '../../../../src/session/mobile-diff-comments'
-import {
-  buildPlainMobileDiffSyntaxLines,
-  highlightMobileCode,
-  highlightMobileDiffLines,
-  resolveMobileSyntaxLanguage
-} from '../../../../src/session/mobile-file-syntax'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
@@ -197,6 +183,7 @@ import { useMobileSessionImageAttachments } from '../../../../src/session/use-mo
 import { useMobileAttachmentInputLeaseGate } from '../../../../src/session/use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from '../../../../src/session/use-mobile-terminal-paste'
 import { useTerminalLiveInputModePreference } from '../../../../src/session/use-terminal-live-input-mode-preference'
+import { useSessionTerminalActions } from '../../../../src/session/use-session-terminal-actions'
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
@@ -222,7 +209,6 @@ import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from '../../../../src/session/mobile-markdown-disk-fallback'
-import { MobileHtmlPreview } from '../../../../src/components/MobileHtmlPreview'
 import { MobileDictationSetupSheet } from '../../../../src/components/MobileDictationSetupSheet'
 import {
   fetchDictationSetup,
@@ -264,14 +250,8 @@ import {
   getRepoIdFromMobileWorktreeId,
   getActiveTabIdForHandle,
   isFileExistsErrorMessage,
-  isGestureMouseTrackingMode,
   isTerminalPhoneDisplayMode,
   MOBILE_SESSION_STATUS_LABELS,
-  TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
-  TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
-  TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
-  TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
-  TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND,
   updateTerminalCwdFromStreamEvent
 } from '../../../../src/session/mobile-session-route-helpers'
 import { resolveTabStripScrollOffset } from '../../../../src/session/tab-strip-scroll'
@@ -287,437 +267,21 @@ import { styles } from '../../../../src/session/mobile-session-styles'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
 import type { TerminalQuickCommand } from '../../../../../src/shared/terminal-quick-command-types'
 import type {
-  DiffCommentActions,
   DiffNotesDelivery,
-  DiffSyntaxState,
   DirtyMarkdownDraft,
   FileDocState,
-  FileSyntaxState,
   MarkdownDocState,
   MobileDisplayMode,
   MobileNewTabAgentLoadState,
   MobileSessionTab,
   MobileSessionTabType,
-  RenderableDiffLine,
   RuntimeRepoSummary,
   SessionTabsResult,
   Terminal,
-  TerminalCreateResult,
-  TerminalGestureInputBucket,
-  TerminalGestureInputQueue
+  TerminalCreateResult
 } from '../../../../src/session/mobile-session-route-types'
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
-
-function DiffLineRow({
-  line,
-  title,
-  index,
-  comments,
-  activeCommentLine,
-  commentDraft,
-  commentsBusy,
-  onStartComment,
-  onCancelComment,
-  onDraftChange,
-  onSubmitComment,
-  onDeleteComment
-}: {
-  line: RenderableDiffLine
-  title: string
-  index: number
-  comments: DiffComment[]
-  activeCommentLine: number | null
-  commentDraft: string
-  commentsBusy: boolean
-  onStartComment: (lineNumber: number) => void
-  onCancelComment: () => void
-  onDraftChange: (value: string) => void
-  onSubmitComment: (lineNumber: number) => void
-  onDeleteComment: (commentId: string) => void
-}) {
-  const commentLine = line.newLineNumber
-  const isCommenting = commentLine !== undefined && activeCommentLine === commentLine
-  const canComment = commentLine !== undefined
-  // Why: review notes anchor to the modified side, so show that line number in the single mobile gutter.
-  const gutterLineNumber = line.newLineNumber ?? line.oldLineNumber ?? ''
-  return (
-    <View style={styles.diffLineBlock}>
-      <View
-        style={[
-          styles.diffLine,
-          line.kind === 'add' && styles.diffLineAdded,
-          line.kind === 'delete' && styles.diffLineDeleted
-        ]}
-      >
-        <Text style={styles.diffGutter}>{gutterLineNumber}</Text>
-        <Text
-          selectable
-          style={styles.diffText}
-          accessibilityLabel={`${title} diff line ${index + 1}`}
-        >
-          <Text
-            style={[
-              styles.diffPrefix,
-              line.kind === 'add' && styles.diffPrefixAdded,
-              line.kind === 'delete' && styles.diffPrefixDeleted
-            ]}
-          >
-            {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
-          </Text>
-          <MobileSyntaxSegments segments={line.segments} />
-        </Text>
-        {canComment ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.diffCommentAddButton,
-              pressed && styles.diffCommentAddButtonPressed,
-              commentsBusy && styles.diffCommentButtonDisabled
-            ]}
-            disabled={commentsBusy}
-            onPress={() => {
-              if (commentLine !== undefined) {
-                onStartComment(commentLine)
-              }
-            }}
-            accessibilityLabel={`Add note on line ${commentLine}`}
-          >
-            <Plus size={12} color={colors.textSecondary} strokeWidth={2.3} />
-          </Pressable>
-        ) : null}
-      </View>
-      {comments.length > 0 ? (
-        <View style={styles.diffCommentList}>
-          {comments.map((comment) => (
-            <View key={comment.id} style={styles.diffCommentCard}>
-              <View style={styles.diffCommentHeader}>
-                <MessageSquare size={12} color={colors.textMuted} strokeWidth={2.2} />
-                <Text style={styles.diffCommentMeta}>Line {comment.lineNumber}</Text>
-                <Pressable
-                  style={styles.diffCommentDeleteButton}
-                  disabled={commentsBusy}
-                  onPress={() => onDeleteComment(comment.id)}
-                  accessibilityLabel={`Delete note on line ${comment.lineNumber}`}
-                >
-                  <X size={12} color={colors.textMuted} strokeWidth={2.2} />
-                </Pressable>
-              </View>
-              <Text style={styles.diffCommentBody}>{comment.body}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      {isCommenting ? (
-        <View style={styles.diffCommentComposer}>
-          <TextInput
-            style={[styles.textInput, styles.diffCommentInput]}
-            value={commentDraft}
-            onChangeText={onDraftChange}
-            placeholder="Add review note"
-            placeholderTextColor={colors.textMuted}
-            editable={!commentsBusy}
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
-          <View style={styles.diffCommentComposerActions}>
-            <Pressable
-              style={styles.diffCommentSecondaryAction}
-              disabled={commentsBusy}
-              onPress={onCancelComment}
-            >
-              <Text style={styles.diffCommentSecondaryText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.diffCommentPrimaryAction,
-                (!commentDraft.trim() || commentsBusy) && styles.diffCommentButtonDisabled
-              ]}
-              disabled={!commentDraft.trim() || commentsBusy}
-              onPress={() => {
-                if (commentLine !== undefined) {
-                  onSubmitComment(commentLine)
-                }
-              }}
-            >
-              <Text style={styles.diffCommentPrimaryText}>Save note</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
-function FileReader({
-  doc,
-  title,
-  relativePath,
-  language,
-  diffCommentActions
-}: {
-  doc: FileDocState | undefined
-  title: string
-  relativePath: string
-  language?: string
-  diffCommentActions?: DiffCommentActions
-}) {
-  const syntaxLanguage = useMemo(
-    () => resolveMobileSyntaxLanguage(relativePath || title, language),
-    [language, relativePath, title]
-  )
-  const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
-  const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
-  const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
-  const [commentDraft, setCommentDraft] = useState('')
-  const plainDiffLines = useMemo(
-    () =>
-      doc?.status === 'ready' && doc.kind === 'diff'
-        ? buildPlainMobileDiffSyntaxLines(doc.lines)
-        : [],
-    [doc]
-  )
-  const diffCommentsForFile = useMemo(
-    () =>
-      diffCommentActions?.comments.filter(
-        (comment) => comment.filePath === relativePath && comment.source !== 'markdown'
-      ) ?? [],
-    [diffCommentActions?.comments, relativePath]
-  )
-  const diffCommentsByLine = useMemo(() => {
-    const map = new Map<number, DiffComment[]>()
-    for (const comment of diffCommentsForFile) {
-      const list = map.get(comment.lineNumber) ?? []
-      list.push(comment)
-      map.set(comment.lineNumber, list)
-    }
-    for (const list of map.values()) {
-      list.sort((a, b) => a.createdAt - b.createdAt)
-    }
-    return map
-  }, [diffCommentsForFile])
-
-  const startComment = useCallback((lineNumber: number) => {
-    setActiveCommentLine(lineNumber)
-    setCommentDraft('')
-  }, [])
-
-  const cancelComment = useCallback(() => {
-    setActiveCommentLine(null)
-    setCommentDraft('')
-  }, [])
-
-  const submitComment = useCallback(
-    (lineNumber: number) => {
-      if (!diffCommentActions) {
-        return
-      }
-      void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
-        if (added) {
-          setActiveCommentLine(null)
-          setCommentDraft('')
-        }
-      })
-    },
-    [commentDraft, diffCommentActions, relativePath]
-  )
-
-  const renderDiffLine: ListRenderItem<RenderableDiffLine> = useCallback(
-    ({ item, index }) => (
-      <DiffLineRow
-        line={item}
-        title={title}
-        index={index}
-        comments={
-          item.newLineNumber !== undefined ? (diffCommentsByLine.get(item.newLineNumber) ?? []) : []
-        }
-        activeCommentLine={activeCommentLine}
-        commentDraft={commentDraft}
-        commentsBusy={diffCommentActions?.busy === true}
-        onStartComment={startComment}
-        onCancelComment={cancelComment}
-        onDraftChange={setCommentDraft}
-        onSubmitComment={submitComment}
-        onDeleteComment={(commentId) => {
-          if (diffCommentActions) {
-            void diffCommentActions.onDelete(commentId)
-          }
-        }}
-      />
-    ),
-    [
-      activeCommentLine,
-      cancelComment,
-      commentDraft,
-      diffCommentActions,
-      diffCommentsByLine,
-      startComment,
-      submitComment,
-      title
-    ]
-  )
-
-  useEffect(() => {
-    if (doc?.status !== 'ready') {
-      return undefined
-    }
-
-    // Why: defer highlighting one tick so large files show as plain text immediately before colors are applied.
-    const timer = setTimeout(() => {
-      // file + html share the syntax-segment source view (html's "Source" toggle).
-      if (doc.kind === 'file' || doc.kind === 'html') {
-        setFileSyntax({
-          doc,
-          language: syntaxLanguage,
-          segments: highlightMobileCode(doc.content, syntaxLanguage).segments
-        })
-        return
-      }
-      if (doc.kind === 'diff') {
-        setDiffSyntax({
-          doc,
-          language: syntaxLanguage,
-          lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
-        })
-      }
-      // image: no syntax highlighting.
-    }, 0)
-
-    return () => clearTimeout(timer)
-  }, [doc, syntaxLanguage])
-
-  if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
-  }
-  if (doc.status === 'error') {
-    return (
-      <View style={styles.markdownState}>
-        <Text style={styles.markdownError}>{doc.message}</Text>
-      </View>
-    )
-  }
-
-  if (doc.kind === 'diff') {
-    const activeDiffSyntax =
-      diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
-    const commentCount = diffCommentActions?.comments.length ?? 0
-    const unsentCommentCount =
-      diffCommentActions?.comments.filter((comment) => !comment.sentAt).length ?? 0
-    const commentsBusy = diffCommentActions?.busy === true
-    const canCopyNotes = commentCount > 0 && !commentsBusy
-    const canSendNotes = unsentCommentCount > 0 && !commentsBusy
-    return (
-      <View style={styles.markdownEditor}>
-        {diffCommentActions ? (
-          <View style={styles.diffNotesToolbar}>
-            <View style={styles.diffNotesTitleRow}>
-              <MessageSquare size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.diffNotesTitle}>
-                {commentCount === 0
-                  ? 'No review notes'
-                  : `${commentCount} review ${commentCount === 1 ? 'note' : 'notes'}`}
-              </Text>
-            </View>
-            <View style={styles.diffNotesActions}>
-              <Pressable
-                style={[
-                  styles.diffNotesActionButton,
-                  !canCopyNotes && styles.diffCommentButtonDisabled
-                ]}
-                disabled={!canCopyNotes}
-                onPress={() => void diffCommentActions.onCopyAll()}
-                accessibilityLabel="Copy review notes"
-              >
-                <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Copy</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.diffNotesActionButton,
-                  !canSendNotes && styles.diffCommentButtonDisabled
-                ]}
-                disabled={!canSendNotes}
-                onPress={diffCommentActions.onSendAll}
-                accessibilityLabel="Send review notes to AI"
-              >
-                <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Send</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-        <FlatList
-          data={activeDiffSyntax ?? plainDiffLines}
-          style={styles.filePreviewScroll}
-          contentContainerStyle={styles.filePreviewContent}
-          keyExtractor={(line, index) =>
-            `${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`
-          }
-          renderItem={renderDiffLine}
-          initialNumToRender={32}
-          maxToRenderPerBatch={48}
-          windowSize={7}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          keyboardShouldPersistTaps="handled"
-        />
-      </View>
-    )
-  }
-
-  if (doc.kind === 'image') {
-    return (
-      <View style={styles.imagePreviewContainer}>
-        <ScrollView
-          style={styles.imagePreviewScroll}
-          contentContainerStyle={styles.imagePreviewContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: doc.dataUri }}
-            style={styles.imagePreview}
-            resizeMode="contain"
-            accessibilityLabel={`${title} image`}
-          />
-        </ScrollView>
-      </View>
-    )
-  }
-
-  const renderSourceText = (content: string) => (
-    <View style={styles.markdownEditor}>
-      <ScrollView
-        style={styles.filePreviewScroll}
-        contentContainerStyle={styles.filePreviewContent}
-      >
-        <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          <MobileSyntaxSegments
-            segments={
-              fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
-                ? fileSyntax.segments
-                : [{ text: content, kind: 'plain' }]
-            }
-          />
-        </Text>
-      </ScrollView>
-    </View>
-  )
-
-  if (doc.kind === 'html') {
-    return (
-      <View style={styles.markdownEditor}>
-        <MobileHtmlPreview html={doc.content} renderSource={() => renderSourceText(doc.content)} />
-      </View>
-    )
-  }
-
-  return renderSourceText(doc.content)
-}
 
 export default function SessionScreen() {
   const {
@@ -896,13 +460,7 @@ export default function SessionScreen() {
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
-  // Why: WebView pushes terminal modes on every change so paste reads a synchronous snapshot — no round-trip.
-  const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
-  const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
-  const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
-  const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
   const terminalCwdRef = useRef<Map<string, string>>(new Map())
-  const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(null)
   // Why: state (not a ref) so the connection verdict re-renders when the endpoint loads and the Tailscale hint can appear.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
@@ -2349,18 +1907,34 @@ export default function SessionScreen() {
     ...sessionTabsFetchReporting
   })
 
+  const terminalActions = useSessionTerminalActions({
+    client,
+    connState,
+    showToast,
+    getTerminalRef,
+    activeHandleRef,
+    activeSessionTabTypeRef,
+    clientRef,
+    connStateRef,
+    deviceTokenRef,
+    hostQueryReplyInputSupportedRef,
+    terminalUnsubsRef
+  })
+  const {
+    ptyModesRef,
+    handleTerminalInput,
+    handleTerminalQueryReply,
+    handleClearTerminal,
+    handleModesChanged,
+    discardAllGestureInput
+  } = terminalActions
+
   useEffect(() => {
     if (connState === 'connected') {
       return
     }
-    for (const queued of terminalGestureInputQueuesRef.current.values()) {
-      if (queued.timer) {
-        clearTimeout(queued.timer)
-      }
-    }
-    terminalGestureInputQueuesRef.current.clear()
-    terminalGestureInputInFlightRef.current.clear()
-  }, [connState])
+    discardAllGestureInput()
+  }, [connState, discardAllGestureInput])
 
   const hostQueryReplyInputSupportedRef = useRef(false)
 
@@ -2611,12 +2185,8 @@ export default function SessionScreen() {
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
-    for (const queued of terminalGestureInputQueuesRef.current.values()) {
-      if (queued.timer) {
-        clearTimeout(queued.timer)
-      }
-    }
-    terminalGestureInputQueuesRef.current.clear()
+    closedTabTombstonesRef.current.clear()
+    discardAllGestureInput()
     terminalGestureInputInFlightRef.current.clear()
     setActiveHandle(null)
     setTerminals([])
@@ -2897,21 +2467,18 @@ export default function SessionScreen() {
   switchSessionTabRef.current = switchSessionTab
 
   // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
-  const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
-    terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
-    if (ref) {
-      terminalRefs.current.set(handle, ref)
-    } else {
-      terminalRefs.current.delete(handle)
-      terminalGestureInputBucketsRef.current.delete(handle)
-      const queued = terminalGestureInputQueuesRef.current.get(handle)
-      if (queued?.timer) {
-        clearTimeout(queued.timer)
+  const setTerminalWebViewRef = useCallback(
+    (handle: string, ref: TerminalWebViewHandle | null) => {
+      terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
+      if (ref) {
+        terminalRefs.current.set(handle, ref)
+      } else {
+        terminalRefs.current.delete(handle)
+        clearGestureInputForHandle(handle)
       }
-      terminalGestureInputQueuesRef.current.delete(handle)
-      terminalGestureInputInFlightRef.current.delete(handle)
-    }
-  }, [])
+    },
+    [clearGestureInputForHandle]
+  )
 
   const handleTerminalWebReady = useCallback(
     (handle: string) => {
@@ -3228,187 +2795,6 @@ export default function SessionScreen() {
     }
   }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
 
-  const allowTerminalGestureInput = useCallback(
-    (handle: string, sequenceCount: number): boolean => {
-      const now = Date.now()
-      const current = terminalGestureInputBucketsRef.current.get(handle) ?? {
-        tokens: TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
-        lastRefillMs: now
-      }
-      const elapsedSeconds = Math.max(0, now - current.lastRefillMs) / 1000
-      const tokens = Math.min(
-        TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
-        current.tokens + elapsedSeconds * TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
-      )
-
-      // Why: tokens count terminal control sequences, not WebView messages; one gesture may batch up to 32 wheel/key reports.
-      if (tokens < sequenceCount) {
-        terminalGestureInputBucketsRef.current.set(handle, { tokens, lastRefillMs: now })
-        return false
-      }
-
-      terminalGestureInputBucketsRef.current.set(handle, {
-        tokens: tokens - sequenceCount,
-        lastRefillMs: now
-      })
-      return true
-    },
-    []
-  )
-
-  const flushTerminalGestureInput = useCallback(async (handle: string) => {
-    const queued = terminalGestureInputQueuesRef.current.get(handle)
-    if (!queued) {
-      return
-    }
-    if (queued.timer) {
-      clearTimeout(queued.timer)
-      queued.timer = null
-    }
-    if (terminalGestureInputInFlightRef.current.has(handle)) {
-      return
-    }
-
-    terminalGestureInputQueuesRef.current.delete(handle)
-    const isActive =
-      handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
-    const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
-    const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
-      return
-    }
-
-    terminalGestureInputInFlightRef.current.add(handle)
-    try {
-      // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      await rpc.sendRequest(
-        'terminal.send',
-        buildTerminalSendParams({
-          terminal: handle,
-          text: queued.bytes,
-          enter: false,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-    } catch {
-      // Transient failure
-    } finally {
-      terminalGestureInputInFlightRef.current.delete(handle)
-      const next = terminalGestureInputQueuesRef.current.get(handle)
-      if (next) {
-        if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
-          if (next.timer) {
-            clearTimeout(next.timer)
-          }
-          terminalGestureInputQueuesRef.current.delete(handle)
-        } else {
-          void flushTerminalGestureInput(handle)
-        }
-      }
-    }
-  }, [])
-
-  const enqueueTerminalGestureInput = useCallback(
-    (handle: string, bytes: string, sequenceCount: number) => {
-      const now = Date.now()
-      const current = terminalGestureInputQueuesRef.current.get(handle)
-      if (
-        current &&
-        current.sequenceCount + sequenceCount <= TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
-      ) {
-        current.bytes += bytes
-        current.sequenceCount += sequenceCount
-        current.lastUpdatedMs = now
-        return
-      }
-
-      if (current) {
-        if (current.timer) {
-          clearTimeout(current.timer)
-        }
-        if (!terminalGestureInputInFlightRef.current.has(handle)) {
-          void flushTerminalGestureInput(handle)
-        } else {
-          // Why: cap is a soft guideline — append instead of dropping queued bytes; the in-flight flush picks up the merged queue.
-          current.bytes += bytes
-          current.sequenceCount += sequenceCount
-          current.lastUpdatedMs = now
-          current.timer = setTimeout(() => {
-            current.timer = null
-            void flushTerminalGestureInput(handle)
-          }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
-          return
-        }
-      }
-
-      const queued: TerminalGestureInputQueue = {
-        bytes,
-        sequenceCount,
-        timer: null,
-        lastUpdatedMs: now
-      }
-      queued.timer = setTimeout(() => {
-        queued.timer = null
-        void flushTerminalGestureInput(handle)
-      }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
-      terminalGestureInputQueuesRef.current.set(handle, queued)
-    },
-    [flushTerminalGestureInput]
-  )
-
-  const handleTerminalInput = useCallback(
-    async (handle: string, bytes: string) => {
-      if (!client || connState !== 'connected' || bytes.length === 0) {
-        return
-      }
-      if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
-        return
-      }
-      const modes = ptyModesRef.current.get(handle)
-      // Why: WebView gesture bytes can become PTY input, so gate mouse reports behind validation and SSH-safe rate limiting.
-      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) {
-        return
-      }
-      const sequenceCount = countTerminalGestureInputSequences(bytes)
-      if (sequenceCount == null) {
-        return
-      }
-      if (!allowTerminalGestureInput(handle, sequenceCount)) {
-        return
-      }
-      enqueueTerminalGestureInput(handle, bytes, sequenceCount)
-    },
-    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
-  )
-
-  const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
-    void sendMobileTerminalQueryReply({
-      bytes,
-      client: clientRef.current,
-      clientId: deviceTokenRef.current,
-      connected: connStateRef.current === 'connected',
-      handle,
-      hostSupportsQueryReplyInput: hostQueryReplyInputSupportedRef.current,
-      subscribedTerminals: terminalUnsubsRef.current
-    })
-  }, [])
-
-  async function handleClearTerminal(target: Terminal) {
-    if (!client) {
-      return
-    }
-    getTerminalRef(target.handle)?.clear()
-    try {
-      await client.sendRequest('terminal.clearBuffer', {
-        terminal: target.handle
-      })
-      showToast('Terminal cleared')
-    } catch {
-      showToast("Couldn't clear terminal", 1500)
-    }
-  }
-
   const accessoryRepeatRef = useRef(
     createTerminalAccessoryRepeatController<ReturnType<typeof createTerminalLiveAccessoryInput>>()
   )
@@ -3519,11 +2905,6 @@ export default function SessionScreen() {
     },
     [showToast]
   )
-
-  const handleModesChanged = useCallback((handle: string, modes: TerminalModes) => {
-    ptyModesRef.current.set(handle, modes)
-    initialModesSeenRef.current.add(handle)
-  }, [])
 
   const handleKeyboardAvoidanceMetrics = useCallback(
     (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => {
@@ -4599,7 +3980,7 @@ export default function SessionScreen() {
               </View>
             ) : activeFileTab ? (
               <View style={styles.markdownFrame}>
-                <FileReader
+                <MobileSessionFileReader
                   doc={fileDocs.get(activeFileTab.id)}
                   title={activeFileTab.title || 'File'}
                   relativePath={activeFileTab.relativePath}
