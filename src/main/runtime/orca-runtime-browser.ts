@@ -166,6 +166,8 @@ type ActiveBrowserScreencastPage = {
   subscribers: Map<string, ActiveBrowserScreencastSubscriber>
   viewportOwnerSubscriptionId: string | null
   appliedBudget: BrowserScreencastFrameBudget
+  // Paint lease held while any offscreen-backed screencast subscriber is joined.
+  releaseOffscreenPaint: (() => void) | null
 }
 
 async function applySharedScreencastFrameBudget(
@@ -658,7 +660,8 @@ export class RuntimeBrowserCommands {
         stopping: false,
         subscribers,
         viewportOwnerSubscriptionId: null,
-        appliedBudget: budget
+        appliedBudget: budget,
+        releaseOffscreenPaint: browserManager.acquireOffscreenPaint(guest.id)
       } as ActiveBrowserScreencastPage
       record.started = startBrowserScreencast(guest, {
         format: params.format,
@@ -707,6 +710,8 @@ export class RuntimeBrowserCommands {
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)
           }
+          record.releaseOffscreenPaint?.()
+          record.releaseOffscreenPaint = null
           for (const subscriber of record.subscribers.values()) {
             subscriber.resolveDone()
           }
@@ -736,6 +741,10 @@ export class RuntimeBrowserCommands {
     } catch (error) {
       active.subscribers.delete(subscriptionId)
       resolveSubscriberDone()
+      // Why: a failed start already unwound the shared record (and its paint lease); if we're still joined as the page stream, hold the lease again.
+      if (this.activeScreencastsByPageId.get(browserPageId) === active) {
+        active.releaseOffscreenPaint = browserManager.acquireOffscreenPaint(guest.id)
+      }
       throw error
     }
     // Why: a device that force-quit and reconnected arrives on a fresh socket, so the

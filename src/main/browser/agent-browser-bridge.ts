@@ -191,6 +191,7 @@ export class AgentBrowserBridge {
       resolveCommandTarget: (worktreeId, browserPageId, requireScopedTarget) =>
         this.resolveCommandTarget(worktreeId, browserPageId, requireScopedTarget),
       acquireAutomationVisibility: (id) => this.browserManager.acquireAutomationVisibility(id),
+      acquireOffscreenPaint: (id) => this.browserManager.acquireOffscreenPaint(id),
       getBrowserPageLoadError: (pageId) => this.browserManager.getBrowserPageLoadError(pageId),
       execAgentBrowser: (sessionName, args, execOptions) =>
         this.sessionTargets.execAgentBrowser(sessionName, args, execOptions),

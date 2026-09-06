@@ -251,6 +251,7 @@ import { configureBrowserClientPageAutomationRuntime } from './browser/browser-c
 import { BrowserClientPageCommandError } from './browser/browser-client-page-command-failure'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
+import { setServeBrowserSettingsResolver } from './browser/serve-browser-settings'
 import { RpcDispatcher } from './runtime/rpc/dispatcher'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
@@ -1515,6 +1516,7 @@ void app.whenReady().then(async () => {
     }
   })
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
+  setServeBrowserSettingsResolver(() => store?.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store!.getSettings()
     const activeIds = new Set(

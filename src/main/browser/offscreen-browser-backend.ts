@@ -7,6 +7,7 @@ import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
+import { resolveServeBrowserPaintMode } from './serve-browser-settings'
 
 // Why: headless orca serve has no renderer window to host a <webview>, so each
 // browser page is backed by a main-process offscreen BrowserWindow. The window
@@ -57,6 +58,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         // Why: offscreen pages are the SSH/headless browser backend; keep their
         // HTML fullscreen behavior aligned with desktop <webview> guests.
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
+        // Why: in auto mode the page starts throttled; a paint lease lifts it while
+        // screencast/screenshot needs frames. 'always' keeps legacy painting.
+        ...(resolveServeBrowserPaintMode() === 'auto' ? { paintWhenInitiallyHidden: false } : {}),
         partition,
         sandbox: true,
         contextIsolation: true,

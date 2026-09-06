@@ -1,6 +1,7 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
+import { browserManager } from './browser-manager'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 
@@ -72,11 +73,17 @@ export class CdpPageCaptureCommands {
   }
 
   handleScreenshot(client: WebSocket, clientId: number, params?: Record<string, unknown>): void {
-    captureScreenshot(
-      this.webContents,
-      params,
-      (result) => this.responder.sendResult(clientId, result, client),
-      (message) => this.responder.sendError(clientId, message, client)
-    )
+    // Why: offscreen guests need a paint lease or the throttled compositor captures a stale surface.
+    const releasePaint = browserManager.acquireOffscreenPaint(this.webContents.id)
+    try {
+      captureScreenshot(
+        this.webContents,
+        params,
+        (result) => this.responder.sendResult(clientId, result, client),
+        (message) => this.responder.sendError(clientId, message, client)
+      )
+    } finally {
+      releasePaint()
+    }
   }
 }

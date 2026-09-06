@@ -44,6 +44,7 @@ export type AgentBrowserInteractionPorts = {
     requireScopedTarget?: boolean
   ): ResolvedBrowserCommandTarget
   acquireAutomationVisibility(webContentsId: number): Promise<() => void>
+  acquireOffscreenPaint(webContentsId: number): () => void
   getBrowserPageLoadError(browserPageId: string): { description: string; code: number } | null
   execAgentBrowser(
     sessionName: string,
@@ -355,6 +356,8 @@ export class AgentBrowserInteractionCommands {
       const restore = session
         ? await this.ports.acquireAutomationVisibility(session.webContentsId)
         : () => {}
+      // Why: offscreen guests need a paint lease or the throttled compositor captures a stale surface.
+      const releasePaint = this.ports.acquireOffscreenPaint(webContentsId)
       try {
         // Why: the guest compositor needs a beat to paint a fresh frame after becoming paintable, or CDP captures a stale surface.
         await new Promise((r) => setTimeout(r, settleMs))
@@ -366,6 +369,7 @@ export class AgentBrowserInteractionCommands {
       } catch (error) {
         throw new BrowserError('browser_error', (error as Error).message)
       } finally {
+        releasePaint()
         restore()
       }
     })

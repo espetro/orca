@@ -52,6 +52,7 @@ import { setupGuestContextMenu } from './browser-guest-context-menu'
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
+import { OffscreenPaintLease } from './offscreen-paint-lease'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 
@@ -82,6 +83,7 @@ export class BrowserManager {
         mobileEmulatorEnabled?: boolean
       })
     | null = null
+  private readonly offscreenPaintLease = new OffscreenPaintLease()
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map gives O(1) guest→tab lookups on every mouse/load/permission/popup event.
   private readonly tabIdByWebContentsId = new Map<number, string>()
@@ -472,8 +474,16 @@ export class BrowserManager {
     }
   }
 
-  async acquireAutomationVisibility(guestWebContentsId: number): Promise<() => void> {
-    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+  /** Lifts background throttling on an offscreen guest while the returned release is held; no-op for unknown/destroyed ids. */
+  acquireOffscreenPaint(webContentsId: number): () => void {
+    const guest = webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed() || !this.offscreenGuestIds.has(webContentsId)) {
+      return () => {}
+    }
+    return this.offscreenPaintLease.acquire(guest)
+  }
+
+  async acquireAutomationVisibility(guestWebContentsId: number): Promise<() => void> {    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (!browserPageId) {
       return () => {}
     }
@@ -507,6 +517,10 @@ export class BrowserManager {
     const disposeAntiDetection = this.injectAntiDetection(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
+    // Why: offscreen guests are re-throttled so the paint lease governs their paint output; desktop webview guests keep it disabled.
+    if (this.offscreenGuestIds.has(guest.id)) {
+      guest.setBackgroundThrottling(true)
+    }
     const detachPopupRouting = this.popupRouting.installPopupAndClickedLinkRouting(guest)
 
     const navigationGuard = (event: Electron.Event, url: string): boolean => {
