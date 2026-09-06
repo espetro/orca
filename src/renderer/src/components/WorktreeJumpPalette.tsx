@@ -11,15 +11,6 @@ import React, {
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import {
-  FileText,
-  FolderTree,
-  Globe,
-  Server,
-  ServerOff,
-  Smartphone,
-  SquareTerminal
-} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
 import {
@@ -27,21 +18,14 @@ import {
   selectPaletteStatusInputs
 } from './worktree-jump-palette-status-inputs'
 import {
-  PaletteLiveStatusProvider,
-  PaletteRecentTabStatusDot,
-  PaletteWorktreeStatusDot
-} from './cmd-j/palette-live-status'
-import {
-  resolveTerminalTabAttentionBadge,
-  terminalTabHasUnreadActivity
-} from '@/components/tab-bar/terminal-tab-activity-status'
-import {
-  CommandDialog,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandItem
-} from '@/components/ui/command'
+  buildRecentTabOccurrenceIds,
+  shouldIncludeOpenTabInRecentSection,
+  type OpenTabRecentRow
+} from './worktree-jump-recent-tab-rows'
+import { WorktreeJumpListEntryRow } from './worktree-jump-list-entry-row'
+import { useWorktreeJumpTaskUrlPreviews } from './use-worktree-jump-task-url-previews'
+import { PaletteLiveStatusProvider } from './cmd-j/palette-live-status'
+import { CommandDialog, CommandInput, CommandList, CommandEmpty } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
@@ -69,20 +53,14 @@ import {
   shouldOpenTabsLeadPaletteSections,
   NO_PALETTE_QUALITY_RANK
 } from '@/lib/cmd-j-section-leadership'
-import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   getWorktreePaletteSearchScope,
-  searchWorktreeDocuments,
-  type PaletteSearchResult
+  searchWorktreeDocuments
 } from '@/lib/worktree-palette-search'
 import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
-import {
-  resolveWorktreeBranchLabel,
-  resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
 import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard,
@@ -102,7 +80,6 @@ import {
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import {
   buildPaletteWorktreeIndex,
-  isPaletteCurrentWorktree,
   resolvePaletteRepoForWorktree,
   resolvePaletteWorktree
 } from '@/lib/palette-repo-resolution'
@@ -128,7 +105,6 @@ import {
 import {
   buildFocusedGroupTabRecency,
   orderRecentWorkspaceTabs,
-  resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
 } from '@/lib/recent-workspace-tab-rows'
 import { subscribeCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
@@ -137,7 +113,6 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
 } from '@/components/browser-pane/host-guest/browser-focus'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
@@ -145,11 +120,9 @@ import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
   getSettingsFocusedExecutionHostId,
-  isRuntimeOwnedSshTargetId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
-import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
 import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
 import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
@@ -201,13 +174,10 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
-import { lookupCmdJGitHubUrlWorkItem } from '@/lib/cmd-j-github-url-lookup'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
-import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
 import {
   getCmdJTaskUrlCreatePreview,
-  parseCmdJTaskSourceUrl,
-  withResolvedCmdJGitHubPreview
+  parseCmdJTaskSourceUrl
 } from '@/lib/worktree-palette-task-url-match'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
@@ -222,12 +192,7 @@ import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { translate } from '@/i18n/i18n'
 import { buildJumpPaletteListEntries } from './cmd-j/jump-palette-list-entries'
 import {
-  PaletteRowShortcutBadge,
   getComposerPrefetchRepoId,
-  getComposerDefaultWorkspaceTarget,
-  HighlightedText,
-  PaletteOpenTabPrimaryLine,
-  PaletteOpenTabWorktreeRailLabel,
   PaletteState,
   FooterKey,
   getSettingsTargetFromSectionId
@@ -255,125 +220,18 @@ import type {
   SettingsPaletteItem,
   QuickActionPaletteItem,
   ProjectTargetPaletteItem,
-  CmdJLinearIssuePreview,
-  CmdJGitHubWorkItemPreview,
   PaletteItem,
   PaletteListEntry
 } from './worktree/types'
 
 export type { PaletteItem, PaletteListEntry }
 
-function isCurrentOpenTabItem(item: OpenTabPaletteItem): boolean {
-  return item.type === 'browser-page' ? item.result.isCurrentPage : item.result.isCurrentTab
-}
-
-/** Not the command id: two hosts — or a duplicate snapshot — can publish the same tab id. */
-function getRecentTabOccurrenceBase(item: OpenTabPaletteItem): string {
-  if (item.type === 'browser-page') {
-    const result = item.result
-    return JSON.stringify([
-      item.type,
-      item.id,
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.workspaceId,
-      result.pageId
-    ])
-  }
-  if (item.type === 'simulator-tab') {
-    const result = item.result
-    // Why no groupId: it changes when a tab is regrouped mid-open, and the frozen
-    // order must keep resolving the row; tabId already identifies it within a host.
-    return JSON.stringify([
-      item.type,
-      item.id,
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.tabId
-    ])
-  }
-  const result = item.result
-  return JSON.stringify([
-    item.type,
-    item.id,
-    result.executionHostId ?? '',
-    result.worktreeId,
-    result.tabId,
-    result.entityId
-  ])
-}
-
-function buildRecentTabOccurrenceIds(items: readonly OpenTabPaletteItem[]): string[] {
-  const nextOrdinalByBase = new Map<string, number>()
-  return items.map((item) => {
-    const base = getRecentTabOccurrenceBase(item)
-    const ordinal = nextOrdinalByBase.get(base) ?? 0
-    nextOrdinalByBase.set(base, ordinal + 1)
-    return `recent-tab:${base}:${ordinal}`
-  })
-}
-
-/** An open tab's recent-section row plus the inputs inclusion needs. */
-type OpenTabRecentRow = {
-  item: OpenTabPaletteItem
-  occurrenceId: string
-  worktree: Worktree
-  row: RecentWorkspaceTabRow
-}
-
-/**
- * Empty-query recent section: skip idle "where you already are" rows, but keep the current tab when
- * it still wants something from you (working, permission, unread). Decided from the open-time status
- * snapshot, so membership matches the frozen row order for the whole session — a current tab that
- * goes high-signal mid-open joins Recent on the next open, not under the cursor.
- */
-function shouldIncludeOpenTabInRecentSection({
-  item,
-  worktree,
-  row,
-  paneSources,
-  unreadTerminalTabs,
-  unreadAgentCompletionPanes,
-  now
-}: {
-  item: OpenTabPaletteItem
-  worktree: Worktree
-  row: RecentWorkspaceTabRow
-  paneSources: TabPaneInputSources
-  unreadTerminalTabs: Record<string, boolean | undefined>
-  unreadAgentCompletionPanes: Record<string, boolean | undefined>
-  now: number
-}): boolean {
-  if (worktree.isArchived) {
-    return false
-  }
-  if (!isCurrentOpenTabItem(item)) {
-    return true
-  }
-  // Current browser/editor rows have no attention ladder to escape "you're already here".
-  if (!row.terminalTab) {
-    return false
-  }
-  // Why the ladder minus `done`: the badge rungs decide entry, but a completion you watched land on
-  // screen (unread auto-acks on the focused tab) is news to nobody, and `done` lingers for the full
-  // 30m staleness window — that slot belongs to a workspace you can't already see. Rows admitted
-  // while working keep their frozen slot and flip to the check.
-  const badge = resolveTerminalTabAttentionBadge({
-    status: resolveRecentWorkspaceTabStatus(row, paneSources, now),
-    hasUnread: terminalTabHasUnreadActivity({
-      terminalTabId: row.terminalTab.id,
-      unreadTerminalTabs,
-      unreadAgentCompletionPanes
-    })
-  })
-  return badge != null && badge !== 'done' && badge !== 'interrupted'
-}
-
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
   const [lingering, setLingering] = useState(visible)
   useEffect(() => {
     if (visible) {
+      // oxlint-disable-next-line react/set-state-in-effect -- keep rows mounted through the close fade.
       setLingering(true)
       return
     }
@@ -511,19 +369,6 @@ function WorktreeJumpPaletteContent({
     [taskSourceUrl]
   )
   const [selectedItemId, setSelectedItemId] = useState('')
-  const [linearIssuePreview, setLinearIssuePreview] = useState<CmdJLinearIssuePreview | null>(null)
-  const [githubWorkItemPreview, setGithubWorkItemPreview] =
-    useState<CmdJGitHubWorkItemPreview | null>(null)
-  const githubLookupGenerationRef = useRef(0)
-  const githubLookupRef = useRef<{
-    query: string
-    promise: Promise<CmdJGitHubWorkItemPreview>
-  } | null>(null)
-  const linearIssueLookupGenerationRef = useRef(0)
-  const linearIssueLookupRef = useRef<{
-    query: string
-    promise: Promise<CmdJLinearIssuePreview>
-  } | null>(null)
   // Why: the id cmdk auto-selected for the last committed list, so a late recent-order snapshot can
   // tell "nobody has moved the highlight yet" from "the user arrowed somewhere deliberately".
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -1656,151 +1501,20 @@ function WorktreeJumpPaletteContent({
   // Why: a task URL bypasses query deferral, so it arms create on its own.
   const showCreateAction = deferredShowCreateAction || taskSourceUrl !== null
 
-  // Why: arm the lookup before Enter can target the newly rendered Linear row.
-  useLayoutEffect(() => {
-    const generation = ++linearIssueLookupGenerationRef.current
-    linearIssueLookupRef.current = null
-    if (!visible || !linearIssueUrlIntent) {
-      setLinearIssuePreview(null)
-      return
-    }
-
-    const state = useAppStore.getState()
-    const workspaceTarget = getComposerDefaultWorkspaceTarget(state)
-    const initialRepoId = workspaceTarget?.repoId ?? null
-    const sourceContext = workspaceTarget
-      ? buildTaskSourceContextFromRepo({
-          provider: 'linear',
-          projectId: workspaceTarget.projectId,
-          repo: workspaceTarget.repo,
-          projectHostSetupId: workspaceTarget.projectHostSetupId
-        })
-      : null
-    const pendingPreview: CmdJLinearIssuePreview = {
-      query: createWorktreeName,
-      issue: null,
-      loading: true,
-      initialRepoId,
-      sourceContext
-    }
-    setLinearIssuePreview(pendingPreview)
-
-    const promise = lookupLinearIssueUrl({
-      intent: linearIssueUrlIntent,
-      knownStatus: state.linearStatus,
-      sourceContext,
-      fetchLinearIssue: state.fetchLinearIssue
-    })
-      .catch(() => null)
-      .then(
-        (issue): CmdJLinearIssuePreview => ({
-          ...pendingPreview,
-          issue,
-          loading: false
-        })
-      )
-    linearIssueLookupRef.current = { query: createWorktreeName, promise }
-    void promise.then((preview) => {
-      if (linearIssueLookupGenerationRef.current === generation) {
-        setLinearIssuePreview(preview)
-      }
-    })
-
-    return () => {
-      if (linearIssueLookupGenerationRef.current === generation) {
-        linearIssueLookupGenerationRef.current += 1
-      }
-    }
-  }, [createWorktreeName, linearIssueUrlIntent, visible])
-
-  useLayoutEffect(() => {
-    const generation = ++githubLookupGenerationRef.current
-    githubLookupRef.current = null
-    if (!visible || !githubUrlLink) {
-      setGithubWorkItemPreview(null)
-      return
-    }
-
-    const state = useAppStore.getState()
-    const workspaceTarget = getComposerDefaultWorkspaceTarget(state)
-    const initialRepoId = workspaceTarget?.repoId ?? null
-    const sourceContext = workspaceTarget
-      ? buildTaskSourceContextFromRepo({
-          provider: 'github',
-          projectId: workspaceTarget.projectId,
-          repo: workspaceTarget.repo,
-          projectHostSetupId: workspaceTarget.projectHostSetupId
-        })
-      : null
-    const pendingPreview: CmdJGitHubWorkItemPreview = {
-      query: createWorktreeName,
-      item: null,
-      loading: true,
-      initialRepoId,
-      sourceContext
-    }
-    setGithubWorkItemPreview(pendingPreview)
-
-    const promise = lookupCmdJGitHubUrlWorkItem({
-      link: githubUrlLink,
-      repo: workspaceTarget?.repo ?? null,
-      sourceContext
-    })
-      .catch(() => null)
-      .then(
-        (item): CmdJGitHubWorkItemPreview => ({
-          ...pendingPreview,
-          item: item ?? null,
-          loading: false
-        })
-      )
-    githubLookupRef.current = { query: createWorktreeName, promise }
-    void promise.then((preview) => {
-      if (githubLookupGenerationRef.current === generation) {
-        setGithubWorkItemPreview(preview)
-      }
-    })
-
-    return () => {
-      if (githubLookupGenerationRef.current === generation) {
-        githubLookupGenerationRef.current += 1
-      }
-    }
-  }, [createWorktreeName, githubUrlLink, visible])
-
-  const taskUrlCreatePreview = useMemo(() => {
-    if (!parsedTaskUrlCreatePreview) {
-      return null
-    }
-    const preview =
-      githubWorkItemPreview?.query === createWorktreeName ? githubWorkItemPreview : null
-    return withResolvedCmdJGitHubPreview(
-      parsedTaskUrlCreatePreview,
-      preview?.item?.title ?? null,
-      preview?.loading === true
-    )
-  }, [createWorktreeName, githubWorkItemPreview, parsedTaskUrlCreatePreview])
-
-  const currentGitHubWorkItemPreview =
-    githubWorkItemPreview?.query === createWorktreeName ? githubWorkItemPreview : null
-  const currentLinearIssuePreview =
-    linearIssuePreview?.query === createWorktreeName ? linearIssuePreview : null
-  const [linearLoadingFeedbackQuery, setLinearLoadingFeedbackQuery] = useState<string | null>(null)
-  useEffect(() => {
-    if (!currentLinearIssuePreview?.loading) {
-      setLinearLoadingFeedbackQuery(null)
-      return
-    }
-    setLinearLoadingFeedbackQuery(null)
-    const timer = window.setTimeout(
-      () => setLinearLoadingFeedbackQuery(currentLinearIssuePreview.query),
-      200
-    )
-    return () => window.clearTimeout(timer)
-  }, [currentLinearIssuePreview?.loading, currentLinearIssuePreview?.query])
-  const showLinearLoadingFeedback =
-    currentLinearIssuePreview?.loading === true &&
-    linearLoadingFeedbackQuery === currentLinearIssuePreview.query
+  const {
+    currentLinearIssuePreview,
+    currentGitHubWorkItemPreview,
+    linearIssueLookupRef,
+    githubLookupRef,
+    taskUrlCreatePreview,
+    showLinearLoadingFeedback
+  } = useWorktreeJumpTaskUrlPreviews({
+    visible,
+    createWorktreeName,
+    parsedTaskUrlCreatePreview,
+    linearIssueUrlIntent,
+    githubUrlLink
+  })
 
   const listEntries = useMemo<PaletteListEntry[]>(
     () =>
@@ -2513,6 +2227,8 @@ function WorktreeJumpPaletteContent({
     currentGitHubWorkItemPreview,
     currentLinearIssuePreview,
     focusFallbackSurface,
+    githubLookupRef,
+    linearIssueLookupRef,
     linearIssueUrlIntent,
     openModal,
     taskUrlCreatePreview,
@@ -2764,487 +2480,30 @@ function WorktreeJumpPaletteContent({
                 )
               }
 
-              if (entry.type === 'worktree') {
-                const worktree = entry.worktree
-                const repo = resolveRepoForWorktree(worktree)
-                const repoName = repo?.displayName ?? ''
-                // Why: both must match searchWorktrees' resolution, or highlight ranges land on
-                // the wrong text — and a branch-less row would throw here before search ever ran.
-                const branch = resolveWorktreeBranchLabel(worktree)
-                const worktreeLabel = resolveWorktreeDisplayName(worktree)
-                const isCurrentWorktree = isPaletteCurrentWorktree(
-                  worktree,
-                  activeWorktreeId,
-                  activeWorkspaceExecutionHostId
-                )
-                // Why: runtime-owned SSH targets have relay health owned by the runtime layer — don't show a false disconnected.
-                const sshConnectionId =
-                  repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
-                    ? repo.connectionId
-                    : null
-                const sshStatus = sshConnectionId
-                  ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
-                  : null
-                const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-                const sessionAge = formatPaletteSessionAge(worktree.lastActivityAt, paletteNowMs)
-                return (
-                  <CommandItem
-                    key={renderKey}
-                    value={renderKey}
-                    onSelect={() => handleSelectItem(entry)}
-                    data-current={isCurrentWorktree ? 'true' : undefined}
-                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
-                  >
-                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
-                      <PaletteWorktreeStatusDot worktree={worktree} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            {sshConnectionId && (
-                              <span
-                                aria-label={
-                                  isSshDisconnected
-                                    ? translate(
-                                        'auto.components.WorktreeJumpPalette.63c2be1914',
-                                        'SSH disconnected'
-                                      )
-                                    : translate(
-                                        'auto.components.WorktreeJumpPalette.34c8fbb46e',
-                                        'SSH remote'
-                                      )
-                                }
-                                className="shrink-0 inline-flex items-center"
-                              >
-                                {isSshDisconnected ? (
-                                  <ServerOff className="size-3.5 text-red-400" aria-hidden="true" />
-                                ) : (
-                                  <Server
-                                    className="size-3.5 text-muted-foreground"
-                                    aria-hidden="true"
-                                  />
-                                )}
-                              </span>
-                            )}
-                            <PaletteOpenTabWorktreeRailLabel
-                              name={worktreeLabel}
-                              matchRanges={entry.match.displayNameRanges}
-                              worktree={worktree}
-                              slot="palette-worktree-name"
-                              className="truncate text-[14px] font-semibold text-foreground"
-                            />
-                            {sessionAge ? (
-                              <span
-                                aria-label={translate(
-                                  'auto.components.WorktreeJumpPalette.lastActiveTime',
-                                  'Last active {{value0}} ago',
-                                  { value0: sessionAge }
-                                )}
-                                className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground/70"
-                              >
-                                {sessionAge}
-                              </span>
-                            ) : null}
-                            {isCurrentWorktree && (
-                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                {translate(
-                                  'auto.components.WorktreeJumpPalette.556e7232ca',
-                                  'Current'
-                                )}
-                              </span>
-                            )}
-                            {worktree.isMainWorktree && (
-                              <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
-                                {translate(
-                                  'auto.components.WorktreeJumpPalette.739bda980c',
-                                  'primary'
-                                )}
-                              </span>
-                            )}
-                            {branch.trim().length > 0 ? (
-                              <>
-                                <span className="shrink-0 text-muted-foreground/45">·</span>
-                                <PaletteOpenTabWorktreeRailLabel
-                                  name={branch}
-                                  matchRanges={entry.match.branchRanges}
-                                  worktree={worktree}
-                                  slot="palette-worktree-branch"
-                                  className="truncate text-[12px] font-medium text-muted-foreground/92"
-                                />
-                              </>
-                            ) : null}
-                          </div>
-                          {entry.match.supportingText && (
-                            <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-muted-foreground/88">
-                              <span
-                                aria-label={entry.match.supportingText.accessibilityLabel}
-                                className="inline-flex h-[18px] shrink-0 items-center rounded border border-border bg-foreground/[0.04] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                              >
-                                {getPaletteSupportingTextLabel(
-                                  entry.match.supportingText.labelKind
-                                )}
-                              </span>
-                              <span className="truncate">
-                                <HighlightedText
-                                  text={entry.match.supportingText.text}
-                                  matchRanges={entry.match.supportingText.matchRanges}
-                                />
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          {repoName && (
-                            <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                              <RepoBadgeMark color={repo?.badgeColor} />
-                              <span className="truncate">
-                                <HighlightedText
-                                  text={repoName}
-                                  matchRanges={entry.match.repoRanges}
-                                />
-                              </span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CommandItem>
-                )
-              }
-
-              if (entry.type === 'project-target') {
-                const result = entry.result
-                const isProject = result.kind === 'project'
-                const badgeLabel = isProject
-                  ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
-                  : translate('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
-                return (
-                  <CommandItem
-                    key={renderKey}
-                    value={renderKey}
-                    onSelect={() => handleSelectItem(entry)}
-                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
-                  >
-                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-                      <FolderTree className="size-3.5" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="truncate text-[14px] font-semibold text-foreground">
-                              {result.title}
-                            </span>
-                            <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                              {badgeLabel}
-                            </span>
-                          </div>
-                        </div>
-                        {isProject ? (
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                              <RepoBadgeMark color={result.repo.badgeColor} />
-                              <span className="truncate">{result.repo.displayName}</span>
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </CommandItem>
-                )
-              }
-
-              if (entry.type === 'settings' || entry.type === 'quick-action') {
-                const result = entry.result
-                const Icon = result.icon
-                const kindLabel =
-                  entry.type === 'settings'
-                    ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
-                    : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
-                return (
-                  <CommandItem
-                    key={renderKey}
-                    value={renderKey}
-                    onSelect={() => handleSelectItem(entry)}
-                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
-                  >
-                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-                      <Icon className="size-3.5" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                          {result.title}
-                        </span>
-                        <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                          {kindLabel}
-                        </span>
-                      </div>
-                      <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88">
-                        {result.description}
-                      </div>
-                    </div>
-                  </CommandItem>
-                )
-              }
-
-              if (entry.type === 'workspace-tab') {
-                const result = entry.result
-                const sessionAge = formatPaletteSessionAge(result.lastActiveAt, paletteNowMs)
-                const workspaceTabWorktree = resolveWorktree(
-                  result.worktreeId,
-                  result.executionHostId
-                )
-                const workspaceTabRepo = workspaceTabWorktree
-                  ? resolveRepoForWorktree(workspaceTabWorktree)
-                  : undefined
-                const workspaceTabRepoName = workspaceTabRepo?.displayName ?? result.repoName
-                const workspaceTabFallback =
-                  result.contentType === 'terminal' && result.occupantAgent ? (
-                    <span
-                      className="inline-flex"
-                      data-agent-icon={result.occupantAgent}
-                      aria-hidden="true"
-                    >
-                      <AgentIcon agent={result.occupantAgent} size={14} />
-                    </span>
-                  ) : result.contentType === 'terminal' ? (
-                    <SquareTerminal className="size-3.5" aria-hidden="true" />
-                  ) : (
-                    <FileText className="size-3.5" aria-hidden="true" />
-                  )
-                // Why regardless of query: a searched-for tab is exactly when you need to know it's
-                // still working — the map covers every open tab, not just the recent section.
-                const recentRow = recentTabRowByItem.get(entry) ?? null
-
-                return (
-                  <CommandItem
-                    key={renderKey}
-                    value={renderKey}
-                    onSelect={() => handleSelectItem(entry)}
-                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
-                  >
-                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-                      <PaletteRecentTabStatusDot row={recentRow} fallback={workspaceTabFallback} />
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <div className="flex items-center justify-between gap-2.5">
-                        <div className="min-w-0 flex-1 overflow-hidden">
-                          <PaletteOpenTabPrimaryLine
-                            title={result.title}
-                            titleRanges={result.titleRanges}
-                            secondaryText={result.secondaryText}
-                            secondaryRanges={result.secondaryRanges}
-                            sessionAge={sessionAge}
-                            leadingBadges={
-                              <>
-                                {result.isCurrentTab && (
-                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                    {translate(
-                                      'auto.components.WorktreeJumpPalette.52404f8096',
-                                      'Current Tab'
-                                    )}
-                                  </span>
-                                )}
-                                {!result.isCurrentTab && result.isCurrentWorktree && (
-                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                    {translate(
-                                      'auto.components.WorktreeJumpPalette.c5081f2814',
-                                      'Current Worktree'
-                                    )}
-                                  </span>
-                                )}
-                              </>
-                            }
-                          />
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <PaletteOpenTabWorktreeRailLabel
-                            name={result.worktreeName}
-                            matchRanges={result.worktreeRanges}
-                            worktree={workspaceTabWorktree}
-                            className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
-                          />
-                          {workspaceTabRepoName && (
-                            <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                              <RepoBadgeMark color={workspaceTabRepo?.badgeColor} />
-                              <span className="truncate">
-                                <HighlightedText
-                                  text={workspaceTabRepoName}
-                                  matchRanges={result.repoRanges}
-                                />
-                              </span>
-                            </span>
-                          )}
-                          <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexByItem.get(entry)}
-                            modifierKeys={digitShortcutModifiers}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </CommandItem>
-                )
-              }
-
-              if (entry.type === 'simulator-tab') {
-                const result = entry.result
-                const simulatorWorktree = resolveWorktree(result.worktreeId, result.executionHostId)
-                const simulatorRepo = simulatorWorktree
-                  ? resolveRepoForWorktree(simulatorWorktree)
-                  : undefined
-                const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
-                const sessionAge = formatPaletteSessionAge(
-                  result.lastActiveAt ?? null,
-                  paletteNowMs
-                )
-
-                return (
-                  <CommandItem
-                    key={renderKey}
-                    value={renderKey}
-                    onSelect={() => handleSelectItem(entry)}
-                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
-                  >
-                    <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-                      <Smartphone className="size-3.5" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <div className="flex items-center justify-between gap-2.5">
-                        <div className="min-w-0 flex-1 overflow-hidden">
-                          <PaletteOpenTabPrimaryLine
-                            title={result.title}
-                            titleRanges={result.titleRanges}
-                            secondaryText={result.secondaryText}
-                            secondaryRanges={result.secondaryRanges}
-                            sessionAge={sessionAge}
-                            leadingBadges={
-                              <>
-                                {result.isCurrentTab && (
-                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                    {translate(
-                                      'auto.components.WorktreeJumpPalette.52404f8096',
-                                      'Current Tab'
-                                    )}
-                                  </span>
-                                )}
-                                {!result.isCurrentTab && result.isCurrentWorktree && (
-                                  <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                    {translate(
-                                      'auto.components.WorktreeJumpPalette.c5081f2814',
-                                      'Current Worktree'
-                                    )}
-                                  </span>
-                                )}
-                              </>
-                            }
-                          />
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <PaletteOpenTabWorktreeRailLabel
-                            name={result.worktreeName}
-                            matchRanges={result.worktreeRanges}
-                            worktree={simulatorWorktree}
-                            className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
-                          />
-                          {simulatorRepoName && (
-                            <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                              <RepoBadgeMark color={simulatorRepo?.badgeColor} />
-                              <span className="truncate">
-                                <HighlightedText
-                                  text={simulatorRepoName}
-                                  matchRanges={result.repoRanges}
-                                />
-                              </span>
-                            </span>
-                          )}
-                          <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexByItem.get(entry)}
-                            modifierKeys={digitShortcutModifiers}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </CommandItem>
-                )
-              }
-
-              const result = entry.result
-              const browserWorktree = resolveWorktree(result.worktreeId, result.executionHostId)
-              const browserRepo = browserWorktree
-                ? resolveRepoForWorktree(browserWorktree)
-                : undefined
-              const browserRepoName = browserRepo?.displayName ?? result.repoName
-              const sessionAge = formatPaletteSessionAge(result.lastActiveAt ?? null, paletteNowMs)
-
               return (
-                <CommandItem
+                <WorktreeJumpListEntryRow
                   key={renderKey}
-                  value={renderKey}
-                  onSelect={() => handleSelectItem(entry)}
-                  className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
-                >
-                  <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
-                    <Globe className="size-3.5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <div className="flex items-center justify-between gap-2.5">
-                      <div className="min-w-0 flex-1 overflow-hidden">
-                        <PaletteOpenTabPrimaryLine
-                          title={result.title}
-                          titleRanges={result.titleRanges}
-                          secondaryText={result.secondaryText}
-                          secondaryRanges={result.secondaryRanges}
-                          sessionAge={sessionAge}
-                          leadingBadges={
-                            <>
-                              {result.isCurrentPage && (
-                                <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                  {translate(
-                                    'auto.components.WorktreeJumpPalette.52404f8096',
-                                    'Current Tab'
-                                  )}
-                                </span>
-                              )}
-                              {!result.isCurrentPage && result.isCurrentWorktree && (
-                                <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                  {translate(
-                                    'auto.components.WorktreeJumpPalette.c5081f2814',
-                                    'Current Worktree'
-                                  )}
-                                </span>
-                              )}
-                            </>
-                          }
-                        />
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <PaletteOpenTabWorktreeRailLabel
-                          name={result.worktreeName}
-                          matchRanges={result.worktreeRanges}
-                          worktree={browserWorktree}
-                          className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
-                        />
-                        {browserRepoName && (
-                          <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                            <RepoBadgeMark color={browserRepo?.badgeColor} />
-                            <span className="truncate">
-                              <HighlightedText
-                                text={browserRepoName}
-                                matchRanges={result.repoRanges}
-                              />
-                            </span>
-                          </span>
-                        )}
-                        <PaletteRowShortcutBadge
-                          index={recentTabShortcutIndexByItem.get(entry)}
-                          modifierKeys={digitShortcutModifiers}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </CommandItem>
+                  entry={entry}
+                  renderKey={renderKey}
+                  paletteNowMs={paletteNowMs}
+                  activeWorktreeId={activeWorktreeId}
+                  activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
+                  sshConnectionStates={sshConnectionStates}
+                  recentTabShortcutIndexByItem={recentTabShortcutIndexByItem}
+                  digitShortcutModifiers={digitShortcutModifiers}
+                  recentTabRowByItem={recentTabRowByItem}
+                  resolveWorktree={resolveWorktree}
+                  resolveRepoForWorktree={resolveRepoForWorktree}
+                  onSelect={(item) => {
+                    if (
+                      item.type !== 'create-worktree' &&
+                      item.type !== 'hint' &&
+                      item.type !== 'section-header'
+                    ) {
+                      handleSelectItem(item)
+                    }
+                  }}
+                />
               )
             })}
           </>
@@ -3300,25 +2559,4 @@ function WorktreeJumpPaletteContent({
       </PaletteLiveStatusProvider>
     </TooltipProvider>
   )
-}
-
-function getPaletteSupportingTextLabel(
-  labelKind: NonNullable<PaletteSearchResult['supportingText']>['labelKind']
-): string {
-  switch (labelKind) {
-    case 'comment':
-      return translate('worktreeJumpPalette.matchLabel.comment', 'Comment')
-    case 'issue':
-      return translate('worktreeJumpPalette.matchLabel.issue', 'Issue')
-    case 'port':
-      return translate('worktreeJumpPalette.matchLabel.port', 'Port')
-    case 'pr':
-      return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
-    case 'mr':
-      return translate('worktreeJumpPalette.matchLabel.mr', 'MR')
-    case 'task':
-      return translate('worktreeJumpPalette.matchLabel.task', 'Task')
-    case 'automation':
-      return translate('worktreeJumpPalette.matchLabel.automation', 'Run')
-  }
 }
