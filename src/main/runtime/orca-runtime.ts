@@ -145,10 +145,6 @@ import type {
   OrchestrationCompatibilityEvidence,
   OrchestrationCompatibilityHostStamp
 } from '../../shared/orchestration-compatibility-evidence'
-import {
-  isOrchestrationMutation,
-  orchestrationMigrationData
-} from '../../shared/orchestration-rpc-contract'
 import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
@@ -351,6 +347,7 @@ import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-sca
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeStartupDraftCommands } from './runtime-startup-draft-commands'
 import { RuntimeWorkspaceSessionHydrationCommands } from './runtime-workspace-session-hydration-commands'
+import { callOrchestrationWorkerServerViaTransport } from './orchestration/call-worker-server-via-transport'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -361,10 +358,6 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/protocol-version'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions
@@ -4109,48 +4102,15 @@ export class OrcaRuntimeService {
     envelope?: RuntimeOrchestrationEnvelope,
     internal?: { contractVerified?: boolean }
   ): Promise<unknown> {
-    if (!this.orchestrationEnvironmentTransport) {
-      throw new OrchestrationError(
-        'server_required',
-        'Connected-server orchestration is unavailable in this runtime.'
-      )
-    }
-    if (isOrchestrationMutation(method, params) && !internal?.contractVerified) {
-      const statusResponse = await this.orchestrationEnvironmentTransport.call(
-        selector,
-        'status.get',
-        undefined,
-        timeoutMs
-      )
-      if (statusResponse.ok === false) {
-        throw new OrchestrationError(
-          statusResponse.error.code,
-          statusResponse.error.message,
-          statusResponse.error.data
-        )
-      }
-      const status = statusResponse.result as RuntimeStatus
-      if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
-        throw new OrchestrationError(
-          'orchestration_migration_required',
-          'The connected worker server does not support the current orchestration contract. No effects were applied.',
-          orchestrationMigrationData('runtime_capability_missing')
-        )
-      }
-    }
-    const response = await this.orchestrationEnvironmentTransport.call(
+    return callOrchestrationWorkerServerViaTransport({
+      transport: this.orchestrationEnvironmentTransport,
       selector,
       method,
       params,
       timeoutMs,
-      method.startsWith('orchestration.')
-        ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
-        : envelope
-    )
-    if (response.ok === false) {
-      throw new OrchestrationError(response.error.code, response.error.message, response.error.data)
-    }
-    return response.result
+      envelope,
+      internal
+    })
   }
 
   async syncOrchestrationFederation(runId?: string): Promise<void> {
