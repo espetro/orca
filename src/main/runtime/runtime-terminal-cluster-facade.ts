@@ -244,12 +244,14 @@ import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
-  REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS,
   addListenerToMap,
-  createTerminalRevealWarning,
-  ownerSurfacing,
-  resolveTerminalPresentation
+  createTerminalRevealWarning
 } from './orca-runtime'
+import {
+  ownerSurfacing,
+  resolveTerminalPresentation,
+  REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS
+} from './runtime-terminal-surface-shared'
 import {
   assertAgentPromptRequestActive,
   copySleepingAgentLaunchConfig,

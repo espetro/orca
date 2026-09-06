@@ -5,6 +5,7 @@ import {
   hasLocalGitOptions,
   parseExactWorktreeIdSelector
 } from './orca-runtime'
+import { omitUndefinedProperties, ownerSurfacing } from './runtime-terminal-surface-shared'
 import type { RuntimeMobileSessionTabSnapshotCommands } from './runtime-mobile-session-tab-snapshot-commands'
 import type { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import type { RuntimeHookAgentRowResolutionCommands } from './runtime-hook-agent-row-resolution-commands'
@@ -18,8 +19,6 @@ import {
   getLocalGitHubPrForBranch,
   getSetupRunnerCommandPlatformForLaunch,
   hasLocalWorktreeBaseRef,
-  omitUndefinedProperties,
-  ownerSurfacing,
   pathExists,
   resolveCreateBranchName
 } from './orca-runtime'

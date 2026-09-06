@@ -43,13 +43,12 @@ import type {
   TerminalHandleRecord,
   TerminalWorkspaceLaunchScope
 } from './orca-runtime'
+import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS, clampTerminalViewport } from './orca-runtime'
 import {
-  MOBILE_TERMINAL_CREATE_RESULT_TTL_MS,
   MOBILE_TERMINAL_READY_FALLBACK_MS,
   MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
-  clampTerminalViewport,
   isClientDisconnectedError
-} from './orca-runtime'
+} from './runtime-terminal-surface-shared'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig

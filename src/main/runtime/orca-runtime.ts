@@ -1192,17 +1192,8 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 // Why the global and not node:timers/promises: only the global is intercepted by fake timers,
 // so a chunked paste stays observable on the test clock.
 
-export const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
-export const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
-export const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
-export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
-export const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
-
-export function isClientDisconnectedError(error: unknown): boolean {
-  return error instanceof Error && error.message === 'client_disconnected'
-}
 
 export function createTerminalRevealWarning(handle: string, error?: unknown): string {
   const reason =
@@ -1213,26 +1204,6 @@ export function createTerminalRevealWarning(handle: string, error?: unknown): st
     `Terminal ${handle} is running, but Orca could not make it discoverable.${reason}`,
     `Run \`orca terminal focus --terminal ${handle}\` to reveal and focus it.`
   ].join(' ')
-}
-
-// Why: an absent `surfaceOwner` means "default", so surfacing callers must omit
-// the key rather than send `true`.
-export function ownerSurfacing(shouldSurface: boolean): { surfaceOwner?: false } {
-  return shouldSurface ? {} : { surfaceOwner: false }
-}
-
-export function resolveTerminalPresentation(opts: {
-  presentation?: RuntimeTerminalPresentation
-  focus?: boolean
-  activate?: boolean
-}): RuntimeTerminalPresentation | undefined {
-  if (opts.presentation) {
-    return opts.presentation
-  }
-  if (opts.focus === true || opts.activate === true) {
-    return 'focused'
-  }
-  return undefined
 }
 
 export type RuntimeNotifier = {
@@ -1443,12 +1414,6 @@ export type MessageWaiter = OrchestrationMessageWaiter & {
 }
 
 export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
-
-export function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entry]) => entry !== undefined)
-  ) as Partial<T>
-}
 
 export type RuntimeWorktreeRemovalTarget = {
   id: string

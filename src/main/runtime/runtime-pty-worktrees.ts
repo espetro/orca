@@ -28,12 +28,14 @@ import type {
   MessageWaitResult
 } from './orca-runtime'
 import {
-  MAX_TRACKED_PTY_LIVENESS_VERDICTS,
-  EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS,
   beginPtyRegistration,
   cancelPendingPtyRegistration,
   markPtyStopRequested
 } from './orca-runtime'
+import {
+  EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS,
+  MAX_TRACKED_PTY_LIVENESS_VERDICTS
+} from './runtime-terminal-surface-shared'
 
 type RuntimePtyRecord = OrcaRuntimeService['ptysById'] extends Map<string, infer T> ? T : never
 
