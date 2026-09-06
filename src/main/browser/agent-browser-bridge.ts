@@ -90,6 +90,18 @@ type EnqueueTargetedCommandOptions = {
 
 export type AgentBrowserBridgeOptions = {
   onTabsChanged?: (worktreeId?: string) => void
+  /** Recreates a sleeping serve page's window before a command resolves its WebContents. */
+  resolveSleepingPage?: (
+    browserPageId: string
+  ) => Promise<{ webContentsId: number } | null> | { webContentsId: number } | null
+  /** Marks a serve page recently used so the idle sweep leaves it alone. */
+  touchOffscreenPage?: (browserPageId: string) => void
+  /** Reports whether a page id is a sleeping serve page (still listed, no window). */
+  isOffscreenPageSleeping?: (browserPageId: string) => boolean
+  /** Last committed URL of a sleeping serve page, for listings while its window is gone. */
+  getSleepingPageUrl?: (browserPageId: string) => string
+  /** All sleeping serve page ids, for listings (they are not in the guest registry). */
+  listSleepingPageIds?: () => string[]
 }
 
 function agentBrowserNativeName(): string {
@@ -239,13 +251,15 @@ export class AgentBrowserBridge {
     browserPageId?: string
   ): { browserPageId: string; url: string; title: string } | null {
     try {
-      const target = this.resolveCommandTarget(worktreeId, browserPageId)
-      const wc = this.getWebContents(target.webContentsId)
-      if (!wc) {
+      const tabs = this.getRegisteredTabs(worktreeId)
+      const resolvedId = browserPageId ?? tabs.keys().next().value
+      const webContentsId = resolvedId != null ? tabs.get(resolvedId) : undefined
+      const wc = webContentsId != null ? this.getWebContents(webContentsId) : null
+      if (!wc || resolvedId == null) {
         return null
       }
       return {
-        browserPageId: target.browserPageId,
+        browserPageId: resolvedId,
         url: wc.getURL() ?? '',
         title: wc.getTitle() ?? ''
       }
@@ -357,7 +371,21 @@ export class AgentBrowserBridge {
     for (const [tabId, wcId] of tabs) {
       const wc = this.getWebContents(wcId)
       if (!wc) {
-        this.browserManager.unregisterGuest(tabId)
+        // Why: a sleeping serve page has no window by design but must stay listed; only unregister genuinely dead guests.
+        if (!this.isOffscreenPageSleeping(tabId)) {
+          this.browserManager.unregisterGuest(tabId)
+          continue
+        }
+        const sleepingUrl = this.options.getSleepingPageUrl?.(tabId) ?? ''
+        result.push({
+          browserPageId: tabId,
+          index: index++,
+          url: sleepingUrl,
+          title: '',
+          active: false,
+          loadError: null,
+          certificateFailure: null
+        })
         continue
       }
       if (firstLiveWcId === null) {
@@ -375,6 +403,20 @@ export class AgentBrowserBridge {
         loadError,
         certificateFailure
       })
+    }
+    // Why: a sleeping serve page left the registry with its window, so append it here or clients lose the tab.
+    for (const tabId of this.listSleepingPageIds()) {
+      if (!tabs.has(tabId)) {
+        result.push({
+          browserPageId: tabId,
+          index: index++,
+          url: this.options.getSleepingPageUrl?.(tabId) ?? '',
+          title: '',
+          active: false,
+          loadError: null,
+          certificateFailure: null
+        })
+      }
     }
     // Why: with no active tab yet, show the first live tab as active without mutating state — keeps `tab list` side-effect free.
     if (activeWcId == null && firstLiveWcId !== null) {
@@ -1372,7 +1414,7 @@ export class AgentBrowserBridge {
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     this.assertCommandAdmission()
-    const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
+    const target = await this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
 
     if (options.ensureSession !== false) {
@@ -1434,7 +1476,7 @@ export class AgentBrowserBridge {
     target: ResolvedBrowserCommandTarget,
     options: EnqueueTargetedCommandOptions
   ): Promise<ResolvedBrowserCommandTarget> {
-    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    const visibleTarget = await this.resolveCommandTarget(worktreeId, target.browserPageId)
     if (visibleTarget.webContentsId === target.webContentsId) {
       return visibleTarget
     }
@@ -1481,26 +1523,65 @@ export class AgentBrowserBridge {
   }
 
   getActivePageId(worktreeId?: string, browserPageId?: string): string | null {
+    // Read-only lookup: no wake, so a sleeping page reports via isOffscreenPageSleeping instead.
     try {
-      return this.resolveCommandTarget(worktreeId, browserPageId).browserPageId
+      const tabs = this.getRegisteredTabs(worktreeId)
+      if (browserPageId) {
+        return tabs.has(browserPageId) || this.isOffscreenPageSleeping(browserPageId)
+          ? browserPageId
+          : null
+      }
+      for (const [tabId, wcId] of tabs) {
+        if (this.getWebContents(wcId)) {
+          return tabId
+        }
+      }
+      return null
     } catch {
       return null
     }
   }
 
-  private resolveCommandTarget(
+  /** True when the offscreen backend reports this page id is sleeping (window torn down). */
+  private isOffscreenPageSleeping(browserPageId: string): boolean {
+    return this.options.isOffscreenPageSleeping?.(browserPageId) ?? false
+  }
+
+  private listSleepingPageIds(): string[] {
+    return this.options.listSleepingPageIds?.() ?? []
+  }
+
+  // Why: keeps idle-sweep lastActivity fresh so an actively-driven page is never a sleep candidate.
+  private touchOffscreenPage(browserPageId: string): void {
+    try {
+      this.options.touchOffscreenPage?.(browserPageId)
+    } catch {
+      // Touch is an optimization; never fail a command because of it.
+    }
+  }
+
+  private async resolveCommandTarget(
     worktreeId?: string,
     browserPageId?: string,
     requireScopedTarget = false
-  ): ResolvedBrowserCommandTarget {
+  ): Promise<ResolvedBrowserCommandTarget> {
     if (!browserPageId) {
-      return requireScopedTarget
+      const active = requireScopedTarget
         ? this.resolveScopedActiveTab(worktreeId)
         : this.resolveActiveTab(worktreeId)
+      this.touchOffscreenPage(active.browserPageId)
+      return active
     }
 
     const tabs = this.getRegisteredTabs(worktreeId)
-    const webContentsId = tabs.get(browserPageId)
+    let webContentsId = tabs.get(browserPageId)
+    if (webContentsId == null && this.options.resolveSleepingPage) {
+      // Why: a sleeping serve page is absent from the registry by design; wake it, then re-resolve.
+      const woken = await this.options.resolveSleepingPage(browserPageId)
+      if (woken) {
+        return { browserPageId, webContentsId: woken.webContentsId }
+      }
+    }
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(

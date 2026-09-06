@@ -1905,8 +1905,26 @@ void app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
+  // Why: the offscreen backend doesn't exist on desktop; the hooks only fire when it does (headless serve).
+  let offscreenBackendRef: OffscreenBrowserBackend | null = null
   const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
-    onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+    onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId),
+    resolveSleepingPage: (browserPageId) => {
+      const backend = offscreenBackendRef
+      if (!backend || !backend.isPageSleeping(browserPageId)) {
+        return null
+      }
+      return backend.wakePage(browserPageId).then(() => ({
+        // Wake registered the guest synchronously, so the id must exist here.
+        webContentsId: backend.getWebContentsId(browserPageId)!
+      }))
+    },
+    touchOffscreenPage: (browserPageId) => offscreenBackendRef?.touchPage(browserPageId),
+    isOffscreenPageSleeping: (browserPageId) =>
+      offscreenBackendRef?.isPageSleeping(browserPageId) ?? false,
+    getSleepingPageUrl: (browserPageId) =>
+      offscreenBackendRef?.getSleepingPage(browserPageId)?.url ?? '',
+    listSleepingPageIds: () => offscreenBackendRef?.listSleepingPageIds() ?? []
   })
   runtimeService.setAgentBrowserBridge(agentBrowserBridge)
   // Why: daemons a crashed or SIGKILL'd previous run left behind answer to nobody; nothing else reclaims them.
@@ -2188,11 +2206,11 @@ void app.whenReady().then(async () => {
     await runtime.reconcileLegacyWorkerTerminals()
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {
-      runtime.setOffscreenBrowserBackend(
-        new OffscreenBrowserBackend(browserManager, {
-          getAgentBrowserBridge: () => agentBrowserBridge
-        })
-      )
+      offscreenBackendRef = new OffscreenBrowserBackend(browserManager, {
+        getAgentBrowserBridge: () => agentBrowserBridge
+      })
+      offscreenBackendRef.startIdleSweeper()
+      runtime.setOffscreenBrowserBackend(offscreenBackendRef)
     }
     // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })

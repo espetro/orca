@@ -38,4 +38,8 @@ export class OffscreenPaintLease {
       this.refcounts.set(webContentsId, remaining)
     }
   }
+
+  isHeld(webContentsId: number): boolean {
+    return (this.refcounts.get(webContentsId) ?? 0) > 0
+  }
 }

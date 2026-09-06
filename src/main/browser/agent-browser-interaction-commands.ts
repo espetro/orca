@@ -42,7 +42,7 @@ export type AgentBrowserInteractionPorts = {
     worktreeId?: string,
     browserPageId?: string,
     requireScopedTarget?: boolean
-  ): ResolvedBrowserCommandTarget
+  ): Promise<ResolvedBrowserCommandTarget> | ResolvedBrowserCommandTarget
   acquireAutomationVisibility(webContentsId: number): Promise<() => void>
   acquireOffscreenPaint(webContentsId: number): () => void
   getBrowserPageLoadError(browserPageId: string): { description: string; code: number } | null
@@ -152,7 +152,7 @@ export class AgentBrowserInteractionCommands {
     }
 
     // Why: cross-process navigation can replace the guest while retaining the same authoritative page id.
-    const navigatedTarget = this.ports.resolveCommandTarget(worktreeId, target.browserPageId)
+    const navigatedTarget = await this.ports.resolveCommandTarget(worktreeId, target.browserPageId)
     const navigatedWebContents = this.ports.requireTargetWebContents(navigatedTarget)
     const loadError = navigationAborted
       ? this.ports.getBrowserPageLoadError(target.browserPageId)
@@ -411,7 +411,7 @@ export class AgentBrowserInteractionCommands {
         )
       }
 
-      const currentTarget = this.ports.resolveCommandTarget(worktreeId, target.browserPageId)
+      const currentTarget = await this.ports.resolveCommandTarget(worktreeId, target.browserPageId)
       if (currentTarget.webContentsId !== target.webContentsId) {
         throw new BrowserError(
           'browser_tab_changed',

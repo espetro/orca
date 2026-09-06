@@ -7,19 +7,30 @@ const mocks = vi.hoisted(() => ({
   finishLoads: true
 }))
 
+type MockNavigationHistory = {
+  getAllEntries: () => { url: string; title: string }[]
+  getActiveIndex: () => number
+  restore: (options: { entries: unknown[]; index?: number }) => Promise<void>
+}
+
 class MockWebContents extends EventEmitter {
   readonly id: number
-
-  constructor(id: number) {
-    super()
-    this.id = id
-  }
-
-  loadURL(): Promise<void> {
+  currentUrl = ''
+  navigationHistory: MockNavigationHistory | undefined
+  loadURL = vi.fn((url: string): Promise<void> => {
+    this.currentUrl = url
     if (mocks.finishLoads) {
       queueMicrotask(() => this.emit('did-finish-load'))
     }
     return Promise.resolve()
+  })
+  getURL(): string {
+    return this.currentUrl
+  }
+
+  constructor(id: number) {
+    super()
+    this.id = id
   }
 }
 
@@ -45,7 +56,8 @@ class MockBrowserWindow {
 vi.mock('electron', () => ({ BrowserWindow: mocks.BrowserWindow }))
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
-    getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' }))
+    getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' })),
+    getProfile: vi.fn(() => ({ id: 'profile-1', partition: 'persist:orca-browser-profile-1' }))
   }
 }))
 
@@ -210,6 +222,115 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
     expect(backend.getWebContentsId('page-1')).toBe(2)
     expect(browserManager.unregisterGuest).toHaveBeenCalledTimes(1)
+  })
+
+  it('sleepPage tears the window down but keeps the page id restorable with its params', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn(),
+      getWorktreeIdForTab: vi.fn(() => 'wt-sleep'),
+      getSessionProfileIdForTab: vi.fn(() => 'profile-1'),
+      isPaintLeaseHeld: vi.fn(() => false)
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'https://example.com/a' })
+    await backend.sleepPage('page-1')
+
+    expect(backend.getWebContentsId('page-1')).toBeNull()
+    expect(browserManager.unregisterGuest).toHaveBeenCalledWith('page-1')
+    expect(backend.isPageSleeping('page-1')).toBe(true)
+    expect(backend.getSleepingPage('page-1')).toMatchObject({
+      url: 'https://example.com/a',
+      worktreeId: 'wt-sleep',
+      profileId: 'profile-1'
+    })
+
+    // Wake recreates the window under the same page id and re-registers the guest.
+    const registrationsBefore = browserManager.registerOffscreenGuest.mock.calls.length
+    await backend.wakePage('page-1')
+    expect(backend.isPageSleeping('page-1')).toBe(false)
+    expect(backend.getWebContentsId('page-1')).not.toBeNull()
+    expect(browserManager.registerOffscreenGuest).toHaveBeenCalledTimes(registrationsBefore + 1)
+  })
+
+  it('wakePage falls back to loadURL when navigationHistory.restore throws', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn(),
+      getWorktreeIdForTab: vi.fn(() => undefined),
+      getSessionProfileIdForTab: vi.fn(() => null),
+      isPaintLeaseHeld: vi.fn(() => false)
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'https://example.com/old' })
+    // A webContents whose restore exists but rejects: wake must fall back cleanly.
+    mocks.windows[0].webContents.navigationHistory = {
+      getAllEntries: () => [{ url: 'https://example.com/old', title: '' }],
+      getActiveIndex: () => 0,
+      restore: () => Promise.reject(new Error('unsupported'))
+    }
+    await backend.sleepPage('page-1')
+
+    await backend.wakePage('page-1')
+    expect(backend.isPageSleeping('page-1')).toBe(false)
+    // createTab already loadURL'd the stored url; the throwing restore must not fail the wake.
+    expect(mocks.windows[1].webContents.loadURL).toHaveBeenCalledWith('https://example.com/old')
+  })
+
+  it('sleepPage stores the last committed URL when no navigation history is available', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn(),
+      getWorktreeIdForTab: vi.fn(() => undefined),
+      getSessionProfileIdForTab: vi.fn(() => null),
+      isPaintLeaseHeld: vi.fn(() => false)
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'https://example.com/fallback' })
+    await backend.sleepPage('page-1')
+    expect(backend.getSleepingPage('page-1')?.url).toBe('https://example.com/fallback')
+  })
+
+  it('touchPage refreshes activity and listPageInventory reports leases', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn(),
+      getWorktreeIdForTab: vi.fn(() => undefined),
+      getSessionProfileIdForTab: vi.fn(() => null),
+      isPaintLeaseHeld: vi.fn(() => true)
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank' })
+    vi.setSystemTime(20_000)
+    backend.touchPage('page-1')
+    const inventory = backend.listPageInventory()
+    expect(inventory.get('page-1')).toMatchObject({
+      lastActivityAt: 20_000,
+      hasActiveLease: true
+    })
+    vi.useRealTimers()
+  })
+
+  it('wakePage on an unknown or non-sleeping id is a no-op', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn(),
+      getWorktreeIdForTab: vi.fn(() => undefined),
+      getSessionProfileIdForTab: vi.fn(() => null),
+      isPaintLeaseHeld: vi.fn(() => false)
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+
+    await expect(backend.wakePage('nope')).resolves.toBe(false)
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank' })
+    await expect(backend.wakePage('page-1')).resolves.toBe(false)
+    expect(mocks.windows).toHaveLength(1)
   })
 
   it('retires the helper when an offscreen renderer is destroyed unexpectedly', async () => {

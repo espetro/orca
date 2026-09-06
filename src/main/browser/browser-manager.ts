@@ -483,6 +483,11 @@ export class BrowserManager {
     return this.offscreenPaintLease.acquire(guest)
   }
 
+  /** True while any screencast/screenshot lease pins the guest's paint output. */
+  isPaintLeaseHeld(webContentsId: number): boolean {
+    return this.offscreenPaintLease.isHeld(webContentsId)
+  }
+
   async acquireAutomationVisibility(guestWebContentsId: number): Promise<() => void> {    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (!browserPageId) {
       return () => {}

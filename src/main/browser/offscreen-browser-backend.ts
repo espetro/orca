@@ -8,21 +8,37 @@ import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
 import { resolveServeBrowserPaintMode } from './serve-browser-settings'
-
-// Why: headless orca serve has no renderer window to host a <webview>, so each
-// browser page is backed by a main-process offscreen BrowserWindow. The window
-// is never shown — it exists only so its WebContents can be driven over CDP and
-// streamed via the existing screencast path. Verified on macOS and on headless
-// Linux under Xvfb (Electron --headless segfaults; a virtual display is
-// required there — provisioned in the serve image, not by this code).
+import { OffscreenTabSweeper } from './offscreen-tab-sweeper'
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
 const LOAD_TIMEOUT_MS = 30_000
 const OWNER_RETIREMENT_CONCURRENCY = 4
 
+/** A page currently torn down to reclaim memory, restorable by page id. */
+export type SleepingOffscreenPage = {
+  url: string
+  worktreeId?: string
+  profileId?: string
+  sleptAt: number
+}
+
+export type OffscreenPageInventoryEntry = {
+  webContentsId: number
+  url: string
+  lastActivityAt: number
+  hasActiveLease: boolean
+}
+
 export class OffscreenBrowserBackend implements BrowserBackend {
   private readonly windowsByPageId = new Map<string, BrowserWindow>()
+  private readonly lastActivityByPageId = new Map<string, number>()
+  private readonly sleepingByPageId = new Map<string, SleepingOffscreenPage>()
+  private readonly sleepingHistoryByPageId = new Map<
+    string,
+    { entries: Electron.NavigationEntry[]; activeIndex: number }
+  >()
+  private readonly sweeper: OffscreenTabSweeper
   // Shutdown is terminal for this backend; rejecting creates closes the race
   // where destroyAll snapshots ownership and a new page appears afterward.
   private shutdownStarted = false
@@ -33,7 +49,12 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
     } = {}
-  ) {}
+  ) {
+    this.sweeper = new OffscreenTabSweeper({
+      getInventory: () => this.listPageInventory(),
+      sleepPage: (pageId) => this.sleepPage(pageId)
+    })
+  }
 
   async createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }> {
     if (this.shutdownStarted) {
@@ -69,6 +90,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     })
 
     this.windowsByPageId.set(browserPageId, win)
+    this.lastActivityByPageId.set(browserPageId, Date.now())
+    // Why: createTab is the documented wake path for sleeping pages, so a stored record is consumed here.
+    this.sleepingByPageId.delete(browserPageId)
 
     // Why: register the guest and return immediately so the new tab appears
     // without waiting for the page to finish loading. Previously createTab
@@ -122,6 +146,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
   async closeTab(browserPageId: string): Promise<void> {
     const win = this.windowsByPageId.get(browserPageId)
     this.windowsByPageId.delete(browserPageId)
+    this.lastActivityByPageId.delete(browserPageId)
+    this.sleepingByPageId.delete(browserPageId)
     this.browserManager.unregisterGuest(browserPageId)
     try {
       if (win) {
@@ -139,8 +165,129 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     return win && !win.isDestroyed() ? win.webContents.id : null
   }
 
+  /** True while the page's window is torn down but its id is restorable. */
+  isPageSleeping(browserPageId: string): boolean {
+    return this.sleepingByPageId.has(browserPageId)
+  }
+
+  /** Marks the page recently used so the idle sweep leaves it alone. */
+  touchPage(browserPageId: string): void {
+    if (this.windowsByPageId.has(browserPageId)) {
+      this.lastActivityByPageId.set(browserPageId, Date.now())
+    }
+  }
+
+  /**
+   * Starts the periodic idle sweep. Explicit rather than createTab-driven so a
+   * backend used without serve (tests, desktop) never arms a timer.
+   */
+  startIdleSweeper(): void {
+    this.sweeper.start()
+  }
+
+  getSleepingPage(browserPageId: string): SleepingOffscreenPage | undefined {
+    return this.sleepingByPageId.get(browserPageId)
+  }
+
+  listSleepingPageIds(): string[] {
+    return [...this.sleepingByPageId.keys()]
+  }
+
+  /** Live offscreen pages for the idle sweeper; sleeping pages have no window so are absent. */
+  listPageInventory(): Map<string, OffscreenPageInventoryEntry> {
+    const inventory = new Map<string, OffscreenPageInventoryEntry>()
+    for (const [pageId, win] of this.windowsByPageId) {
+      if (win.isDestroyed()) {
+        continue
+      }
+      inventory.set(pageId, {
+        webContentsId: win.webContents.id,
+        url: win.webContents.getURL?.() ?? '',
+        lastActivityAt: this.lastActivityByPageId.get(pageId) ?? 0,
+        hasActiveLease: this.browserManager.isPaintLeaseHeld(win.webContents.id)
+      })
+    }
+    return inventory
+  }
+
+  async sleepPage(browserPageId: string): Promise<void> {
+    const win = this.windowsByPageId.get(browserPageId)
+    if (!win || win.isDestroyed() || this.sleepingByPageId.has(browserPageId)) {
+      return
+    }
+    const wc = win.webContents
+    let url = ''
+    try {
+      // Why navigationHistory over getURL(): keeps the tab's back stack across the sleep.
+      const entries = wc.navigationHistory?.getAllEntries?.() ?? []
+      if (entries.length > 0) {
+        const activeIndex = wc.navigationHistory.getActiveIndex()
+        url = entries[activeIndex]?.url ?? entries[0]?.url ?? ''
+        this.sleepingHistoryByPageId.set(browserPageId, { entries, activeIndex })
+      }
+    } catch {
+      // getURL fallback below
+    }
+    if (!url) {
+      url = wc.getURL?.() ?? ''
+    }
+    const registrationWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
+    const profileId = this.browserManager.getSessionProfileIdForTab(browserPageId) ?? undefined
+    this.sleepingByPageId.set(browserPageId, {
+      url: url || 'about:blank',
+      ...(registrationWorktreeId !== undefined ? { worktreeId: registrationWorktreeId } : {}),
+      ...(profileId ? { profileId } : {}),
+      sleptAt: Date.now()
+    })
+    // Close without consuming the sleeping record: a window death mid-sleep must not
+    // drop the restore params, but the guest registration has to go with the window.
+    this.windowsByPageId.delete(browserPageId)
+    this.lastActivityByPageId.delete(browserPageId)
+    this.browserManager.unregisterGuest(browserPageId)
+    try {
+      await this.retirePageOwner(browserPageId)
+    } finally {
+      win.destroy()
+    }
+  }
+
+  /** Recreates a sleeping page's window in place; returns false when the id was not sleeping. */
+  async wakePage(browserPageId: string): Promise<boolean> {
+    const sleeping = this.sleepingByPageId.get(browserPageId)
+    if (!sleeping) {
+      return false
+    }
+    if (this.shutdownStarted) {
+      throw new Error('Offscreen browser backend is shutting down')
+    }
+    await this.createTab({
+      browserPageId,
+      url: sleeping.url,
+      worktreeId: sleeping.worktreeId,
+      profileId: sleeping.profileId
+    })
+    const win = this.windowsByPageId.get(browserPageId)
+    if (!win || win.isDestroyed()) {
+      return true
+    }
+    try {
+      const sourceEntries = this.sleepingHistoryByPageId.get(browserPageId)
+      if (sourceEntries && sourceEntries.entries.length > 0) {
+        await win.webContents.navigationHistory.restore({
+          entries: sourceEntries.entries,
+          index: sourceEntries.activeIndex
+        })
+      }
+    } catch {
+      // createTab already loaded lastUrl; restore is best-effort.
+    }
+    this.sleepingHistoryByPageId.delete(browserPageId)
+    return true
+  }
+
   async destroyAll(): Promise<void> {
     this.shutdownStarted = true
+    this.sweeper.stop()
     const pageIds = [...this.windowsByPageId.keys()]
     await mapSettledWithConcurrency(pageIds, OWNER_RETIREMENT_CONCURRENCY, (pageId) =>
       this.closeTab(pageId)

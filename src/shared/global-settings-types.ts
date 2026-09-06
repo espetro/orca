@@ -301,7 +301,11 @@ export type GlobalSettings = {
   browserGuestWorktreeRetentionBudget?: boolean
   /** Serve browser pages: 'auto' hides offscreen windows until a consumer (screencast/screenshot) holds a paint lease; 'always' keeps the legacy always-paint behavior. */
   serveBrowserPaintMode?: 'auto' | 'always'
-  /** Seconds an idle serve browser page may sleep between paint leases; 0 disables idle sleep. Reserved for a later phase. */
+  /**
+   * Seconds an idle serve browser page may sleep before its offscreen window is destroyed to
+   * reclaim memory (recreated on next access, same as mobile tab eviction: in-page JS state
+   * like WebSockets and timers is lost); 0 disables idle sleep.
+   */
   serveBrowserIdleSleepSeconds?: number
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
