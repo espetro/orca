@@ -23,10 +23,12 @@ import {
   removeAgentStatusByTabPrefixAction,
   clearTransientAgentStatusesAction,
   dropAgentStatusAction,
-  dropAgentStatusByTabPrefixAction,
+  dropAgentStatusByTabPrefixAction
+} from './agent-status-drop-actions'
+import {
   dropHibernatedAgentStatusPaneAction,
   dropAgentStatusByWorktreeAction
-} from './agent-status-drop-actions'
+} from './agent-status-worktree-drop-actions'
 import {
   retainAgentsAction,
   dismissRetainedAgentAction,
