@@ -16,7 +16,6 @@ describe('deriveHostMemoryBudget', () => {
     expect(budget4.parcelWatcherMaxOldSpaceMb).toBe(96)
     expect(budget4.disableGpuMemoryBufferVideoFrames).toBe(true)
     expect(budget4.purgeAndSuspendGpu).toBe(true)
-    expect(budget4.maxRetainedHiddenWebglContexts).toBe(0)
     expect(budget4.enableLowEndDeviceMode).toBe(true)
     expect(budget4.rendererProcessLimit).toBe(2)
 
@@ -42,7 +41,6 @@ describe('deriveHostMemoryBudget', () => {
     expect(budget12.parcelWatcherMaxOldSpaceMb).toBe(160)
     expect(budget12.disableGpuMemoryBufferVideoFrames).toBe(false)
     expect(budget12.purgeAndSuspendGpu).toBe(false)
-    expect(budget12.maxRetainedHiddenWebglContexts).toBe(2)
     expect(budget12.enableLowEndDeviceMode).toBe(false)
     expect(budget12.rendererProcessLimit).toBeNull()
 
@@ -66,7 +64,6 @@ describe('deriveHostMemoryBudget', () => {
     expect(budget24.parcelWatcherMaxOldSpaceMb).toBe(256)
     expect(budget24.disableGpuMemoryBufferVideoFrames).toBe(false)
     expect(budget24.purgeAndSuspendGpu).toBe(false)
-    expect(budget24.maxRetainedHiddenWebglContexts).toBe(6)
     expect(budget24.enableLowEndDeviceMode).toBe(false)
     expect(budget24.rendererProcessLimit).toBeNull()
 

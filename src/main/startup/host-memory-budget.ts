@@ -13,7 +13,6 @@ export type HostMemoryBudget = {
   parcelWatcherMaxOldSpaceMb: number
   disableGpuMemoryBufferVideoFrames: boolean
   purgeAndSuspendGpu: boolean
-  maxRetainedHiddenWebglContexts: number
   enableLowEndDeviceMode: boolean
   rendererProcessLimit: number | null
 }
@@ -36,7 +35,6 @@ export function deriveHostMemoryBudget(totalBytes: number = totalmem()): HostMem
       parcelWatcherMaxOldSpaceMb: 96,
       disableGpuMemoryBufferVideoFrames: true,
       purgeAndSuspendGpu: true,
-      maxRetainedHiddenWebglContexts: 0,
       enableLowEndDeviceMode: true,
       rendererProcessLimit: 2
     }
@@ -54,7 +52,6 @@ export function deriveHostMemoryBudget(totalBytes: number = totalmem()): HostMem
       parcelWatcherMaxOldSpaceMb: 160,
       disableGpuMemoryBufferVideoFrames: false,
       purgeAndSuspendGpu: false,
-      maxRetainedHiddenWebglContexts: 2,
       enableLowEndDeviceMode: false,
       rendererProcessLimit: null
     }
@@ -71,7 +68,6 @@ export function deriveHostMemoryBudget(totalBytes: number = totalmem()): HostMem
     parcelWatcherMaxOldSpaceMb: 256,
     disableGpuMemoryBufferVideoFrames: false,
     purgeAndSuspendGpu: false,
-    maxRetainedHiddenWebglContexts: 6,
     enableLowEndDeviceMode: false,
     rendererProcessLimit: null
   }

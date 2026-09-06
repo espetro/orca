@@ -294,7 +294,8 @@ export function installDevParentSignalQuit(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(
-  budget: HostMemoryBudget = deriveHostMemoryBudget()
+  budget: HostMemoryBudget = deriveHostMemoryBudget(),
+  options: { isServeMode?: boolean } = {}
 ): void {
   if (
     process.env.ORCA_DISABLE_GPU === '1' ||
@@ -358,10 +359,20 @@ export function enableMainProcessGpuFeatures(
     new Set([
       ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
       ...(budget.purgeAndSuspendGpu ? ['PurgeAndSuspend'] : []),
+      ...(options.isServeMode ? ['PurgeAndSuspend'] : []),
       ...existingFeatures
     ])
   ).join(',')
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
+  }
+
+  if (options.isServeMode) {
+    // Why: bounds the GPU-process cache pressure that grows with hidden offscreen browser tabs; env override for experiments.
+    const gpuMemMb = Number.parseInt(process.env.ORCA_GPU_MEM_AVAILABLE_MB ?? '', 10)
+    app.commandLine.appendSwitch(
+      'force-gpu-mem-available-mb',
+      String(Number.isFinite(gpuMemMb) && gpuMemMb > 0 ? gpuMemMb : 512)
+    )
   }
 }

@@ -34,8 +34,7 @@ vi.mock('./host-memory-budget', () => ({
     pluginHostMaxOldSpaceMb: 256,
     parcelWatcherMaxOldSpaceMb: 160,
     disableGpuMemoryBufferVideoFrames: false,
-    purgeAndSuspendGpu: false,
-    maxRetainedHiddenWebglContexts: 2
+    purgeAndSuspendGpu: false
   }))
 }))
 
@@ -542,6 +541,7 @@ describe('enableMainProcessGpuFeatures', () => {
     } else {
       process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
     }
+    delete process.env.ORCA_GPU_MEM_AVAILABLE_MB
   })
 
   it('appends VS Code-style GPU channel flags without unsafe WebGPU/Vulkan opt-ins', async () => {
@@ -557,6 +557,55 @@ describe('enableMainProcessGpuFeatures', () => {
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
     )
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
+  })
+
+  it('serve mode caps GPU memory and forces PurgeAndSuspend', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures(undefined, { isServeMode: true })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('force-gpu-mem-available-mb', '512')
+    const enableFeatures = vi
+      .mocked(app.commandLine.appendSwitch)
+      .mock.calls.filter(([flag]) => flag === 'enable-features')
+      .map(([, value]) => value as string)
+      .join(',')
+    expect(enableFeatures).toContain('PurgeAndSuspend')
+  })
+
+  it('serve mode honours ORCA_GPU_MEM_AVAILABLE_MB override', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    process.env.ORCA_GPU_MEM_AVAILABLE_MB = '1024'
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures(undefined, { isServeMode: true })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('force-gpu-mem-available-mb', '1024')
+  })
+
+  it('desktop mode leaves serve GPU caps off', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures(undefined, { isServeMode: false })
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'force-gpu-mem-available-mb',
+      expect.any(String)
+    )
+    const enableFeatures = vi
+      .mocked(app.commandLine.appendSwitch)
+      .mock.calls.filter(([flag]) => flag === 'enable-features')
+      .map(([, value]) => value as string)
+      .join(',')
+    expect(enableFeatures).not.toContain('PurgeAndSuspend')
   })
 
   it('raises the WebGL context budget above the 16-context Blink default', async () => {
@@ -809,7 +858,6 @@ describe('enableMainProcessGpuFeatures', () => {
       parcelWatcherMaxOldSpaceMb: 96,
       disableGpuMemoryBufferVideoFrames: true,
       purgeAndSuspendGpu: true,
-      maxRetainedHiddenWebglContexts: 0,
       enableLowEndDeviceMode: true,
       rendererProcessLimit: 2
     })

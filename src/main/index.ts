@@ -890,7 +890,7 @@ if (hasSingleInstanceLock) {
   enableRendererHeapHeadroom()
   gpuFallbackLaunch.maybeApplyGpuFallbackForThisLaunch()
   if (!gpuFallbackLaunch.isGpuFallbackActiveThisLaunch()) {
-    enableMainProcessGpuFeatures()
+    enableMainProcessGpuFeatures(undefined, { isServeMode })
   }
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
   headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({ isServeMode })
