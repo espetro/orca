@@ -94,7 +94,9 @@ describe('browser link routing modifier copy', () => {
       'Localhost Worktree Labels',
       'Session & Cookies',
       'Remote server workspaces',
-      'SSH workspaces'
+      'SSH workspaces',
+      'Server Browser Memory: Server tab rendering',
+      'Server Browser Memory: Sleep idle server browser tabs'
     ])
   })
 

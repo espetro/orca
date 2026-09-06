@@ -283,6 +283,45 @@ export function getBrowserPaneSearchEntries(
           'network'
         )
       ]
+    },
+    // Appended, not inserted: BrowserPane selects these entries by index.
+    {
+      title: translate(
+        'settings.browser.serverMemory.search.paintTitle',
+        'Server Browser Memory: Server tab rendering'
+      ),
+      description: translate(
+        'settings.browser.serverMemory.search.paintDescription',
+        'Applies to `orca serve`. Controls whether headless server browser tabs paint immediately or stay invisible until first shown.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.server', 'server'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.memory', 'memory'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.render', 'render'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.paint', 'paint'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.gpu', 'gpu'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.serve', 'serve')
+      ]
+    },
+    {
+      title: translate(
+        'settings.browser.serverMemory.search.idleSleepTitle',
+        'Server Browser Memory: Sleep idle server browser tabs'
+      ),
+      description: translate(
+        'settings.browser.serverMemory.search.idleSleepDescription',
+        'Applies to `orca serve`. Puts server browser tabs to sleep after a period of inactivity to free memory.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.server', 'server'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.memory', 'memory'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.sleep', 'sleep'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.idle', 'idle'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.suspend', 'suspend'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.serverMemory.serve', 'serve')
+      ]
     }
   ]
 }

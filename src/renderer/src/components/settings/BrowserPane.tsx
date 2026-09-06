@@ -16,6 +16,7 @@ import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsS
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
+import { ServerBrowserMemorySection } from './ServerBrowserMemorySection'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
@@ -120,6 +121,8 @@ export function BrowserPane({
     getBrowserPaneSearchEntries()[9]
   ])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
+  const showServerPaintMode = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[10]])
+  const showServerIdleSleep = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[11]])
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
     { isMac },
@@ -300,6 +303,13 @@ export function BrowserPane({
       {showSshWorkspaceRouting ? (
         <BrowserSshWorkspaceRoutingSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
+
+      <ServerBrowserMemorySection
+        settings={settings}
+        updateSettings={updateSettings}
+        showPaintMode={showServerPaintMode}
+        showIdleSleep={showServerIdleSleep}
+      />
 
       {showCookies ? (
         <BrowserSessionCookiesSection
