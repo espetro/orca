@@ -39,7 +39,6 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
@@ -165,7 +164,6 @@ import {
   MOBILE_AUTO_RESTORE_FIT_MAX_MS,
   MOBILE_AUTO_RESTORE_FIT_MIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS,
-  TUI_IDLE_DEFAULT_TIMEOUT_MS,
   agentTitleProvesAgentPresence,
   applyRestoredTerminalTailSeed,
   assertTerminalInputWithinLimitWithYield,
@@ -179,8 +177,6 @@ import {
   buildVisibleSnapshotReadFallback,
   classifyAgentTitle,
   computeTerminalTailWaitState,
-  detectExplicitIdleStatusFromTitle,
-  detectTerminalWaitBlockedReason,
   expandTerminalInteractiveWait,
   getLatestLeafTitle,
   getTerminalState,
@@ -226,6 +222,11 @@ import {
   resolveTerminalSplitSourceAuthority,
   startPtyTuiIdleFallbackPoll
 } from './runtime-terminal-focus-commands'
+import {
+  waitForMessage,
+  waitForNewLeafInTab,
+  waitForTerminal
+} from './runtime-terminal-wait-commands'
 import {
   adoptTerminalOrphansFromInventory,
   createTerminal
@@ -4897,49 +4898,7 @@ export class RuntimeTerminalCluster {
       exclusive?: boolean
     }
   ): Promise<MessageWaitResult> {
-    return new Promise((resolve) => {
-      const currentWaiters = this.deps.messageWaitersByHandle().get(handle)
-      if (options?.exclusive && currentWaiters && currentWaiters.size > 0) {
-        resolve('waiter_exists')
-        return
-      }
-      const timeoutMs = options?.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS
-
-      const waiter: MessageWaiter = {
-        handle,
-        typeFilter: options?.typeFilter,
-        resolve,
-        timeout: null,
-        abortCleanup: null
-      }
-
-      // Why: on caller abort (RPC socket closed — design doc §3.1), resolve now to release the long-poll slot instead of waiting out timeoutMs.
-      const signal = options?.signal
-      const onAbort = (): void => {
-        this.removeMessageWaiter(waiter)
-        resolve('cancelled')
-      }
-      if (signal) {
-        if (signal.aborted) {
-          resolve('cancelled')
-          return
-        }
-        waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
-        signal.addEventListener('abort', onAbort, { once: true })
-      }
-
-      waiter.timeout = setTimeout(() => {
-        this.removeMessageWaiter(waiter)
-        resolve('timed_out')
-      }, timeoutMs)
-
-      let waiters = this.deps.messageWaitersByHandle().get(handle)
-      if (!waiters) {
-        waiters = new Set()
-        this.deps.messageWaitersByHandle().set(handle, waiters)
-      }
-      waiters.add(waiter)
-    })
+    return waitForMessage(this, handle, options)
   }
 
   waitForNewLeafInTab(
@@ -4947,43 +4906,18 @@ export class RuntimeTerminalCluster {
     existingLeafKeys: Set<string>,
     timeoutMs = 10_000
   ): Promise<string> {
-    const tryResolve = (): string | null => {
-      for (const [key, leaf] of this.deps.leaves()) {
-        if (leaf.tabId === tabId && !existingLeafKeys.has(key) && leaf.ptyId !== null) {
-          return this.issueHandle(leaf)
-        }
-      }
-      return null
+    return waitForNewLeafInTab(this, tabId, existingLeafKeys, timeoutMs)
+  }
+
+  async waitForTerminal(
+    handle: string,
+    options?: {
+      condition?: RuntimeTerminalWaitCondition
+      timeoutMs?: number
+      signal?: AbortSignal
     }
-
-    const existing = tryResolve()
-    if (existing) {
-      return Promise.resolve(existing)
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const idx = this.deps.graphSyncCallbacks().indexOf(check)
-        if (idx !== -1) {
-          this.deps.graphSyncCallbacks().splice(idx, 1)
-        }
-        reject(new Error('Timed out waiting for split pane handle'))
-      }, timeoutMs)
-
-      const check = (): void => {
-        const handle = tryResolve()
-        if (handle) {
-          clearTimeout(timer)
-          const idx = this.deps.graphSyncCallbacks().indexOf(check)
-          if (idx !== -1) {
-            this.deps.graphSyncCallbacks().splice(idx, 1)
-          }
-          resolve(handle)
-        }
-      }
-      this.deps.graphSyncCallbacks().push(check)
-      check()
-    })
+  ): Promise<RuntimeTerminalWait> {
+    return waitForTerminal(this, handle, options)
   }
 
   waitForRendererTerminalSerializer(
@@ -4998,220 +4932,6 @@ export class RuntimeTerminalCluster {
         ?.waitForRendererSerializer?.(ptyId, afterGeneration, timeoutMs, signal) ??
       Promise.resolve(false)
     )
-  }
-
-  async waitForTerminal(
-    handle: string,
-    options?: {
-      condition?: RuntimeTerminalWaitCondition
-      timeoutMs?: number
-      signal?: AbortSignal
-    }
-  ): Promise<RuntimeTerminalWait> {
-    const condition = options?.condition ?? 'exit'
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (condition === 'exit' && !pty.pty.connected) {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
-      }
-      const ptyWaitText = buildTerminalWaitText(
-        pty.pty.tailBuffer,
-        pty.pty.tailPartialLine,
-        pty.pty.preview
-      )
-      const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
-      if (condition === 'tui-idle' && ptyBlockedReason) {
-        return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
-      }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
-      }
-      if (
-        condition === 'tui-idle' &&
-        (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText))
-      ) {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
-      }
-      return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
-        const effectiveTimeoutMs =
-          typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
-            ? options.timeoutMs
-            : condition === 'tui-idle'
-              ? TUI_IDLE_DEFAULT_TIMEOUT_MS
-              : 0
-        const waiter: TerminalWaiter = {
-          handle,
-          condition,
-          resolve,
-          reject,
-          timeout: null,
-          pollInterval: null,
-          abortCleanup: null
-        }
-        if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
-          reject(new Error('request_aborted'))
-          return
-        }
-        if (effectiveTimeoutMs > 0) {
-          waiter.timeout = setTimeout(() => {
-            this.removeWaiter(waiter)
-            reject(new Error('timeout'))
-          }, effectiveTimeoutMs)
-        }
-        let waiters = this.deps.waitersByHandle().get(handle)
-        if (!waiters) {
-          waiters = new Set()
-          this.deps.waitersByHandle().set(handle, waiters)
-        }
-        waiters.add(waiter)
-        const live = this.getLivePtyForHandle(handle)
-        if (!live) {
-          this.removeWaiter(waiter)
-          reject(new Error('terminal_handle_stale'))
-        } else if (condition === 'exit' && !live.pty.connected) {
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-        } else if (condition === 'tui-idle') {
-          const livePtyWaitText = buildTerminalWaitText(
-            live.pty.tailBuffer,
-            live.pty.tailPartialLine,
-            live.pty.preview
-          )
-          const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
-          if (blockedReason) {
-            this.resolveWaiter(
-              waiter,
-              buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
-            )
-          } else if (live.pty.lastAgentStatus === 'idle') {
-            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-          } else if (
-            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
-          ) {
-            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-          } else {
-            this.startPtyTuiIdleFallbackPoll(waiter, live.pty, effectiveTimeoutMs)
-          }
-        }
-      })
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
-
-    if (condition === 'exit' && getTerminalState(leaf) === 'exited') {
-      return buildTerminalWaitResult(handle, condition, leaf)
-    }
-
-    const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-    const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
-    if (condition === 'tui-idle' && leafBlockedReason) {
-      return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
-    }
-
-    // Why: if the agent already transitioned to idle (or permission) before the
-    // waiter was registered, resolve immediately. This uses the same OSC title
-    // detection that powers the renderer's "Task complete" notifications.
-    // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
-    // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
-      return buildTerminalWaitResult(handle, condition, leaf)
-    }
-    if (condition === 'tui-idle') {
-      const fastPathTitle = leaf.paneTitle ?? this.deps.tabs().get(leaf.tabId)?.title
-      if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
-      ) {
-        return buildTerminalWaitResult(handle, condition, leaf)
-      }
-    }
-
-    return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
-      // Why: tui-idle depends on OSC title transitions from a recognized agent.
-      // If no agent is detected, the waiter would hang forever. Enforce a default
-      // timeout so unsupported CLIs fail predictably instead of silently blocking.
-      const effectiveTimeoutMs =
-        typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
-          ? options.timeoutMs
-          : condition === 'tui-idle'
-            ? TUI_IDLE_DEFAULT_TIMEOUT_MS
-            : 0
-
-      const waiter: TerminalWaiter = {
-        handle,
-        condition,
-        resolve,
-        reject,
-        timeout: null,
-        pollInterval: null,
-        abortCleanup: null
-      }
-
-      if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
-        reject(new Error('request_aborted'))
-        return
-      }
-
-      if (effectiveTimeoutMs > 0) {
-        waiter.timeout = setTimeout(() => {
-          this.removeWaiter(waiter)
-          reject(new Error('timeout'))
-        }, effectiveTimeoutMs)
-      }
-
-      let waiters = this.deps.waitersByHandle().get(handle)
-      if (!waiters) {
-        waiters = new Set()
-        this.deps.waitersByHandle().set(handle, waiters)
-      }
-      waiters.add(waiter)
-
-      // Why: the handle may go stale or exit in the small gap between the first
-      // validation and waiter registration. Re-checking here keeps wait --for
-      // exit honest instead of hanging on a terminal that already changed.
-      try {
-        const live = this.getLiveLeafForHandle(handle)
-        if (getTerminalState(live.leaf) === 'exited') {
-          this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-        } else if (condition === 'tui-idle') {
-          const liveLeafWaitText = buildTerminalWaitText(
-            live.leaf.tailBuffer,
-            live.leaf.tailPartialLine,
-            live.leaf.preview
-          )
-          const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
-          if (blockedReason) {
-            this.resolveWaiter(
-              waiter,
-              buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
-            )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
-            // Why: don't clear lastAgentStatus here. It's a factual record of the
-            // last detected OSC state, not a one-shot signal. Clearing it causes
-            // subsequent tui-idle waiters to hang even though the agent is idle —
-            // the first waiter consumes the status and all later ones see null.
-            this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-          } else {
-            // Why: renderer-synced previews can show a known ready prompt even
-            // while the last OSC title is still "working"; keep polling the
-            // preview/title until the waiter resolves or hits its timeout.
-            const fastPathTitle =
-              live.leaf.paneTitle ?? this.deps.tabs().get(live.leaf.tabId)?.title
-            if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
-            ) {
-              this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-            } else {
-              this.startTuiIdleFallbackPoll(waiter, live.leaf, effectiveTimeoutMs)
-            }
-          }
-        }
-      } catch (error) {
-        this.removeWaiter(waiter)
-        reject(error instanceof Error ? error : new Error(String(error)))
-      }
-    })
   }
 
   waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
