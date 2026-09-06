@@ -197,8 +197,8 @@ export function buildMobileSessionFacadeDepsImpl(
     resolveWorkspaceTerminalStartupCwd: (...args) =>
       rt['resolveWorkspaceTerminalStartupCwd'](...args),
     resolveWorktreeSelector: (...args) => rt['resolveWorktreeSelector'](...args),
-    retireMobileSessionSurfacesForPty: (...args) =>
-      rt['retireMobileSessionSurfacesForPty'](...args),
+    retireMobileSessionSurfacesForPty: (ptyId, incarnationId, exactSurfaces) =>
+      rt['retireMobileSessionSurfacesForPty'](ptyId, incarnationId, exactSurfaces),
     searchMobileFilePaths: () => rt['searchMobileFilePaths'],
     seedHeadlessTerminal: (...args) => rt['seedHeadlessTerminal'](...args),
     setDriver: (...args) => rt['setDriver'](...args),

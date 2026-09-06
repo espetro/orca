@@ -2428,6 +2428,18 @@ export class OrcaRuntimeService {
   private readonly resolvedWorktreeCache: RuntimeResolvedWorktreeCache
   private readonly disposalTree: RuntimeDisposalTree
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
+  // Why: consumed via bracket access by runtime-orchestration-federation.ts; a
+  // regression silently dropped these declarations and left every read as `any`/undefined.
+  private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
+  private orchestrationTerminalHistoryRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  private orchestrationTerminalHistoryRecoveryInFlight: Promise<void> | null = null
+  private orchestrationTerminalRecoveryRowId = 0
+  private orchestrationFederationRelayGeneration = 0
+  private readonly orchestrationFederationSyncs = new Map<
+    string,
+    { db: OrchestrationDb; promise: Promise<void> }
+  >()
+  private readonly orchestrationFederationWarnings = new Set<string>()
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
@@ -5092,6 +5104,15 @@ export class OrcaRuntimeService {
   // explicit reference list keeps noUnusedLocals honest about real runtime reads.
   private wiringReferencedHostMembers(): readonly unknown[] {
     return [
+      // Why: federation relay state is read/written via bracket access in
+      // runtime-orchestration-federation.ts, invisible to noUnusedLocals.
+      this.orchestrationFederationTimers,
+      this.orchestrationTerminalHistoryRecoveryTimer,
+      this.orchestrationTerminalHistoryRecoveryInFlight,
+      this.orchestrationTerminalRecoveryRowId,
+      this.orchestrationFederationRelayGeneration,
+      this.orchestrationFederationSyncs,
+      this.orchestrationFederationWarnings,
       this.hookAgentRowResolutionCommands,
       this.disposalTree,
       this.acceptedRendererMobileSnapshotByWorktree,
@@ -11213,6 +11234,18 @@ export class OrcaRuntimeService {
   // Delegation methods for RuntimeMobileSnapshotMergeCommands:
 
   // Delegation methods for RuntimeMobileSessionTabSnapshotCommands:
+
+  retireMobileSessionSurfacesForPty(
+    ptyId: string,
+    incarnationId: string,
+    exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
+  ): void {
+    return this.mobileTabSnapshots.retireMobileSessionSurfacesForPty(
+      ptyId,
+      incarnationId,
+      exactSurfaces
+    )
+  }
 
   touchMobileSessionSnapshotsForPty(ptyId: string, options?: { immediate?: boolean }): void {
     return this.terminalClusterFacade.touchMobileSessionSnapshotsForPty(ptyId, options)

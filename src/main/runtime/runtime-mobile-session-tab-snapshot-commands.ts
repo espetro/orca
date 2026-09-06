@@ -227,7 +227,7 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     return { accepted, unpersisted }
   }
 
-  private retireMobileSessionSurfacesForPty(
+  retireMobileSessionSurfacesForPty(
     ptyId: string,
     incarnationId: string,
     exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
