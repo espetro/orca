@@ -242,11 +242,8 @@ import { advanceTerminalTopologyRevision } from './workspace-session-terminal-me
 import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import {
-  AGENT_HOOK_RUNTIME_ENV_KEYS,
-  addListenerToMap,
-  createTerminalRevealWarning
-} from './orca-runtime'
+import { AGENT_HOOK_RUNTIME_ENV_KEYS, createTerminalRevealWarning } from './orca-runtime'
+import { addListenerToMap } from './runtime-worktree-git-shared'
 import {
   ownerSurfacing,
   resolveTerminalPresentation,

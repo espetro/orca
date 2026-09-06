@@ -1,11 +1,14 @@
 /* eslint-disable max-lines -- Why: extracted managed-worktree facade (bulk worktree cluster move); state-owner extraction can split further if it grows */
+import { omitUndefinedProperties, ownerSurfacing } from './runtime-terminal-surface-shared'
 import {
   canCheckoutExistingLocalBranch,
+  getLocalGitHubPrForBranch,
   getSelectedHostedReviewForBranch,
   hasLocalGitOptions,
-  parseExactWorktreeIdSelector
-} from './orca-runtime'
-import { omitUndefinedProperties, ownerSurfacing } from './runtime-terminal-surface-shared'
+  parseExactWorktreeIdSelector,
+  pathExists,
+  resolveCreateBranchName
+} from './runtime-worktree-git-shared'
 import type { RuntimeMobileSessionTabSnapshotCommands } from './runtime-mobile-session-tab-snapshot-commands'
 import type { RuntimeMobileSnapshotValueComparisonCommands } from './runtime-mobile-snapshot-value-comparison-commands'
 import type { RuntimeHookAgentRowResolutionCommands } from './runtime-hook-agent-row-resolution-commands'
@@ -16,11 +19,8 @@ import {
   WORKTREE_CREATE_RESULT_TTL_MS,
   WorktreeIdRequiresFullPathError,
   extractOrchestrationTaskId,
-  getLocalGitHubPrForBranch,
   getSetupRunnerCommandPlatformForLaunch,
-  hasLocalWorktreeBaseRef,
-  pathExists,
-  resolveCreateBranchName
+  hasLocalWorktreeBaseRef
 } from './orca-runtime'
 import type {
   OrchestrationCompatibilityTerminalAuthority,

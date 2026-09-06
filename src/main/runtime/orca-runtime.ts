@@ -132,7 +132,6 @@ import { gitExecFileAsync } from '../git/runner'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
 import { createHash, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { stat } from 'node:fs/promises'
 
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
@@ -216,7 +215,6 @@ import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-t
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 
-import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { hasHostAuthoritativeTerminalMembership } from './workspace-session-terminal-membership-authority'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
@@ -345,6 +343,7 @@ import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-sca
 
 import { RuntimeFileCommands } from './orca-runtime-files'
 import type { AgentSessionCreateOperation } from './agent-session-terminal-operations'
+import { addListenerToMap, clampTerminalViewport } from './runtime-worktree-git-shared'
 import { RuntimeStartupDraftCommands } from './runtime-startup-draft-commands'
 import { RuntimeWorkspaceSessionHydrationCommands } from './runtime-workspace-session-hydration-commands'
 import { callOrchestrationWorkerServerViaTransport } from './orchestration/call-worker-server-via-transport'
@@ -446,13 +445,8 @@ import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 
-import { listWorktrees } from '../git/worktree'
-import { isENOENT } from '../ipc/filesystem-path-containment'
-
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
-import { computeValidatedBranchName } from '../ipc/worktree-logic'
-import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
 
 import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
@@ -494,11 +488,6 @@ import {
 } from './mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from './terminal-focus-navigation-coalescer'
 import { nativeChatTranscriptIncludesPath } from '../native-chat/native-chat-file-provenance'
-import {
-  getSelectedReviewBranch,
-  getSelectedReviewLookupHints,
-  type SelectedReviewBranchInput
-} from './selected-review-branch'
 import {
   getRuntimeFolderWorkspaceRootId,
   isRuntimeFolderWorkspaceIdForRepo,
@@ -1479,176 +1468,6 @@ function listRuntimeFolderWorkspaces(
       hostId: repoOwnerCount === 1 ? (meta.hostId ?? expectedHostId) : expectedHostId
     }
   })
-}
-
-export function parseExactWorktreeIdSelector(
-  selector: string
-): RuntimeWorktreeRemovalTarget | null {
-  const worktreeId = selector.startsWith('id:') ? selector.slice(3) : selector
-  const parsed = splitWorktreeId(worktreeId)
-  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
-    return null
-  }
-  return {
-    id: worktreeId,
-    repoId: parsed.repoId,
-    path: parsed.worktreePath
-  }
-}
-
-export async function resolveCreateBranchName(
-  repoPath: string,
-  branchNameOverride: string | undefined,
-  sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
-  username: string | null,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<string> {
-  if (!branchNameOverride) {
-    // The runtime store's getSettings() types branchPrefix loosely as string;
-    // it is always one of the BranchPrefixStrategy literals at runtime.
-    return computeValidatedBranchName(
-      sanitizedName,
-      { ...settings, branchPrefix: settings.branchPrefix as BranchPrefixStrategy },
-      username
-    )
-  }
-  if (branchNameOverride.startsWith('-')) {
-    throw new Error('Branch name must not start with "-"')
-  }
-  await gitExecFileAsync(['check-ref-format', '--branch', branchNameOverride], {
-    cwd: repoPath,
-    ...gitOptions
-  })
-  return branchNameOverride
-}
-
-function normalizeLocalBranchName(branchName: string | undefined): string {
-  return branchName?.replace(/^refs\/heads\//, '') ?? ''
-}
-
-// Clamp terminal dimensions to the PTY's supported range (cols 20–240, rows 8–120).
-export function clampTerminalViewport(cols: number, rows: number): { cols: number; rows: number } {
-  return {
-    cols: Math.max(20, Math.min(240, Math.round(cols))),
-    rows: Math.max(8, Math.min(120, Math.round(rows)))
-  }
-}
-
-// Subscribe a listener to a per-key Set, pruning the key's entry once its last
-// listener unsubscribes. Returns the unsubscribe callback.
-export function addListenerToMap<T>(
-  map: Map<string, Set<T>>,
-  key: string,
-  listener: T
-): () => void {
-  let listeners = map.get(key)
-  if (!listeners) {
-    listeners = new Set<T>()
-    map.set(key, listeners)
-  }
-  const set = listeners
-  set.add(listener)
-  return () => {
-    set.delete(listener)
-    if (set.size === 0) {
-      map.delete(key)
-    }
-  }
-}
-
-export async function canCheckoutExistingLocalBranch(
-  repoPath: string,
-  branchName: string,
-  baseBranch: string,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  let localHead = ''
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
-      {
-        cwd: repoPath,
-        ...gitOptions
-      }
-    )
-    localHead = stdout.trim()
-  } catch {
-    return false
-  }
-  if (normalizeLocalBranchName(baseBranch) !== branchName) {
-    if (!localHead) {
-      return false
-    }
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', '--quiet', `${baseBranch}^{commit}`],
-        { cwd: repoPath, ...gitOptions }
-      )
-      if (stdout.trim() !== localHead) {
-        return false
-      }
-    } catch {
-      return false
-    }
-  }
-  const worktrees = await listWorktrees(repoPath, gitOptions)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
-}
-
-export function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
-  return Object.keys(gitOptions).length > 0
-}
-
-export function getLocalGitHubPrForBranch(
-  repoPath: string,
-  branchName: string,
-  gitOptions: { wslDistro?: string }
-): ReturnType<typeof getPRForBranch> {
-  return hasLocalGitOptions(gitOptions)
-    ? getPRForBranch(repoPath, branchName, null, null, null, {
-        localGitExecOptions: gitOptions
-      })
-    : getPRForBranch(repoPath, branchName)
-}
-
-export async function getSelectedHostedReviewForBranch(
-  repo: Pick<Repo, 'path' | 'connectionId'>,
-  branchName: string,
-  args: SelectedReviewBranchInput,
-  executionOptions: { localGitExecOptions?: { wslDistro?: string } } = {}
-): Promise<{ matchesSelected: boolean; number: number } | null> {
-  const selectedReview = getSelectedReviewBranch(args)
-  if (!selectedReview) {
-    return null
-  }
-  const review = await getHostedReviewForBranchFromRepo({
-    repoPath: repo.path,
-    connectionId: repo.connectionId ?? null,
-    branch: branchName,
-    ...executionOptions,
-    ...getSelectedReviewLookupHints(args)
-  })
-  if (!review) {
-    return null
-  }
-  return {
-    matchesSelected:
-      review.provider === selectedReview.provider && review.number === selectedReview.number,
-    number: review.number
-  }
-}
-
-export async function pathExists(pathValue: string): Promise<boolean> {
-  try {
-    await stat(pathValue)
-    return true
-  } catch (error) {
-    if (isENOENT(error)) {
-      return false
-    }
-    throw error
-  }
 }
 
 export type ResolvedWorktree = Worktree & {

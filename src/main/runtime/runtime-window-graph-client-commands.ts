@@ -36,9 +36,9 @@ import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
+import { clampTerminalViewport } from './runtime-worktree-git-shared'
 import {
   WORKTREE_CREATE_RESULT_TTL_MS,
-  clampTerminalViewport,
   type ApplyLayoutResult,
   type DriverState,
   type PtyIncarnationHandleRecord,

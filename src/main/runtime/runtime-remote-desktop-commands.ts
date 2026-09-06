@@ -1,5 +1,5 @@
 import type { RuntimeTerminalCluster } from './runtime-terminal-cluster-facade'
-import { clampTerminalViewport } from './orca-runtime'
+import { clampTerminalViewport } from './runtime-worktree-git-shared'
 
 export type RuntimeRemoteDesktopCommandsDeps = {
   terminalClusterFacade: () => RuntimeTerminalCluster
