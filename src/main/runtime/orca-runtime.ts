@@ -219,6 +219,7 @@ import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { hasHostAuthoritativeTerminalMembership } from './workspace-session-terminal-membership-authority'
@@ -347,28 +348,17 @@ import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TerminalQuickCommandMutation } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
-import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
 import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import {
-  getTuiAgentLaunchCommand,
-  isTuiAgent,
-  TUI_AGENT_CONFIG
-} from '../../shared/tui-agent-config'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
-import {
-  detectInstalledAgentsWithShellPathHydration,
-  detectRemoteAgents
-} from '../preflight/agent-detection'
+
 import { RuntimeFileCommands } from './orca-runtime-files'
+import { RuntimeStartupDraftCommands } from './runtime-startup-draft-commands'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -3108,6 +3098,10 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.startupDraftCommands = new RuntimeStartupDraftCommands({
+      store: this.store,
+      getAgentLaunchPlatformForRepo: (repo) => this.getAgentLaunchPlatformForRepo(repo)
+    })
     this.workspaceFileTargetCommands = new RuntimeWorkspaceFileTargetCommands({
       store: this.store,
       listResolvedWorktrees: () => this.listResolvedWorktrees(),
@@ -8848,110 +8842,14 @@ export class OrcaRuntimeService {
     return this.managedWorktrees.activateManagedWorktree(worktreeSelector, opts)
   }
 
-  private async buildStartupForDraft(
+  private buildStartupForDraft = (
     repo: Repo,
     draft: string,
     requestedAgent?: TuiAgent
-  ): Promise<{
-    agent: TuiAgent
-    startup: WorktreeStartupLaunch
-    draftPaste?: WorktreeStartupDraftPaste
-  } | null> {
-    if (!this.store) {
-      return null
-    }
-    const content = draft.trim()
-    if (!content) {
-      return null
-    }
-    const settings = this.store.getSettings()
-    const preferredAgent = requestedAgent ?? settings.defaultTuiAgent
-    if (preferredAgent === 'blank') {
-      // Why: `blank` is an explicit user preference to create a shell-only
-      // workspace, so linked task drafts must not auto-pick a detected agent.
-      return null
-    }
-    let agent =
-      isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)
-        ? preferredAgent
-        : null
-    if (!agent) {
-      let detected: string[] = []
-      try {
-        // Why: startup-draft fallback can run from sparse runtime launch envs too.
-        detected = repo.connectionId
-          ? await detectRemoteAgents({ connectionId: repo.connectionId })
-          : await detectInstalledAgentsWithShellPathHydration()
-      } catch {
-        detected = []
-      }
-      const typedDetected = detected.filter(isTuiAgent)
-      agent = pickTuiAgent(null, typedDetected, settings.disabledTuiAgents)
-    }
-    if (!agent) {
-      return null
-    }
+  ): ReturnType<RuntimeStartupDraftCommands['buildStartupForDraft']> =>
+    this.startupDraftCommands.buildStartupForDraft(repo, draft, requestedAgent)
 
-    // Why: a mobile client can run on Windows while the workspace shell is
-    // Linux over SSH. Startup command quoting must target the shell that runs it.
-    const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
-    const isRemote = repoIsRemote(repo)
-    const queuedShell = resolveLocalWindowsAgentStartupShell({
-      platform: agentLaunchPlatform,
-      isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    const draftLaunchPlan = buildAgentDraftLaunchPlan({
-      agent,
-      draft: content,
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-      platform: agentLaunchPlatform,
-      shell: queuedShell,
-      isRemote
-    })
-    if (draftLaunchPlan) {
-      return {
-        agent,
-        startup: {
-          command: draftLaunchPlan.launchCommand,
-          launchConfig: draftLaunchPlan.launchConfig,
-          ...(draftLaunchPlan.startupCommandDelivery
-            ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-            : {}),
-          ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-        }
-      }
-    }
-
-    const startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: '',
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-      platform: agentLaunchPlatform,
-      shell: queuedShell,
-      isRemote,
-      allowEmptyPromptLaunch: true
-    })
-    if (!startupPlan) {
-      return null
-    }
-    return {
-      agent,
-      startup: {
-        command: startupPlan.launchCommand,
-        launchConfig: startupPlan.launchConfig,
-        ...(startupPlan.startupCommandDelivery
-          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-          : {}),
-        ...(startupPlan.env ? { env: startupPlan.env } : {})
-      },
-      draftPaste: { agent, content }
-    }
-  }
+  private readonly startupDraftCommands: RuntimeStartupDraftCommands
 
   private buildStartupForAgent(
     repo: Repo,
