@@ -243,6 +243,13 @@ import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS, createTerminalRevealWarning } from './orca-runtime'
+import {
+  applyLayout,
+  applyRemoteDesktopLayout,
+  enqueueLayout,
+  runLayoutSlot
+} from './runtime-terminal-layout-commands'
+import type { RuntimeTerminalLayoutCtx } from './runtime-terminal-layout-commands'
 import { addListenerToMap } from './runtime-worktree-git-shared'
 import {
   ownerSurfacing,
@@ -641,6 +648,21 @@ export class RuntimeTerminalCluster {
 
   constructor(deps: RuntimeTerminalClusterDeps) {
     this.deps = deps
+  }
+
+  private layoutCtx(): RuntimeTerminalLayoutCtx {
+    return {
+      deps: this.deps,
+      applyLayout,
+      enqueueLayout,
+      runLayoutSlot,
+      getDriver: (ptyId) => this.getDriver(ptyId),
+      getTerminalSize: (ptyId) => this.getTerminalSize(ptyId),
+      resizeHeadlessTerminal: (ptyId, cols, rows) => this.resizeHeadlessTerminal(ptyId, cols, rows),
+      notifyFitOverrideListeners: (ptyId, mode, cols, rows) =>
+        this.notifyFitOverrideListeners(ptyId, mode, cols, rows),
+      notifyTerminalResize: (ptyId, event) => this.notifyTerminalResize(ptyId, event)
+    }
   }
 
   async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
@@ -1163,168 +1185,15 @@ export class RuntimeTerminalCluster {
   }
 
   async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
-    // Why: re-check pty-exit at the head of the slot — the queue may have
-    // accepted this target before onPtyExit ran.
-    if (!this.deps.layouts().has(ptyId) && !this.deps.isFreshSubscribe(ptyId)) {
-      return { ok: false, reason: 'pty-exited' }
-    }
+    return applyLayout(this.layoutCtx(), ptyId, target)
+  }
 
-    const prev = this.deps.layouts().get(ptyId) ?? null
-    const seq = (prev?.seq ?? 0) + 1
-    const next: PtyLayoutState = { ...target, seq, appliedAt: Date.now() }
-
-    const currentSize = this.getTerminalSize(ptyId)
-    const dimsChanged = currentSize?.cols !== target.cols || currentSize?.rows !== target.rows
-    const modeChanged = (prev?.kind ?? 'desktop') !== target.kind
-
-    // Snapshot for rollback.
-    const prevFitOverride = this.deps.terminalFitOverrides().get(ptyId) ?? null
-
-    // Tentative writes — the resize is the point of no return.
-    this.deps.layouts().set(ptyId, next)
-    if (target.kind === 'phone') {
-      // Why: pull baseline cols+rows atomically from the same subscriber so
-      // they can't desync.
-      const baseline = (() => {
-        const inner = this.deps.mobileSubscribers().get(ptyId)
-        if (!inner) {
-          return null
-        }
-        return this.deps.pickEarliestRestoreTarget(inner)
-      })()
-      this.deps.terminalFitOverrides().set(ptyId, {
-        mode: 'mobile-fit',
-        cols: target.cols,
-        rows: target.rows,
-        previousCols: baseline?.previousCols ?? null,
-        previousRows: baseline?.previousRows ?? null,
-        updatedAt: next.appliedAt,
-        clientId: target.ownerClientId
-      })
-    } else {
-      this.deps.terminalFitOverrides().delete(ptyId)
-    }
-
-    if (dimsChanged) {
-      let ok = false
-      try {
-        const r = this.deps.ptyController()?.resize?.(ptyId, target.cols, target.rows)
-        ok = r ?? true
-      } catch (err) {
-        console.error('[layout] ptyController.resize threw', { ptyId, err })
-        ok = false
-      }
-      if (!ok) {
-        // Roll back to pre-call snapshot. seq is NOT bumped on the wire
-        // because we never emit below.
-        if (prev) {
-          this.deps.layouts().set(ptyId, prev)
-        } else {
-          this.deps.layouts().delete(ptyId)
-        }
-        if (prevFitOverride) {
-          this.deps.terminalFitOverrides().set(ptyId, prevFitOverride)
-        } else {
-          this.deps.terminalFitOverrides().delete(ptyId)
-        }
-        return { ok: false, reason: 'resize-failed' }
-      }
-      this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
-    }
-
-    // Why: remote desktop ownership is a fit hold for the host and passive
-    // peer viewers. Emit every remote layout so owner changes at equal geometry
-    // still park/release the correct clients without relying on resize deltas.
-    // Defense-in-depth (#7588): also emit when the override's presence
-    // changed even without a kind flip. applyLayout is the sole writer and
-    // keeps override presence in lockstep with layout kind, so overrideChanged
-    // ≡ modeChanged in every reachable state today; the extra clause fires
-    // only if that invariant is ever violated, repairing the renderer instead
-    // of stranding the held modal.
-    const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
-    if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
-      // Why: phone→desktop arms the renderer-cascade suppress window
-      // before the collateral safeFit IPCs arrive. See "Renderer cascade
-      // suppression".
-      if (target.kind === 'desktop') {
-        this.deps.lastRendererSizes().delete(ptyId)
-        this.deps.suppressResizesForMs(500)
-      }
-      this.deps
-        .notifier()
-        ?.terminalFitOverrideChanged(
-          ptyId,
-          target.kind === 'phone'
-            ? 'mobile-fit'
-            : target.kind === 'remote-desktop'
-              ? 'remote-desktop-fit'
-              : 'desktop-fit',
-          target.cols,
-          target.rows
-        )
-      this.notifyFitOverrideListeners(
-        ptyId,
-        target.kind === 'phone'
-          ? 'mobile-fit'
-          : target.kind === 'remote-desktop'
-            ? 'remote-desktop-fit'
-            : 'desktop-fit',
-        target.cols,
-        target.rows
-      )
-    }
-
-    // Mobile-facing event always fires (phone clients need to re-fit on
-    // every dim change, not just mode flips).
-    this.notifyTerminalResize(ptyId, {
-      cols: target.cols,
-      rows: target.rows,
-      displayMode: target.kind === 'phone' ? 'phone' : 'desktop',
-      reason: 'apply-layout',
-      seq
-    })
-
-    return { ok: true, state: next }
+  async applyRemoteDesktopLayout(ptyId: string): Promise<boolean> {
+    return applyRemoteDesktopLayout(this.layoutCtx(), ptyId)
   }
 
   async applyMobileDisplayMode(ptyId: string): Promise<boolean> {
     return this.deps.mobileSessionFacade().applyMobileDisplayMode(ptyId)
-  }
-
-  async applyRemoteDesktopLayout(ptyId: string): Promise<boolean> {
-    if (this.getDriver(ptyId).kind === 'mobile') {
-      return true
-    }
-    const target = this.deps.activeRemoteDesktopViewport(ptyId)
-    const reclaimingHost = !target
-    const viewerRevision = this.deps.remoteDesktopViewerRevisions().get(ptyId) ?? 0
-    const layoutTarget: PtyLayoutTarget = target
-      ? {
-          kind: 'remote-desktop',
-          cols: target.cols,
-          rows: target.rows,
-          ownerSubscriptionKey: this.deps.remoteDesktopOwners().get(ptyId)!
-        }
-      : { kind: 'desktop', ...this.deps.resolveRemoteDesktopHostReclaimTarget(ptyId) }
-    this.deps.freshSubscribeGuard().add(ptyId)
-    try {
-      const result = await this.enqueueLayout(ptyId, layoutTarget)
-      // Why: only drop the recorded host size once the reclaim resize actually
-      // landed. If it failed, the PTY is still at the remote-viewer width, so
-      // keep the target for the next reclaim (otherwise it resolves via the
-      // stale remote width and never restores true host geometry).
-      if (
-        reclaimingHost &&
-        result.ok &&
-        !this.deps.remoteDesktopOwners().has(ptyId) &&
-        this.deps.remoteDesktopViewerRevisions().get(ptyId) === viewerRevision
-      ) {
-        this.deps.remoteDesktopHostReclaimTargets().delete(ptyId)
-      }
-      return result.ok
-    } finally {
-      this.deps.freshSubscribeGuard().delete(ptyId)
-    }
   }
 
   applySeededAgentStatus(ptyId: string, title: string): void {
@@ -2826,32 +2695,7 @@ export class RuntimeTerminalCluster {
   }
 
   enqueueLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
-    // Why: PTY-exit short-circuit. Fresh-subscribe gate lets the very first
-    // transition through even though `layouts` has no entry yet.
-    if (!this.deps.layouts().has(ptyId) && !this.deps.isFreshSubscribe(ptyId)) {
-      return Promise.resolve({ ok: false, reason: 'pty-exited' })
-    }
-
-    let entry = this.deps.layoutQueues().get(ptyId)
-    if (!entry) {
-      entry = { running: null, pending: [] }
-      this.deps.layoutQueues().set(ptyId, entry)
-    }
-    const queue = entry
-
-    return new Promise<ApplyLayoutResult>((resolve) => {
-      if (!queue.running) {
-        queue.running = this.runLayoutSlot(ptyId, target, [resolve])
-        return
-      }
-      const tail = queue.pending.at(-1)
-      if (tail && this.deps.coalescesWith(tail.target, target)) {
-        tail.target = target
-        tail.waiters.push(resolve)
-        return
-      }
-      queue.pending.push({ target, waiters: [resolve] })
-    })
+    return enqueueLayout(this.layoutCtx(), ptyId, target)
   }
 
   ensureSubscriberDrivenProviderAttach(ptyId: string): void {
@@ -5604,34 +5448,7 @@ export class RuntimeTerminalCluster {
     target: PtyLayoutTarget,
     waiters: ((r: ApplyLayoutResult) => void)[]
   ): Promise<ApplyLayoutResult> {
-    let result: ApplyLayoutResult
-    try {
-      result = await this.applyLayout(ptyId, target)
-    } catch (err) {
-      // Why: defensive — applyLayout itself catches resize errors, but a
-      // throw from one of the synchronous map writes (e.g. notifier hook)
-      // must not jam the queue forever.
-      console.error('[layout] applyLayout threw', { ptyId, err })
-      result = { ok: false, reason: 'resize-failed' }
-    }
-    for (const w of waiters) {
-      w(result)
-    }
-
-    const queue = this.deps.layoutQueues().get(ptyId)
-    if (!queue) {
-      return result
-    }
-    const next = queue.pending.shift()
-    if (next) {
-      queue.running = this.runLayoutSlot(ptyId, next.target, next.waiters)
-    } else {
-      queue.running = null
-      // Why: drop the entry once empty so the map doesn't grow without bound
-      // across short-lived PTYs.
-      this.deps.layoutQueues().delete(ptyId)
-    }
-    return result
+    return runLayoutSlot(this.layoutCtx(), ptyId, target, waiters)
   }
 
   seedHeadlessTerminal(
