@@ -61,10 +61,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
-import {
-  SSH_EXIT_UNCONFIRMED_REASON,
-  SSH_PROVIDER_UNREGISTERED_REASON
-} from '../../shared/pty-liveness-verdict'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import type {
   RuntimeGraphStatus,
   RuntimeMobileSessionCreateTerminalResult,
@@ -83,10 +80,6 @@ import type {
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import {
-  OPERATOR_CLOSE_EXIT_CAUSE,
-  resolveUnreportedExitCause
-} from '../../shared/terminal-exit-cause'
 import type { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { TerminalOutputSourceRange } from '../../shared/terminal-output-source-range'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
@@ -105,12 +98,9 @@ import {
 } from './agent-session-process-identity-probe'
 import type { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
-import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
-import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type { OrchestrationDb } from './orchestration/db'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
-import { planLegacyWorkerTerminalRecovery } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope
@@ -119,13 +109,10 @@ import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import type { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
 import {
-  DISCONNECTED_PTY_RECORD_MAX,
   PTY_CONTROLLER_LIST_TIMEOUT_MS,
   appendCompletedTerminalTranscript,
   appendNormalizedToTailBuffer,
   buildPreview,
-  buildPtyTerminalWaitResult,
-  buildTerminalWaitResult,
   buildTerminalWaitText,
   classifyAgentTitle,
   classifyLatestAgentTitle,
@@ -137,10 +124,8 @@ import {
   getTerminalState,
   isKnownReadyPromptPreview,
   normalizeTerminalChunk,
-  notifyRuntimeListeners,
   ptyTitleProvesAgentPresence,
   readTerminalTail,
-  runtimeWorktreeIdsEqual,
   tailGainedNewerBlockedReason,
   tailStateMatches,
   withTimeoutResult
@@ -148,8 +133,10 @@ import {
 import { readStructuredTuiProcessIdentity } from './structured-tui-process-identity'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
-import { randomUUID } from 'node:crypto'
+import { RuntimePtyExitPipeline } from './runtime-pty-exit-pipeline'
+import { RuntimePtyIncarnationRegistry } from './runtime-pty-incarnation-registry'
+import { RuntimePtyWaiterQueue } from './runtime-pty-waiter-queue'
+import { RuntimePtyLegacyWorkerRecovery } from './runtime-pty-legacy-worker-recovery'
 
 export type RuntimePtyWorktreesDeps = {
   adoptTerminalOrphansFromInventory: (
@@ -383,9 +370,17 @@ export class RuntimePtyWorktrees {
   readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
   readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
   private readonly deps: RuntimePtyWorktreesDeps
+  private readonly exitPipeline: RuntimePtyExitPipeline
+  private readonly incarnationRegistry: RuntimePtyIncarnationRegistry
+  private readonly waiterQueue: RuntimePtyWaiterQueue
+  private readonly legacyWorkerRecovery: RuntimePtyLegacyWorkerRecovery
 
   constructor(deps: RuntimePtyWorktreesDeps) {
     this.deps = deps
+    this.exitPipeline = new RuntimePtyExitPipeline(this, deps)
+    this.incarnationRegistry = new RuntimePtyIncarnationRegistry(this, deps)
+    this.waiterQueue = new RuntimePtyWaiterQueue(this, deps)
+    this.legacyWorkerRecovery = new RuntimePtyLegacyWorkerRecovery(this, deps)
   }
 
   acceptPtyDataBounded(
@@ -432,36 +427,12 @@ export class RuntimePtyWorktrees {
     incarnationId?: string,
     options: { exactRestoredSurface?: boolean } = {}
   ): void {
-    const trimmed = handle?.trim()
-    if (!trimmed || !trimmed.startsWith('term_')) {
-      return
-    }
-    const pty = this.deps.ptysById().get(ptyId)
-    const changedIncarnation = Boolean(
-      incarnationId && pty?.incarnationId && incarnationId !== pty.incarnationId
+    return this.incarnationRegistry.adoptControllerTerminalHandle(
+      ptyId,
+      handle,
+      incarnationId,
+      options
     )
-    if (changedIncarnation) {
-      const priorHandle = this.deps.handleByPtyId().get(ptyId)
-      this.invalidateAllHandlesForPty(ptyId)
-      pty!.tabId = null
-      pty!.paneKey = null
-      // Reusing an exported handle would make stale client metadata name the replacement process.
-      if (priorHandle === trimmed) {
-        return
-      }
-    }
-    if (this.isTerminalHandleAdoptionBlocked(ptyId, trimmed)) {
-      if (
-        !options.exactRestoredSurface ||
-        !this.replaceSyntheticTerminalHandlesForRestoredPty(ptyId, trimmed) ||
-        this.isTerminalHandleAdoptionBlocked(ptyId, trimmed)
-      ) {
-        return
-      }
-    }
-    // Why: after an app/runtime restart, the live PTY child still has its
-    // original ORCA_TERMINAL_HANDLE, but the runtime's in-memory map is gone.
-    this.registerPreAllocatedHandleForPty(ptyId, trimmed)
   }
 
   adoptFirstPtyForLeafHandle(
@@ -469,36 +440,288 @@ export class RuntimePtyWorktrees {
     ptyId: string | null,
     ptyGeneration: number
   ): boolean {
-    const handle = this.deps.handleByLeafKey().get(leafKey)
-    const record = handle ? this.deps.handles().get(handle) : null
-    if (!handle || !record || record.ptyId !== null || ptyId === null) {
-      return false
-    }
-    this.deps.handles().set(handle, { ...record, ptyId, ptyGeneration })
-    return true
+    return this.incarnationRegistry.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
   }
 
   adoptPreAllocatedHandle(leaf: RuntimeLeafRecord): string | null {
-    if (!leaf.ptyId) {
-      return null
+    return this.incarnationRegistry.adoptPreAllocatedHandle(leaf)
+  }
+
+  armLegacyWorkerTerminalRecoveryRetry(
+    scopeKey: string,
+    retry: {
+      attempt: number
+      connectionId?: string
+      materializeRenderer: boolean
+      timer: ReturnType<typeof setTimeout> | null
     }
-    const preAllocated = this.deps.handleByPtyId().get(leaf.ptyId)
-    if (!preAllocated) {
-      return null
+  ): void {
+    return this.legacyWorkerRecovery.armLegacyWorkerTerminalRecoveryRetry(scopeKey, retry)
+  }
+
+  bindPtyIncarnationHandle(retained: PtyIncarnationHandleRecord, leaf: RuntimeLeafRecord): void {
+    return this.incarnationRegistry.bindPtyIncarnationHandle(retained, leaf)
+  }
+
+  bindTerminalWaiterAbort(waiter: TerminalWaiter, signal: AbortSignal | undefined): boolean {
+    return this.waiterQueue.bindTerminalWaiterAbort(waiter, signal)
+  }
+
+  cancelLegacyWorkerTerminalRecoveryRetry(scopeKey: string): void {
+    return this.legacyWorkerRecovery.cancelLegacyWorkerTerminalRecoveryRetry(scopeKey)
+  }
+
+  cancelMessageWaiters(handle: string): void {
+    return this.waiterQueue.cancelMessageWaiters(handle)
+  }
+
+  clearPtyIncarnationHandles(): void {
+    return this.incarnationRegistry.clearPtyIncarnationHandles()
+  }
+
+  collectPaneKeysForPty(ptyId: string): Set<string> {
+    return this.exitPipeline.collectPaneKeysForPty(ptyId)
+  }
+
+  createPreAllocatedTerminalHandle(): string {
+    return this.incarnationRegistry.createPreAllocatedTerminalHandle()
+  }
+
+  findHandleForPtyRecord(ptyId: string): string | null {
+    return this.incarnationRegistry.findHandleForPtyRecord(ptyId)
+  }
+
+  getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
+    return this.legacyWorkerRecovery.getLegacyWorkerTerminalRecoveryPlan()
+  }
+
+  invalidateAllHandlesForPty(ptyId: string): void {
+    return this.incarnationRegistry.invalidateAllHandlesForPty(ptyId)
+  }
+
+  invalidateLeafHandle(leafKey: string): void {
+    return this.incarnationRegistry.invalidateLeafHandle(leafKey)
+  }
+
+  invalidatePtyIncarnationHandle(ptyId: string): void {
+    return this.incarnationRegistry.invalidatePtyIncarnationHandle(ptyId)
+  }
+
+  isTerminalHandleAdoptionBlocked(ptyId: string, handle: string): boolean {
+    return this.incarnationRegistry.isTerminalHandleAdoptionBlocked(ptyId, handle)
+  }
+
+  issueHandle(leaf: RuntimeLeafRecord): string {
+    return this.incarnationRegistry.issueHandle(leaf)
+  }
+
+  issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    return this.incarnationRegistry.issuePtyHandle(pty)
+  }
+
+  issueStructuredTuiPtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    return this.incarnationRegistry.issueStructuredTuiPtyHandle(pty)
+  }
+
+  notifyPtyExitListeners(ptyId: string): void {
+    return this.exitPipeline.notifyPtyExitListeners(ptyId)
+  }
+
+  onPtyExit(
+    ptyId: string,
+    exitCode: number,
+    exitIncarnationId?: PtyIncarnationId,
+    options?: {
+      hostExitConfirmed?: boolean
+      cause?: TerminalExitCause
+      providerExitObserved?: boolean
     }
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    this.deps.handles().set(preAllocated, {
-      handle: preAllocated,
-      runtimeId: this.deps.runtimeId(),
-      rendererGraphEpoch: this.deps.rendererGraphEpoch(),
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.deps.handleByLeafKey().set(leafKey, preAllocated)
-    return preAllocated
+  ): void {
+    return this.exitPipeline.onPtyExit(ptyId, exitCode, exitIncarnationId, options)
+  }
+
+  async persistLegacyWorkerTerminalRecoveryBatch(
+    resolutions: readonly LegacyWorkerTerminalRecoveryResolution[]
+  ): Promise<ReadonlySet<string>> {
+    return this.legacyWorkerRecovery.persistLegacyWorkerTerminalRecoveryBatch(resolutions)
+  }
+
+  preAllocateHandleForPty(ptyId: string): string {
+    return this.incarnationRegistry.preAllocateHandleForPty(ptyId)
+  }
+
+  prepareLegacyWorkerTerminalRecovery(): LegacyWorkerTerminalRecoveryPlan {
+    return this.legacyWorkerRecovery.prepareLegacyWorkerTerminalRecovery()
+  }
+
+  pruneDisconnectedPtyRecords(): void {
+    return this.exitPipeline.pruneDisconnectedPtyRecords()
+  }
+
+  ptyExit_cleanupLeaves(
+    pty: RuntimePtyRecord | null,
+    ptyId: string
+  ): Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[] {
+    return this.exitPipeline.ptyExit_cleanupLeaves(pty, ptyId)
+  }
+
+  ptyExit_collectExitPaneKeys(
+    _pty: RuntimePtyRecord | null,
+    ptyId: string,
+    exitCode: number,
+    options?: { hostExitConfirmed?: boolean; providerExitObserved?: boolean },
+    preservesAbnormalSshSurface?: boolean
+  ): void {
+    return this.exitPipeline.ptyExit_collectExitPaneKeys(
+      _pty,
+      ptyId,
+      exitCode,
+      options,
+      preservesAbnormalSshSurface
+    )
+  }
+
+  ptyExit_decideSshSurface(
+    pty: RuntimePtyRecord | null,
+    ptyId: string,
+    exitCode: number,
+    options?: { hostExitConfirmed?: boolean }
+  ): {
+    preservesAbnormalSshSurface: boolean
+    preservesIntentionalHandlessSurface: boolean
+    incarnationId: PtyIncarnationId
+  } {
+    return this.exitPipeline.ptyExit_decideSshSurface(pty, ptyId, exitCode, options)
+  }
+
+  ptyExit_guardIncarnation(
+    ptyId: string,
+    exitIncarnationId?: PtyIncarnationId
+  ): RuntimePtyRecord | null {
+    return this.exitPipeline.ptyExit_guardIncarnation(ptyId, exitIncarnationId)
+  }
+
+  ptyExit_releaseLayout(ptyId: string): void {
+    return this.exitPipeline.ptyExit_releaseLayout(ptyId)
+  }
+
+  ptyExit_resolveExitCause(
+    ptyId: string,
+    exitCode: number,
+    cause?: TerminalExitCause
+  ): { exitCause: TerminalExitCause; stopNeverConfirmed: boolean } {
+    return this.exitPipeline.ptyExit_resolveExitCause(ptyId, exitCode, cause)
+  }
+
+  ptyExit_settleDispatch(
+    _ptyId: string,
+    exitCode: number,
+    exitCause: TerminalExitCause,
+    preservesAbnormalSshSurface: boolean,
+    exitedSurfaces: { handle: string; paneKey: string | null }[]
+  ): void {
+    return this.exitPipeline.ptyExit_settleDispatch(
+      _ptyId,
+      exitCode,
+      exitCause,
+      preservesAbnormalSshSurface,
+      exitedSurfaces
+    )
+  }
+
+  ptyExit_teardown(_ptyId: string): void {
+    return this.exitPipeline.ptyExit_teardown(_ptyId)
+  }
+
+  ptyExit_updateLivenessVerdict(ptyId: string, preservesAbnormalSshSurface: boolean): void {
+    return this.exitPipeline.ptyExit_updateLivenessVerdict(ptyId, preservesAbnormalSshSurface)
+  }
+
+  reconcileMissingLegacyWorkerTerminal(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): boolean {
+    return this.legacyWorkerRecovery.reconcileMissingLegacyWorkerTerminal(candidate)
+  }
+
+  reconcilePtyIncarnationHandles(): void {
+    return this.incarnationRegistry.reconcilePtyIncarnationHandles()
+  }
+
+  registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
+    return this.incarnationRegistry.registerPreAllocatedHandleForPty(ptyId, handle)
+  }
+
+  rejectAllWaiters(code: string): void {
+    return this.waiterQueue.rejectAllWaiters(code)
+  }
+
+  rejectWaitersForHandle(handle: string, code: string): void {
+    return this.waiterQueue.rejectWaitersForHandle(handle, code)
+  }
+
+  removeMessageWaiter(waiter: MessageWaiter): void {
+    return this.waiterQueue.removeMessageWaiter(waiter)
+  }
+
+  removeWaiter(waiter: TerminalWaiter): void {
+    return this.waiterQueue.removeWaiter(waiter)
+  }
+
+  replaceSyntheticTerminalHandlesForRestoredPty(ptyId: string, controllerHandle: string): boolean {
+    return this.incarnationRegistry.replaceSyntheticTerminalHandlesForRestoredPty(
+      ptyId,
+      controllerHandle
+    )
+  }
+
+  resolveExitWaiters(leaf: RuntimeLeafRecord): void {
+    return this.waiterQueue.resolveExitWaiters(leaf)
+  }
+
+  resolveHandleForTab(tabId: string): string | null {
+    return this.waiterQueue.resolveHandleForTab(tabId)
+  }
+
+  resolveMessageWaiter(waiter: MessageWaiter, result: MessageWaitResult): void {
+    return this.waiterQueue.resolveMessageWaiter(waiter, result)
+  }
+
+  resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    return this.waiterQueue.resolvePtyExitWaiters(pty, ptyId)
+  }
+
+  resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
+    return this.waiterQueue.resolveTuiIdleWaiters(leaf)
+  }
+
+  resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
+    return this.waiterQueue.resolveWaiter(waiter, result)
+  }
+
+  rollbackLegacyWorkerTerminalSurface(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): void {
+    return this.legacyWorkerRecovery.rollbackLegacyWorkerTerminalSurface(candidate)
+  }
+
+  updateLegacyWorkerTerminalRecoveryRetry(
+    plan: LegacyWorkerTerminalRecoveryPlan,
+    deferredDispatchIds: ReadonlySet<string>,
+    options: { connectionId?: string; materializeRenderer?: boolean }
+  ): void {
+    return this.legacyWorkerRecovery.updateLegacyWorkerTerminalRecoveryRetry(
+      plan,
+      deferredDispatchIds,
+      options
+    )
+  }
+
+  waitForLeafPtyId(handle: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<string> {
+    return this.waiterQueue.waitForLeafPtyId(handle, timeoutMs, signal)
+  }
+
+  waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
+    return this.waiterQueue.waitForTerminalHandle(tabId, timeoutMs)
   }
 
   async adoptTerminalOrphans(
@@ -551,40 +774,6 @@ export class RuntimePtyWorktrees {
     this.deps.providerVisibleRetryAtByPtyId().delete(ptyId)
   }
 
-  armLegacyWorkerTerminalRecoveryRetry(
-    scopeKey: string,
-    retry: {
-      attempt: number
-      connectionId?: string
-      materializeRenderer: boolean
-      timer: ReturnType<typeof setTimeout> | null
-    }
-  ): void {
-    if (retry.timer) {
-      return
-    }
-    const delayMs = Math.min(1_000 * 2 ** retry.attempt, 30_000)
-    retry.attempt += 1
-    retry.timer = setTimeout(() => {
-      retry.timer = null
-      void this.deps
-        .reconcileLegacyWorkerTerminals({
-          ...(retry.connectionId ? { connectionId: retry.connectionId } : {}),
-          materializeRenderer: retry.materializeRenderer
-        })
-        .catch((error) => {
-          console.warn('[orchestration] worker terminal recovery retry failed', {
-            scope: scopeKey,
-            error
-          })
-          if (this.deps.legacyWorkerTerminalRecoveryRetries().get(scopeKey) === retry) {
-            this.armLegacyWorkerTerminalRecoveryRetry(scopeKey, retry)
-          }
-        })
-    }, delayMs)
-    retry.timer.unref?.()
-  }
-
   assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {
     const runtimePty = this.getLivePtyForHandle(handle)
     if (runtimePty) {
@@ -630,43 +819,6 @@ export class RuntimePtyWorktrees {
     )
   }
 
-  bindPtyIncarnationHandle(retained: PtyIncarnationHandleRecord, leaf: RuntimeLeafRecord): void {
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    if (retained.leafKey !== leafKey) {
-      if (this.deps.handleByLeafKey().get(retained.leafKey) === retained.handle) {
-        this.deps.handleByLeafKey().delete(retained.leafKey)
-      }
-      retained.leafKey = leafKey
-    }
-    this.deps.handles().set(retained.handle, {
-      handle: retained.handle,
-      runtimeId: this.deps.runtimeId(),
-      rendererGraphEpoch: this.deps.rendererGraphEpoch(),
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.deps.handleByLeafKey().set(leafKey, retained.handle)
-  }
-
-  bindTerminalWaiterAbort(waiter: TerminalWaiter, signal: AbortSignal | undefined): boolean {
-    if (!signal) {
-      return true
-    }
-    if (signal.aborted) {
-      return false
-    }
-    const onAbort = (): void => {
-      this.removeWaiter(waiter)
-      waiter.reject(new Error('request_aborted'))
-    }
-    waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
-    signal.addEventListener('abort', onAbort, { once: true })
-    return true
-  }
-
   buildPtyTerminalSummary(
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>
@@ -702,56 +854,12 @@ export class RuntimePtyWorktrees {
     }
   }
 
-  cancelLegacyWorkerTerminalRecoveryRetry(scopeKey: string): void {
-    const retry = this.deps.legacyWorkerTerminalRecoveryRetries().get(scopeKey)
-    if (retry?.timer) {
-      clearTimeout(retry.timer)
-    }
-    this.deps.legacyWorkerTerminalRecoveryRetries().delete(scopeKey)
-  }
-
-  cancelMessageWaiters(handle: string): void {
-    const waiters = this.deps.messageWaitersByHandle().get(handle)
-    if (!waiters) {
-      return
-    }
-    // eslint-disable-next-line unicorn/no-useless-spread -- waiters is mutated during iteration
-    for (const waiter of [...waiters]) {
-      this.resolveMessageWaiter(waiter, 'cancelled')
-    }
-  }
-
   cancelPendingPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
     return cancelPendingPtyRegistration(
       ptyId,
       incarnationId,
       this as unknown as OrcaRuntimeLivenessVerdictApi
     )
-  }
-
-  clearPtyIncarnationHandles(): void {
-    for (const retained of this.deps.handleByPtyIncarnation().values()) {
-      this.deps.syntheticTerminalHandles().delete(retained.handle)
-    }
-    this.deps.handleByPtyIncarnation().clear()
-  }
-
-  collectPaneKeysForPty(ptyId: string): Set<string> {
-    const paneKeys = new Set<string>()
-    const pty = this.deps.ptysById().get(ptyId)
-    if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
-      paneKeys.add(pty.paneKey)
-    }
-    const receipt = this.deps.restoredOrchestrationAuthorityByPtyId().get(ptyId)
-    if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
-      paneKeys.add(receipt.paneKey)
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
-        paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
-      }
-    }
-    return paneKeys
   }
 
   controllerKnowsPtyIsLive(ptyId: string): boolean {
@@ -761,10 +869,6 @@ export class RuntimePtyWorktrees {
       // Why: liveness lookup failures are doubt; doubt never gates a write.
       return false
     }
-  }
-
-  createPreAllocatedTerminalHandle(): string {
-    return `term_${randomUUID()}`
   }
 
   createPtyHeadlessTerminalState(
@@ -886,19 +990,6 @@ export class RuntimePtyWorktrees {
     }
   }
 
-  findHandleForPtyRecord(ptyId: string): string | null {
-    for (const [handle, record] of this.deps.handles()) {
-      if (
-        record.runtimeId === this.deps.runtimeId() &&
-        record.ptyId === ptyId &&
-        record.tabId.startsWith('pty:')
-      ) {
-        return handle
-      }
-    }
-    return null
-  }
-
   findLiveRegisteredPtyForRendererTab(
     worktreeId: string,
     tabId: string
@@ -943,17 +1034,6 @@ export class RuntimePtyWorktrees {
 
   getLeavesForPty(ptyId: string): RuntimeLeafRecord[] {
     return this.deps.leavesByPtyId().get(ptyId) ?? []
-  }
-
-  getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
-    try {
-      return planLegacyWorkerTerminalRecovery(
-        this.deps.getOrchestrationDb().listLegacyWorkerTerminalRecoveryRows()
-      )
-    } catch (error) {
-      console.warn('[orchestration] failed to plan legacy worker terminal recovery', error)
-      return { blockedPanes: [], candidates: [], ambiguousDispatchIds: [] }
-    }
   }
 
   getLiveLeafForHandle(handle: string): {
@@ -1187,62 +1267,6 @@ export class RuntimePtyWorktrees {
     return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
   }
 
-  invalidateAllHandlesForPty(ptyId: string): void {
-    const incarnationHandle = this.deps.handleByPtyIncarnation().get(ptyId)?.handle
-    const preallocatedHandle = this.deps.handleByPtyId().get(ptyId)
-    this.invalidatePtyIncarnationHandle(ptyId)
-    this.deps.handleByPtyId().delete(ptyId)
-    const invalidated = new Set<string>()
-    if (preallocatedHandle && preallocatedHandle !== incarnationHandle) {
-      invalidated.add(preallocatedHandle)
-    }
-    for (const [handle, record] of this.deps.handles()) {
-      if (record.ptyId === ptyId) {
-        invalidated.add(handle)
-        this.deps.handles().delete(handle)
-      }
-    }
-    for (const handle of invalidated) {
-      this.deps.handles().delete(handle)
-      this.deps.syntheticTerminalHandles().delete(handle)
-      this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
-    }
-    for (const [leafKey, handle] of this.deps.handleByLeafKey()) {
-      if (invalidated.has(handle)) {
-        this.deps.handleByLeafKey().delete(leafKey)
-      }
-    }
-  }
-
-  invalidateLeafHandle(leafKey: string): void {
-    const handle = this.deps.handleByLeafKey().get(leafKey)
-    if (!handle) {
-      return
-    }
-    const record = this.deps.handles().get(handle)
-    if (record?.ptyId && this.deps.handleByPtyIncarnation().get(record.ptyId)?.handle === handle) {
-      this.deps.handleByPtyIncarnation().delete(record.ptyId)
-    }
-    this.deps.handleByLeafKey().delete(leafKey)
-    this.deps.handles().delete(handle)
-    this.deps.syntheticTerminalHandles().delete(handle)
-    this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
-  }
-
-  invalidatePtyIncarnationHandle(ptyId: string): void {
-    const retained = this.deps.handleByPtyIncarnation().get(ptyId)
-    if (!retained) {
-      return
-    }
-    this.deps.handleByPtyIncarnation().delete(ptyId)
-    if (this.deps.handleByLeafKey().get(retained.leafKey) === retained.handle) {
-      this.deps.handleByLeafKey().delete(retained.leafKey)
-    }
-    this.deps.handles().delete(retained.handle)
-    this.deps.syntheticTerminalHandles().delete(retained.handle)
-    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
-  }
-
   isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
     if (
       this.deps.headlessTerminals().has(ptyId) ||
@@ -1372,134 +1396,6 @@ export class RuntimePtyWorktrees {
     return this.deps.snapshotValueComparison().isSshOwnedPtyId(ptyId)
   }
 
-  isTerminalHandleAdoptionBlocked(ptyId: string, handle: string): boolean {
-    if (this.deps.handleByPtyId().get(ptyId) ?? this.findHandleForPtyRecord(ptyId)) {
-      return true
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const issued = this.deps.handleByLeafKey().get(this.deps.getLeafKey(leaf.tabId, leaf.leafId))
-      if (issued && issued !== handle) {
-        return true
-      }
-    }
-    const existingRecord = this.deps.handles().get(handle)
-    if (existingRecord && existingRecord.ptyId !== ptyId) {
-      return true
-    }
-    for (const [otherPtyId, otherHandle] of this.deps.handleByPtyId()) {
-      if (otherHandle === handle && otherPtyId !== ptyId) {
-        return true
-      }
-    }
-    return false
-  }
-
-  issueHandle(leaf: RuntimeLeafRecord): string {
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    const existingHandle = this.deps.handleByLeafKey().get(leafKey)
-    if (existingHandle) {
-      const existingRecord = this.deps.handles().get(existingHandle)
-      if (
-        existingRecord &&
-        existingRecord.rendererGraphEpoch === this.deps.rendererGraphEpoch() &&
-        existingRecord.ptyId === leaf.ptyId &&
-        existingRecord.ptyGeneration === leaf.ptyGeneration
-      ) {
-        return existingHandle
-      }
-    }
-
-    const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
-    if (preAllocatedHandle) {
-      return preAllocatedHandle
-    }
-    const incarnationId = leaf.ptyId
-      ? (this.deps.ptysById().get(leaf.ptyId)?.incarnationId ?? null)
-      : null
-    const retained = leaf.ptyId ? this.deps.handleByPtyIncarnation().get(leaf.ptyId) : undefined
-    if (retained && leaf.ptyId && retained.incarnationId !== incarnationId) {
-      this.invalidatePtyIncarnationHandle(leaf.ptyId)
-    } else if (retained) {
-      this.bindPtyIncarnationHandle(retained, leaf)
-      return retained.handle
-    }
-
-    const handle = `term_${randomUUID()}`
-    this.deps.syntheticTerminalHandles().add(handle)
-    this.deps.handles().set(handle, {
-      handle,
-      runtimeId: this.deps.runtimeId(),
-      rendererGraphEpoch: this.deps.rendererGraphEpoch(),
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
-    this.deps.handleByLeafKey().set(leafKey, handle)
-    if (leaf.ptyId && incarnationId) {
-      this.deps.handleByPtyIncarnation().set(leaf.ptyId, { handle, incarnationId, leafKey })
-    }
-    return handle
-  }
-
-  issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
-    const existingHandle =
-      this.deps.handleByPtyId().get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
-    if (existingHandle) {
-      const existingRecord = this.deps.handles().get(existingHandle)
-      if (
-        existingRecord &&
-        existingRecord.runtimeId === this.deps.runtimeId() &&
-        existingRecord.ptyId === pty.ptyId
-      ) {
-        this.deps.handleByPtyId().set(pty.ptyId, existingHandle)
-        return existingHandle
-      }
-    }
-
-    const handle = existingHandle ?? `term_${randomUUID()}`
-    if (!existingHandle) {
-      this.deps.syntheticTerminalHandles().add(handle)
-    }
-    const syntheticId = `pty:${pty.ptyId}`
-    this.deps.handles().set(handle, {
-      handle,
-      runtimeId: this.deps.runtimeId(),
-      rendererGraphEpoch: this.deps.rendererGraphEpoch(),
-      worktreeId: pty.worktreeId,
-      tabId: syntheticId,
-      leafId: syntheticId,
-      ptyId: pty.ptyId,
-      ptyGeneration: 0
-    })
-    this.deps.handleByPtyId().set(pty.ptyId, handle)
-    return handle
-  }
-
-  issueStructuredTuiPtyHandle(pty: RuntimePtyWorktreeRecord): string {
-    const existingHandle = this.findHandleForPtyRecord(pty.ptyId)
-    if (existingHandle) {
-      this.deps.handleByPtyId().set(pty.ptyId, existingHandle)
-      return existingHandle
-    }
-    const handle = `term_${randomUUID()}`
-    const syntheticId = `pty:${pty.ptyId}`
-    this.deps.syntheticTerminalHandles().add(handle)
-    this.deps.handles().set(handle, {
-      handle,
-      runtimeId: this.deps.runtimeId(),
-      rendererGraphEpoch: this.deps.rendererGraphEpoch(),
-      worktreeId: pty.worktreeId,
-      tabId: syntheticId,
-      leafId: syntheticId,
-      ptyId: pty.ptyId,
-      ptyGeneration: 0
-    })
-    this.deps.handleByPtyId().set(pty.ptyId, handle)
-    return handle
-  }
-
   leafExistsForPty(ptyId: string): boolean {
     return (this.deps.leavesByPtyId().get(ptyId)?.length ?? 0) > 0
   }
@@ -1535,15 +1431,6 @@ export class RuntimePtyWorktrees {
     this.deps.osc7ScanTailByPtyId().delete(ptyId)
     this.deps.agentStatusOscProcessorsByPtyId().delete(ptyId)
     this.deps.disposeHeadlessTerminal(ptyId)
-  }
-
-  notifyPtyExitListeners(ptyId: string): void {
-    const listeners = this.deps.ptyExitListenersByPtyId().get(ptyId)
-    if (!listeners) {
-      return
-    }
-    this.deps.ptyExitListenersByPtyId().delete(ptyId)
-    notifyRuntimeListeners(listeners, (listener) => listener(), 'pty-exit')
   }
 
   onPtyData(
@@ -1807,57 +1694,6 @@ export class RuntimePtyWorktrees {
     return outputSequence
   }
 
-  onPtyExit(
-    ptyId: string,
-    exitCode: number,
-    exitIncarnationId?: PtyIncarnationId,
-    options?: {
-      hostExitConfirmed?: boolean
-      cause?: TerminalExitCause
-      providerExitObserved?: boolean
-    }
-  ): void {
-    const pty = this.ptyExit_guardIncarnation(ptyId, exitIncarnationId)
-    if (!pty) {
-      return
-    }
-
-    const { exitCause } = this.ptyExit_resolveExitCause(ptyId, exitCode, options?.cause)
-
-    const { preservesAbnormalSshSurface, preservesIntentionalHandlessSurface, incarnationId } =
-      this.ptyExit_decideSshSurface(pty, ptyId, exitCode, options)
-
-    this.ptyExit_collectExitPaneKeys(pty, ptyId, exitCode, options, preservesAbnormalSshSurface)
-
-    this.ptyExit_updateLivenessVerdict(ptyId, preservesAbnormalSshSurface)
-
-    const exactSurfaces = this.ptyExit_cleanupLeaves(pty, ptyId)
-
-    const exitedSurfaces = this.deps.ptyExit_notifyTabAndMobile(
-      pty,
-      ptyId,
-      exitIncarnationId,
-      exitCode,
-      exitCause,
-      preservesAbnormalSshSurface,
-      preservesIntentionalHandlessSurface,
-      exactSurfaces,
-      incarnationId
-    )
-
-    this.ptyExit_releaseLayout(ptyId)
-
-    this.ptyExit_settleDispatch(
-      ptyId,
-      exitCode,
-      exitCause,
-      preservesAbnormalSshSurface,
-      exitedSurfaces
-    )
-
-    this.ptyExit_teardown(ptyId)
-  }
-
   onPtySpawned(
     ptyId: string,
     incarnationId?: PtyIncarnationId,
@@ -1882,152 +1718,6 @@ export class RuntimePtyWorktrees {
       leaf.writable = this.deps.graphStatus() === 'ready'
       this.adoptPreAllocatedHandle(leaf)
     }
-  }
-
-  async persistLegacyWorkerTerminalRecoveryBatch(
-    resolutions: readonly LegacyWorkerTerminalRecoveryResolution[]
-  ): Promise<ReadonlySet<string>> {
-    const store = this.deps.store()
-    if (
-      !store?.getWorkspaceSession ||
-      !store.setWorkspaceSession ||
-      (!store.flushPendingOrThrowAsync && !store.flushOrThrow)
-    ) {
-      return new Set()
-    }
-    const originalSessions = new Map<ExecutionHostId, WorkspaceSessionState>()
-    const stagedSessions = new Map<ExecutionHostId, WorkspaceSessionState>()
-    const stagedDispatchIds = new Set<string>()
-    try {
-      for (const { candidate, resolution } of resolutions) {
-        const hostId = this.deps.tryGetWorkspaceSessionHostIdForWorktree(candidate.worktreeId)
-        const session = hostId ? store.getWorkspaceSession(hostId) : null
-        if (!hostId || !session) {
-          continue
-        }
-        originalSessions.set(hostId, originalSessions.get(hostId) ?? session)
-        let next =
-          resolution === 'exited'
-            ? retireTerminalSurfaceFromPersistence(session, {
-                worktreeId: candidate.worktreeId,
-                parentTabId: candidate.tabId,
-                leafId: candidate.leafId,
-                ptyId: candidate.ptyId,
-                incarnationId: candidate.incarnationId
-              })
-            : session
-        const record = next.sleepingAgentSessionsByPaneKey?.[candidate.paneKey]
-        if (record && runtimeWorktreeIdsEqual(record.worktreeId, candidate.worktreeId)) {
-          const sleepingAgentSessionsByPaneKey = { ...next.sleepingAgentSessionsByPaneKey }
-          delete sleepingAgentSessionsByPaneKey[candidate.paneKey]
-          next = { ...next, sleepingAgentSessionsByPaneKey }
-        }
-        if (next !== session) {
-          store.setWorkspaceSession(next, hostId)
-        }
-        stagedSessions.set(hostId, store.getWorkspaceSession(hostId))
-        stagedDispatchIds.add(candidate.dispatchId)
-      }
-      if (stagedDispatchIds.size > 0) {
-        await this.deps.flushWorkspaceSessionOrThrowAsync()
-      }
-      return stagedDispatchIds
-    } catch (error) {
-      for (const [hostId, original] of originalSessions) {
-        const staged = stagedSessions.get(hostId)
-        const current = store.getWorkspaceSession(hostId)
-        if (!staged || !current) {
-          continue
-        }
-        const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(original, staged, current)
-        if (rolledBack !== current) {
-          store.setWorkspaceSession(rolledBack, hostId)
-        }
-      }
-      console.warn('[orchestration] failed to persist legacy worker recovery batch', {
-        dispatchIds: [...stagedDispatchIds],
-        error
-      })
-      return new Set()
-    }
-  }
-
-  preAllocateHandleForPty(ptyId: string): string {
-    const existing = this.deps.handleByPtyId().get(ptyId)
-    if (existing) {
-      return existing
-    }
-    const handle = this.createPreAllocatedTerminalHandle()
-    this.deps.handleByPtyId().set(ptyId, handle)
-    return handle
-  }
-
-  prepareLegacyWorkerTerminalRecovery(): LegacyWorkerTerminalRecoveryPlan {
-    const plan = this.getLegacyWorkerTerminalRecoveryPlan()
-    const store = this.deps.store()
-    if (
-      !store?.getWorkspaceSession ||
-      !store.setWorkspaceSession ||
-      (!store.flushPendingOrThrowAsync && !store.flushOrThrow)
-    ) {
-      return plan
-    }
-    const sessions = new Map<
-      ExecutionHostId,
-      { current: WorkspaceSessionState; next: WorkspaceSessionState }
-    >()
-    const changedHostIds = new Set<ExecutionHostId>()
-    for (const blocked of plan.blockedPanes) {
-      let hostIds: ExecutionHostId[]
-      try {
-        hostIds = [this.deps.getWorkspaceSessionHostIdForWorktree(blocked.worktreeId)]
-      } catch (error) {
-        console.warn('[orchestration] legacy worker resume fence owner is unavailable', {
-          worktreeId: blocked.worktreeId,
-          error
-        })
-        hostIds = store.getWorkspaceSessionHostIds?.() ?? [LOCAL_EXECUTION_HOST_ID]
-      }
-      for (const hostId of hostIds) {
-        let state = sessions.get(hostId)
-        if (!state) {
-          const current = store.getWorkspaceSession(hostId)
-          if (!current) {
-            continue
-          }
-          state = { current, next: structuredClone(current) }
-          sessions.set(hostId, state)
-        }
-        const record = state.next.sleepingAgentSessionsByPaneKey?.[blocked.paneKey]
-        if (
-          !record ||
-          !runtimeWorktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
-          record.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-        ) {
-          continue
-        }
-        state.next.sleepingAgentSessionsByPaneKey = {
-          ...state.next.sleepingAgentSessionsByPaneKey,
-          [blocked.paneKey]: {
-            ...record,
-            automaticResumeBlockedBy: 'legacy-orchestration-worker'
-          }
-        }
-        changedHostIds.add(hostId)
-      }
-    }
-    const changed = [...sessions].filter(([hostId]) => changedHostIds.has(hostId))
-    if (changed.length === 0) {
-      return plan
-    }
-    try {
-      for (const [hostId, state] of changed) {
-        store.setWorkspaceSession(state.next, hostId)
-      }
-    } catch (error) {
-      console.warn('[orchestration] failed to stage legacy worker resume fence', error)
-    }
-    return plan
   }
 
   preparePtyExecutionContext(
@@ -2144,17 +1834,6 @@ export class RuntimePtyWorktrees {
     }
   }
 
-  pruneDisconnectedPtyRecords(): void {
-    const retained = [...this.deps.ptysById().values()]
-      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
-      .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
-    const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
-    for (const stale of retained.slice(0, staleCount)) {
-      // Why: exited runtime-owned PTYs stay readable, but long-lived runtimes churn through many sessions; bound the archive.
-      this.dropDisconnectedPtyRecord(stale.ptyId)
-    }
-  }
-
   pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void {
     if (pty.connected) {
       return
@@ -2171,156 +1850,6 @@ export class RuntimePtyWorktrees {
     pty.waitBlockedAt = null
     // Why: tail is now empty, so clear the memoized wait scan; onPtyData must recompute from the reset tail if this record resumes output.
     pty.tailWaitState = undefined
-  }
-
-  ptyExit_cleanupLeaves(
-    pty: RuntimePtyRecord | null,
-    ptyId: string
-  ): Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[] {
-    this.advancePtyLifecycleGeneration(ptyId)
-    this.notifyPtyExitListeners(ptyId)
-
-    const exactSurfaceByKey = new Map<
-      string,
-      Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
-    >()
-
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
-        worktreeId: leaf.worktreeId,
-        parentTabId: leaf.tabId,
-        leafId: leaf.leafId
-      })
-    }
-
-    const parsedPaneKey = parsePaneKey(pty?.paneKey ?? '')
-    if (pty?.tabId && parsedPaneKey) {
-      exactSurfaceByKey.set(`${pty.worktreeId}\0${pty.tabId}\0${parsedPaneKey.leafId}`, {
-        worktreeId: pty.worktreeId,
-        parentTabId: pty.tabId,
-        leafId: parsedPaneKey.leafId
-      })
-    }
-
-    return [...exactSurfaceByKey.values()]
-  }
-
-  ptyExit_collectExitPaneKeys(
-    _pty: RuntimePtyRecord | null,
-    ptyId: string,
-    exitCode: number,
-    options?: { hostExitConfirmed?: boolean; providerExitObserved?: boolean },
-    preservesAbnormalSshSurface?: boolean
-  ): void {
-    const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
-
-    if (preservesAbnormalSshSurface) {
-      this.deps.restoredOrchestrationAuthorityByPtyId().delete(ptyId)
-    } else {
-      this.retirePtyAgentLaunchAuthority(ptyId)
-    }
-
-    const processDeathCertified =
-      exitCode >= 0 || options?.hostExitConfirmed === true || options?.providerExitObserved === true
-
-    if (processDeathCertified && exitPaneKeys.size > 0) {
-      this.deps.reconcileAgentStatusForEndedProcessFn()?.(exitPaneKeys)
-    }
-  }
-
-  ptyExit_decideSshSurface(
-    pty: RuntimePtyRecord | null,
-    ptyId: string,
-    exitCode: number,
-    options?: { hostExitConfirmed?: boolean }
-  ): {
-    preservesAbnormalSshSurface: boolean
-    preservesIntentionalHandlessSurface: boolean
-    incarnationId: PtyIncarnationId
-  } {
-    const preservesAbnormalSshSurface =
-      this.isSshOwnedPtyId(ptyId) &&
-      pty?.connectionId != null &&
-      exitCode < 0 &&
-      options?.hostExitConfirmed !== true
-
-    const incarnationId =
-      (pty?.incarnationId as PtyIncarnationId) ??
-      (`runtime:${this.deps.runtimeId()}:${this.getPtyLifecycleGeneration(ptyId)}` as PtyIncarnationId)
-
-    const intentionalStopIncarnation = this.deps.intentionalHandlelessPtyStops().get(ptyId)
-    const preservesIntentionalHandlessSurface =
-      this.deps.intentionalHandlelessPtyStops().has(ptyId) &&
-      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
-
-    return {
-      preservesAbnormalSshSurface,
-      preservesIntentionalHandlessSurface,
-      incarnationId
-    }
-  }
-
-  ptyExit_guardIncarnation(
-    ptyId: string,
-    exitIncarnationId?: PtyIncarnationId
-  ): RuntimePtyRecord | null {
-    const pty = this.deps.ptysById().get(ptyId)
-    if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
-      return null
-    }
-    return pty ?? null
-  }
-
-  ptyExit_releaseLayout(ptyId: string): void {
-    this.deps.layouts().delete(ptyId)
-    this.deps.layoutQueues().delete(ptyId)
-    this.deps.freshSubscribeGuard().delete(ptyId)
-    this.deps.cancelPendingDriverMutations(ptyId)
-    this.deps.retireOrchestrationMailboxDeliveryForPty(ptyId)
-  }
-
-  ptyExit_resolveExitCause(
-    ptyId: string,
-    exitCode: number,
-    cause?: TerminalExitCause
-  ): { exitCause: TerminalExitCause; stopNeverConfirmed: boolean } {
-    const observedCause = cause ?? resolveUnreportedExitCause(exitCode)
-    const stopNeverConfirmed =
-      observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
-    const exitCause: TerminalExitCause =
-      this.deps.stopRequestedPtyIds().has(ptyId) && !stopNeverConfirmed
-        ? OPERATOR_CLOSE_EXIT_CAUSE
-        : observedCause
-    this.deps.stopRequestedPtyIds().delete(ptyId)
-    return { exitCause, stopNeverConfirmed }
-  }
-
-  ptyExit_settleDispatch(
-    _ptyId: string,
-    exitCode: number,
-    exitCause: TerminalExitCause,
-    preservesAbnormalSshSurface: boolean,
-    exitedSurfaces: { handle: string; paneKey: string | null }[]
-  ): void {
-    if (preservesAbnormalSshSurface) {
-      return
-    }
-
-    for (const surface of exitedSurfaces) {
-      this.deps.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
-    }
-  }
-
-  ptyExit_teardown(_ptyId: string): void {
-    this.pruneDisconnectedPtyRecords()
-  }
-
-  ptyExit_updateLivenessVerdict(ptyId: string, preservesAbnormalSshSurface: boolean): void {
-    if (preservesAbnormalSshSurface) {
-      if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
-        this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
-      }
-    }
   }
 
   readPtyTerminal(
@@ -2358,46 +1887,6 @@ export class RuntimePtyWorktrees {
     current.clear()
     for (const [ptyId, list] of next) {
       current.set(ptyId, list)
-    }
-  }
-
-  reconcileMissingLegacyWorkerTerminal(
-    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
-  ): boolean {
-    if (candidate.dispatchStatus !== 'pending' && candidate.dispatchStatus !== 'dispatched') {
-      return true
-    }
-    try {
-      this.deps
-        .getOrchestrationDb()
-        .reconcileMissingWorkerTerminal(
-          candidate.dispatchId,
-          'The assigned worker terminal is no longer live after orchestration recovery.'
-        )
-      return true
-    } catch (error) {
-      console.warn('[orchestration] failed to reconcile missing worker terminal', {
-        dispatchId: candidate.dispatchId,
-        error
-      })
-      return false
-    }
-  }
-
-  reconcilePtyIncarnationHandles(): void {
-    for (const [ptyId, retained] of this.deps.handleByPtyIncarnation()) {
-      const pty = this.deps.ptysById().get(ptyId)
-      const leaves = this.getLeavesForPty(ptyId)
-      if (
-        !pty?.incarnationId ||
-        pty.incarnationId !== retained.incarnationId ||
-        leaves.length !== 1 ||
-        this.deps.handleByPtyId().has(ptyId)
-      ) {
-        this.invalidatePtyIncarnationHandle(ptyId)
-        continue
-      }
-      this.bindPtyIncarnationHandle(retained, leaves[0])
     }
   }
 
@@ -2533,19 +2022,6 @@ export class RuntimePtyWorktrees {
       )
   }
 
-  registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
-    const retained = this.deps.handleByPtyIncarnation().get(ptyId)
-    if (retained?.handle === handle) {
-      this.deps.handleByPtyIncarnation().delete(ptyId)
-    } else {
-      this.invalidatePtyIncarnationHandle(ptyId)
-    }
-    this.deps.handleByPtyId().set(ptyId, handle)
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      this.adoptPreAllocatedHandle(leaf)
-    }
-  }
-
   registerPty(
     ptyId: string,
     worktreeId: string,
@@ -2626,25 +2102,6 @@ export class RuntimePtyWorktrees {
     }
   }
 
-  rejectAllWaiters(code: string): void {
-    // eslint-disable-next-line unicorn/no-useless-spread -- map is mutated during iteration
-    for (const handle of [...this.deps.waitersByHandle().keys()]) {
-      this.rejectWaitersForHandle(handle, code)
-    }
-  }
-
-  rejectWaitersForHandle(handle: string, code: string): void {
-    const waiters = this.deps.waitersByHandle().get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    // eslint-disable-next-line unicorn/no-useless-spread -- waiters is mutated during iteration
-    for (const waiter of [...waiters]) {
-      this.removeWaiter(waiter)
-      waiter.reject(new Error(code))
-    }
-  }
-
   releaseRejectedPtyRegistrationFence(
     ptyId: string,
     candidateIncarnation?: PtyIncarnationId
@@ -2695,114 +2152,9 @@ export class RuntimePtyWorktrees {
     }
   }
 
-  removeMessageWaiter(waiter: MessageWaiter): void {
-    if (waiter.timeout) {
-      clearTimeout(waiter.timeout)
-      waiter.timeout = null
-    }
-    if (waiter.abortCleanup) {
-      waiter.abortCleanup()
-      waiter.abortCleanup = null
-    }
-    const waiters = this.deps.messageWaitersByHandle().get(waiter.handle)
-    if (waiters) {
-      waiters.delete(waiter)
-      if (waiters.size === 0) {
-        this.deps.messageWaitersByHandle().delete(waiter.handle)
-      }
-    }
-  }
-
-  removeWaiter(waiter: TerminalWaiter): void {
-    if (waiter.timeout) {
-      clearTimeout(waiter.timeout)
-    }
-    if (waiter.pollInterval) {
-      clearInterval(waiter.pollInterval)
-    }
-    if (waiter.abortCleanup) {
-      waiter.abortCleanup()
-      waiter.abortCleanup = null
-    }
-    const waiters = this.deps.waitersByHandle().get(waiter.handle)
-    if (!waiters) {
-      return
-    }
-    waiters.delete(waiter)
-    if (waiters.size === 0) {
-      this.deps.waitersByHandle().delete(waiter.handle)
-    }
-  }
-
-  replaceSyntheticTerminalHandlesForRestoredPty(ptyId: string, controllerHandle: string): boolean {
-    const boundHandles = new Set<string>()
-    const directHandle = this.deps.handleByPtyId().get(ptyId)
-    if (directHandle) {
-      boundHandles.add(directHandle)
-    }
-    for (const [handle, record] of this.deps.handles()) {
-      if (record.ptyId === ptyId) {
-        boundHandles.add(handle)
-      } else if (handle === controllerHandle) {
-        return false
-      }
-    }
-    for (const [otherPtyId, handle] of this.deps.handleByPtyId()) {
-      if (otherPtyId !== ptyId && handle === controllerHandle) {
-        return false
-      }
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const handle = this.deps.handleByLeafKey().get(this.deps.getLeafKey(leaf.tabId, leaf.leafId))
-      if (handle) {
-        boundHandles.add(handle)
-      }
-    }
-    if (
-      boundHandles.size === 0 ||
-      [...boundHandles].some(
-        (handle) => handle === controllerHandle || !this.deps.syntheticTerminalHandles().has(handle)
-      )
-    ) {
-      return false
-    }
-    this.invalidateAllHandlesForPty(ptyId)
-    return true
-  }
-
   resetPtyModelAfterMigrationFailure(ptyId: string): void {
     this.deps.providerSnapshotPreferredPtys().add(ptyId)
     this.deps.disposeHeadlessTerminal(ptyId)
-  }
-
-  resolveExitWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.issueHandle(leaf)
-    if (!handle) {
-      return
-    }
-    const waiters = this.deps.waitersByHandle().get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    // eslint-disable-next-line unicorn/no-useless-spread -- waiters is mutated during iteration
-    for (const waiter of [...waiters]) {
-      if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
-      } else {
-        // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
-      }
-    }
-  }
-
-  resolveHandleForTab(tabId: string): string | null {
-    for (const leaf of this.deps.leaves().values()) {
-      if (leaf.tabId === tabId && leaf.ptyId !== null) {
-        return this.issueHandle(leaf)
-      }
-    }
-    return null
   }
 
   resolveLeafForHandle(handle: string): { ptyId: string | null } | null {
@@ -2841,31 +2193,6 @@ export class RuntimePtyWorktrees {
     return { ptyId: leaf.ptyId }
   }
 
-  resolveMessageWaiter(waiter: MessageWaiter, result: MessageWaitResult): void {
-    this.removeMessageWaiter(waiter)
-    waiter.resolve(result)
-  }
-
-  resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
-    const handle = this.deps.handleByPtyId().get(ptyId)
-    if (!handle) {
-      return
-    }
-    const waiters = this.deps.waitersByHandle().get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    // eslint-disable-next-line unicorn/no-useless-spread -- waiters is mutated during iteration
-    for (const waiter of [...waiters]) {
-      if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
-      } else {
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
-      }
-    }
-  }
-
   async resolveTerminalCwd(handle: string): Promise<string | null> {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
     if (!ptyId) {
@@ -2888,35 +2215,6 @@ export class RuntimePtyWorktrees {
     return ptyId ? (this.deps.terminalFileUriHostnameByPtyId().get(ptyId) ?? null) : null
   }
 
-  resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    const candidateHandle =
-      this.deps.handleByLeafKey().get(leafKey) ??
-      (leaf.ptyId
-        ? (this.deps.handleByPtyId().get(leaf.ptyId) ??
-          this.deps.handleByPtyIncarnation().get(leaf.ptyId)?.handle)
-        : undefined)
-    if (!candidateHandle || !this.deps.waitersByHandle().has(candidateHandle)) {
-      return
-    }
-    const handle = this.issueHandle(leaf)
-    const waiters = this.deps.waitersByHandle().get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    // eslint-disable-next-line unicorn/no-useless-spread -- waiters is mutated during iteration
-    for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
-      }
-    }
-  }
-
-  resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
-    this.removeWaiter(waiter)
-    waiter.resolve(result)
-  }
-
   retirePtyAgentLaunchAuthority(ptyId: string): void {
     const pty = this.deps.ptysById().get(ptyId)
     if (!pty) {
@@ -2934,56 +2232,6 @@ export class RuntimePtyWorktrees {
     for (const paneKey of paneKeys) {
       this.deps.retireAgentHookCompatibilityAuthorityFn()?.(paneKey)
     }
-  }
-
-  rollbackLegacyWorkerTerminalSurface(
-    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
-  ): void {
-    const snapshot = this.deps.mobileSessionTabsByWorktree().get(candidate.worktreeId)
-    if (snapshot) {
-      const retired = retireTerminalSurfacesFromSnapshot({
-        snapshot,
-        ptyId: candidate.ptyId,
-        exactSurfaces: [{ parentTabId: candidate.tabId, leafId: candidate.leafId }],
-        exactOnly: true
-      })
-      if (retired) {
-        this.deps.mobileSessionTabsByWorktree().set(candidate.worktreeId, retired.snapshot)
-        this.deps.notifyMobileSessionTabsChanged(candidate.worktreeId)
-      }
-    }
-
-    const leafKey = this.deps.getLeafKey(candidate.tabId, candidate.leafId)
-    const leaf = this.deps.leaves().get(leafKey)
-    const pty = this.deps.ptysById().get(candidate.ptyId)
-    if (
-      leaf?.ptyId === candidate.ptyId &&
-      runtimeWorktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
-    ) {
-      this.deps.leaves().delete(leafKey)
-      const surfaceHandle = this.deps.handleByLeafKey().get(leafKey)
-      this.deps.handleByLeafKey().delete(leafKey)
-      const handleRecord = surfaceHandle ? this.deps.handles().get(surfaceHandle) : undefined
-      if (
-        surfaceHandle &&
-        handleRecord?.tabId === candidate.tabId &&
-        handleRecord.leafId === candidate.leafId &&
-        handleRecord.ptyId === candidate.ptyId
-      ) {
-        this.deps.handles().delete(surfaceHandle)
-      }
-      this.rebuildLeafPtyIndex()
-      if (![...this.deps.leaves().values()].some((entry) => entry.tabId === candidate.tabId)) {
-        this.deps.tabs().delete(candidate.tabId)
-      }
-    }
-    if (pty?.tabId === candidate.tabId) {
-      pty.tabId = null
-      pty.paneKey = null
-    }
-    this.deps
-      .notifier()
-      ?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, 'rolled_back', candidate.ptyId)
   }
 
   setPairedRendererSessionOwnership(ptyId: string, owned: boolean): void {
@@ -3168,35 +2416,6 @@ export class RuntimePtyWorktrees {
     return this.deps.mobileTabSnapshots().touchMobileSessionSnapshotsForPty(ptyId, options)
   }
 
-  updateLegacyWorkerTerminalRecoveryRetry(
-    plan: LegacyWorkerTerminalRecoveryPlan,
-    deferredDispatchIds: ReadonlySet<string>,
-    options: { connectionId?: string; materializeRenderer?: boolean }
-  ): void {
-    const scopeKey = options.connectionId ? `ssh:${options.connectionId}` : 'local'
-    const hasDeferredWorker = plan.candidates.some((candidate) => {
-      const sshPty = parseAppSshPtyId(candidate.ptyId)
-      const inScope = options.connectionId
-        ? sshPty?.connectionId === options.connectionId
-        : sshPty === null
-      return inScope && deferredDispatchIds.has(candidate.dispatchId)
-    })
-    if (!hasDeferredWorker) {
-      this.cancelLegacyWorkerTerminalRecoveryRetry(scopeKey)
-      return
-    }
-    const existing = this.deps.legacyWorkerTerminalRecoveryRetries().get(scopeKey)
-    const retry = existing ?? {
-      attempt: 0,
-      ...(options.connectionId ? { connectionId: options.connectionId } : {}),
-      materializeRenderer: options.materializeRenderer === true,
-      timer: null
-    }
-    retry.materializeRenderer ||= options.materializeRenderer === true
-    this.deps.legacyWorkerTerminalRecoveryRetries().set(scopeKey, retry)
-    this.armLegacyWorkerTerminalRecoveryRetry(scopeKey, retry)
-  }
-
   async waitForAdoptedStructuredTuiProof(input: {
     owner: StructuredTuiOwner
     threadId: string
@@ -3221,68 +2440,6 @@ export class RuntimePtyWorktrees {
     return { transcriptPath }
   }
 
-  waitForLeafPtyId(handle: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<string> {
-    const leaf = this.resolveLeafForHandle(handle)
-    if (leaf?.ptyId) {
-      return Promise.resolve(leaf.ptyId)
-    }
-
-    // Why: ptyId null→real invalidates the old handle; capture tabId+leafId now for direct leaf lookup afterward.
-    const record = this.deps.handles().get(handle)
-    const savedTabId = record?.tabId ?? null
-    const savedLeafId = record?.leafId ?? null
-
-    return new Promise<string>((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      let check: () => void = () => {}
-      const cleanup = (): void => {
-        if (timer) {
-          clearTimeout(timer)
-          timer = null
-        }
-        const idx = this.deps.graphSyncCallbacks().indexOf(check)
-        if (idx !== -1) {
-          this.deps.graphSyncCallbacks().splice(idx, 1)
-        }
-        signal?.removeEventListener('abort', onAbort)
-      }
-      const finish = (ptyId: string): void => {
-        cleanup()
-        resolve(ptyId)
-      }
-      const fail = (error: Error): void => {
-        cleanup()
-        reject(error)
-      }
-      const onAbort = (): void => {
-        fail(new Error('request_aborted'))
-      }
-      if (signal?.aborted) {
-        reject(new Error('request_aborted'))
-        return
-      }
-      signal?.addEventListener('abort', onAbort, { once: true })
-      timer = setTimeout(() => {
-        fail(new Error('Timed out waiting for PTY to spawn'))
-      }, timeoutMs)
-
-      check = (): void => {
-        // Try the handle first (works if handle wasn't invalidated yet)
-        let ptyId = this.resolveLeafForHandle(handle)?.ptyId
-        // Why: ptyId null→real invalidates the old handle; fall back to direct leaf lookup by saved coordinates.
-        if (!ptyId && savedTabId && savedLeafId) {
-          const directLeaf = this.deps.leaves().get(this.deps.getLeafKey(savedTabId, savedLeafId))
-          ptyId = directLeaf?.ptyId ?? null
-        }
-        if (ptyId) {
-          finish(ptyId)
-        }
-      }
-      this.deps.graphSyncCallbacks().push(check)
-      check()
-    })
-  }
-
   async waitForStructuredTuiPtyExit(ptyId: string): Promise<void> {
     const deadline = Date.now() + 5_000
     while (this.deps.ptysById().get(ptyId)?.connected === true) {
@@ -3291,37 +2448,5 @@ export class RuntimePtyWorktrees {
       }
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
-  }
-
-  waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
-    const existing = this.resolveHandleForTab(tabId)
-    if (existing) {
-      return Promise.resolve(existing)
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const idx = this.deps.graphSyncCallbacks().indexOf(check)
-        if (idx !== -1) {
-          this.deps.graphSyncCallbacks().splice(idx, 1)
-        }
-        reject(new Error('Timed out waiting for terminal handle after creation'))
-      }, timeoutMs)
-
-      const check = (): void => {
-        const handle = this.resolveHandleForTab(tabId)
-        if (handle) {
-          clearTimeout(timer)
-          const idx = this.deps.graphSyncCallbacks().indexOf(check)
-          if (idx !== -1) {
-            this.deps.graphSyncCallbacks().splice(idx, 1)
-          }
-          resolve(handle)
-        }
-      }
-      this.deps.graphSyncCallbacks().push(check)
-      // Why: graph sync may have fired between the initial check and registration; re-check to avoid a missed wake-up.
-      check()
-    })
   }
 }
