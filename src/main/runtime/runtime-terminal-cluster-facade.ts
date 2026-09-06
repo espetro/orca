@@ -1,35 +1,46 @@
 /* eslint-disable max-lines -- Why: extracted terminal cluster (create/split/wait/show, headless persistence, layout/fit-restore, tail projection) */
+import {
+  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+  DEFAULT_TERMINAL_LIST_LIMIT,
+  MOBILE_AUTO_RESTORE_FIT_MAX_MS,
+  MOBILE_AUTO_RESTORE_FIT_MIN_MS,
+  applyRestoredTerminalTailSeed,
+  assertTerminalInputWithinLimitWithYield,
+  buildPtyTerminalWaitBlockedResult,
+  buildPtyTerminalWaitResult,
+  buildRestoredTerminalTailSeed,
+  buildTerminalWaitBlockedResult,
+  buildTerminalWaitResult,
+  buildVisibleSnapshotReadFallback,
+  computeTerminalTailWaitState,
+  expandTerminalInteractiveWait,
+  getTerminalState,
+  isTerminalSendSettlementAgent,
+  labelTerminalReadSource,
+  notifyRuntimeListeners,
+  projectVisibleTerminalLines,
+  readTerminalTail,
+  resolveTerminalSessionWorktreeId,
+  restoredTerminalTailSeedAllowed,
+  runtimeWorktreeIdsEqual
+} from './runtime-tail-projection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import type { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
-  isOpenCodeNativeTitle,
-  isQuarterCircleSpinnerOnlyAgentTitle,
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
-import {
-  isExpectedAgentProcess,
-  recognizeAgentProcess
-} from '../../shared/agent-process-recognition'
-import {
-  AGENT_PROMPT_BRACKETED_PASTE_END,
-  AGENT_PROMPT_SUBMIT,
-  buildAgentPromptPasteBytes,
-  getAgentPromptSubmitDelayMs,
-  getTerminalPasteIngestMs
-} from '../../shared/agent-prompt-injection'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ProcessedAgentStatusChunk } from '../../shared/agent-status-osc'
 import { createAgentStatusOscProcessor } from '../../shared/agent-status-osc'
 import type {
-  AgentStatusEntry,
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type {
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
@@ -98,14 +109,7 @@ import type {
 } from '../../shared/terminal-side-effect-facts'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -125,10 +129,6 @@ import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
 } from './agent-prompt-submission-verification'
-import {
-  resolveAgentPromptEffectTimeoutMs,
-  verifyAgentPromptSubmission
-} from './agent-prompt-submission-verification'
 import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import type { ClaudeAgentTeamsService } from './claude-agent-teams-service'
@@ -146,49 +146,11 @@ import type {
   RemoteTerminalSourceRangeReplacementReservation,
   RemoteTerminalSourceRangeStreamIdentity
 } from './remote-terminal-source-range-consumer'
-import type { RuntimeManagedWorktrees } from './runtime-managed-worktrees'
 import type { RuntimeMobileSessionFacade } from './runtime-mobile-session-facade'
 import type { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimePtyWorktrees } from './runtime-pty-worktrees'
 import type { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import type { TerminalTailWaitState } from './runtime-tail-projection'
-import {
-  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  DEFAULT_TERMINAL_LIST_LIMIT,
-  MOBILE_AUTO_RESTORE_FIT_MAX_MS,
-  MOBILE_AUTO_RESTORE_FIT_MIN_MS,
-  PTY_CONTROLLER_LIST_TIMEOUT_MS,
-  agentTitleProvesAgentPresence,
-  applyRestoredTerminalTailSeed,
-  assertTerminalInputWithinLimitWithYield,
-  buildPtyTerminalWaitBlockedResult,
-  buildPtyTerminalWaitResult,
-  buildRestoredTerminalTailSeed,
-  buildSendPayload,
-  buildTerminalWaitBlockedResult,
-  buildTerminalWaitResult,
-  buildTerminalWaitText,
-  buildVisibleSnapshotReadFallback,
-  classifyAgentTitle,
-  computeTerminalTailWaitState,
-  expandTerminalInteractiveWait,
-  getLatestLeafTitle,
-  getTerminalState,
-  inferWorktreeIdFromPtyId,
-  isKnownReadyPromptPreview,
-  isTerminalSendSettlementAgent,
-  labelTerminalReadSource,
-  mapExplicitAgentStateToRuntimeTerminalStatus,
-  notifyRuntimeListeners,
-  projectVisibleTerminalLines,
-  ptyTitleProvesAgentPresence,
-  readTerminalTail,
-  resolveTerminalSessionWorktreeId,
-  restoredTerminalTailSeedAllowed,
-  runtimeWorktreeIdsEqual,
-  terminalTitleBlocksExplicitAgentStatus,
-  withTimeoutResult
-} from './runtime-tail-projection'
 import type { TerminalFocusNavigationCoalescer } from './terminal-focus-navigation-coalescer'
 import {
   appendRecentPtyPathCandidates,
@@ -223,6 +185,18 @@ import {
   splitPtyBackedTerminal
 } from './runtime-terminal-split-commands'
 import {
+  buildStartupForAgent,
+  getFreshExplicitAgentStatusForHandle,
+  getTerminalAgentStatus,
+  isTerminalRunningAgent,
+  reconcileRemoteTerminalCreate,
+  seedHeadlessTerminal,
+  sendTerminal,
+  sendTerminalAgentPrompt,
+  writeTerminalAction,
+  writeTerminalAgentPrompt
+} from './runtime-terminal-agent-prompt-commands'
+import {
   buildTerminalListHostScope,
   buildTerminalSummary,
   buildTerminalVisualGroups,
@@ -248,20 +222,15 @@ import {
   waitForSetupTerminalCompletion,
   reclaimTerminalForDesktop
 } from './runtime-terminal-session-commands'
+import type { RuntimeTerminalCloseCtx } from './runtime-terminal-close-commands'
 import {
   closeTerminal,
   stopExplicitlyClosedTabPtys,
   describeTerminalClose,
   getPtyIdsForExplicitTabClose
 } from './runtime-terminal-close-commands'
-import type { RuntimeTerminalCloseCtx } from './runtime-terminal-close-commands'
 import { addListenerToMap } from './runtime-worktree-git-shared'
-import {
-  assertAgentPromptRequestActive,
-  waitForAgentPromptDelay,
-  waitForAgentPromptPromise,
-  yieldBetweenTerminalInputChunks
-} from './agent-session-terminal-operations'
+import { yieldBetweenTerminalInputChunks } from './agent-session-terminal-operations'
 import type {
   ApplyLayoutResult,
   DriverState,
@@ -949,58 +918,7 @@ export class RuntimeTerminalCluster {
     prompt: string | undefined,
     launchPreferences?: AgentLaunchPreferences
   ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
-    if (!this.deps.store()) {
-      throw new Error('runtime_unavailable')
-    }
-    const settings = this.requireStore().getSettings()
-    if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
-      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
-    }
-    // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
-    // the workspace shell rather than the client shell.
-    const agentLaunchPlatform = this.deps.getAgentLaunchPlatformForRepo(repo)
-    const isRemote = repoIsRemote(repo)
-    const queuedShell = resolveLocalWindowsAgentStartupShell({
-      platform: agentLaunchPlatform,
-      isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    const sessionOptions = this.toAgentSessionOptions(launchPreferences)
-    const startupPlan = buildAgentStartupPlan({
-      agent,
-      prompt: prompt ?? '',
-      cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-      sessionOptions,
-      sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
-      platform: agentLaunchPlatform,
-      shell: queuedShell,
-      isRemote,
-      allowEmptyPromptLaunch: true
-    })
-    if (!startupPlan) {
-      throw new Error(`Could not build launch command for ${agent}.`)
-    }
-    return {
-      agent,
-      startup: {
-        command: startupPlan.launchCommand,
-        launchConfig: startupPlan.launchConfig,
-        ...(startupPlan.startupCommandDelivery
-          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-          : {}),
-        ...(startupPlan.env ? { env: startupPlan.env } : {})
-      },
-      ...(startupPlan.followupPrompt
-        ? {
-            followup: {
-              expectedProcess: startupPlan.expectedProcess,
-              prompt: startupPlan.followupPrompt
-            }
-          }
-        : {})
-    }
+    return buildStartupForAgent(this, repo, agent, prompt, launchPreferences)
   }
 
   buildTerminalVisualGroupLayout(
@@ -1598,49 +1516,7 @@ export class RuntimeTerminalCluster {
     /** When this state was entered. Pinned across same-state pings, so it identifies the turn. */
     stateStartedAt: number
   } | null {
-    const paneKey = paneKeyOverride ?? this.getPaneKeyForTerminalHandle(handle)
-    const now = Date.now()
-    let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
-    let bestUpdatedAt = -1
-    let bestStateStartedAt = -1
-
-    const consider = (
-      state: AgentStatusEntry['state'] | undefined,
-      updatedAt: number | null | undefined,
-      restoredUnconfirmed = false,
-      stateStartedAt?: number | null
-    ): void => {
-      if (!state || restoredUnconfirmed) {
-        return
-      }
-      if (typeof updatedAt !== 'number' || now - updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-        return
-      }
-      const status = mapExplicitAgentStateToRuntimeTerminalStatus(state)
-      // Why: older retained permission rows can remain visible after the agent
-      // resumes. Prefer the newest explicit state; only let permission win ties.
-      if (updatedAt > bestUpdatedAt || (updatedAt === bestUpdatedAt && status === 'permission')) {
-        bestStatus = status
-        bestUpdatedAt = updatedAt
-        bestStateStartedAt = typeof stateStartedAt === 'number' ? stateStartedAt : updatedAt
-      }
-    }
-
-    if (paneKey) {
-      const retained = this.deps.latestAgentStatusByPaneKey().get(paneKey)
-      consider(retained?.payload.state, retained?.updatedAt, false, retained?.stateStartedAt)
-    }
-
-    for (const entry of this.deps.getAgentStatusSnapshotFn()?.() ?? []) {
-      if (entry.terminalHandle !== handle && (!paneKey || entry.paneKey !== paneKey)) {
-        continue
-      }
-      consider(entry.state, entry.receivedAt, entry.restoredUnconfirmed, entry.stateStartedAt)
-    }
-
-    return bestStatus
-      ? { status: bestStatus, updatedAt: bestUpdatedAt, stateStartedAt: bestStateStartedAt }
-      : null
+    return getFreshExplicitAgentStatusForHandle(this, handle, paneKeyOverride)
   }
 
   getHeadlessMobileSessionGroupId() {
@@ -1811,50 +1687,7 @@ export class RuntimeTerminalCluster {
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
-    const ptyId = this.deps.getTerminalAgentStatusPtyId(handle)
-    const terminal = this.deps.getTerminalAgentStatusSnapshot(handle, ptyId)
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
-    const lifecycle = this.deps.agentPromptLifecycleByPtyId().get(ptyId)
-    if (
-      (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) ||
-      this.deps.hasAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle)
-    ) {
-      return { handle, isRunningAgent: true, status: 'permission' }
-    }
-    if (explicitStatus) {
-      // Why: permission titles can linger after hooks report the agent resumed.
-      // Fresh hook state is tighter, but current shell/management evidence wins.
-      const isRunningAgent =
-        !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
-        !(await this.terminalHasShellForegroundProcess(handle, ptyId))
-      this.deps.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return {
-        handle,
-        isRunningAgent,
-        status: isRunningAgent ? explicitStatus.status : null
-      }
-    }
-    if (terminal.titleStatus) {
-      // Why: an OpenCode marker and a lone quarter-circle spinner (STA-4028) are activity,
-      // not identity, so resolve both through the identity/foreground evidence path.
-      if (
-        isOpenCodeNativeTitle(terminal.title) ||
-        isQuarterCircleSpinnerOnlyAgentTitle(terminal.title)
-      ) {
-        const isRunningAgent = await this.isTerminalRunningAgent(handle)
-        this.deps.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-        return {
-          handle,
-          isRunningAgent,
-          status: isRunningAgent ? terminal.titleStatus : null
-        }
-      }
-      return { handle, isRunningAgent: true, status: terminal.titleStatus }
-    }
-
-    const isRunningAgent = await this.isTerminalRunningAgent(handle)
-    this.deps.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    return { handle, isRunningAgent, status: null }
+    return getTerminalAgentStatus(this, handle)
   }
 
   getTerminalFitOverride(ptyId: string) {
@@ -2161,67 +1994,7 @@ export class RuntimeTerminalCluster {
     handle: string,
     options: { retryForegroundWrappers?: boolean } = {}
   ): Promise<boolean> {
-    try {
-      const pty = this.getLivePtyForHandle(handle)
-      if (pty) {
-        const leaf = this.deps.getPrimaryLeafForPty(pty.pty.ptyId)
-        return await this.deps.isPtyRunningAgent(pty.pty, leaf, options)
-      }
-      const { leaf } = this.getLiveLeafForHandle(handle)
-      const trackedPty = leaf.ptyId ? this.deps.ptysById().get(leaf.ptyId) : null
-      // Why: check the leaf pane title and the tab title, which already carries OSC-enriched agent indicators (e.g. ✳ prefix).
-      const paneTitle = getLatestLeafTitle(leaf, null)
-      const paneTitleClassification = classifyAgentTitle(paneTitle)
-      if (
-        trackedPty
-          ? ptyTitleProvesAgentPresence(trackedPty, paneTitle, paneTitleClassification)
-          : agentTitleProvesAgentPresence(paneTitle, paneTitleClassification)
-      ) {
-        return true
-      }
-      const tabTitle = this.deps.tabs().get(leaf.tabId)?.title?.trim() || null
-      const tabTitleClassification = paneTitle === null ? classifyAgentTitle(tabTitle) : 'neutral'
-      if (
-        trackedPty
-          ? ptyTitleProvesAgentPresence(trackedPty, tabTitle, tabTitleClassification)
-          : agentTitleProvesAgentPresence(tabTitle, tabTitleClassification)
-      ) {
-        return true
-      }
-      const openCodeMarkerTitle = paneTitle ?? tabTitle
-      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      if (!isOpenCodeNativeTitle(openCodeMarkerTitle) && isKnownReadyPromptPreview(waitText)) {
-        return true
-      }
-      const hasCurrentTitleEvidence = paneTitle !== null || tabTitle !== null
-      if (leaf.lastAgentStatus !== null && !hasCurrentTitleEvidence) {
-        return true
-      }
-      if (!leaf.ptyId || !this.deps.ptyController()) {
-        return false
-      }
-      const fg = await this.deps.ptyController()!.getForegroundProcess(leaf.ptyId)
-      // Why: a bare `Cursor Agent` title is identity, not liveness — it reads the same
-      // whether cursor-agent is parked or long exited with the shell back. A null
-      // foreground is untracked, not alive, so no-evidence must stay a refusal. A live
-      // pane wrongly refused here means the read failed; fix that, not this.
-      if (!fg) {
-        return false
-      }
-      // Why: Claude's management UI runs under the Claude process but isn't a task-capable session; suppress only that process.
-      const shouldSuppressClaudeForeground =
-        paneTitleClassification === 'management' || tabTitleClassification === 'management'
-      if (shouldSuppressClaudeForeground && isExpectedAgentProcess(fg, 'claude')) {
-        return false
-      }
-      // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
-      return await this.deps.isRecognizedForegroundAgentProcess(leaf.ptyId, fg, {
-        suppressClaude: shouldSuppressClaudeForeground,
-        retryWrappers: options.retryForegroundWrappers !== false
-      })
-    } catch {
-      return false
-    }
+    return isTerminalRunningAgent(this, handle, options)
   }
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
@@ -2673,55 +2446,7 @@ export class RuntimeTerminalCluster {
     worktreeId: string,
     terminalHandle: string
   ): Promise<RuntimeTerminalCreate | null> {
-    if (!this.deps.ptyController()?.listProcesses) {
-      throw new Error('runtime_unavailable')
-    }
-    const listed = await withTimeoutResult(
-      this.deps.ptyController()!.listProcesses!(),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS
-    )
-    if (!listed.ok) {
-      // Why: unknown inventory cannot prove the first create failed, so spawning could duplicate a live shell.
-      throw new Error('runtime_unavailable')
-    }
-    const matches = listed.value.filter((session) => session.terminalHandle === terminalHandle)
-    if (matches.length > 1) {
-      throw new Error('terminal_create_identity_conflict')
-    }
-    if (matches.length === 0) {
-      const sameWorktreeHasUnknownIdentity = listed.value.some(
-        (session) =>
-          (session.worktreeId ?? inferWorktreeIdFromPtyId(session.id)) === worktreeId &&
-          !session.terminalHandle
-      )
-      if (sameWorktreeHasUnknownIdentity) {
-        // Why: older retained providers may list the first shell without its handle; absence is not authoritative in that shape.
-        throw new Error('runtime_unavailable')
-      }
-      return null
-    }
-    const session = matches[0]
-    const authoritativeWorktreeId = session.worktreeId ?? inferWorktreeIdFromPtyId(session.id)
-    if (authoritativeWorktreeId !== worktreeId) {
-      // Why: a reused address or forged provider record must never adopt a PTY from another workspace.
-      throw new Error('terminal_create_identity_conflict')
-    }
-    this.adoptControllerTerminalHandle(session.id, terminalHandle)
-    const pty = this.deps.recordPtyWorktree(session.id, worktreeId, {
-      connected: true,
-      title: session.title
-    })
-    const adoptedHandle = this.deps.issuePtyHandle(pty)
-    if (adoptedHandle !== terminalHandle) {
-      throw new Error('terminal_create_identity_conflict')
-    }
-    return {
-      handle: adoptedHandle,
-      ptyId: session.id,
-      worktreeId,
-      title: session.title || null,
-      surface: 'background'
-    }
+    return reconcileRemoteTerminalCreate(this, worktreeId, terminalHandle)
   }
 
   recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
@@ -3322,54 +3047,7 @@ export class RuntimeTerminalCluster {
     size?: { cols: number; rows: number },
     metadata: HeadlessSeedMetadata = {}
   ): void {
-    if (!data) {
-      return
-    }
-    const existing = this.deps.headlessTerminals().get(ptyId)
-    if (existing) {
-      // Why: emulator already has live data — re-seeding would duplicate
-      // every byte. The seed is only valid when the emulator is fresh.
-      if (metadata.preferProviderIfExisting) {
-        this.deps.providerSnapshotPreferredPtys().add(ptyId)
-      }
-      return
-    }
-    const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    state.outputSequence = this.getPtyOutputSequence(ptyId)
-    this.deps.headlessTerminals().set(ptyId, state)
-    this.deps.recordOsc7MetadataForPty(ptyId, data)
-    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
-    state.writeChain = state.writeChain
-      .then(async () => {
-        // Why: seed writes never set forwardQueryReplies — the main-side
-        // replay guard. A snapshot containing old queries must answer no one.
-        await state.emulator.write(data)
-        // Why AFTER the seed write: the snapshot payload cannot carry kitty
-        // pushes (rehydrateSequences deliberately omits them), but ordering
-        // behind it keeps the parse deterministic. Unflagged like the seed —
-        // re-applying flags must answer no one.
-        if (typeof metadata.kittyKeyboardFlags === 'number') {
-          await state.emulator.applyKittyKeyboardFlags(metadata.kittyKeyboardFlags)
-        }
-        if (metadata.cwd !== undefined) {
-          state.emulator.setCwd(metadata.cwd)
-        }
-        if (metadata.oscLinks !== undefined) {
-          state.emulator.setRestoredOscLinks(metadata.oscLinks)
-        }
-        // Why derived from the emulator: the seed bytes bypass ownership.scan,
-        // so the scanner must inherit the restored alternate-screen state or a
-        // pane seeded mid-TUI never arms its recovery trigger.
-        state.ownership.seedOwner(metadata.terminalOwner, {
-          alternateScreen: state.emulator.isAlternateScreen
-        })
-        this.deps.providerSnapshotPreferredPtys().delete(ptyId)
-      })
-      .catch(() => {
-        // Seeding is best-effort; live data will continue to populate the
-        // emulator even if the snapshot replay fails.
-      })
+    return seedHeadlessTerminal(this, ptyId, data, size, metadata)
   }
 
   seedTerminalRestoreTail(ptyId: string, restore: { text?: string; lastTitle?: string }): void {
@@ -3409,53 +3087,10 @@ export class RuntimeTerminalCluster {
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
-      // Why: the pre-Enter wait now scales with the payload, so an abandoned request must be
-      // able to stop it instead of writing Enter minutes after the caller gave up.
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeTerminalSend> {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected) {
-        throw new Error('terminal_not_writable')
-      }
-      const payload = buildSendPayload(action)
-      if (payload === null) {
-        throw new Error('invalid_terminal_send')
-      }
-      await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
-      return {
-        handle,
-        accepted: true,
-        bytesWritten: Buffer.byteLength(payload, 'utf8')
-      }
-    }
-
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!leaf.writable || !leaf.ptyId) {
-      throw new Error('terminal_not_writable')
-    }
-    const payload = buildSendPayload(action)
-    if (payload === null) {
-      throw new Error('invalid_terminal_send')
-    }
-    await assertTerminalInputWithinLimitWithYield(action.text)
-    // Why: leaf.writable mirrors the renderer graph, which can still answer for
-    // a prior process's ptyId — and provider writes to unknown ids are accepted
-    // no-ops. Only controller-proven absence rejects; unknown proceeds (a
-    // restored daemon session takes writes before its pane remounts).
-    if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
-      throw new Error('terminal_not_writable')
-    }
-
-    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
-
-    return {
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(payload, 'utf8')
-    }
+    return sendTerminal(this, handle, action, options)
   }
 
   async sendTerminalAgentPrompt(
@@ -3467,51 +3102,7 @@ export class RuntimeTerminalCluster {
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeTerminalSend> {
-    const payload = buildAgentPromptPasteBytes(prompt)
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected) {
-        throw new Error('terminal_not_writable')
-      }
-      await assertTerminalInputWithinLimitWithYield(payload)
-      const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
-      const submits = await this.serializeAgentPromptSubmission(
-        pty.pty.ptyId,
-        generation,
-        async () => {
-          this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-          this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
-            handle,
-            pty.pty.ptyId,
-            generation,
-            payload,
-            options
-          )
-        }
-      )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
-      return { handle, accepted: true, bytesWritten }
-    }
-
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!leaf.writable || !leaf.ptyId) {
-      throw new Error('terminal_not_writable')
-    }
-    await assertTerminalInputWithinLimitWithYield(payload)
-    // Why: same absence gate as sendTerminal — a stale graph mirror must not
-    // accept a prompt into a void; unknown liveness still proceeds.
-    if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
-      throw new Error('terminal_not_writable')
-    }
-    const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
-    })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
-    return { handle, accepted: true, bytesWritten }
+    return sendTerminalAgentPrompt(this, handle, prompt, options)
   }
 
   async serializeAgentPromptSubmission<T>(
@@ -4119,61 +3710,7 @@ export class RuntimeTerminalCluster {
       signal?: AbortSignal
     } = {}
   ): Promise<void> {
-    // Why: the lease is checked before the mobile floor is reserved, so a refused send never takes
-    // a claim it will not use.
-    const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
-    // Why: direct terminal.send can carry paste-sized text from RPC/mobile
-    // clients; chunk text before PTY/ConPTY while preserving suffix separation.
-    const text = typeof action.text === 'string' ? action.text : ''
-    const hasSuffix = action.enter || action.interrupt
-    if (text) {
-      await this.writeTerminalInputChunks(ptyId, text, options, admitted)
-    }
-    if (hasSuffix) {
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      if (text) {
-        // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
-        // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
-        await waitForAgentPromptDelay(
-          getAgentPromptSubmitDelayMs(
-            this.deps.getPtyWriteHostPlatform(ptyId),
-            Buffer.byteLength(text, 'utf8')
-          ),
-          options.signal
-        )
-      }
-      // Why: the 500ms text/suffix pause is long enough for a handoff to complete, so the submit
-      // is re-checked against the fence the text was admitted under.
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-      try {
-        await options.beforeWrite?.(ptyId)
-      } catch (error) {
-        if (options.suffixFailureError) {
-          throw new Error(options.suffixFailureError)
-        }
-        throw error
-      }
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-      options.reserveWrite?.(ptyId)
-      const suffixWrote = this.deps.ptyController()?.write(ptyId, suffix) ?? false
-      if (!suffixWrote) {
-        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
-      }
-      await options.afterWrite?.(ptyId)
-      return
-    }
-    if (text) {
-      return
-    }
-
-    await options.beforeWrite?.(ptyId)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-    options.reserveWrite?.(ptyId)
-    const wrote = this.deps.ptyController()?.write(ptyId, payload) ?? false
-    if (!wrote) {
-      throw new Error('terminal_not_writable')
-    }
-    await options.afterWrite?.(ptyId)
+    return writeTerminalAction(this, ptyId, action, payload, options)
   }
 
   async writeTerminalAgentPrompt(
@@ -4187,115 +3724,7 @@ export class RuntimeTerminalCluster {
       signal?: AbortSignal
     } = {}
   ): Promise<number> {
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
-    const permissionBaseline = this.deps.getAgentPromptActivity(handle, ptyId)
-    this.deps.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
-    // Why: the floor for every wait below. Enter must never overtake bytes the execution
-    // host is still feeding the child, and that cost is proportional to the payload.
-    const writeHostPlatform = this.deps.getPtyWriteHostPlatform(ptyId)
-    const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
-    const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
-    const renderGate = this.deps.createAgentPromptRenderGate(ptyId, pasteIngestMs)
-    let wrotePasteBytes = false
-    let completedPaste = false
-    try {
-      const chunks = iterateTerminalInputChunks(pastePayload)
-      let chunk = chunks.next()
-      let firstChunk = true
-      while (!chunk.done) {
-        const nextChunk = chunks.next()
-        assertAgentPromptRequestActive(options.signal)
-        this.assertAgentPromptGeneration(ptyId, generation)
-        // Why: the first chunk was just admitted above; re-checking the lease there would only
-        // re-read what `assertAdmitted` established.
-        if (!firstChunk) {
-          agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-        }
-        firstChunk = false
-        await options.beforeWrite?.(ptyId)
-        assertAgentPromptRequestActive(options.signal)
-        this.assertAgentPromptGeneration(ptyId, generation)
-        this.deps.assertAgentPromptPermissionSafe(
-          permissionBaseline,
-          this.deps.getAgentPromptActivity(handle, ptyId)
-        )
-        agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-        if (nextChunk.done) {
-          renderGate?.arm()
-        }
-        const wrote = this.deps.ptyController()?.write(ptyId, chunk.value) ?? false
-        if (!wrote) {
-          throw new Error('terminal_not_writable')
-        }
-        wrotePasteBytes = true
-        chunk = nextChunk
-        if (!chunk.done) {
-          await yieldBetweenTerminalInputChunks()
-        }
-      }
-      completedPaste = true
-    } catch (error) {
-      if (
-        wrotePasteBytes &&
-        !completedPaste &&
-        this.getPtyLifecycleGeneration(ptyId) === generation
-      ) {
-        // Why: a lease that moved mid-paste also refuses this terminator, leaving the TUI in paste
-        // mode — the incoming owner re-establishes the mode, and feeding a session we no longer own
-        // is the worse outcome.
-        try {
-          agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-          this.deps.ptyController()?.write(ptyId, AGENT_PROMPT_BRACKETED_PASTE_END)
-        } catch {
-          // The original refusal is the actionable error.
-        }
-      }
-      renderGate?.dispose()
-      throw error
-    }
-
-    if (renderGate) {
-      try {
-        await waitForAgentPromptPromise(renderGate.wait(), options.signal)
-      } finally {
-        renderGate.dispose()
-      }
-    } else {
-      await waitForAgentPromptDelay(
-        getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
-        options.signal
-      )
-    }
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-    try {
-      await options.beforeWrite?.(ptyId)
-    } catch (error) {
-      if (options.suffixFailureError) {
-        throw new Error(options.suffixFailureError)
-      }
-      throw error
-    }
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
-    const waitTextCache: AgentPromptWaitTextCache = {}
-    const baseline = this.deps.getAgentPromptActivity(handle, ptyId, waitTextCache)
-    this.deps.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-    const suffixWrote = this.deps.ptyController()?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
-    if (!suffixWrote) {
-      throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
-    }
-    await verifyAgentPromptSubmission({
-      baseline,
-      readActivity: () => this.deps.getAgentPromptActivity(handle, ptyId, waitTextCache),
-      timeoutMs: resolveAgentPromptEffectTimeoutMs(this.deps.getPtyAgent(ptyId)),
-      signal: options.signal
-    })
-    return 1
+    return writeTerminalAgentPrompt(this, handle, ptyId, generation, pastePayload, options)
   }
 
   async writeTerminalInputChunks(
