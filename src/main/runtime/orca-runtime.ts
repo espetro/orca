@@ -368,7 +368,7 @@ import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
 } from '../preflight/agent-detection'
-import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
+import { RuntimeFileCommands } from './orca-runtime-files'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -442,7 +442,6 @@ import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
-import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
 import type { MobileSessionTabCloseOutcome } from './mobile-session-tab-close-outcome'
 import type {
@@ -3109,6 +3108,18 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.workspaceFileTargetCommands = new RuntimeWorkspaceFileTargetCommands({
+      store: this.store,
+      listResolvedWorktrees: () => this.listResolvedWorktrees(),
+      buildRuntimeVisibilitySourceMatchersByRepoId: (worktrees, visibilityDefaults) =>
+        this.buildRuntimeVisibilitySourceMatchersByRepoId(worktrees, visibilityDefaults),
+      isRuntimeWorktreeVisible: (worktree, matcher, settings) =>
+        this.isRuntimeWorktreeVisible(worktree, matcher, settings),
+      resolveFolderWorkspaceConnectionId: (folderWorkspace) =>
+        this.resolveFolderWorkspaceConnectionId(folderWorkspace),
+      folderWorkspaceToResolvedWorktree: (folderWorkspace) =>
+        this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+    })
     this.terminalRecoveryCommands = new RuntimeTerminalRecoveryCommands(
       buildTerminalRecoveryCommandsDepsImpl(this)
     )
@@ -5403,13 +5414,17 @@ export class OrcaRuntimeService {
     )
   }
 
+  private readonly workspaceFileTargetCommands: RuntimeWorkspaceFileTargetCommands
   private readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-    resolveKnownWorkspaceFileTarget: (absolutePath, connectionId) =>
-      this.resolveKnownWorkspaceFileTarget(absolutePath, connectionId),
+    resolveKnownWorkspaceFileTarget: (absolutePath, executionHostId) =>
+      this.workspaceFileTargetCommands.resolveKnownWorkspaceFileTarget(
+        absolutePath,
+        executionHostId
+      ),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
     resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
@@ -5811,84 +5826,6 @@ export class OrcaRuntimeService {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = store.getRepo(worktree.repoId)
     return { worktree, connectionId: repo?.connectionId ?? undefined }
-  }
-
-  private async resolveKnownWorkspaceFileTarget(
-    absolutePath: string,
-    executionHostId: ExecutionHostId
-  ): Promise<{
-    worktree: ResolvedWorktree
-    connectionId?: string
-    relativePath: string
-  } | null> {
-    const targets = new Map<
-      string,
-      {
-        worktree: ResolvedWorktree
-        connectionId?: string
-        executionHostId: ExecutionHostId
-      }
-    >()
-    const resolvedWorktrees = await this.listResolvedWorktrees()
-    const settings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
-      resolvedWorktrees,
-      settings?.worktreeVisibilityDefaults
-    )
-    for (const worktree of resolvedWorktrees) {
-      if (
-        !this.isRuntimeWorktreeVisible(
-          worktree,
-          visibilitySourceMatchersByRepoId.get(worktree.repoId),
-          settings
-        )
-      ) {
-        continue
-      }
-      const candidateConnectionId = this.store?.getRepo(worktree.repoId)?.connectionId ?? undefined
-      const target = {
-        worktree,
-        executionHostId: getRuntimeFileTargetExecutionHostId({
-          worktree,
-          connectionId: candidateConnectionId
-        }),
-        ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
-      }
-      targets.set(`${target.executionHostId}\0${worktree.id}`, target)
-    }
-    for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
-      try {
-        const candidateConnectionId =
-          this.resolveFolderWorkspaceConnectionId(folderWorkspace) ?? undefined
-        const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-        const target = {
-          worktree,
-          executionHostId: getRuntimeFileTargetExecutionHostId({
-            worktree,
-            connectionId: candidateConnectionId
-          }),
-          ...(candidateConnectionId ? { connectionId: candidateConnectionId } : {})
-        }
-        targets.set(`${target.executionHostId}\0${worktree.id}`, target)
-      } catch {
-        // An ambiguous folder workspace has no single filesystem authority.
-      }
-    }
-
-    const owner = findRuntimeWorkspaceFileOwner(
-      [...targets.values()].map((target) => ({
-        workspaceId: target.worktree.id,
-        rootPath: target.worktree.path,
-        executionHostId: target.executionHostId
-      })),
-      absolutePath,
-      executionHostId
-    )
-    if (!owner) {
-      return null
-    }
-    const target = targets.get(`${owner.executionHostId}\0${owner.workspaceId}`)
-    return target ? { ...target, relativePath: owner.relativePath } : null
   }
 
   onMobileSessionTabsChanged(
@@ -11146,6 +11083,7 @@ import { RuntimeMobileTabOperations } from './runtime-mobile-tab-operations'
 import { RuntimeWorktreePs } from './runtime-worktree-ps'
 import { RuntimeWindowGraphClientCommands } from './runtime-window-graph-client-commands'
 import { RuntimeTerminalRecoveryCommands } from './runtime-terminal-recovery-commands'
+import { RuntimeWorkspaceFileTargetCommands } from './runtime-workspace-file-target-commands'
 import {
   buildMobileTabOperationsDepsImpl,
   buildTerminalRecoveryCommandsDepsImpl,
