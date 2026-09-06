@@ -205,7 +205,6 @@ import {
   recentTerminalPathCandidatesIncludePath
 } from './terminal-output-path-candidates'
 import type { BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './orca-runtime'
 import {
@@ -228,6 +227,11 @@ import {
   waitForTerminal
 } from './runtime-terminal-wait-commands'
 import {
+  recoverTerminalPane,
+  replaceHeadlessTerminalAfterExecutionContextChange,
+  splitPtyBackedTerminal
+} from './runtime-terminal-split-commands'
+import {
   adoptTerminalOrphansFromInventory,
   createTerminal
 } from './runtime-terminal-create-commands'
@@ -248,10 +252,6 @@ import {
 } from './runtime-terminal-close-commands'
 import type { RuntimeTerminalCloseCtx } from './runtime-terminal-close-commands'
 import { addListenerToMap } from './runtime-worktree-git-shared'
-import {
-  REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS,
-  ownerSurfacing
-} from './runtime-terminal-surface-shared'
 import {
   assertAgentPromptRequestActive,
   waitForAgentPromptDelay,
@@ -3256,62 +3256,6 @@ export class RuntimeTerminalCluster {
     this.emitTerminalSideEffectBatch(ptyId, [fact])
   }
 
-  async recoverTerminalPane(
-    paneKey: string,
-    expectedWorktreeId: string,
-    expectedHandle?: string
-  ): Promise<RuntimeTerminalResolvePane> {
-    const parsed = parsePaneKey(paneKey)
-    const pty = this.getPtyRecordForPaneKey(paneKey)
-    if (
-      !parsed ||
-      !pty ||
-      !expectedHandle ||
-      pty.worktreeId !== expectedWorktreeId ||
-      this.getPaneKeyForTerminalHandle(expectedHandle) !== paneKey
-    ) {
-      throw new Error('terminal_not_found')
-    }
-    const recoveryKey = `${expectedWorktreeId}\0${paneKey}`
-    const pending = this.deps.terminalPaneRecoveryByIdentity().get(recoveryKey)
-    if (pending) {
-      return pending
-    }
-    if (pty?.connected) {
-      const current = this.resolveTerminalPane(paneKey, expectedWorktreeId)
-      if (expectedHandle === undefined || current.handle !== expectedHandle) {
-        return current
-      }
-      throw new Error('terminal_not_recoverable')
-    }
-    if (
-      !this.getRecentExpiredSshLease(expectedWorktreeId, parsed.tabId, parsed.leafId, pty.ptyId)
-    ) {
-      // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell recreation.
-      throw new Error('terminal_not_recoverable')
-    }
-    // Why: disconnected PTYs can reissue handles during graph cleanup; only a connected replacement satisfies the pane CAS.
-    const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
-      tabId: parsed.tabId,
-      leafId: parsed.leafId,
-      focus: false
-    }).then((terminal) => ({
-      handle: terminal.handle,
-      tabId: parsed.tabId,
-      leafId: parsed.leafId,
-      ptyId: terminal.ptyId ?? null,
-      worktreeId: expectedWorktreeId
-    }))
-    this.deps.terminalPaneRecoveryByIdentity().set(recoveryKey, recovery)
-    const clearRecovery = (): void => {
-      if (this.deps.terminalPaneRecoveryByIdentity().get(recoveryKey) === recovery) {
-        this.deps.terminalPaneRecoveryByIdentity().delete(recoveryKey)
-      }
-    }
-    void recovery.then(clearRecovery, clearRecovery)
-    return recovery
-  }
-
   async refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
@@ -3421,47 +3365,6 @@ export class RuntimeTerminalCluster {
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.deps.notifier()?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
-  }
-
-  replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void {
-    this.disposeHeadlessTerminal(ptyId)
-    this.deps.providerSnapshotPreferredPtys().add(ptyId)
-    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    this.deps.headlessTerminals().set(ptyId, state)
-    state.writeChain = state.writeChain
-      .then(async () => {
-        const snapshot = await this.serializeProviderTerminalBuffer(ptyId)
-        if (!snapshot) {
-          return
-        }
-        const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
-        // Why: a newer live OSC 7 can arrive while the snapshot is in flight;
-        // only seed metadata while no post-correction CWD has won the race.
-        if (!this.deps.terminalCwdByPtyId().has(ptyId)) {
-          this.deps.recordOsc7MetadataForPty(ptyId, data)
-        }
-        await state.emulator.write(data)
-        if (snapshot.cwd !== undefined) {
-          state.emulator.setCwd(snapshot.cwd)
-          if (!this.deps.terminalCwdByPtyId().has(ptyId) && snapshot.cwd?.trim()) {
-            this.deps.terminalCwdByPtyId().set(ptyId, snapshot.cwd)
-          }
-        }
-        if (snapshot.oscLinks !== undefined) {
-          state.emulator.setRestoredOscLinks(snapshot.oscLinks)
-        }
-        state.ownership.seedOwner(snapshot.terminalOwner, {
-          alternateScreen: state.emulator.isAlternateScreen
-        })
-        state.outputSequence = snapshot.seq
-      })
-      .catch(() => {
-        // Best-effort: live bytes already chain behind this replacement state.
-      })
-      .finally(() => {
-        this.deps.providerSnapshotPreferredPtys().delete(ptyId)
-      })
   }
 
   replaceHeadlessTerminalFromRendererSnapshotForRecovery(
@@ -4502,200 +4405,6 @@ export class RuntimeTerminalCluster {
     return this.deps.managedWorktrees().sleepTerminalsForWorktree(worktreeSelector)
   }
 
-  async splitPtyBackedTerminal(
-    pty: RuntimePtyWorktreeRecord,
-    opts: {
-      direction?: 'horizontal' | 'vertical'
-      command?: string
-      env?: Record<string, string>
-      envToDelete?: string[]
-      activate?: boolean
-      // Why: same split as createTerminal — adopt the pane without revealing its
-      // workspace, for splits the user never asked to see.
-      surfaceOwner?: false
-      telemetrySource?: TerminalPaneSplitSource
-    } = {}
-  ): Promise<RuntimeTerminalSplit> {
-    if (!this.deps.ptyController()?.spawn) {
-      throw new Error('runtime_unavailable')
-    }
-    if (!pty.connected) {
-      throw new Error('terminal_exited')
-    }
-    const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
-    const parentTabId = pty.tabId?.trim()
-    if (!parentTabId || !parsedPaneKey) {
-      throw new Error('terminal_handle_stale')
-    }
-    const direction = opts.direction ?? 'horizontal'
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
-    const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
-      workspace.id,
-      parentTabId,
-      parsedPaneKey.leafId,
-      pty.ptyId
-    )
-    if (!sourceAuthority) {
-      throw new Error('terminal_split_source_not_found')
-    }
-    const sourceIncarnationId =
-      sourceAuthority.liveIncarnationId ?? sourceAuthority.persistedIncarnationId
-    const leafId = randomUUID()
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
-    const paneKey = makePaneKey(parentTabId, leafId)
-    const result = await this.deps.ptyController()!.spawn!({
-      cols: 120,
-      rows: 40,
-      cwd: workspace.path,
-      command: opts.command,
-      commandDelivery: 'provider',
-      env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
-      envToDelete: opts.envToDelete,
-      connectionId: workspace.connectionId,
-      worktreeId: workspace.id,
-      preAllocatedHandle,
-      tabId: parentTabId,
-      leafId,
-      persistHostSessionBinding: true,
-      ...(sourceAuthority.persisted
-        ? {
-            expectedSourceBinding: {
-              ...(sourceAuthority.persistedWorktreeId
-                ? { worktreeId: sourceAuthority.persistedWorktreeId }
-                : {}),
-              tabId: parentTabId,
-              leafId: parsedPaneKey.leafId,
-              ptyId: pty.ptyId,
-              // Why: the store can only match its own persisted map, so a live-only id it never
-              // recorded would reject every split from a session restored without incarnations.
-              // The live id is fenced by revalidateSourceAuthority below instead.
-              ...(sourceAuthority.persistedIncarnationId
-                ? { incarnationId: sourceAuthority.persistedIncarnationId }
-                : {})
-            }
-          }
-        : {})
-    })
-    this.deps.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    if (result.wslDistro) {
-      this.deps.preparePtyExecutionContext(result.id, result.wslDistro ?? null, {})
-    }
-    this.deps.registerPty(result.id, workspace.id, workspace.connectionId)
-    const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
-    if (createdPty) {
-      createdPty.tabId = parentTabId
-      createdPty.paneKey = paneKey
-      createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
-      this.deps.setPairedRendererSessionOwnership(
-        createdPty.ptyId,
-        this.deps.pairedRendererSessionOwnedPtyIds().has(pty.ptyId)
-      )
-    }
-
-    const revealSplit = async (): Promise<void> => {
-      await this.deps.notifier()?.revealTerminalSession?.(workspace.id, {
-        ptyId: result.id,
-        title: null,
-        activate: opts.activate !== false,
-        ...ownerSurfacing(opts.surfaceOwner !== false),
-        tabId: parentTabId,
-        leafId,
-        splitFromLeafId: parsedPaneKey.leafId,
-        splitDirection: direction,
-        splitTelemetrySource: opts.telemetrySource
-      })
-    }
-
-    try {
-      const revalidateSourceAuthority = (): void => {
-        const current = this.resolveTerminalSplitSourceAuthority(
-          workspace.id,
-          parentTabId,
-          parsedPaneKey.leafId,
-          pty.ptyId
-        )
-        if (
-          !current ||
-          (sourceAuthority.persisted && !current.persisted) ||
-          (sourceIncarnationId !== null &&
-            (current.liveIncarnationId ?? current.persistedIncarnationId) !== sourceIncarnationId)
-        ) {
-          throw new Error('terminal_split_source_not_found')
-        }
-      }
-      revalidateSourceAuthority()
-      if (!sourceAuthority.persisted) {
-        await revealSplit()
-        // Why: rejecting here unmounts the pane the reveal just added only because the retire
-        // below always emits its exit and the tab still holds the source sibling — the renderer's
-        // exit handler closes non-final panes. Never close it by tabId: that drops the whole tab.
-        revalidateSourceAuthority()
-      }
-      if (createdPty) {
-        const persisted = this.persistHeadlessTerminalSplit({
-          worktreeId: workspace.id,
-          tabId: parentTabId,
-          leafId,
-          ptyId: createdPty.ptyId,
-          splitFromLeafId: parsedPaneKey.leafId,
-          direction
-        })
-        if (sourceAuthority.persisted && !persisted) {
-          throw new Error('workspace_session_unavailable')
-        }
-        this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
-          tabId: parentTabId,
-          leafId,
-          title: null,
-          activate: opts.activate !== false,
-          split: { splitFromLeafId: parsedPaneKey.leafId, direction }
-        })
-      }
-    } catch (error) {
-      this.deps.setPairedRendererSessionOwnership(result.id, false)
-      let stopped = false
-      try {
-        stopped =
-          (await this.deps.ptyController()!.stopAndWait?.(result.id, {
-            deadlineMs: Date.now() + REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS
-          })) ?? false
-      } catch {
-        // Best-effort fallback below preserves the original split authority error.
-      }
-      if (!stopped) {
-        try {
-          this.deps.ptyController()!.kill(result.id)
-        } catch {
-          // Best-effort cleanup; retirement below still runs and the original error still throws.
-        }
-      }
-      try {
-        this.deps.ptyController()!.retireRejectedPty?.(result.id, stopped)
-      } catch {
-        // Best-effort cleanup; preserve the original split authority error.
-      }
-      throw error
-    }
-    const committedSourceAuthority = sourceAuthority.persisted
-      ? this.resolveTerminalSplitSourceAuthority(
-          workspace.id,
-          parentTabId,
-          parsedPaneKey.leafId,
-          pty.ptyId
-        )
-      : null
-    if (sourceAuthority.persisted && committedSourceAuthority?.rendererMounted) {
-      // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
-      void revealSplit().catch(() => undefined)
-    }
-
-    return {
-      handle: this.deps.issuePtyHandle(createdPty ?? pty),
-      tabId: parentTabId,
-      paneRuntimeId: -1
-    }
-  }
-
   async splitTerminal(
     handle: string,
     opts: {
@@ -4887,6 +4596,33 @@ export class RuntimeTerminalCluster {
 
   async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     return this.deps.mobileSessionFacade().visibleSnapshotPreview(ptyId, preview)
+  }
+
+  async splitPtyBackedTerminal(
+    pty: RuntimePtyWorktreeRecord,
+    opts: {
+      direction?: 'horizontal' | 'vertical'
+      command?: string
+      env?: Record<string, string>
+      envToDelete?: string[]
+      activate?: boolean
+      surfaceOwner?: false
+      telemetrySource?: TerminalPaneSplitSource
+    } = {}
+  ): Promise<RuntimeTerminalSplit> {
+    return splitPtyBackedTerminal(this, pty, opts)
+  }
+
+  async recoverTerminalPane(
+    paneKey: string,
+    expectedWorktreeId: string,
+    expectedHandle?: string
+  ): Promise<RuntimeTerminalResolvePane> {
+    return recoverTerminalPane(this, paneKey, expectedWorktreeId, expectedHandle)
+  }
+
+  replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void {
+    replaceHeadlessTerminalAfterExecutionContextChange(this, ptyId)
   }
 
   waitForMessage(
