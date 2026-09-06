@@ -125,7 +125,6 @@ import {
 import { resolvePaneAgentOwner } from '../../shared/pane-agent-owner'
 import type { ProcessedAgentStatusChunk } from '../../shared/agent-status-osc'
 type AgentStatusOscProcessor = (data: string) => ProcessedAgentStatusChunk
-import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
@@ -138,7 +137,6 @@ import { stat } from 'node:fs/promises'
 
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
-import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
 import { OrchestrationError } from './orchestration/orchestration-error'
@@ -284,11 +282,7 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TabActivationIntent } from '../../shared/tab-activation-intent'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
-import {
-  describeTerminalExitCause,
-  isDeliberateTerminalExit,
-  type TerminalExitCause
-} from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeDesktopWindowStatus,
@@ -352,7 +346,6 @@ import {
 
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TerminalQuickCommandMutation } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
@@ -2424,6 +2417,7 @@ export class OrcaRuntimeService {
   private readonly remoteDesktopCommands: RuntimeRemoteDesktopCommands
   private readonly clientConnectionCommands: RuntimeClientConnectionCommands
   private readonly windowGraphClientCommands: RuntimeWindowGraphClientCommands
+  private readonly terminalRecoveryCommands: RuntimeTerminalRecoveryCommands
   private readonly worktreePs: RuntimeWorktreePs
   private readonly mobileTabOperations: RuntimeMobileTabOperations
   private readonly agentClusterFacade: RuntimeAgentClusterFacade
@@ -3106,6 +3100,43 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    this.terminalRecoveryCommands = new RuntimeTerminalRecoveryCommands({
+      _orchestrationDb: () => this._orchestrationDb,
+      prepareLegacyWorkerTerminalRecovery: (...args) =>
+        this.prepareLegacyWorkerTerminalRecovery(...args),
+      resolveTerminalWorkspaceLaunchScope: (...args) =>
+        this.resolveTerminalWorkspaceLaunchScope(...args),
+      canRecoverPersistentLocalPtysFn: () => this.canRecoverPersistentLocalPtysFn,
+      folderWorkspaceToResolvedWorktree: (...args) =>
+        this.folderWorkspaceToResolvedWorktree(...args),
+      resolveWorktreeSelector: (...args) => this.resolveWorktreeSelector(...args),
+      refreshPtyWorktreeRecordsWithControllerInventory: (...args) =>
+        this.refreshPtyWorktreeRecordsWithControllerInventory(...args),
+      getWorkspaceSessionForWorktree: (...args) => this.getWorkspaceSessionForWorktree(...args),
+      hasExactPersistedTerminalSurfaceIdentity: (...args) =>
+        this.hasExactPersistedTerminalSurfaceIdentity(...args),
+      hasExactTerminalSurfaceIdentity: (...args) => this.hasExactTerminalSurfaceIdentity(...args),
+      getTerminalTopologyRevision: (...args) => this.getTerminalTopologyRevision(...args),
+      adoptTerminalOrphansFromInventory: (...args) =>
+        this.adoptTerminalOrphansFromInventory(...args),
+      notifier: () => this.notifier,
+      legacyWorkerTerminalReceiptEpochByPane: () => this.legacyWorkerTerminalReceiptEpochByPane,
+      rendererGraphEpoch: () => this.rendererGraphEpoch,
+      ptysById: () => this.ptysById,
+      onPtyExit: (...args) => this.onPtyExit(...args),
+      persistLegacyWorkerTerminalRecoveryBatch: (...args) =>
+        this.persistLegacyWorkerTerminalRecoveryBatch(...args),
+      legacyWorkerRecoveredPtys: () => this.legacyWorkerRecoveredPtys,
+      rollbackLegacyWorkerTerminalSurface: (...args) =>
+        this.rollbackLegacyWorkerTerminalSurface(...args),
+      reconcileMissingLegacyWorkerTerminal: (...args) =>
+        this.reconcileMissingLegacyWorkerTerminal(...args),
+      updateLegacyWorkerTerminalRecoveryRetry: (...args) =>
+        this.updateLegacyWorkerTerminalRecoveryRetry(...args),
+      notifyMessageArrived: (...args) => this.notifyMessageArrived(...args),
+      reconcileRequestedWorkerTerminalReleasesFn: () =>
+        reconcileRequestedWorkerTerminalReleases(this)
+    })
     this.windowGraphClientCommands = new RuntimeWindowGraphClientCommands({
       adoptFirstPtyForLeafHandle: (...args) => this.adoptFirstPtyForLeafHandle(...args),
       adoptPreAllocatedHandle: (...args) => this.adoptPreAllocatedHandle(...args),
@@ -4134,302 +4165,7 @@ export class OrcaRuntimeService {
     connectionId?: string
     materializeRenderer?: boolean
   }): Promise<LegacyWorkerTerminalRecoveryResult> {
-    const plan = this.prepareLegacyWorkerTerminalRecovery()
-    const adoptedDispatchIds: string[] = []
-    const exitedDispatchIds: string[] = []
-    const deferredDispatchIds = new Set(plan.ambiguousDispatchIds)
-    const pendingResolutions: LegacyWorkerTerminalRecoveryResolution[] = []
-    const recoveryCandidatesByProvider = new Map<
-      string,
-      {
-        connectionId: string | null
-        entries: {
-          candidate: (typeof plan.candidates)[number]
-          workspace: TerminalWorkspaceLaunchScope
-          resolvedWorkspace: ResolvedWorktree
-        }[]
-      }
-    >()
-    for (const candidate of plan.candidates) {
-      try {
-        const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-          `id:${candidate.worktreeId}`
-        )
-        const sshPty = parseAppSshPtyId(candidate.ptyId)
-        if (workspace.connectionId) {
-          if (
-            options.connectionId !== workspace.connectionId ||
-            sshPty?.connectionId !== workspace.connectionId
-          ) {
-            deferredDispatchIds.add(candidate.dispatchId)
-            continue
-          }
-        } else if (
-          options.connectionId !== undefined ||
-          sshPty !== null ||
-          !this.canRecoverPersistentLocalPtysFn()
-        ) {
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        const resolvedWorkspace = workspace.folderWorkspace
-          ? this.folderWorkspaceToResolvedWorktree(workspace.folderWorkspace)
-          : await this.resolveWorktreeSelector(`id:${workspace.id}`)
-        const connectionId = workspace.connectionId ?? null
-        const providerKey = connectionId === null ? 'local' : `ssh:${connectionId}`
-        const provider = recoveryCandidatesByProvider.get(providerKey) ?? {
-          connectionId,
-          entries: []
-        }
-        provider.entries.push({ candidate, workspace, resolvedWorkspace })
-        recoveryCandidatesByProvider.set(providerKey, provider)
-      } catch {
-        deferredDispatchIds.add(candidate.dispatchId)
-      }
-    }
-    for (const provider of recoveryCandidatesByProvider.values()) {
-      const resolvedWorktrees = [
-        ...new Map(
-          provider.entries.map(({ resolvedWorkspace }) => [resolvedWorkspace.id, resolvedWorkspace])
-        ).values()
-      ]
-      const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-        resolvedWorktrees,
-        null,
-        undefined,
-        provider.connectionId
-      )
-      if (!inventory) {
-        provider.entries.forEach(({ candidate }) => deferredDispatchIds.add(candidate.dispatchId))
-        continue
-      }
-      for (const { candidate, workspace } of provider.entries) {
-        if (!inventory.livePtyIds.has(candidate.ptyId)) {
-          pendingResolutions.push({ candidate, resolution: 'exited' })
-          continue
-        }
-        const controllerIdentity = inventory.terminalIdentityByPtyId.get(candidate.ptyId)
-        if (!controllerIdentity) {
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        if (
-          controllerIdentity.handle !== candidate.terminalHandle ||
-          controllerIdentity.incarnationId !== candidate.incarnationId
-        ) {
-          pendingResolutions.push({ candidate, resolution: 'exited' })
-          continue
-        }
-        const preAdoptionInventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-          resolvedWorktrees,
-          null,
-          undefined,
-          provider.connectionId
-        )
-        if (!preAdoptionInventory) {
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        if (!preAdoptionInventory.livePtyIds.has(candidate.ptyId)) {
-          pendingResolutions.push({ candidate, resolution: 'exited' })
-          continue
-        }
-        const preAdoptionIdentity = preAdoptionInventory.terminalIdentityByPtyId.get(
-          candidate.ptyId
-        )
-        if (!preAdoptionIdentity) {
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        if (
-          preAdoptionIdentity.handle !== candidate.terminalHandle ||
-          preAdoptionIdentity.incarnationId !== candidate.incarnationId
-        ) {
-          pendingResolutions.push({ candidate, resolution: 'exited' })
-          continue
-        }
-        const session = this.getWorkspaceSessionForWorktree(candidate.worktreeId)
-        const sessionWorktreeId = session
-          ? resolveTerminalSessionWorktreeId(session, candidate.worktreeId)
-          : null
-        const activeTabId = sessionWorktreeId
-          ? session?.activeTabIdByWorktree?.[sessionWorktreeId]
-          : undefined
-        const activeGroupId = sessionWorktreeId
-          ? session?.activeGroupIdByWorktree?.[sessionWorktreeId]
-          : undefined
-        const exactSurfaceAlreadyPublished =
-          this.hasExactPersistedTerminalSurfaceIdentity(candidate) &&
-          this.hasExactTerminalSurfaceIdentity(candidate)
-        if (!exactSurfaceAlreadyPublished) {
-          try {
-            await this.adoptTerminalOrphansFromInventory(
-              {
-                worktree: `id:${candidate.worktreeId}`,
-                expectedTopologyRevision: this.getTerminalTopologyRevision(candidate.worktreeId),
-                ...(activeTabId ? { activeTabId } : {}),
-                ...(activeGroupId ? { activeGroupId } : {}),
-                claims: [
-                  {
-                    terminal: candidate.terminalHandle,
-                    ptyId: candidate.ptyId,
-                    incarnationId: candidate.incarnationId,
-                    tabId: candidate.tabId,
-                    leafId: candidate.leafId
-                  }
-                ]
-              },
-              workspace,
-              preAdoptionInventory
-            )
-          } catch (error) {
-            console.warn('[orchestration] legacy worker terminal adoption deferred', {
-              dispatchId: candidate.dispatchId,
-              error
-            })
-            deferredDispatchIds.add(candidate.dispatchId)
-            continue
-          }
-        }
-        let rendererMaterialized =
-          options.materializeRenderer !== true ||
-          this.legacyWorkerTerminalReceiptEpochByPane.get(candidate.paneKey) ===
-            this.rendererGraphEpoch
-        const pty = this.ptysById.get(candidate.ptyId)
-        if (
-          options.materializeRenderer &&
-          !rendererMaterialized &&
-          pty &&
-          this.notifier?.revealTerminalSession
-        ) {
-          for (let attempt = 0; attempt < 2 && !rendererMaterialized; attempt += 1) {
-            try {
-              const reveal = await this.notifier.revealTerminalSession(candidate.worktreeId, {
-                ptyId: candidate.ptyId,
-                title: getLatestPtyTitle(pty) ?? pty.controllerTitle,
-                activate: false,
-                presentation: 'background',
-                tabId: candidate.tabId,
-                leafId: candidate.leafId,
-                focus: false,
-                expectedProcessIdentity: {
-                  terminalHandle: candidate.terminalHandle,
-                  incarnationId: candidate.incarnationId
-                }
-              })
-              const identity = reveal?.identity
-              if (
-                !identity ||
-                !runtimeWorktreeIdsEqual(identity.worktreeId, candidate.worktreeId) ||
-                identity.tabId !== candidate.tabId ||
-                identity.leafId !== candidate.leafId ||
-                identity.ptyId !== candidate.ptyId
-              ) {
-                throw new Error('terminal_reveal_identity_mismatch')
-              }
-              rendererMaterialized = true
-              this.legacyWorkerTerminalReceiptEpochByPane.set(
-                candidate.paneKey,
-                this.rendererGraphEpoch
-              )
-            } catch (error) {
-              if (attempt === 0) {
-                await new Promise<void>((resolve) => setTimeout(resolve, 100))
-                continue
-              }
-              console.warn('[orchestration] adopted legacy worker was not revealed', {
-                dispatchId: candidate.dispatchId,
-                error
-              })
-            }
-          }
-        }
-        if (!rendererMaterialized) {
-          this.legacyWorkerTerminalReceiptEpochByPane.delete(candidate.paneKey)
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        if (
-          options.materializeRenderer === true &&
-          !this.hasExactTerminalSurfaceIdentity({
-            worktreeId: candidate.worktreeId,
-            tabId: candidate.tabId,
-            leafId: candidate.leafId,
-            ptyId: candidate.ptyId,
-            terminalHandle: candidate.terminalHandle,
-            incarnationId: candidate.incarnationId
-          })
-        ) {
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        const finalInventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-          resolvedWorktrees,
-          null,
-          undefined,
-          provider.connectionId
-        )
-        if (!finalInventory) {
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        if (!finalInventory.livePtyIds.has(candidate.ptyId)) {
-          this.legacyWorkerTerminalReceiptEpochByPane.delete(candidate.paneKey)
-          this.onPtyExit(candidate.ptyId, 0, candidate.incarnationId)
-          pendingResolutions.push({ candidate, resolution: 'exited' })
-          continue
-        }
-        const finalIdentity = finalInventory.terminalIdentityByPtyId.get(candidate.ptyId)
-        if (!finalIdentity) {
-          this.legacyWorkerTerminalReceiptEpochByPane.delete(candidate.paneKey)
-          deferredDispatchIds.add(candidate.dispatchId)
-          continue
-        }
-        if (
-          finalIdentity.handle !== candidate.terminalHandle ||
-          finalIdentity.incarnationId !== candidate.incarnationId
-        ) {
-          this.legacyWorkerTerminalReceiptEpochByPane.delete(candidate.paneKey)
-          pendingResolutions.push({ candidate, resolution: 'exited' })
-          continue
-        }
-        pendingResolutions.push({ candidate, resolution: 'adopted' })
-      }
-    }
-    const persistedDispatchIds =
-      await this.persistLegacyWorkerTerminalRecoveryBatch(pendingResolutions)
-    for (const { candidate, resolution } of pendingResolutions) {
-      if (!persistedDispatchIds.has(candidate.dispatchId)) {
-        deferredDispatchIds.add(candidate.dispatchId)
-        continue
-      }
-      if (resolution === 'adopted') {
-        this.legacyWorkerRecoveredPtys.add(candidate.ptyId)
-        this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, 'adopted')
-        adoptedDispatchIds.push(candidate.dispatchId)
-        continue
-      }
-      this.rollbackLegacyWorkerTerminalSurface(candidate)
-      if (!this.reconcileMissingLegacyWorkerTerminal(candidate)) {
-        deferredDispatchIds.add(candidate.dispatchId)
-        continue
-      }
-      this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, 'exited')
-      exitedDispatchIds.push(candidate.dispatchId)
-    }
-    const result = {
-      blockedPaneCount: plan.blockedPanes.length,
-      adoptedDispatchIds,
-      exitedDispatchIds,
-      deferredDispatchIds: [...deferredDispatchIds]
-    }
-    this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)
-    // Why: previously requested releases may only finish after the owning provider's terminals
-    // are rediscovered; this pass runs per scope (local and each reconnected provider).
-    void reconcileRequestedWorkerTerminalReleases(this).catch((error) => {
-      console.warn('[orchestration] worker terminal release reconciliation failed', { error })
-    })
-    return result
+    return this.terminalRecoveryCommands.reconcileLegacyWorkerTerminalsNow(options)
   }
 
   setAutomationService(service: AutomationService): void {
@@ -8578,124 +8314,7 @@ export class OrcaRuntimeService {
     exitCode: number,
     cause: TerminalExitCause
   ): void {
-    if (!this._orchestrationDb) {
-      return
-    }
-
-    // Why the pane key too: a reminted handle no longer matches the row, but the
-    // pane identity behind it outlives the remint.
-    const dispatch = this._orchestrationDb.getActiveDispatchForTerminal(
-      handle,
-      paneKey ?? undefined
-    )
-    if (!dispatch) {
-      return
-    }
-
-    const errorContext = describeTerminalExitCause(cause)
-    const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
-      workerProcessExited: true,
-      terminationReason: cause.kind
-    })
-
-    // Why: a deliberate close is not an incident. Escalating it trains
-    // coordinators to ignore the channel that should wake them for a real one.
-    if (isDeliberateTerminalExit(cause)) {
-      return
-    }
-
-    // Why: failDispatch above is the authoritative state transition and has already
-    // committed. Everything below is best-effort mail on top of it — resolving the
-    // recipient reads the database too — and onPtyExit runs this synchronously per leaf,
-    // so letting any of it escape would abandon the remaining leaves and the pty record
-    // pruning that close out this exit.
-    try {
-      // Why: create an escalation message so the coordinator is notified about
-      // the unexpected exit, even if the circuit breaker hasn't tripped yet.
-      const recipient = this.resolveExitEscalationRecipient(dispatch.run_id)
-      if (!recipient) {
-        return
-      }
-      const escalation = this._orchestrationDb.insertMessage({
-        from: handle,
-        to: recipient.to,
-        subject: `Agent exited unexpectedly (${errorContext})`,
-        body: this.describeWorkerExit(dispatch, cause, handle, settled?.status),
-        type: 'escalation',
-        priority: 'high',
-        // Why: applyEscalationToDispatch rejects an escalation without an exact Dispatch
-        // binding, and a coordinator reading this needs to know which Dispatch died.
-        payload: JSON.stringify({
-          taskId: dispatch.task_id,
-          dispatchId: dispatch.id,
-          // Why both: `exitCode` stays for readers that already parse it, but it
-          // is the raw number the host handed over, not a verdict — `exitCause`
-          // is what says whether the agent was killed, finished, or was closed.
-          exitCode,
-          exitCause: cause,
-          handle
-        }),
-        ...(recipient.runId ? { runId: recipient.runId } : {})
-      })
-      // Why: worker death is the one escalation nobody will poll for — the dead pane
-      // can't nudge the coordinator, so wake its check --wait the way every other
-      // message producer does.
-      this.notifyMessageArrived(escalation.to_handle, escalation.type)
-    } catch (error) {
-      // Why: log the Run rather than the recipient — resolution itself can be what failed.
-      console.warn('[orchestration] failed to escalate worker exit', {
-        dispatchId: dispatch.id,
-        runId: dispatch.run_id,
-        error
-      })
-    }
-  }
-
-  // Why: the banner shows the subject and a raw payload, so without prose the coordinator
-  // has to resolve ids by hand to learn what died and whether the task is still retryable.
-  private describeWorkerExit(
-    dispatch: { id: string; task_id: string; run_id: string },
-    cause: TerminalExitCause,
-    handle: string,
-    settledStatus: DispatchStatus | undefined
-  ): string {
-    const task = this._orchestrationDb?.getTask?.(dispatch.task_id, dispatch.run_id)
-    const title =
-      typeof task?.spec === 'string'
-        ? buildOrchestrationTaskDisplayMetadata({
-            spec: task.spec,
-            taskTitle: task.task_title,
-            displayName: task.display_name
-          }).taskTitle
-        : ''
-    const named = title ? `"${title}" (${dispatch.task_id})` : dispatch.task_id
-    const outcome =
-      settledStatus === 'circuit_broken'
-        ? ' This task has now failed too many times, so it will not be retried automatically.'
-        : settledStatus === 'failed'
-          ? ' The task is ready to be dispatched again.'
-          : ''
-    // Why the cause and not a code: `code 0` reads as success even when the
-    // worker was killed, which is what sent operators chasing phantom OOMs.
-    return `Worker ${handle} stopped while running task ${named}. ${describeTerminalExitCause(
-      cause
-    )}.${outcome}`
-  }
-
-  // Why: a lightweight Run keeps its coordinator in runs/run_coordinator_handles and
-  // never writes the legacy coordinator_runs table, so gating solely on that table
-  // dropped every worker-death escalation (STA-4604). Address the Run mailbox the
-  // coordinator's `orchestration check` actually reads, and leave legacy Runs on the
-  // legacy gate.
-  private resolveExitEscalationRecipient(
-    runId: string
-  ): { to: string; runId?: string } | undefined {
-    const owningRun = this._orchestrationDb?.getRun?.(runId)
-    if (owningRun && owningRun.legacy !== 1) {
-      return { to: `run:${owningRun.id}`, runId: owningRun.id }
-    }
-    const legacyRun = this._orchestrationDb?.getActiveCoordinatorRun?.()
-    return legacyRun ? { to: legacyRun.coordinator_handle } : undefined
+    return this.terminalRecoveryCommands.failActiveDispatchOnExit(handle, paneKey, exitCode, cause)
   }
 
   async listTerminals(
@@ -11700,7 +11319,6 @@ import {
   getLatestPtyTitle,
   isKnownReadyPromptPreview,
   notifyRuntimeListeners,
-  resolveTerminalSessionWorktreeId,
   runtimePathsEqual,
   runtimeWorktreeIdsEqual,
   setBoundedMapEntry,
@@ -11724,6 +11342,7 @@ import { RuntimeClientConnectionCommands } from './runtime-client-connection-com
 import { RuntimeMobileTabOperations } from './runtime-mobile-tab-operations'
 import { RuntimeWorktreePs } from './runtime-worktree-ps'
 import { RuntimeWindowGraphClientCommands } from './runtime-window-graph-client-commands'
+import { RuntimeTerminalRecoveryCommands } from './runtime-terminal-recovery-commands'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,
