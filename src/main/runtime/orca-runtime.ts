@@ -332,11 +332,7 @@ import {
 } from './runtime-graph-reload-lifecycle'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  getRepoIdFromWorktreeId,
-  splitWorktreeId
-} from '../../shared/worktree/id'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree/id'
 
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
@@ -354,6 +350,7 @@ import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-sca
 
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeStartupDraftCommands } from './runtime-startup-draft-commands'
+import { RuntimeWorkspaceSessionHydrationCommands } from './runtime-workspace-session-hydration-commands'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -4248,55 +4245,20 @@ export class OrcaRuntimeService {
     return hostIds
   }
 
-  private getWorkspaceSessionHydrationTargets(
-    includeAllPersistedWorktrees: boolean
-  ): Map<string, WorkspaceSessionState> {
-    const repos = this.store?.getRepos?.() ?? []
-    const repoHostIdByRepoId = new Map(
-      repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
+  private getWorkspaceSessionHydrationTargets = (includeAllPersistedWorktrees: boolean) =>
+    this.workspaceSessionHydrationCommands.getWorkspaceSessionHydrationTargets(
+      includeAllPersistedWorktrees
     )
-    const folderHostIdByWorkspaceId = new Map(
-      (this.store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
-        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-        return [
-          workspace.id,
-          connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-        ] as const
-      })
-    )
-    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-    for (const repo of repos) {
-      hostIds.add(getRepoExecutionHostId(repo))
-    }
-    for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
-      hostIds.add(hostId)
-    }
 
-    const targets = new Map<string, WorkspaceSessionState>()
-    for (const hostId of hostIds) {
-      const session = this.store?.getWorkspaceSession?.(hostId)
-      if (!session) {
-        continue
-      }
-      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-        const scope = parseWorkspaceKey(worktreeId)
-        const ownerHostId =
-          scope?.type === 'folder'
-            ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
-                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
-        if (
-          ownerHostId === hostId &&
-          (includeAllPersistedWorktrees ||
-            this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs))
-        ) {
-          targets.set(worktreeId, session)
-        }
-      }
+  private readonly workspaceSessionHydrationCommands = new RuntimeWorkspaceSessionHydrationCommands(
+    {
+      store: () => this.store,
+      resolveFolderWorkspaceConnectionId: (workspace) =>
+        this.resolveFolderWorkspaceConnectionId(workspace),
+      workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate: (session, worktreeId, tabs) =>
+        this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
     }
-    return targets
-  }
+  )
 
   getStatus(): RuntimeStatus {
     return this.windowGraphClientCommands.getStatus()
