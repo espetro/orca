@@ -24,6 +24,8 @@ import {
 } from './runtime-worktree-lifecycle'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
+import { RuntimeStructuredTuiOwnerCommands } from './runtime-structured-tui-owner-commands'
+import { RuntimeClientNotificationBus } from './runtime-client-notification-bus'
 import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
 import { RuntimeOrchestrationGraphReloadCommands } from './runtime-orchestration-graph-reload-commands'
@@ -107,9 +109,6 @@ import {
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredTuiOwner } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { stopStructuredSessionProcess } from './agent-session-owner-process-stop'
-import { waitForStructuredTuiExitProof } from './structured-tui-exit-proof'
-import { hasStructuredTuiIdleEvidence } from './structured-tui-idle-evidence'
 import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
@@ -299,9 +298,6 @@ import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TerminalQuickCommandMutation } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
-import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
-import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { waitForStartupDraftReady } from './runtime-startup-draft-ready-wait'
 
 import { RuntimeFileCommands } from './orca-runtime-files'
@@ -430,10 +426,7 @@ import {
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
-import {
-  MobileNotificationReplayBuffer,
-  type ReplayableMobileNotification
-} from './mobile-notification-replay'
+import type { ReplayableMobileNotification } from './mobile-notification-replay'
 import {
   createMobileSessionTabsAgentStatusHeartbeat,
   type MobileSessionTabsAgentStatusHeartbeat
@@ -1191,7 +1184,11 @@ export class OrcaRuntimeService {
   // notifications.subscribe. This set enables fan-out — each connected
   // mobile client gets its own listener, and dispatchMobileNotification
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
-  private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
+  private readonly clientNotificationBus = new RuntimeClientNotificationBus({
+    dispatchMobileNotification: (event) => this.dispatchMobileNotification(event)
+  })
+  // Why: read via keyed view in runtime-mobile-session-facade-wiring.ts (invisible to noUnusedLocals).
+  private notificationListeners = this.clientNotificationBus.notificationListeners
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   // Why a separate map: `connected` is a wire field that any inventory gap
   // clears, so it cannot distinguish an observed exit from lost contact. This
@@ -1553,6 +1550,16 @@ export class OrcaRuntimeService {
     RestoredOrchestrationAuthorityReceipt
   >()
   private readonly accountCommands = new RuntimeAccountCommands()
+  private readonly structuredTuiOwnerCommands = new RuntimeStructuredTuiOwnerCommands({
+    getStore: () => this.store,
+    ptysById: this.ptysById,
+    requireStore: () => this.requireStore(),
+    getFreshExplicitAgentStatusForHandle: (handle, paneKeyOverride) =>
+      this.getFreshExplicitAgentStatusForHandle(handle, paneKeyOverride),
+    issueStructuredTuiPtyHandle: (pty) => this.ptyWorktrees.issueStructuredTuiPtyHandle(pty),
+    waitForStructuredTuiPtyExit: (ptyId) => this.ptyWorktrees.waitForStructuredTuiPtyExit(ptyId),
+    closeTerminal: (handle) => this.closeTerminal(handle)
+  })
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
   private readonly skillTransactionRecovery: Promise<unknown>
@@ -3190,6 +3197,12 @@ export class OrcaRuntimeService {
     return [
       // Why: consumed only by extracted wiring builders via bracket access (see runtime-ctor-wiring.ts).
       this.assertStableReadyGraph,
+      this.notificationListeners,
+      this.refreshStructuredTuiOwnerBinding,
+      this.issueStructuredTuiPtyHandle,
+      this.waitForStructuredTuiPtyExit,
+      this.waitForStructuredTuiOwnerExit,
+      this.structuredTuiStatus,
       this.attachAgentRowsToSummaries,
       this.captureReadyGraphEpoch,
       this.getAutoRestoreFitMs,
@@ -4001,16 +4014,7 @@ export class OrcaRuntimeService {
   }
 
   private resolveConfiguredCodexStructuredArgs(): string[] {
-    const settings = this.requireStore().getSettings()
-    const shell = resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: false,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
-    return resolveCodexStructuredAppServerArgs(
-      resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
-      shell ?? 'posix'
-    )
+    return this.structuredTuiOwnerCommands.resolveConfiguredCodexStructuredArgs()
   }
 
   private async proveRecoveredStructuredTuiPtyProcess(
@@ -4024,32 +4028,13 @@ export class OrcaRuntimeService {
   private async closeStructuredTuiOwner(
     owner: StructuredTuiOwner
   ): Promise<{ transcriptPath?: string }> {
-    if (this.ptysById.get(owner.terminal.ptyId)?.connected) {
-      const current = this.refreshStructuredTuiOwnerBinding(owner)
-      try {
-        await this.closeTerminal(current.terminal.handle)
-      } catch (error) {
-        if (this.ptysById.get(owner.terminal.ptyId)?.connected) {
-          throw error
-        }
-      }
-    }
-    await this.waitForStructuredTuiOwnerExit(owner)
-    return owner.transcriptPath ? { transcriptPath: owner.transcriptPath } : {}
+    return this.structuredTuiOwnerCommands.closeStructuredTuiOwner(owner)
   }
 
   // The new exact `codex resume <thread>` child proves the resumed owner without
   // a first turn; the pinned rollout then binds its durable transcript.
   private refreshStructuredTuiOwnerBinding(owner: StructuredTuiOwner): StructuredTuiOwner {
-    const pty = this.ptysById.get(owner.terminal.ptyId)
-    if (!pty?.connected) {
-      throw new Error('The owning agent terminal lost its launch identity.')
-    }
-    const handle = this.issueStructuredTuiPtyHandle(pty)
-    if (handle === owner.terminal.handle) {
-      return owner
-    }
-    return { ...owner, terminal: { ...owner.terminal, handle } }
+    return this.structuredTuiOwnerCommands.refreshStructuredTuiOwnerBinding(owner)
   }
 
   private issueStructuredTuiPtyHandle(pty: RuntimePtyWorktreeRecord): string {
@@ -4061,56 +4046,22 @@ export class OrcaRuntimeService {
   }
 
   private async waitForStructuredTuiOwnerExit(owner: StructuredTuiOwner): Promise<void> {
-    await waitForStructuredTuiExitProof({
-      identity: owner.process,
-      waitForExit: () => this.waitForStructuredTuiPtyExit(owner.terminal.ptyId)
-    })
+    return this.structuredTuiOwnerCommands.waitForStructuredTuiOwnerExit(owner)
   }
 
   private async waitForStructuredTuiIdleOrExit(
     owner: StructuredTuiOwner,
     signal: AbortSignal
   ): Promise<'idle' | 'exited' | null> {
-    const deadline = Date.now() + 250
-    while (!signal.aborted && Date.now() < deadline) {
-      if (!this.ptysById.get(owner.terminal.ptyId)?.connected) {
-        await this.waitForStructuredTuiOwnerExit(owner)
-        return 'exited'
-      }
-      if (this.structuredTuiStatus(owner) === 'idle') {
-        return 'idle'
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
-    return null
+    return this.structuredTuiOwnerCommands.waitForStructuredTuiIdleOrExit(owner, signal)
   }
 
   private stopStructuredSessionProcess(record: AgentSessionRecord): Promise<void> {
-    return stopStructuredSessionProcess(record)
+    return this.structuredTuiOwnerCommands.stopStructuredSessionProcess(record)
   }
 
   private structuredTuiStatus(owner: StructuredTuiOwner): 'idle' | 'busy' {
-    const pty = this.ptysById.get(owner.terminal.ptyId)
-    const paneKey = pty?.paneKey ?? owner.terminal.paneKey
-    const explicit = this.getFreshExplicitAgentStatusForHandle(owner.terminal.handle, paneKey)
-    if (explicit) {
-      return explicit.status === 'idle' ? 'idle' : 'busy'
-    }
-    if (pty?.connected) {
-      const text = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-      const blocked = detectTerminalWaitBlockedReason(text) !== null
-      if (!blocked && isKnownReadyPromptPreview(text)) {
-        return 'idle'
-      }
-      return hasStructuredTuiIdleEvidence({
-        blocked,
-        status: pty.lastAgentStatus,
-        statusObservedLive: pty.lastAgentStatusObservedLive
-      })
-        ? 'idle'
-        : 'busy'
-    }
-    return 'busy'
+    return this.structuredTuiOwnerCommands.structuredTuiStatus(owner)
   }
 
   async getStructuredAgentSessionCreateSupport(
@@ -5496,14 +5447,11 @@ export class OrcaRuntimeService {
   // Each subscriber gets its own listener. Returns an unsubscribe function
   // that the subscription cleanup mechanism calls on disconnect.
   onNotificationDispatched(listener: (event: MobileNotificationEvent) => void): () => void {
-    this.notificationListeners.add(listener)
-    return () => {
-      this.notificationListeners.delete(listener)
-    }
+    return this.clientNotificationBus.onNotificationDispatched(listener)
   }
 
   getMobileNotificationListenerCount(): number {
-    return this.mobileSessionFacade.getMobileNotificationListenerCount()
+    return this.clientNotificationBus.listenerCount
   }
 
   // Why: bounded replay buffer for the mobile reconnect catch-up (#8129).
@@ -5511,7 +5459,6 @@ export class OrcaRuntimeService {
   // reconnecting client can fetch exactly the events it missed. Kept on the
   // service instance (not per-client) because the buffer is a global,
   // idempotent-by-seq source of truth; clients watermark their own position.
-  private readonly mobileNotificationReplay = new MobileNotificationReplayBuffer()
 
   dispatchMobileNotification(event: MobileNotificationEvent): void {
     return this.mobileSessionFacade.dispatchMobileNotification(event)
@@ -5521,7 +5468,7 @@ export class OrcaRuntimeService {
   // watermark always yields the same set, so a client cannot be re-pushed an
   // already-delivered event (the adversarial-review gate for #8129).
   getMissedNotificationsSince(lastSeenSeq: number, epoch?: string): ReplayableMobileNotification[] {
-    return this.mobileNotificationReplay.getMissedSince(lastSeenSeq, epoch)
+    return this.clientNotificationBus.getMissedNotificationsSince(lastSeenSeq, epoch)
   }
 
   // Why (#8591): the seq counter is per-process and restarts at 0 on every desktop
@@ -5542,18 +5489,7 @@ export class OrcaRuntimeService {
     title: string
     body?: string
   }): Promise<{ delivered: boolean }> {
-    // Why: prefix with the plugin id so a plugin cannot spoof an Orca system
-    // notification or impersonate another plugin.
-    const title = `${input.pluginId}: ${input.title}`
-    const body = input.body ?? ''
-    let delivered = false
-    try {
-      delivered = getRuntimeDesktopSurface().showNotification({ title, body })
-    } catch {
-      // A host with no notification display still relays to paired clients below.
-    }
-    this.dispatchMobileNotification({ type: 'notification', source: 'plugin', title, body })
-    return { delivered }
+    return this.clientNotificationBus.dispatchPluginNotification(input)
   }
 
   // ─── Account Services (mobile RPC bridge) ─────────────────────
@@ -9177,13 +9113,10 @@ import {
   WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS,
   WAIT_BLOCKED_KEYWORD_CARRY_CHARS,
   WAIT_BLOCKED_KEYWORD_PATTERN,
-  buildTerminalWaitText,
   classifyAgentTitle,
   computeTerminalTailWaitState,
-  detectTerminalWaitBlockedReason,
   getLatestAgentCandidateTitle,
   getLatestPtyTitle,
-  isKnownReadyPromptPreview,
   notifyRuntimeListeners,
   runtimePathsEqual,
   runtimeWorktreeIdsEqual,
