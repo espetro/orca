@@ -179,7 +179,6 @@ import {
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-tail-projection'
 import type {
-  AgentSessionCreateOperation,
   HookLiveAgentRow,
   ProviderSnapshotReadOptions,
   ResolvedWorktree,
@@ -200,21 +199,8 @@ import type {
   WorktreeStartupFollowup
 } from './orca-runtime'
 import {
-  AGENT_PROMPT_RENDER_MARKER,
-  AGENT_PROMPT_RENDER_QUIET_MS,
-  AGENT_PROMPT_RENDER_TIMEOUT_MS,
-  AGENT_SESSION_OPERATION_GLOBAL_LIMIT,
-  AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT,
   FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS,
-  FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS,
-  assertAgentPromptRequestActive,
-  copySleepingAgentLaunchConfig,
-  deterministicAgentSessionUuid,
-  isAgentSessionOperationOutcomeUnknown,
-  resolveBareAgentLaunchCommand,
-  waitForAgentPromptDelay,
-  waitForAgentPromptPromise,
-  yieldBetweenTerminalInputChunks
+  FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS
 } from './orca-runtime'
 import type { RuntimeHookAgentRowResolutionCommands } from './runtime-hook-agent-row-resolution-commands'
 import type { RuntimeTerminalAgentStatusBindingCommands } from './runtime-terminal-agent-status-binding-commands'
@@ -223,6 +209,22 @@ import {
   hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk,
   ensureStructuredAgentSessionHost as installStructuredAgentSessionHost
 } from './structured-agent-session-runtime'
+import {
+  AGENT_PROMPT_RENDER_MARKER,
+  AGENT_PROMPT_RENDER_QUIET_MS,
+  AGENT_PROMPT_RENDER_TIMEOUT_MS,
+  AGENT_SESSION_OPERATION_GLOBAL_LIMIT,
+  AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT,
+  assertAgentPromptRequestActive,
+  copySleepingAgentLaunchConfig,
+  deterministicAgentSessionUuid,
+  isAgentSessionOperationOutcomeUnknown,
+  resolveBareAgentLaunchCommand,
+  waitForAgentPromptDelay,
+  waitForAgentPromptPromise,
+  yieldBetweenTerminalInputChunks,
+  type AgentSessionCreateOperation
+} from './agent-session-terminal-operations'
 import { readStructuredTuiProcessIdentity } from './structured-tui-process-identity'
 import { evaluateStructuredTuiRecoveryClaim } from './structured-tui-recovery-claim-match'
 import { createHash } from 'node:crypto'

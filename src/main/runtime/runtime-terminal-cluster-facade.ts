@@ -246,18 +246,20 @@ import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
   REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS,
   addListenerToMap,
+  createTerminalRevealWarning,
+  ownerSurfacing,
+  resolveTerminalPresentation
+} from './orca-runtime'
+import {
   assertAgentPromptRequestActive,
   copySleepingAgentLaunchConfig,
-  createTerminalRevealWarning,
   inferCapturedClaudeAgentTeamsMode,
   mergeTerminalEnvDeletionKeys,
-  ownerSurfacing,
   resolveBareAgentLaunchCommand,
-  resolveTerminalPresentation,
   waitForAgentPromptDelay,
   waitForAgentPromptPromise,
   yieldBetweenTerminalInputChunks
-} from './orca-runtime'
+} from './agent-session-terminal-operations'
 import type {
   ApplyLayoutResult,
   DriverState,

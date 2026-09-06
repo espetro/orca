@@ -336,15 +336,15 @@ import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TerminalQuickCommandMutation } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
 import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 
 import { RuntimeFileCommands } from './orca-runtime-files'
+import type { AgentSessionCreateOperation } from './agent-session-terminal-operations'
 import { RuntimeStartupDraftCommands } from './runtime-startup-draft-commands'
 import { RuntimeWorkspaceSessionHydrationCommands } from './runtime-workspace-session-hydration-commands'
 import { callOrchestrationWorkerServerViaTransport } from './orchestration/call-worker-server-via-transport'
@@ -431,7 +431,6 @@ import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
 } from './claude-agent-teams-service'
-import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
 import { collectMemorySnapshot } from '../memory/collector'
 import type { BrowserWindow } from 'electron'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -880,44 +879,11 @@ export type TerminalCreateOptions = {
   deferMobileSessionPublish?: boolean
 }
 
-export function mergeTerminalEnvDeletionKeys(
-  first: readonly string[] | undefined,
-  second: readonly string[] | undefined
-): string[] | undefined {
-  const merged = [...new Set([...(first ?? []), ...(second ?? [])])]
-  return merged.length > 0 ? merged : undefined
-}
-
-export type AgentSessionCreateOperation = {
-  fingerprint: string
-  promise: Promise<RuntimeCreateAgentSessionResult>
-}
-
-export function isAgentSessionOperationOutcomeUnknown(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'agentSessionOperationOutcome' in error &&
-    error.agentSessionOperationOutcome === 'unknown'
-  )
-}
-
 // Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.
 
 export type TrackedPtyLivenessVerdict = {
   verdict: PtyLivenessVerdict
   observedAt: number
-}
-
-export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
-export const AGENT_SESSION_OPERATION_GLOBAL_LIMIT = 4_096
-
-export function deterministicAgentSessionUuid(seed: string): string {
-  const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32).split('')
-  hex[12] = '4'
-  hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16)
-  const value = hex.join('')
-  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`
 }
 
 type PtyForegroundAgentRefresh = {
@@ -936,75 +902,6 @@ type PtyForegroundProcessReadEntry = {
   controller: RuntimePtyController
   startedAfterTitleObservation: number
   promise: Promise<PtyForegroundProcessRead>
-}
-
-export function copySleepingAgentLaunchConfig(
-  config: SleepingAgentLaunchConfig
-): SleepingAgentLaunchConfig {
-  return {
-    ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
-    agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
-  }
-}
-
-function normalizeAgentLaunchCommandForMatch(command: string): string {
-  return command.trim().replace(/\s+/g, ' ')
-}
-
-export function resolveBareAgentLaunchCommand(args: {
-  command: string | undefined
-  settings: {
-    agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
-    disabledTuiAgents?: Iterable<unknown> | null
-  }
-  platform: NodeJS.Platform
-  isRemote: boolean
-}): TuiAgent | null {
-  const command = args.command ? normalizeAgentLaunchCommandForMatch(args.command) : ''
-  if (!command) {
-    return null
-  }
-
-  const cmdOverrides = args.settings.agentCmdOverrides ?? {}
-  for (const agent of Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]) {
-    if (!isTuiAgentEnabled(agent, args.settings.disabledTuiAgents)) {
-      continue
-    }
-    const override = cmdOverrides[agent]?.trim()
-    const defaultLaunchCommand = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], args.platform, {
-      isRemote: args.isRemote
-    })
-    const launchCommands = override ? [defaultLaunchCommand, override] : [defaultLaunchCommand]
-    if (
-      launchCommands.some((candidate) => command === normalizeAgentLaunchCommandForMatch(candidate))
-    ) {
-      return agent
-    }
-  }
-
-  return null
-}
-
-export function inferCapturedClaudeAgentTeamsMode(
-  launchConfig: SleepingAgentLaunchConfig | undefined,
-  command: string | undefined,
-  currentMode: ClaudeAgentTeamsMode | undefined
-): ClaudeAgentTeamsMode | undefined {
-  const capturedCommand = launchConfig?.agentCommand?.trim() || command?.trim() || ''
-  const capturedArgs = launchConfig?.agentArgs?.trim() ?? ''
-  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
-  if (/(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)) {
-    return 'native-panes-shim'
-  }
-  if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedLaunch)) {
-    return 'in-process'
-  }
-  if (launchConfig && /(^|\s)--resume(?:\s|=|$)/.test(command?.trim() ?? '')) {
-    return 'off'
-  }
-  return currentMode
 }
 
 export type RuntimeTerminalAgentStatusEvent = {
@@ -1285,51 +1182,7 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 // payload's ingest bound rather than standing in for it (see getTerminalPasteIngestMs).
 // The quiet window stays at 1500: nothing measured describes an agent's post-paste
 // redraw cadence, and a shorter window submits mid-redraw.
-export const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
-export const AGENT_PROMPT_RENDER_QUIET_MS = 1500
 // Why: Claude and Codex emit show-cursor after accepting bracketed paste.
-export const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
-
-export function assertAgentPromptRequestActive(signal?: AbortSignal): void {
-  if (signal?.aborted) {
-    throw new Error('request_aborted')
-  }
-}
-
-export async function waitForAgentPromptPromise<T>(
-  promise: Promise<T>,
-  signal?: AbortSignal
-): Promise<T> {
-  if (!signal) {
-    return await promise
-  }
-  assertAgentPromptRequestActive(signal)
-  return await new Promise<T>((resolve, reject) => {
-    let settled = false
-    const finish = (result: { value: T } | { error: unknown }): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      signal.removeEventListener('abort', onAbort)
-      if ('error' in result) {
-        reject(result.error)
-      } else {
-        resolve(result.value)
-      }
-    }
-    const onAbort = (): void => finish({ error: new Error('request_aborted') })
-    signal.addEventListener('abort', onAbort, { once: true })
-    if (signal.aborted) {
-      onAbort()
-      return
-    }
-    promise.then(
-      (value) => finish({ value }),
-      (error: unknown) => finish({ error })
-    )
-  })
-}
 
 // Why not setTimeout(0): it costs a full ~15.19 ms Windows timer tick per chunk (~0.95 s/MB)
 // and never bought backpressure -- 16 KiB per tick paces ~1.07 MB/s, 11x above ConPTY's
@@ -1338,36 +1191,6 @@ export async function waitForAgentPromptPromise<T>(
 // and TERMINAL_INPUT_MAX_BYTES still bounds what can be in flight either way.
 // Why the global and not node:timers/promises: only the global is intercepted by fake timers,
 // so a chunked paste stays observable on the test clock.
-export function yieldBetweenTerminalInputChunks(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    setImmediate(resolve)
-  })
-}
-
-export async function waitForAgentPromptDelay(
-  delayMs: number,
-  signal?: AbortSignal
-): Promise<void> {
-  if (!signal) {
-    await new Promise((resolve) => setTimeout(resolve, delayMs))
-    return
-  }
-  assertAgentPromptRequestActive(signal)
-  await new Promise<void>((resolve, reject) => {
-    const onAbort = (): void => {
-      clearTimeout(timer)
-      reject(new Error('request_aborted'))
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, delayMs)
-    signal.addEventListener('abort', onAbort, { once: true })
-    if (signal.aborted) {
-      onAbort()
-    }
-  })
-}
 
 export const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
