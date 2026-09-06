@@ -2146,50 +2146,9 @@ export class OrcaRuntimeService {
   }
 
   async updateClientSettings(
-    updates: Pick<
-      Partial<GlobalSettings>,
-      | 'worktreeVisibilityDefaults'
-      | 'agentStatusHooksEnabled'
-      | 'defaultTuiAgent'
-      | 'disabledTuiAgents'
-      | 'agentDefaultArgs'
-      | 'agentDefaultEnv'
-      | 'defaultTaskSource'
-      | 'defaultTaskViewPreset'
-      | 'visibleTaskProviders'
-      | 'defaultRepoSelection'
-      | 'defaultLinearTeamSelection'
-      | 'githubProjects'
-      | 'experimentalNewWorktreeCardStyle'
-      | 'compactWorktreeCards'
-      | 'minimaxGroupId'
-      | 'minimaxUsageModels'
-      | 'prBotAuthorOverrides'
-    >
-  ): Promise<
-    Pick<
-      GlobalSettings,
-      | 'worktreeVisibilityDefaults'
-      | 'defaultTuiAgent'
-      | 'disabledTuiAgents'
-      | 'agentCmdOverrides'
-      | 'agentDefaultArgs'
-      | 'agentDefaultEnv'
-      | 'agentStatusHooksEnabled'
-      | 'defaultTaskSource'
-      | 'defaultTaskViewPreset'
-      | 'visibleTaskProviders'
-      | 'defaultRepoSelection'
-      | 'defaultLinearTeamSelection'
-      | 'githubProjects'
-      | 'experimentalNewWorktreeCardStyle'
-      | 'compactWorktreeCards'
-      | 'minimaxGroupId'
-      | 'minimaxUsageModels'
-      | 'prBotAuthorOverrides'
-    >
-  > {
-    return this.clientConnectionCommands.updateClientSettings(updates)
+    ...args: Parameters<RuntimeClientConnectionCommands['updateClientSettings']>
+  ): ReturnType<RuntimeClientConnectionCommands['updateClientSettings']> {
+    return this.clientConnectionCommands.updateClientSettings(...args)
   }
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
