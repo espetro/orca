@@ -155,7 +155,6 @@ import type { MobileSessionTabCloseOutcome } from './mobile-session-tab-close-ou
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
 import type { OrchestrationDb } from './orchestration/db'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
-import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import type { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from './remote-runtime-terminal-create-identity'
@@ -182,9 +181,6 @@ import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS,
-  TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
   agentTitleProvesAgentPresence,
   applyRestoredTerminalTailSeed,
   assertTerminalInputWithinLimitWithYield,
@@ -223,7 +219,6 @@ import {
   terminalTitleBlocksExplicitAgentStatus,
   withTimeoutResult
 } from './runtime-tail-projection'
-import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { TerminalFocusNavigationCoalescer } from './terminal-focus-navigation-coalescer'
 import { terminalOrphanExecutionOwnersEqual } from './terminal-orphan-owner'
 import {
@@ -249,6 +244,15 @@ import {
   runLayoutSlot
 } from './runtime-terminal-layout-commands'
 import type { RuntimeTerminalLayoutCtx } from './runtime-terminal-layout-commands'
+import {
+  maybeHydrateHeadlessFromRenderer,
+  emitTerminalAgentStatusEvents,
+  readVisibleTerminalState,
+  resolveActiveTerminal,
+  startTuiIdleVisibleReadProbe,
+  waitForSetupTerminalCompletion,
+  reclaimTerminalForDesktop
+} from './runtime-terminal-session-commands'
 import {
   closeTerminal,
   stopExplicitlyClosedTabPtys,
@@ -645,7 +649,7 @@ export type RuntimeTerminalClusterDeps = {
 }
 
 export class RuntimeTerminalCluster {
-  private readonly deps: RuntimeTerminalClusterDeps
+  readonly deps: RuntimeTerminalClusterDeps
   private recentPtyPathCandidateTrackingActive = false
   private titleObservationSequence = 0
   private legacyWorkerTerminalRecoveryQueue: Promise<void> = Promise.resolve()
@@ -1226,6 +1230,34 @@ export class RuntimeTerminalCluster {
       getPtyIdsForExplicitTabClose,
       stopExplicitlyClosedTabPtys
     }
+  }
+
+  maybeHydrateHeadlessFromRenderer(ptyId: string): void {
+    return maybeHydrateHeadlessFromRenderer(this, ptyId)
+  }
+
+  emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): boolean {
+    return emitTerminalAgentStatusEvents(this, ptyId, chunk)
+  }
+
+  async readVisibleTerminalState(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
+    return readVisibleTerminalState(this, ptyId)
+  }
+
+  async resolveActiveTerminal(worktreeSelector?: string): Promise<string> {
+    return resolveActiveTerminal(this, worktreeSelector)
+  }
+
+  startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
+    return startTuiIdleVisibleReadProbe(this, waiter, waiterTimeoutMs)
+  }
+
+  async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
+    return waitForSetupTerminalCompletion(this, handle)
+  }
+
+  async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
+    return reclaimTerminalForDesktop(this, ptyId)
   }
 
   async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
@@ -2520,83 +2552,6 @@ export class RuntimeTerminalCluster {
     this.deps.clientEventPublishingCommands().emitClientEvent(event)
   }
 
-  emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): boolean {
-    // Why: snapshot retention (for mobile worktree.ps) must run even when no
-    // renderer listener is attached, so we don't early-return on a missing
-    // onTerminalAgentStatus — only the per-target emit below is gated on it.
-    if (chunk.payloads.length === 0) {
-      return false
-    }
-    const targets = new Map<
-      string,
-      {
-        source: 'mounted-leaf' | 'pty-record'
-        paneKey: string
-        tabId?: string
-        worktreeId?: string
-        connectionId?: string | null
-      }
-    >()
-    const pty = this.deps.ptysById().get(ptyId)
-    const connectionId = pty?.connectionId ?? null
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const paneKey = this.makeRuntimePaneKey(leaf)
-      targets.set(paneKey, {
-        source: 'mounted-leaf',
-        paneKey,
-        tabId: leaf.tabId,
-        worktreeId: leaf.worktreeId,
-        connectionId
-      })
-    }
-    if (targets.size === 0 && pty?.paneKey) {
-      targets.set(pty.paneKey, {
-        source: 'pty-record',
-        paneKey: pty.paneKey,
-        tabId: pty.tabId ?? undefined,
-        worktreeId: pty.worktreeId,
-        connectionId
-      })
-    }
-    let retainedChanged = false
-    for (const payload of chunk.payloads) {
-      this.recordAgentPromptLifecycleState(
-        ptyId,
-        mapExplicitAgentStateToRuntimeTerminalStatus(payload.state)
-      )
-      for (const target of targets.values()) {
-        retainedChanged =
-          this.retainAgentRowSnapshot(
-            ptyId,
-            target.paneKey,
-            target.worktreeId,
-            target.tabId,
-            target.connectionId ?? null,
-            payload
-          ) || retainedChanged
-        if (!this.deps.onTerminalAgentStatus()) {
-          continue
-        }
-        try {
-          this.deps.onTerminalAgentStatus()?.({
-            ptyId,
-            ...target,
-            payload
-          })
-        } catch (err) {
-          console.error('[runtime] terminal agent status listener threw', {
-            ptyId,
-            paneKey: target.paneKey,
-            state: payload.state,
-            agentType: payload.agentType,
-            err
-          })
-        }
-      }
-    }
-    return retainedChanged
-  }
-
   emitTerminalSideEffectBatch(
     ptyId: string,
     facts: TerminalSideEffectFact[],
@@ -3805,89 +3760,6 @@ export class RuntimeTerminalCluster {
       : this.deps.markLocalWorkspaceTrustedForAgent(agent, workspacePath)
   }
 
-  maybeHydrateHeadlessFromRenderer(ptyId: string): void {
-    if (this.deps.headlessHydrationState().has(ptyId)) {
-      return
-    }
-    const providerSnapshotPreferred = this.deps.providerSnapshotPreferredPtys().has(ptyId)
-    if (this.deps.headlessTerminals().has(ptyId) && !providerSnapshotPreferred) {
-      // Daemon-snapshot seed already populated the emulator — skip hydration.
-      this.deps.headlessHydrationState().set(ptyId, 'done')
-      return
-    }
-    const controller = this.deps.ptyController()
-    if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
-      return
-    }
-    if (!controller.hasRendererSerializer(ptyId)) {
-      // Renderer hasn't registered yet (or never will). Live writes lazy-
-      // create the state via trackHeadlessTerminalData on this same tick.
-      return
-    }
-
-    if (providerSnapshotPreferred) {
-      // Why: a stream byte can create a partial model before restored history
-      // arrives. A mounted renderer snapshot can safely replace that model.
-      this.disposeHeadlessTerminal(ptyId)
-    }
-
-    this.deps.headlessHydrationState().set(ptyId, 'pending')
-    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    // Why: hydration writes below never set forwardQueryReplies (main-side
-    // replay guard) — renderer-buffer snapshots can embed stale queries.
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    state.outputSequence = this.getPtyOutputSequence(ptyId)
-    this.deps.headlessTerminals().set(ptyId, state)
-
-    // Why: append the seed work to writeChain so live writes queued by
-    // trackHeadlessTerminalData (after this method returns synchronously)
-    // execute AFTER the seed-write resolves. If we awaited inline before
-    // setting headlessTerminals, the live byte would lazy-create a separate
-    // state and the seed-resolve would overwrite it, dropping live bytes.
-    state.writeChain = state.writeChain.then(async () => {
-      try {
-        const rendered = await controller.serializeBuffer!(ptyId, {
-          scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
-          altScreenForcesZeroRows: true
-        })
-        if (!rendered || rendered.data.length === 0) {
-          return
-        }
-        this.deps.recordOsc7MetadataForPty(ptyId, rendered.data)
-        this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
-        // Resize to renderer's dims so the seed reflows correctly into the
-        // emulator's grid, then resize back to PTY dims (if known) so live
-        // writes use the correct cell layout.
-        if (rendered.cols !== dims.cols || rendered.rows !== dims.rows) {
-          state.emulator.resize(rendered.cols, rendered.rows)
-        }
-        await state.emulator.write(rendered.data)
-        const ptyDims = this.getTerminalSize(ptyId)
-        if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
-          state.emulator.resize(ptyDims.cols, ptyDims.rows)
-        }
-        // Why: the renderer xterm no longer sees synthetic hook title frames
-        // (they feed main's tracker only), so its serializer lastTitle can be
-        // stale here. Prefer main's tracked title; the renderer's is only the
-        // seed when main has observed none (fresh relaunch, cold tracker).
-        state.ownership.seedOwner(undefined, {
-          alternateScreen: state.emulator.isAlternateScreen
-        })
-        const seedTitle = this.deps.getTrackedRawTitleForPty(ptyId) ?? rendered.lastTitle
-        if (seedTitle) {
-          state.emulator.setLastTitle(seedTitle)
-          this.applySeededAgentStatus(ptyId, seedTitle)
-        }
-        this.deps.providerSnapshotPreferredPtys().delete(ptyId)
-      } catch {
-        // Hydration is best-effort. Live writes continue via the same
-        // writeChain that this catch-arm leaves intact.
-      } finally {
-        this.deps.headlessHydrationState().set(ptyId, 'done')
-      }
-    })
-  }
-
   mergePreservedHeadlessMobileSessionTabs() {
     return this.deps.mobileSessionFacade().mergePreservedHeadlessMobileSessionTabs()
   }
@@ -4264,132 +4136,6 @@ export class RuntimeTerminalCluster {
       : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerSnapshot)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     return labelTerminalReadSource(visibleRead)
-  }
-
-  async readVisibleTerminalState(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
-    if (!this.deps.providerSnapshotPreferredPtys().has(ptyId)) {
-      return this.readHeadlessVisibleTerminalState(ptyId)
-    }
-
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    const outputSequence = this.getPtyOutputSequence(ptyId)
-    const cached = this.deps.providerVisibleStateByPtyId().get(ptyId)
-    const trackedMode = this.deps.providerModeTrackersByPtyId().get(ptyId)
-    if (
-      cached?.generation === generation &&
-      outputSequence <= cached.sequence &&
-      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
-    ) {
-      return cached
-    }
-    if (trackedMode && !trackedMode.isAlternateScreen) {
-      const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
-      return headlessState
-        ? { ...headlessState, isAlternateScreen: false }
-        : {
-            lines: [],
-            isAlternateScreen: false,
-            sequence: outputSequence,
-            generation
-          }
-    }
-    if ((this.deps.providerVisibleRetryAtByPtyId().get(ptyId) ?? 0) > Date.now()) {
-      return null
-    }
-
-    const snapshot = await this.serializeProviderTerminalBuffer(
-      ptyId,
-      { scrollbackRows: 0 },
-      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
-    )
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
-      this.deps
-        .providerVisibleRetryAtByPtyId()
-        .set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
-      return null
-    }
-    this.deps.providerVisibleRetryAtByPtyId().delete(ptyId)
-    if (this.deps.providerSnapshotsWithLiveModeTransition().has(snapshot)) {
-      // Why: the provider frame can predate a mode switch observed while its
-      // RPC was pending; the ordered live emulator owns the post-switch grid.
-      const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
-      if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
-        return liveState
-      }
-    }
-    const projection = await this.parseVisibleSnapshot(snapshot)
-    if (
-      this.getPtyLifecycleGeneration(ptyId) !== generation ||
-      this.getPtyOutputSequence(ptyId) > snapshot.seq
-    ) {
-      return null
-    }
-    const visibleState: RuntimeVisibleTerminalState = {
-      lines: projection.lines,
-      ...(projection.draft ? { draft: projection.draft } : {}),
-      isAlternateScreen: snapshot.alternateScreen ?? false,
-      sequence: snapshot.seq,
-      generation
-    }
-    this.deps.providerVisibleStateByPtyId().set(ptyId, visibleState)
-    return visibleState
-  }
-
-  async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
-    this.cancelPendingDriverMutations(ptyId)
-    if (this.isMobileSubscriberActive(ptyId)) {
-      this.setMobileDisplayMode(ptyId, 'desktop')
-      await this.applyMobileDisplayMode(ptyId)
-      this.releaseDesktopTakeBack(ptyId)
-      // Why: a desktop-initiated reclaim is "I'm taking over right now", not a
-      // sticky preference. The next mobile subscribe (e.g. user switches back to
-      // the terminal tab on the phone) must default to phone-fit again, not stay
-      // in passive desktop-watch mode.
-      this.setMobileDisplayMode(ptyId, 'auto')
-      if (this.hasRemoteDesktopLayoutState(ptyId)) {
-        // Why: the lock is already released above, so this re-layout is
-        // best-effort. Reporting its `ok` would tell the desktop "nothing was
-        // reclaimed" and cost the caller its post-take-back refit and focus.
-        await this.applyRemoteDesktopLayout(ptyId)
-      }
-      return true
-    }
-    const heldOverride = this.deps.terminalFitOverrides().get(ptyId)
-    if (heldOverride && this.hasRemoteDesktopLayoutState(ptyId)) {
-      // Why: applyRemoteDesktopLayout no-ops while the driver still reads mobile.
-      this.setDriver(ptyId, { kind: 'idle' })
-      // Why: best-effort, like the local held branch below. A host whose resize
-      // keeps failing (dropped SSH/WSL provider, exited PTY) would otherwise
-      // roll the lock back and leave the banner stranded, making every retry a
-      // no-op — the one branch that broke this method's release guarantee.
-      await this.applyRemoteDesktopLayout(ptyId)
-      this.releaseDesktopTakeBack(ptyId)
-      this.setMobileDisplayMode(ptyId, 'auto')
-      return true
-    }
-    if (heldOverride) {
-      // Why: with no subscribers, resolveDesktopRestoreTarget can fall through
-      // to current PTY size — which is at phone dims (wrong). Prefer a fresh
-      // desktop renderer measurement when one exists; otherwise use the
-      // override's pre-fit baseline before falling back to current size.
-      const fallback = this.resolveDesktopRestoreTarget(ptyId)
-      const renderer = this.deps.lastRendererSizes().get(ptyId)
-      const cols = renderer?.cols ?? heldOverride.previousCols ?? fallback.cols
-      const rows = renderer?.rows ?? heldOverride.previousRows ?? fallback.rows
-      await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
-      this.releaseDesktopTakeBack(ptyId)
-      this.setMobileDisplayMode(ptyId, 'auto')
-      return true
-    }
-    // Why: a stale lock — driver still reads mobile with no active subscriber
-    // and no held override (e.g. reclaimed inside the soft-leave grace, or a
-    // subscriber that dropped without a clean unsubscribe). Release it so the
-    // banner can't linger; there is nothing to resize.
-    if (this.getDriver(ptyId).kind === 'mobile') {
-      this.releaseDesktopTakeBack(ptyId)
-      return true
-    }
-    return false
   }
 
   reconcileHeadlessMobileSessionBrowserTabs() {
@@ -4822,67 +4568,6 @@ export class RuntimeTerminalCluster {
         // Best-effort mirror tracking; live PTY streaming must continue even
         // if xterm rejects a raced resize during teardown.
       })
-  }
-
-  async resolveActiveTerminal(worktreeSelector?: string): Promise<string> {
-    if (this.deps.graphStatus() !== 'ready') {
-      const targetWorktreeId = worktreeSelector
-        ? (await this.resolveWorktreeSelector(worktreeSelector)).id
-        : null
-      const snapshots = targetWorktreeId
-        ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
-        : await this.listAllMobileSessionTabs()
-      for (const snapshot of snapshots) {
-        const activeTerminal = snapshot.tabs.find(
-          (tab) =>
-            tab.type === 'terminal' &&
-            tab.isActive &&
-            tab.status === 'ready' &&
-            typeof tab.terminal === 'string'
-        )
-        if (activeTerminal?.type === 'terminal' && activeTerminal.terminal) {
-          return activeTerminal.terminal
-        }
-      }
-      const listed = await this.listTerminals(worktreeSelector, undefined, {
-        includeVisualLayouts: false
-      })
-      const first = listed.terminals[0]?.handle
-      if (first) {
-        return first
-      }
-      throw new Error('no_active_terminal')
-    }
-    this.assertGraphReady()
-
-    const targetWorktreeId = worktreeSelector
-      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
-      : null
-
-    // Prefer the tab's activeLeafId — this is the pane the user last focused
-    for (const tab of this.deps.tabs().values()) {
-      if (targetWorktreeId && tab.worktreeId !== targetWorktreeId) {
-        continue
-      }
-      if (!tab.activeLeafId) {
-        continue
-      }
-      const leafKey = this.getLeafKey(tab.tabId, tab.activeLeafId)
-      const leaf = this.deps.leaves().get(leafKey)
-      if (leaf) {
-        return this.issueHandle(leaf)
-      }
-    }
-
-    // Fallback: any leaf in the target worktree
-    for (const leaf of this.deps.leaves().values()) {
-      if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
-        continue
-      }
-      return this.issueHandle(leaf)
-    }
-
-    throw new Error('no_active_terminal')
   }
 
   async resolveAgentTerminalCreateOptions(
@@ -6400,65 +6085,6 @@ export class RuntimeTerminalCluster {
     }
   }
 
-  startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
-    const settleMarginMs = Math.min(
-      TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
-      Math.max(1, Math.floor(waiterTimeoutMs / 3))
-    )
-    const probeTimeoutMs = Math.min(
-      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS + settleMarginMs,
-      Math.max(0, waiterTimeoutMs - settleMarginMs)
-    )
-    const providerTimeoutMs = Math.min(
-      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-      Math.max(0, probeTimeoutMs - settleMarginMs)
-    )
-    // Node clamps sub-millisecond timers to 1ms, so no distinct retirement deadline exists.
-    if (providerTimeoutMs < 1) {
-      return
-    }
-    // Retire the provider before the detached probe and waiter can settle.
-    void withTimeout(
-      this.readTerminal(
-        waiter.handle,
-        {},
-        {
-          timeoutMs: providerTimeoutMs,
-          retireOnTimeout: true,
-          // Why: the ready banner stays in scrollback for the whole session, so
-          // classifying history would call a working agent idle (#15569 review).
-          visibleScreenOnly: true
-        }
-      ),
-      probeTimeoutMs,
-      null
-    )
-      .then((read) => {
-        if (
-          !read ||
-          read.source !== 'screen' ||
-          !this.deps.waitersByHandle().get(waiter.handle)?.has(waiter)
-        ) {
-          return
-        }
-        const snapshotText = read.tail.join('\n')
-        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        if (!blockedReason && !isKnownReadyPromptPreview(snapshotText)) {
-          return
-        }
-        // Why resolve before clearing: a stale handle throws while locating the
-        // record, and a cleared interval would leave the waiter with no poll and
-        // no probe — able to end only in timeout.
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
-        if (waiter.pollInterval) {
-          clearInterval(waiter.pollInterval)
-          waiter.pollInterval = null
-        }
-        this.resolveWaiter(waiter, result)
-      })
-      .catch(() => {})
-  }
-
   async stopExactTerminalsForWorktree(
     worktreeSelector: string,
     expectedPtyIds: readonly string[],
@@ -6722,62 +6348,6 @@ export class RuntimeTerminalCluster {
         ?.waitForRendererSerializer?.(ptyId, afterGeneration, timeoutMs, signal) ??
       Promise.resolve(false)
     )
-  }
-
-  async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
-    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
-    if (!ptyId) {
-      throw new Error('terminal_handle_stale')
-    }
-    const completionToken = this.deps.setupCompletionTokenByPtyId().get(ptyId)
-    const exitAbort = new AbortController()
-    return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
-      let settled = false
-      let unsubscribe: (() => void) | null = null
-      const cleanup = (): void => {
-        unsubscribe?.()
-        exitAbort.abort()
-      }
-      const finish = (exitCode: number | null): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        this.deps.setupCompletionTokenByPtyId().delete(ptyId)
-        resolve({ exitCode })
-      }
-      const fail = (error: unknown): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        reject(error)
-      }
-      const scanner = completionToken ? createSetupCompletionScanner(completionToken, finish) : null
-
-      if (scanner) {
-        unsubscribe = this.subscribeToTerminalData(ptyId, scanner.scan)
-      }
-      // Why: setup can finish before the observer is registered on fast local worktrees.
-      const replay = this.deps.recentPtyOutputById().get(ptyId)?.read()
-      if (scanner && replay) {
-        scanner.scan(replay)
-      }
-      if (!settled) {
-        void this.waitForTerminal(handle, {
-          condition: 'exit',
-          signal: exitAbort.signal
-        })
-          .then((wait) => {
-            if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {
-              finish(wait.exitCode)
-            }
-          })
-          .catch(fail)
-      }
-    })
   }
 
   async waitForTerminal(
