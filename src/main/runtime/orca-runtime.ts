@@ -452,6 +452,7 @@ import { isENOENT } from '../ipc/filesystem-path-containment'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import { computeValidatedBranchName } from '../ipc/worktree-logic'
+import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
 
 import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
