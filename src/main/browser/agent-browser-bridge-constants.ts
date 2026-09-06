@@ -1,0 +1,3 @@
+// argv-size budgets shared by the agent-browser bridge and its command modules.
+export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
+export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES

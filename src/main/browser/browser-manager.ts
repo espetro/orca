@@ -1,21 +1,10 @@
 /* eslint-disable max-lines -- Why: single privileged facade for guest registration, authorization, and lifecycle cleanup; keeps the browser security boundary in one file. */
-import { randomUUID } from 'node:crypto'
-
-import { shell, webContents } from 'electron'
-import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
-import {
-  normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl,
-  redactKagiSessionToken,
-  toSecureCertificateEndpoint
-} from '../../shared/browser-url'
 import type {
-  BrowserDownloadFinishedEvent,
-  BrowserDownloadProgressEvent,
-  BrowserDownloadRequestedEvent,
-  BrowserPermissionDeniedEvent,
-  BrowserPopupEvent
-} from '../../shared/browser-guest-events'
+  BrowserCertificateFailure,
+  BrowserLoadError,
+  BrowserSessionUserAgentMode,
+  BrowserViewportOverride
+} from '../../shared/browser-workspace-types'
 import type {
   BrowserGrabCancelReason,
   BrowserGrabPayload,
@@ -23,126 +12,48 @@ import type {
   BrowserGrabResult,
   BrowserGrabScreenshot
 } from '../../shared/browser-grab-types'
-import { buildGuestOverlayScript } from './grab-guest-script'
-import { clampGrabPayload } from './browser-grab-payload'
-import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from './browser-grab-screenshot'
-import { BrowserGrabSessionController } from './browser-grab-session-controller'
-import { browserDownloadDestinationReservations } from './browser-download-destination'
-import type { BrowserClientDownloadRoute } from './browser-client-download-relay'
-import { routeBrowserClientDownload } from './browser-client-download-routing'
-import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
-import { resolveRendererWebContents } from './browser-guest-renderer-target'
-import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
-import { setupGuestContextMenu } from './browser-guest-context-menu'
-import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
-import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
-import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
-import {
-  BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
-  buildBrowserClickedLinkRoutingScript,
-  buildBrowserIframeClickedLinkRoutingScript
-} from './browser-clicked-link-routing'
-import {
-  createPageInitiatedTabBudget,
-  type PageInitiatedTabBudget
-} from './browser-page-initiated-tab-budget'
-import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
-import { cleanElectronUserAgent } from './browser-session-ua'
-import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
-import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
-import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
-import type {
-  BrowserCertificateFailure,
-  BrowserLoadError,
-  BrowserSessionUserAgentMode,
-  BrowserViewportOverride
-} from '../../shared/browser-workspace-types'
+import type { KeybindingOverrides } from '../../shared/keybindings'
 import {
   type BrowserAnnotationViewportBridgeOptions,
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
 import {
-  getWorkspaceDocPageGuest,
-  installDocPreviewGuestPolicy,
-  isWorkspaceDocPageId
-} from './doc-preview-guest-policy'
-import type { KeybindingOverrides } from '../../shared/keybindings'
+  normalizeBrowserNavigationUrl,
+  redactKagiSessionToken,
+  toSecureCertificateEndpoint
+} from '../../shared/browser-url'
+import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
+import { webContents } from 'electron'
+import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import {
   BrowserCertificateTrustController,
   type ManagedBrowserGuestContext
 } from './browser-certificate-trust-controller'
-
-const AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS = 2_000
-
-function isChromiumInternalErrorUrl(url: string): boolean {
-  return url.startsWith('chrome-error://')
-}
-
-function resolveWithTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  fallbackValue: T
-): Promise<{ value: T; timedOut: boolean }> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
-  const timeoutPromise = new Promise<{ value: T; timedOut: boolean }>((resolve) => {
-    timeoutId = setTimeout(() => resolve({ value: fallbackValue, timedOut: true }), timeoutMs)
-  })
-  return Promise.race([
-    promise.then((value) => ({ value, timedOut: false })),
-    timeoutPromise
-  ]).finally(() => {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-  })
-}
-
-function releaseAutomationVisibilityToken(renderer: Electron.WebContents, token: string): void {
-  if (renderer.isDestroyed()) {
-    return
-  }
-  renderer
-    .executeJavaScript(
-      `(function() {
-        var bridge = window.__orcaBrowserAutomationVisibility;
-        if (!bridge || typeof bridge.release !== 'function') return false;
-        return bridge.release(${JSON.stringify(token)});
-      })()`
-    )
-    .catch(() => {})
-}
-
-function cleanupLateAutomationVisibilityToken(
-  renderer: Electron.WebContents,
-  acquirePromise: Promise<unknown>
-): void {
-  acquirePromise
-    .then((lateToken) => {
-      if (typeof lateToken !== 'string' || lateToken.length === 0) {
-        return
-      }
-      // Why: the lease is created before paint; if main's acquire timed out, release the late token so hidden webviews don't stay paintable.
-      releaseAutomationVisibilityToken(renderer, lateToken)
-    })
-    .catch(() => {})
-}
-
-function createNoopRestoreForTimedOutAutomationAcquire(
-  renderer: Electron.WebContents,
-  acquirePromise: Promise<unknown>,
-  timedOut: boolean
-): () => void {
-  if (timedOut) {
-    cleanupLateAutomationVisibilityToken(renderer, acquirePromise)
-  }
-  return () => {}
-}
-
-function isAutomationVisibilityToken(token: unknown): token is string {
-  return typeof token === 'string' && token.length > 0
-}
+import { GuestDownloadRelay } from './browser-guest-download-relay'
+import { GuestEventForwarding } from './browser-guest-event-forwarding'
+import {
+  GuestPopupRoutingController,
+  isChromiumInternalErrorUrl,
+  safeOrigin,
+  type PopupOwnerContext
+} from './browser-guest-popup-routing'
+import { AuthUserAgentOverrideController } from './browser-auth-user-agent-override'
+import { BrowserGrabSelectionController } from './browser-grab-selection-controller'
+import { acquireAutomationVisibilityViaRenderer } from './browser-automation-visibility'
+import {
+  installDocPreviewGuestPolicy,
+  isWorkspaceDocPageId,
+  getWorkspaceDocPageGuest
+} from './doc-preview-guest-policy'
+import { resolveRendererWebContents } from './browser-guest-renderer-target'
+import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
+import { setupGuestContextMenu } from './browser-guest-context-menu'
+import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
+import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
+import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
+import { browserDownloadDestinationReservations } from './browser-download-destination'
+import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 
 export type BrowserGuestRegistration = {
   browserPageId?: string
@@ -155,18 +66,6 @@ export type BrowserGuestRegistration = {
   rendererWebContentsId: number
 }
 
-type PendingPermissionEvent = Omit<BrowserPermissionDeniedEvent, 'browserPageId'>
-type PendingPopupEvent = Omit<BrowserPopupEvent, 'browserPageId'>
-type BrowserDownloadDoneState = 'completed' | 'cancelled' | 'interrupted'
-type PopupOwnerContext = {
-  browserTabId: string
-  rootGuestWebContentsId: number
-}
-/**
- * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
- * anti-detection all apply. A workspace-document guest renders one granted document and gets none
- * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
- */
 export type BrowserGuestPolicy =
   | { profile: 'browsing' }
   | { profile: 'workspace-doc'; host: Electron.WebContents }
@@ -174,71 +73,6 @@ const BROWSING_GUEST_POLICY: BrowserGuestPolicy = { profile: 'browsing' }
 type PendingMainFrameNavigation = {
   currentUrl: string
   supersededUrls: string[]
-}
-type AuthUserAgentOverrideOperation = {
-  sequence: number
-  userAgent: string
-}
-type AuthUserAgentOverrideState = {
-  confirmed: AuthUserAgentOverrideOperation | null
-  nextSequence: number
-  pending: AuthUserAgentOverrideOperation[]
-}
-const SAFE_POPUP_WINDOW_OPTIONS = {
-  alwaysOnTop: false,
-  closable: true,
-  focusable: true,
-  frame: true,
-  fullscreen: false,
-  kiosk: false,
-  modal: false,
-  movable: true,
-  opacity: 1,
-  show: true,
-  simpleFullscreen: false,
-  skipTaskbar: false,
-  titleBarStyle: 'default',
-  transparent: false,
-  // Why: Electron applies these before createWindow; feature strings/opener inheritance must not relax the child's isolation.
-  webPreferences: {
-    allowRunningInsecureContent: false,
-    contextIsolation: true,
-    nodeIntegration: false,
-    nodeIntegrationInSubFrames: false,
-    sandbox: true,
-    webviewTag: false
-  }
-} satisfies Electron.BrowserWindowConstructorOptions
-
-type ActiveDownload = {
-  downloadId: string
-  guestWebContentsId: number
-  browserTabId: string | null
-  rendererWebContentsId: number | null
-  origin: string
-  filename: string
-  totalBytes: number | null
-  mimeType: string | null
-  item: Electron.DownloadItem
-  savePath: string
-  reservationKey: string | null
-  clientRoute: BrowserClientDownloadRoute | null
-  remoteDestination: BrowserDownloadFinishedEvent['remoteDestination']
-  receivedBytes: number
-  transientState: BrowserDownloadProgressEvent['state']
-  terminalEvent: BrowserDownloadFinishedEvent | null
-  startedSent: boolean
-  cleanup: (() => void) | null
-}
-
-function safeOrigin(rawUrl: string): string {
-  const external = normalizeExternalBrowserUrl(rawUrl)
-  const urlToParse = external ?? rawUrl
-  try {
-    return new URL(urlToParse).origin
-  } catch {
-    return external ?? 'unknown'
-  }
 }
 
 export class BrowserManager {
@@ -251,10 +85,7 @@ export class BrowserManager {
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map gives O(1) guest→tab lookups on every mouse/load/permission/popup event.
   private readonly tabIdByWebContentsId = new Map<number, string>()
-  private readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
   // Why: keyed by the opener tree's root so named child popups can't each mint a fresh tab quota.
-  private readonly pageInitiatedTabBudgetByRootGuestId = new Map<number, PageInitiatedTabBudget>()
-  // Why: guests are keyed by page id but renderer visibility by workspace id; bridge the mismatch to activate the right tab before capture.
   private readonly workspaceIdByPageId = new Map<string, string>()
   private readonly sessionProfileIdByPageId = new Map<string, string | null>()
   private readonly userAgentModeByPageId = new Map<string, BrowserSessionUserAgentMode>()
@@ -264,12 +95,6 @@ export class BrowserManager {
   // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
   // can re-issue it against the target URL's identity.
   private readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
-  // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
-  // ordered without claiming a failed write was installed.
-  private readonly authUserAgentOverrideStateByGuestId = new Map<
-    number,
-    AuthUserAgentOverrideState
-  >()
   // Why: the in-flight main-frame navigation target, held only until commit or failure — getURL()
   // still reports the outgoing page until then. See resolveTabNavigationUrl.
   private readonly pendingNavigationByGuestId = new Map<number, PendingMainFrameNavigation>()
@@ -282,22 +107,56 @@ export class BrowserManager {
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly offscreenGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
-  private readonly clickedLinkFrameNameByGuestId = new Map<number, string>()
   private readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Why: did-start-navigation hides the overlay optimistically; stash the cleared error so did-fail-load(-3) can restore an aborted nav.
   private readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   private browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   private certificateTrustController: BrowserCertificateTrustController | null = null
   private shouldForwardDictationShortcut: (() => boolean) | null = null
-  private readonly pendingLoadFailuresByGuestId = new Map<
-    number,
-    { code: number; description: string; validatedUrl: string }
-  >()
-  private readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
-  private readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
-  private readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
-  private readonly downloadsById = new Map<string, ActiveDownload>()
-  private readonly grabSessionController = new BrowserGrabSessionController()
+  private readonly popupRouting = new GuestPopupRoutingController({
+    resolveTabIdForGuest: (guestId) => this.tabIdByWebContentsId.get(guestId),
+    resolveWebContentsIdForTab: (tabId) => this.webContentsIdByTabId.get(tabId),
+    resolveRoutePopupOpener: resolveBrowserRouteGuestPopupOpener,
+    tryConsumePageInitiatedTab: (rootId) => this.popupRouting.tryConsumePageInitiatedTab(rootId),
+    openLinkInOrcaTab: (tabId, url) => this.openLinkInOrcaTab(tabId, url),
+    forwardOrQueuePopupEvent: (guestId, event) =>
+      this.guestEvents.forwardOrQueuePopupEvent(guestId, event),
+    attachGuestPolicies: (guest, ownerContext) =>
+      this.attachGuestPolicies(guest, ownerContext, BROWSING_GUEST_POLICY),
+    createPopupChildWindowWithOriginBar: (opener, url, options) =>
+      this.popupRouting.createPopupChildWindowWithOriginBar(opener, url, options)
+  })
+  private readonly guestEvents = new GuestEventForwarding({
+    resolveRendererForBrowserTab: (tabId) => this.resolveRendererForBrowserTab(tabId),
+    resolveBrowserTabIdForGuestWebContentsId: (guestId) =>
+      this.resolveBrowserTabIdForGuestWebContentsId(guestId)
+  })
+  private readonly downloadRelay = new GuestDownloadRelay({
+    resolveOwnerContext: (guestId) => this.popupRouting.getOwnerContext(guestId),
+    resolveRendererForBrowserTab: (tabId) => this.resolveRendererForBrowserTab(tabId),
+    resolveRendererWebContentsIdForTab: (tabId) =>
+      this.rendererWebContentsIdByTabId.get(tabId) ?? null
+  })
+  private readonly authUaOverride = new AuthUserAgentOverrideController({
+    resolveDirectTabIdForGuest: (guestId) => this.tabIdByWebContentsId.get(guestId),
+    resolveOwnerTabIdForGuest: (guestId) => this.resolveBrowserTabIdForGuestWebContentsId(guestId),
+    userAgentModeByPageIdGet: (tabId) => this.userAgentModeByPageId.get(tabId),
+    viewportUaOverrideMobileByTabIdGet: (tabId) => this.viewportUaOverrideMobileByTabId.get(tabId),
+    sendViewportUserAgentOverride: (guest, mobile, url, baseUserAgent) =>
+      this.authUaOverride.sendViewportUserAgentOverride(guest, mobile, url, baseUserAgent),
+    resolveTabNavigationUrl: (guest) => this.resolveTabNavigationUrl(guest),
+    reapplyViewportUserAgentOverride: (guest, tabId, url) =>
+      this.reapplyViewportUserAgentOverride(guest, tabId, url)
+  })
+  private readonly grabSessionController = new BrowserGrabSelectionController()
+
+  // Why: tests inspect per-guest popup state; these are the same maps the routing controller owns.
+  get popupOwnerContextByGuestId(): Map<number, unknown> {
+    return this.popupRouting.testOwnerContextByGuestId
+  }
+  get clickedLinkFrameNameByGuestId(): Map<number, string> {
+    return this.popupRouting.testClickedLinkFrameNameByGuestId
+  }
 
   setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
     this.shouldForwardDictationShortcut = predicate
@@ -356,7 +215,7 @@ export class BrowserManager {
 
     // Why: proxy/bridge stop detaches the debugger and drops injections; re-attach (500ms delay to avoid racing a mid-restart) to keep overrides.
     const onDetach = (): void => {
-      this.authUserAgentOverrideStateByGuestId.delete(guest.id)
+      this.authUaOverride.forgetGuest(guest.id)
       if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
         reattachTimer = setTimeout(() => {
           reattachTimer = null
@@ -387,42 +246,7 @@ export class BrowserManager {
   }
 
   private resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
-    return this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId ?? null
-  }
-
-  private resolvePopupOwnerContext(guestWebContentsId: number): PopupOwnerContext | null {
-    const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
-    if (browserTabId) {
-      return { browserTabId, rootGuestWebContentsId: guestWebContentsId }
-    }
-    // Route popups live in an Orca-built window, so they never pass through did-create-window and
-    // have no inherited context; their owning page comes from the route popup registry instead.
-    const routeOpenerWebContentsId = resolveBrowserRouteGuestPopupOpener(guestWebContentsId)
-    if (routeOpenerWebContentsId !== null) {
-      const openerTabId = this.tabIdByWebContentsId.get(routeOpenerWebContentsId)
-      return openerTabId
-        ? { browserTabId: openerTabId, rootGuestWebContentsId: routeOpenerWebContentsId }
-        : null
-    }
-    const inherited = this.popupOwnerContextByGuestId.get(guestWebContentsId)
-    if (
-      inherited &&
-      this.webContentsIdByTabId.get(inherited.browserTabId) === inherited.rootGuestWebContentsId
-    ) {
-      return inherited
-    }
-    this.popupOwnerContextByGuestId.delete(guestWebContentsId)
-    return null
-  }
-
-  /** Shared across the whole opener tree, so a chain of popups draws from one budget. */
-  private tryConsumePageInitiatedTab(rootGuestWebContentsId: number): boolean {
-    let budget = this.pageInitiatedTabBudgetByRootGuestId.get(rootGuestWebContentsId)
-    if (!budget) {
-      budget = createPageInitiatedTabBudget()
-      this.pageInitiatedTabBudgetByRootGuestId.set(rootGuestWebContentsId, budget)
-    }
-    return budget.tryConsume(Date.now())
+    return this.popupRouting.getOwnerContext(guestWebContentsId)?.browserTabId ?? null
   }
 
   private resolveRendererForBrowserTab(browserTabId: string): Electron.WebContents | null {
@@ -657,30 +481,7 @@ export class BrowserManager {
     if (!renderer || renderer.isDestroyed()) {
       return () => {}
     }
-
-    // Why: agent commands need a paintable webview for lazy-loading sites without stealing the user's visible tab.
-    const acquirePromise = renderer
-      .executeJavaScript(
-        `(async function() {
-            var bridge = window.__orcaBrowserAutomationVisibility;
-            if (!bridge || typeof bridge.acquire !== 'function') return null;
-            return await bridge.acquire(${JSON.stringify(browserPageId)});
-          })()`
-      )
-      .catch(() => null)
-    const { value: token, timedOut } = await resolveWithTimeout(
-      acquirePromise,
-      AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS,
-      null
-    )
-
-    if (!isAutomationVisibilityToken(token)) {
-      return createNoopRestoreForTimedOutAutomationAcquire(renderer, acquirePromise, timedOut)
-    }
-
-    return () => {
-      releaseAutomationVisibilityToken(renderer, token)
-    }
+    return acquireAutomationVisibilityViaRenderer(renderer, browserPageId)
   }
 
   attachGuestPolicies(
@@ -700,184 +501,13 @@ export class BrowserManager {
       return
     }
     if (inheritedOwnerContext) {
-      this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
+      this.popupRouting.setInheritedOwnerContext(guest.id, inheritedOwnerContext)
     }
-    // Why: only the primary embedded browser converts new-tab clicks to Orca tabs; OAuth child windows keep native link behavior.
-    const clickedLinkFrameName = inheritedOwnerContext
-      ? null
-      : `__orca_clicked_link_foreground_${randomUUID()}`
-    if (clickedLinkFrameName) {
-      this.clickedLinkFrameNameByGuestId.set(guest.id, clickedLinkFrameName)
-    }
-    let clickedLinkRoutingActive = Boolean(clickedLinkFrameName)
-
     // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
     const disposeAntiDetection = this.injectAntiDetection(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
-    const installClickedLinkRouting = (): void => {
-      if (!clickedLinkRoutingActive || !clickedLinkFrameName || guest.isDestroyed()) {
-        return
-      }
-      // Why: an isolated-world listener labels real anchor clicks without exposing the frame name to page scripts.
-      void guest
-        .executeJavaScriptInIsolatedWorld(
-          BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
-          [
-            {
-              // Why: mobile emulation spoofs the UA as iOS, so use the real host platform from main for modifier routing.
-              code: buildBrowserClickedLinkRoutingScript(
-                clickedLinkFrameName,
-                process.platform === 'darwin'
-              )
-            }
-          ],
-          false
-        )
-        .catch(() => {})
-    }
-    if (clickedLinkFrameName) {
-      guest.on('dom-ready', installClickedLinkRouting)
-    }
-    const pendingIframeRoutingInstalls = new Map<Electron.WebFrameMain, () => void>()
-    const iframeFrameNameByFrame = new Map<Electron.WebFrameMain, string>()
-    const iframeFrameByFrameName = new Map<string, Electron.WebFrameMain>()
-    const clearIframeFrameName = (frame: Electron.WebFrameMain): void => {
-      const name = iframeFrameNameByFrame.get(frame)
-      if (!name) {
-        return
-      }
-      iframeFrameNameByFrame.delete(frame)
-      iframeFrameByFrameName.delete(name)
-    }
-    const installIframeClickedLinkRouting = (frame: Electron.WebFrameMain): void => {
-      clearIframeFrameName(frame)
-      if (!clickedLinkRoutingActive || frame.isDestroyed()) {
-        return
-      }
-      const name = `__orca_clicked_link_iframe_foreground_${randomUUID()}`
-      iframeFrameNameByFrame.set(frame, name)
-      iframeFrameByFrameName.set(name, frame)
-      // Why: child-frame tokens live in the page world, so consume after one trusted click and replace before the next.
-      void frame
-        .executeJavaScript(
-          buildBrowserIframeClickedLinkRoutingScript(name, process.platform === 'darwin'),
-          false
-        )
-        .catch(() => {
-          if (iframeFrameNameByFrame.get(frame) === name) {
-            clearIframeFrameName(frame)
-          }
-        })
-    }
-    const handleFrameCreated = (
-      _event: Electron.Event,
-      { frame }: Electron.FrameCreatedDetails
-    ): void => {
-      if (!clickedLinkFrameName || !frame || frame.parent === null) {
-        return
-      }
-      for (const knownFrame of iframeFrameNameByFrame.keys()) {
-        if (knownFrame.isDestroyed()) {
-          clearIframeFrameName(knownFrame)
-        }
-      }
-      const installAfterDomReady = (): void => {
-        pendingIframeRoutingInstalls.delete(frame)
-        installIframeClickedLinkRouting(frame)
-      }
-      pendingIframeRoutingInstalls.set(frame, installAfterDomReady)
-      frame.once('dom-ready', installAfterDomReady)
-    }
-    if (clickedLinkFrameName) {
-      guest.on('frame-created', handleFrameCreated)
-    }
-    const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
-      // Why: popup descendants inherit the opener's owner context but must not replace its primary registration.
-      this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
-    }
-    guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
-      const ownerContext = this.resolvePopupOwnerContext(guest.id)
-      const browserTabId = ownerContext?.browserTabId ?? null
-      const browserUrl = normalizeBrowserNavigationUrl(url)
-      const externalUrl = normalizeExternalBrowserUrl(url)
-      const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
-      const iframeFrame = frameName ? iframeFrameByFrameName.get(frameName) : undefined
-      let isClickedLink = Boolean(
-        expectedClickedLinkFrameName && frameName === expectedClickedLinkFrameName
-      )
-      if (!isClickedLink && iframeFrame) {
-        isClickedLink = true
-        clearIframeFrameName(iframeFrame)
-        queueMicrotask(() => installIframeClickedLinkRouting(iframeFrame))
-      }
-
-      if (isClickedLink) {
-        if (browserTabId && browserUrl && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
-          this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(browserUrl),
-            action: 'opened-in-orca'
-          })
-        }
-        // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
-        return { action: 'deny' }
-      }
-
-      // Why: an unnamed, featureless window.open() is Chromium's own new-tab shape, so an Orca tab is
-      // the honest presentation; a floating origin-bar window is not. Opener-dependent shapes are
-      // excluded by isNewBrowserTabPopupIntent and still get a real child window below.
-      if (
-        ownerContext &&
-        externalUrl &&
-        isNewBrowserTabPopupIntent({ frameName, disposition, features })
-      ) {
-        // Why: one activation lets a page loop window.open, and each routed tab persists into
-        // workspace session state, so it survives the quit that used to clear popup windows.
-        if (!this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
-          this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(externalUrl),
-            action: 'blocked'
-          })
-          return { action: 'deny' }
-        }
-        if (this.openLinkInOrcaTab(ownerContext.browserTabId, externalUrl)) {
-          this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(externalUrl),
-            action: 'opened-in-orca'
-          })
-        }
-        // Why: a recognized new-tab intent must never fall through to a native popup if its renderer vanished mid-open.
-        return { action: 'deny' }
-      }
-
-      // Why: file URLs are fine for in-pane previews, but must not spawn native child windows targeting local paths.
-      const canOpenAsChild = Boolean(externalUrl || browserUrl === ORCA_BROWSER_BLANK_URL)
-      if (browserTabId && canOpenAsChild) {
-        // Why: OAuth may request size/position, but content must not create deceptive or inescapable native chrome.
-        return {
-          action: 'allow',
-          overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS,
-          // Why: default child windows lack an address bar; host in an Orca origin-bar window so the destination is verifiable.
-          createWindow: (options: PopupChildWindowOptions) =>
-            this.createPopupChildWindowWithOriginBar(guest, url, options)
-        }
-      } else if (externalUrl) {
-        // Why: Kagi target=_blank popup URLs still contain the bearer token; redact before handing to the OS browser.
-        void shell.openExternal(redactKagiSessionToken(externalUrl))
-        this.forwardOrQueuePopupEvent(guest.id, {
-          origin: safeOrigin(externalUrl),
-          action: 'opened-external'
-        })
-      } else {
-        // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
-        this.forwardOrQueuePopupEvent(guest.id, {
-          origin: safeOrigin(url),
-          action: 'blocked'
-        })
-      }
-      return { action: 'deny' }
-    })
+    const detachPopupRouting = this.popupRouting.installPopupAndClickedLinkRouting(guest)
 
     const navigationGuard = (event: Electron.Event, url: string): boolean => {
       // Why: Turnstile loads challenge resources via blob:; blocking them trips error 600010. Allow only http(s) blobs, not opaque ones.
@@ -944,7 +574,7 @@ export class BrowserManager {
         if (clearedError !== undefined) {
           this.clearedLoadErrorsByGuestId.delete(guest.id)
           this.loadErrorsByGuestId.set(guest.id, clearedError)
-          this.forwardOrQueueGuestLoadFailure(guest.id, clearedError)
+          this.guestEvents.forwardOrQueueGuestLoadFailure(guest.id, clearedError)
           this.notifyBrowserGuestStateChanged(guest.id)
         }
         return
@@ -956,7 +586,7 @@ export class BrowserManager {
         validatedURL || guest.getURL() || 'about:blank'
       )
       this.loadErrorsByGuestId.set(guest.id, loadError)
-      this.forwardOrQueueGuestLoadFailure(guest.id, loadError)
+      this.guestEvents.forwardOrQueueGuestLoadFailure(guest.id, loadError)
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
@@ -975,7 +605,7 @@ export class BrowserManager {
       this.applyGoogleAuthUserAgent(guest, url)
       this.certificateTrustController?.onMainFrameNavigationStarted(guest.id)
       // Why: a pre-registration failure belongs only to its own nav; a replacement nav must not replay it.
-      this.pendingLoadFailuresByGuestId.delete(guest.id)
+      this.guestEvents.clearPendingLoadFailure(guest.id)
       const activeError = this.loadErrorsByGuestId.get(guest.id)
       if (activeError === undefined) {
         // Why: no error to hide; drop any stale stash so a later abort can't resurrect an old failure.
@@ -1009,22 +639,9 @@ export class BrowserManager {
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeAntiDetection()
+      detachPopupRouting()
       try {
         guest.off('destroyed', handleDestroyed)
-        guest.off('did-create-window', handleDidCreateWindow)
-        if (clickedLinkFrameName) {
-          clickedLinkRoutingActive = false
-          guest.off('dom-ready', installClickedLinkRouting)
-          guest.off('frame-created', handleFrameCreated)
-          for (const [frame, install] of pendingIframeRoutingInstalls) {
-            if (!frame.isDestroyed()) {
-              frame.off('dom-ready', install)
-            }
-          }
-          pendingIframeRoutingInstalls.clear()
-          iframeFrameNameByFrame.clear()
-          iframeFrameByFrameName.clear()
-        }
       } catch {
         // guest may already be destroyed
       }
@@ -1062,135 +679,12 @@ export class BrowserManager {
     })
   }
 
-  // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
-  // not the request header, so the header-level Firefox switch in setupClientHintsOverride
-  // must be matched here per navigation or the two layers disagree — itself a bot tell.
-  // Restores the session's base identity off the auth hosts. Native-UA profiles opt out
-  // of the whole clean-UA path, so they keep their untouched identity everywhere.
   private applyGoogleAuthUserAgent(
     guest: Electron.WebContents,
     url: string,
     options: { duringRedirect?: boolean } = {}
   ): void {
-    const browserPageId = this.tabIdByWebContentsId.get(guest.id)
-    // Why: popup child windows get these policies but are never in tabIdByWebContentsId, so a direct
-    // lookup misses the native-UA opt-out and would hand a native profile's popup the Firefox UA.
-    // That is worse than doing nothing: native sessions skip setupClientHintsOverride entirely, so
-    // the popup would send the raw Electron UA on the wire while navigator.userAgent claims Firefox.
-    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
-    // Session state is authoritative before renderer registration and after a native profile imports a source UA.
-    const mode =
-      getBrowserSessionUserAgentMode(guest.session) ??
-      (ownerTabId ? this.userAgentModeByPageId.get(ownerTabId) : undefined)
-    if (mode === 'native') {
-      return
-    }
-    const firefoxUa = googleAuthUserAgent()
-    const overrideState = this.authUserAgentOverrideStateByGuestId.get(guest.id)
-    const latestPendingOverride = overrideState?.pending.at(-1)
-    const confirmedOverride = overrideState?.confirmed
-    const currentOverride =
-      latestPendingOverride && latestPendingOverride.sequence > (confirmedOverride?.sequence ?? -1)
-        ? latestPendingOverride
-        : confirmedOverride
-    const currentUa = currentOverride?.userAgent ?? guest.getUserAgent()
-    const nextUa = isGoogleAuthUrl(url)
-      ? firefoxUa
-      : // Only restore when the auth-host override is actually in place, so normal
-        // navigation never touches the session UA.
-        currentUa === firefoxUa
-        ? guest.session.getUserAgent()
-        : null
-    let authOverrideIssuedOverCdp = false
-    if (nextUa !== null && nextUa !== currentUa) {
-      // Why: WebContents.setUserAgent() during a redirect makes Chromium cancel the in-flight
-      // navigation (ERR_ABORTED) and replay the original request, which a POST-started OAuth chain
-      // cannot survive — the sign-in lands on a blank tab. CDP retargets navigator.userAgent without
-      // touching the navigation, and it outranks the WebContents UA from then on, so a guest that
-      // switches to it stays on it. The wire UA never depended on this write: setupClientHintsOverride
-      // rewrites User-Agent per request for auth-host URLs on its own.
-      if (options.duringRedirect === true || overrideState !== undefined) {
-        if (this.canOverrideUserAgentOverCdp(guest)) {
-          authOverrideIssuedOverCdp = true
-          // Why: go through the viewport builder rather than writing nextUa raw, so both CDP writers
-          // resolve one identity for this URL — Firefox on auth hosts, the profile's clean base off
-          // them, any mobile preset preserved. Writing the session UA directly would put the
-          // unlaundered Electron token back on the wire.
-          void this.applyAuthUserAgentOverrideOverCdp(
-            guest,
-            (browserPageId ? this.viewportUaOverrideMobileByTabId.get(browserPageId) : undefined) ??
-              false,
-            url,
-            nextUa
-          )
-        }
-        // Why: with no debugger there is no way to retarget the identity without cancelling the
-        // redirect. A stale navigator.userAgent is recoverable; a dead navigation is not.
-      } else {
-        guest.setUserAgent(nextUa)
-      }
-    }
-    // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of
-    // its own, so inheriting the owner tab's preset UA would pair a mobile UA with a desktop viewport.
-    if (browserPageId && !authOverrideIssuedOverCdp) {
-      this.reapplyViewportUserAgentOverride(guest, browserPageId, url)
-    }
-  }
-
-  private canOverrideUserAgentOverCdp(guest: Electron.WebContents): boolean {
-    try {
-      return !guest.isDestroyed() && guest.debugger.isAttached()
-    } catch {
-      return false
-    }
-  }
-
-  private applyAuthUserAgentOverrideOverCdp(
-    guest: Electron.WebContents,
-    mobile: boolean,
-    url: string,
-    userAgent: string
-  ): Promise<boolean> {
-    if (!this.canOverrideUserAgentOverCdp(guest)) {
-      return Promise.resolve(false)
-    }
-    const state = this.authUserAgentOverrideStateByGuestId.get(guest.id) ?? {
-      confirmed: null,
-      nextSequence: 0,
-      pending: []
-    }
-    const operation = { sequence: ++state.nextSequence, userAgent }
-    state.pending.push(operation)
-    this.authUserAgentOverrideStateByGuestId.set(guest.id, state)
-    return this.sendViewportUserAgentOverride(guest, mobile, url, userAgent).then(
-      () => this.settleAuthUserAgentOverride(guest.id, state, operation, true),
-      () => {
-        this.settleAuthUserAgentOverride(guest.id, state, operation, false)
-        return false
-      }
-    )
-  }
-
-  private settleAuthUserAgentOverride(
-    guestId: number,
-    state: AuthUserAgentOverrideState,
-    operation: AuthUserAgentOverrideOperation,
-    succeeded: boolean
-  ): boolean {
-    if (this.authUserAgentOverrideStateByGuestId.get(guestId) !== state) {
-      return false
-    }
-    if (succeeded && (state.confirmed?.sequence ?? -1) < operation.sequence) {
-      state.confirmed = operation
-    }
-    const pendingIndex = state.pending.indexOf(operation)
-    if (pendingIndex !== -1) {
-      state.pending.splice(pendingIndex, 1)
-    }
-    if (state.confirmed === null && state.pending.length === 0) {
-      this.authUserAgentOverrideStateByGuestId.delete(guestId)
-    }
-    return true
+    this.authUaOverride.applyGoogleAuthUserAgent(guest, url, options)
   }
 
   private startPendingNavigation(guestId: number, url: string): void {
@@ -1253,63 +747,15 @@ export class BrowserManager {
     // Why: no queue needed — debugger.sendCommand dispatches in call order over one channel, so the
     // later-issued write wins. What matters is that both writers resolve the SAME host, which they
     // now do via the navigation target rather than the stale committed URL.
-    void this.sendViewportUserAgentOverride(guest, mobile, url).catch(() => {})
-  }
-
-  private async sendViewportUserAgentOverride(
-    guest: Electron.WebContents,
-    mobile: boolean,
-    url?: string,
-    baseUserAgent?: string
-  ): Promise<void> {
-    if (guest.isDestroyed() || !guest.debugger.isAttached()) {
-      return
-    }
-    await guest.debugger.sendCommand(
-      'Emulation.setUserAgentOverride',
-      buildViewportUserAgentOverride({
-        url: url ?? this.resolveTabNavigationUrl(guest),
-        mobile,
-        // Why: the session UA is the profile's stable base identity. guest.getUserAgent() is not:
-        // applyGoogleAuthUserAgent leaves it pinned to the Firefox auth UA once a guest switches to
-        // the CDP override, so reading it back here would republish that identity on ordinary hosts.
-        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.session.getUserAgent())
-      })
-    )
+    void this.authUaOverride.sendViewportUserAgentOverride(guest, mobile, url).catch(() => {})
   }
 
   /** Route guests own their own popup handler, so their denials arrive here instead. */
   reportRouteGuestPopupBlocked(input: { openerWebContentsId: number; url: string }): void {
-    this.forwardOrQueuePopupEvent(input.openerWebContentsId, {
+    this.guestEvents.forwardOrQueuePopupEvent(input.openerWebContentsId, {
       origin: safeOrigin(input.url),
       action: 'blocked'
     })
-  }
-
-  private createPopupChildWindowWithOriginBar(
-    openerGuest: Electron.WebContents,
-    targetUrl: string,
-    options: PopupChildWindowOptions
-  ): Electron.WebContents {
-    const popup = openPopupWithOriginBar(options, targetUrl)
-    // Why: Electron emits no did-create-window for createWindow children, so attach the opener's policies here.
-    this.attachGuestPolicies(
-      popup.contentWebContents,
-      this.resolvePopupOwnerContext(openerGuest.id)
-    )
-    this.forwardOrQueuePopupEvent(openerGuest.id, {
-      origin: safeOrigin(targetUrl),
-      action: 'opened-in-orca'
-    })
-    // Why: match Electron's child-window lifecycle so closing the owning tab doesn't orphan session-bearing popups.
-    const closePopupWithOpener = (): void => popup.close()
-    openerGuest.once('destroyed', closePopupWithOpener)
-    popup.onClosed(() => {
-      if (!openerGuest.isDestroyed()) {
-        openerGuest.off('destroyed', closePopupWithOpener)
-      }
-    })
-    return popup.contentWebContents
   }
 
   private retireStaleGuestWebContents(previousWebContentsId: number): void {
@@ -1319,7 +765,6 @@ export class BrowserManager {
 
   private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
     const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
-    const isPrimaryGuest = browserTabId !== undefined
     if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guestWebContentsId) {
       this.webContentsIdByTabId.delete(browserTabId)
     }
@@ -1331,26 +776,12 @@ export class BrowserManager {
       this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
     this.policyAttachedGuestIds.delete(guestWebContentsId)
-    this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
-    this.popupOwnerContextByGuestId.delete(guestWebContentsId)
-    this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
-    this.authUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
+    this.popupRouting.forgetGuest(guestWebContentsId)
+    this.authUaOverride.forgetGuest(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
-    // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
-    if (isPrimaryGuest) {
-      for (const [popupGuestId, owner] of this.popupOwnerContextByGuestId) {
-        if (owner.rootGuestWebContentsId === guestWebContentsId) {
-          this.popupOwnerContextByGuestId.delete(popupGuestId)
-        }
-      }
-    }
-    this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
-    this.loadErrorsByGuestId.delete(guestWebContentsId)
-    this.clearedLoadErrorsByGuestId.delete(guestWebContentsId)
-    this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
-    this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
-    this.cancelPendingDownloadsForGuest(guestWebContentsId)
+    this.guestEvents.clearForGuest(guestWebContentsId)
+    this.downloadRelay.cancelPendingDownloadsForGuest(guestWebContentsId)
   }
 
   registerGuest({
@@ -1417,10 +848,10 @@ export class BrowserManager {
     this.setupGrabShortcut(browserTabId, guest)
     this.setupShortcutForwarding(browserTabId, guest)
     this.setupMouseWheelZoomForwarding(browserTabId, guest)
-    this.flushPendingLoadFailure(browserTabId, webContentsId)
-    this.flushPendingPermissionEvents(browserTabId, webContentsId)
-    this.flushPendingPopupEvents(browserTabId, webContentsId)
-    this.flushPendingDownloadRequests(browserTabId, webContentsId)
+    this.guestEvents.flushPendingLoadFailure(browserTabId, webContentsId)
+    this.guestEvents.flushPendingPermissionEvents(browserTabId, webContentsId)
+    this.guestEvents.flushPendingPopupEvents(browserTabId, webContentsId)
+    this.downloadRelay.flushPendingDownloadRequests(browserTabId, webContentsId)
     return true
   }
 
@@ -1461,9 +892,12 @@ export class BrowserManager {
       this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
     }
     // Why: downloads are per-tab chrome; closing the tab must cancel active writes, not orphan them.
-    for (const [downloadId, download] of this.downloadsById.entries()) {
+    for (const [downloadId, download] of this.downloadRelay.listDownloads().entries()) {
       if (download.browserTabId === browserTabId && !download.terminalEvent) {
-        this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
+        this.downloadRelay.cancelDownloadInternal(
+          downloadId,
+          'Tab closed before download completed.'
+        )
       }
     }
     const wcId = this.webContentsIdByTabId.get(browserTabId)
@@ -1533,9 +967,7 @@ export class BrowserManager {
   unregisterAll(): void {
     // Cancel all active grab ops before tearing down registrations
     this.grabSessionController.cancelAll('evicted')
-    for (const downloadId of this.downloadsById.keys()) {
-      this.cancelDownloadInternal(downloadId, 'Orca is shutting down.')
-    }
+    this.downloadRelay.cancelAll('Orca is shutting down.')
     browserDownloadDestinationReservations.clear()
     for (const browserTabId of this.webContentsIdByTabId.keys()) {
       this.unregisterGuest(browserTabId)
@@ -1547,22 +979,17 @@ export class BrowserManager {
       cleanup()
     }
     this.policyCleanupByGuestId.clear()
-    this.clickedLinkFrameNameByGuestId.clear()
+    this.popupRouting.clearAll()
     this.tabIdByWebContentsId.clear()
-    this.popupOwnerContextByGuestId.clear()
-    this.pageInitiatedTabBudgetByRootGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
     this.viewportUaOverrideMobileByTabId.clear()
-    this.authUserAgentOverrideStateByGuestId.clear()
+    this.authUaOverride.clearAll()
     this.pendingNavigationByGuestId.clear()
-    this.pendingLoadFailuresByGuestId.clear()
+    this.guestEvents.clearAll()
     this.loadErrorsByGuestId.clear()
     this.clearedLoadErrorsByGuestId.clear()
-    this.pendingPermissionEventsByGuestId.clear()
-    this.pendingPopupEventsByGuestId.clear()
-    this.pendingDownloadIdsByGuestId.clear()
     this.mouseWheelZoomCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
   }
@@ -1606,7 +1033,7 @@ export class BrowserManager {
   }
 
   getManagedBrowserGuestContext(webContentsId: number): ManagedBrowserGuestContext | null {
-    if (this.popupOwnerContextByGuestId.has(webContentsId)) {
+    if (this.popupRouting.hasDirectOwnerContext(webContentsId)) {
       return null
     }
     const browserPageId = this.tabIdByWebContentsId.get(webContentsId) ?? null
@@ -1647,7 +1074,7 @@ export class BrowserManager {
     if (failure && navigationUrl) {
       const loadError = this.buildLoadError(failure.errorCode ?? -1, failure.error, navigationUrl)
       this.loadErrorsByGuestId.set(webContentsId, loadError)
-      this.forwardOrQueueGuestLoadFailure(webContentsId, loadError)
+      this.guestEvents.forwardOrQueueGuestLoadFailure(webContentsId, loadError)
     }
     const browserPageId = this.tabIdByWebContentsId.get(webContentsId)
     if (!browserPageId) {
@@ -1682,186 +1109,18 @@ export class BrowserManager {
     permission: string
     rawUrl: string
   }): void {
-    this.forwardOrQueuePermissionDenied(args.guestWebContentsId, {
+    this.guestEvents.forwardOrQueuePermissionDenied(args.guestWebContentsId, {
       permission: args.permission,
       origin: safeOrigin(args.rawUrl)
     })
   }
 
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
-    const { guestWebContentsId, item } = args
-    const downloadId = randomUUID()
-    const requestedFilename = (() => {
-      try {
-        return item.getFilename() || 'download'
-      } catch {
-        return 'download'
-      }
-    })()
-    const totalBytes = (() => {
-      try {
-        const total = item.getTotalBytes()
-        return total > 0 ? total : null
-      } catch {
-        return null
-      }
-    })()
-    const mimeType = (() => {
-      try {
-        const mime = item.getMimeType()
-        return mime || null
-      } catch {
-        return null
-      }
-    })()
-    const origin = (() => {
-      try {
-        return safeOrigin(item.getURL())
-      } catch {
-        return 'unknown'
-      }
-    })()
-
-    // Why: a client-hosted page's bytes belong on the remote workspace, so main stages them itself
-    // instead of reserving a name in the desktop Downloads folder. A popup downloads to its
-    // opener's page: the popup itself is a client-local transient with no logical page of its own.
-    const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
-    const decision = routeBrowserClientDownload({
-      guestWebContentsId: ownerContext?.rootGuestWebContentsId ?? guestWebContentsId
-    })
-    const clientRoute = decision.kind === 'remote' ? decision.route : null
-    const destination = (() => {
-      if (clientRoute) {
-        return {
-          filename: requestedFilename,
-          savePath: clientRoute.stagingPath,
-          reservationKey: null
-        }
-      }
-      // Why: a client-hosted download with no resolvable remote destination is canceled rather than
-      // written to this desktop's Downloads folder.
-      if (decision.kind === 'blocked') {
-        return null
-      }
-      try {
-        return browserDownloadDestinationReservations.reserve(requestedFilename)
-      } catch (error) {
-        console.error('[browser-download] Failed to choose download destination:', error)
-        return null
-      }
-    })()
-
-    const fallbackSavePath = destination?.savePath ?? ''
-
-    const download: ActiveDownload = {
-      downloadId,
-      guestWebContentsId,
-      browserTabId: null,
-      rendererWebContentsId: null,
-      origin,
-      filename: destination?.filename ?? requestedFilename,
-      totalBytes,
-      mimeType,
-      item,
-      savePath: fallbackSavePath,
-      reservationKey: destination?.reservationKey ?? null,
-      clientRoute,
-      remoteDestination: undefined,
-      receivedBytes: 0,
-      transientState: null,
-      terminalEvent: null,
-      startedSent: false,
-      cleanup: null
-    }
-    this.downloadsById.set(downloadId, download)
-
-    const browserTabId = ownerContext?.browserTabId ?? null
-    if (browserTabId) {
-      this.bindDownloadToTab(downloadId, browserTabId)
-    } else {
-      const pending = this.pendingDownloadIdsByGuestId.get(guestWebContentsId) ?? []
-      pending.push(downloadId)
-      this.pendingDownloadIdsByGuestId.set(guestWebContentsId, pending)
-    }
-
-    if (!destination) {
-      this.finishDownloadInternal(
-        downloadId,
-        'failed',
-        decision.kind === 'blocked'
-          ? 'Could not save the download to the remote workspace.'
-          : 'Could not choose a Downloads file name.'
-      )
-      try {
-        item.cancel()
-      } catch {
-        // Why: with no destination Chromium must not keep writing invisibly; cancel is best-effort after surfacing the failure.
-      }
-      return
-    }
-
-    try {
-      item.setSavePath(destination.savePath)
-    } catch (error) {
-      console.error('[browser-download] Failed to set download destination:', error)
-      this.finishDownloadInternal(downloadId, 'failed', 'Failed to set download destination.')
-      try {
-        item.cancel()
-      } catch {
-        // Why: a failed setSavePath can leave Electron partially finalized; cancel is best-effort after the UI is made terminal.
-      }
-      return
-    }
-
-    const updatedHandler = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => {
-      download.receivedBytes = this.getDownloadReceivedBytes(download.item)
-      download.transientState = state
-      this.sendDownloadProgress(download.browserTabId, {
-        browserPageId: download.browserTabId ?? undefined,
-        downloadId: download.downloadId,
-        receivedBytes: download.receivedBytes,
-        totalBytes: download.totalBytes,
-        state
-      })
-    }
-    const doneHandler = (_event: Electron.Event, state: BrowserDownloadDoneState): void => {
-      const status: BrowserDownloadFinishedEvent['status'] =
-        state === 'completed' ? 'completed' : state === 'cancelled' ? 'canceled' : 'failed'
-      const failure =
-        status === 'failed'
-          ? state === 'interrupted'
-            ? 'Download was interrupted.'
-            : 'Download failed.'
-          : null
-      if (download.clientRoute) {
-        void this.settleClientHostedDownload(download, status, failure)
-        return
-      }
-      this.finishDownloadInternal(download.downloadId, status, failure)
-    }
-    download.cleanup = (): void => {
-      try {
-        download.item.off('updated', updatedHandler)
-        download.item.off('done', doneHandler)
-      } catch {
-        // Why: a completed DownloadItem may already be finalized; keep cleanup best-effort so teardown never crashes main.
-      }
-    }
-    item.on('updated', updatedHandler)
-    item.once('done', doneHandler)
-
-    if (browserTabId) {
-      this.sendDownloadStarted(downloadId)
-    }
+    this.downloadRelay.handleGuestWillDownload(args)
   }
 
   cancelDownload(args: { downloadId: string; senderWebContentsId: number }): boolean {
-    const download = this.downloadsById.get(args.downloadId)
-    if (!download || download.rendererWebContentsId !== args.senderWebContentsId) {
-      return false
-    }
-    this.cancelDownloadInternal(args.downloadId, 'Canceled.')
-    return true
+    return this.downloadRelay.cancelDownload(args)
   }
 
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
@@ -1999,7 +1258,7 @@ export class BrowserManager {
           // Navigation must see the preset intent while the final CDP command is in flight.
           this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
           // Why: same sender as the navigation path, so both resolve the tab's host identically.
-          await this.sendViewportUserAgentOverride(guest, override.mobile)
+          await this.authUaOverride.sendViewportUserAgentOverride(guest, override.mobile)
         }
       } else {
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
@@ -2011,9 +1270,9 @@ export class BrowserManager {
         // A navigation after this point must not re-install the override behind the clear.
         this.viewportUaOverrideMobileByTabId.delete(browserTabId)
         try {
-          if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
+          if (this.authUaOverride.hasStateForGuest(guest.id)) {
             const url = this.resolveTabNavigationUrl(guest)
-            const restored = await this.applyAuthUserAgentOverrideOverCdp(
+            const restored = await this.authUaOverride.applyAuthUserAgentOverrideOverCdp(
               guest,
               false,
               url,
@@ -2079,39 +1338,14 @@ export class BrowserManager {
     return this.grabSessionController.hasActiveGrabOp(browserTabId)
   }
 
-  /** Enable/disable grab mode for a tab: on enable inject the overlay runtime, on disable cancel any active grab op. */
-  async setGrabMode(
+  setGrabMode(
     browserTabId: string,
     enabled: boolean,
     guest: Electron.WebContents
   ): Promise<boolean> {
-    if (!enabled) {
-      const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
-      this.cancelGrabOp(browserTabId, 'user')
-      if (hadActiveGrabOp) {
-        return true
-      }
-      try {
-        await guest.executeJavaScript(buildGuestOverlayScript('teardown'))
-        return true
-      } catch {
-        return false
-      }
-    }
-    // Why: inject the overlay runtime eagerly on arm so the hover UI appears instantly; re-injection is idempotent/safe.
-    try {
-      await guest.executeJavaScript(buildGuestOverlayScript('arm'))
-      return true
-    } catch {
-      return false
-    }
+    return this.grabSessionController.setGrabMode(browserTabId, enabled, guest)
   }
 
-  /**
-   * Await a single grab selection on the given tab; resolves once on click, cancel, or error.
-   *
-   * Why in-guest: before-input-event fires only for keyboard (not mouse) on guests, so the overlay hit-catcher consumes the click.
-   */
   awaitGrabSelection(
     browserTabId: string,
     opId: string,
@@ -2125,29 +1359,19 @@ export class BrowserManager {
     this.grabSessionController.cancelGrabOp(browserTabId, reason)
   }
 
-  /** Capture a screenshot of the guest surface, optionally cropped to the given CSS-pixel rect. */
-  async captureSelectionScreenshot(
+  captureSelectionScreenshot(
     _browserTabId: string,
     rect: BrowserGrabRect,
     guest: Electron.WebContents
   ): Promise<BrowserGrabScreenshot | null> {
-    return captureGrabSelectionScreenshot(rect, guest)
+    return this.grabSessionController.captureSelectionScreenshot(_browserTabId, rect, guest)
   }
 
-  /** Extract the hovered element's payload without disrupting the active grab overlay/awaitClick listener. */
-  async extractHoverPayload(
+  extractHoverPayload(
     _browserTabId: string,
     guest: Electron.WebContents
   ): Promise<BrowserGrabPayload | null> {
-    try {
-      const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('extractHover'))
-      if (!rawPayload || typeof rawPayload !== 'object') {
-        return null
-      }
-      return clampGrabPayload(rawPayload)
-    } catch {
-      return null
-    }
+    return this.grabSessionController.extractHoverPayload(_browserTabId, guest)
   }
 
   private setupContextMenu(browserTabId: string, guest: Electron.WebContents): void {
@@ -2222,353 +1446,6 @@ export class BrowserManager {
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
       })
     )
-  }
-
-  private forwardOrQueueGuestLoadFailure(
-    guestWebContentsId: number,
-    loadError: { code: number; description: string; validatedUrl: string }
-  ): void {
-    const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
-    if (!browserTabId) {
-      // Why: a failure can arrive before the tab is registered; queue by guest ID so registerGuest can replay it.
-      this.pendingLoadFailuresByGuestId.set(guestWebContentsId, loadError)
-      return
-    }
-    this.sendGuestLoadFailure(browserTabId, loadError)
-  }
-
-  private forwardOrQueuePermissionDenied(
-    guestWebContentsId: number,
-    event: PendingPermissionEvent
-  ): void {
-    const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    if (!browserTabId) {
-      const pending = this.pendingPermissionEventsByGuestId.get(guestWebContentsId) ?? []
-      pending.push(event)
-      if (pending.length > 5) {
-        pending.shift()
-      }
-      this.pendingPermissionEventsByGuestId.set(guestWebContentsId, pending)
-      return
-    }
-    this.sendPermissionDenied(browserTabId, event)
-  }
-
-  private flushPendingPermissionEvents(browserTabId: string, guestWebContentsId: number): void {
-    const pending = this.pendingPermissionEventsByGuestId.get(guestWebContentsId)
-    if (!pending?.length) {
-      return
-    }
-    this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
-    for (const event of pending) {
-      this.sendPermissionDenied(browserTabId, event)
-    }
-  }
-
-  private sendPermissionDenied(browserTabId: string, event: PendingPermissionEvent): void {
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return
-    }
-    renderer.send('browser:permission-denied', {
-      browserPageId: browserTabId,
-      ...event
-    } satisfies BrowserPermissionDeniedEvent)
-  }
-
-  private forwardOrQueuePopupEvent(guestWebContentsId: number, event: PendingPopupEvent): void {
-    const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    if (!browserTabId) {
-      const pending = this.pendingPopupEventsByGuestId.get(guestWebContentsId) ?? []
-      pending.push(event)
-      if (pending.length > 5) {
-        pending.shift()
-      }
-      this.pendingPopupEventsByGuestId.set(guestWebContentsId, pending)
-      return
-    }
-    this.sendPopupEvent(browserTabId, event)
-  }
-
-  private flushPendingPopupEvents(browserTabId: string, guestWebContentsId: number): void {
-    const pending = this.pendingPopupEventsByGuestId.get(guestWebContentsId)
-    if (!pending?.length) {
-      return
-    }
-    this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
-    for (const event of pending) {
-      this.sendPopupEvent(browserTabId, event)
-    }
-  }
-
-  private sendPopupEvent(browserTabId: string, event: PendingPopupEvent): void {
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return
-    }
-    renderer.send('browser:popup', {
-      browserPageId: browserTabId,
-      ...event
-    } satisfies BrowserPopupEvent)
-  }
-
-  private bindDownloadToTab(downloadId: string, browserTabId: string): void {
-    const download = this.downloadsById.get(downloadId)
-    if (!download) {
-      return
-    }
-    download.browserTabId = browserTabId
-    download.rendererWebContentsId = this.rendererWebContentsIdByTabId.get(browserTabId) ?? null
-  }
-
-  private flushPendingDownloadRequests(browserTabId: string, guestWebContentsId: number): void {
-    const pending = this.pendingDownloadIdsByGuestId.get(guestWebContentsId)
-    if (!pending?.length) {
-      return
-    }
-    this.pendingDownloadIdsByGuestId.delete(guestWebContentsId)
-    for (const downloadId of pending) {
-      this.bindDownloadToTab(downloadId, browserTabId)
-      this.flushDownloadSnapshot(downloadId)
-    }
-  }
-
-  private flushDownloadSnapshot(downloadId: string): void {
-    const download = this.downloadsById.get(downloadId)
-    if (!download) {
-      return
-    }
-    this.sendDownloadStarted(downloadId)
-    if (download.receivedBytes > 0 || download.transientState) {
-      this.sendDownloadProgress(download.browserTabId, {
-        browserPageId: download.browserTabId ?? undefined,
-        downloadId: download.downloadId,
-        receivedBytes: download.receivedBytes,
-        totalBytes: download.totalBytes,
-        state: download.transientState
-      })
-    }
-    if (download.terminalEvent) {
-      this.sendDownloadFinished(download.browserTabId, {
-        ...download.terminalEvent,
-        browserPageId: download.browserTabId ?? undefined
-      })
-      this.downloadsById.delete(downloadId)
-    }
-  }
-
-  private sendDownloadStarted(downloadId: string): void {
-    const download = this.downloadsById.get(downloadId)
-    if (!download?.browserTabId) {
-      return
-    }
-    if (download.startedSent) {
-      return
-    }
-    const renderer = this.resolveRendererForBrowserTab(download.browserTabId)
-    if (!renderer) {
-      return
-    }
-    renderer.send('browser:download-requested', {
-      browserPageId: download.browserTabId,
-      downloadId: download.downloadId,
-      origin: download.origin,
-      filename: download.filename,
-      totalBytes: download.totalBytes,
-      mimeType: download.mimeType,
-      savePath: download.savePath,
-      status: 'downloading'
-    } satisfies BrowserDownloadRequestedEvent)
-    download.startedSent = true
-  }
-
-  private sendDownloadProgress(
-    browserTabId: string | null,
-    payload: BrowserDownloadProgressEvent
-  ): void {
-    if (!browserTabId) {
-      return
-    }
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return
-    }
-    renderer.send('browser:download-progress', payload)
-  }
-
-  private sendDownloadFinished(
-    browserTabId: string | null,
-    payload: BrowserDownloadFinishedEvent
-  ): void {
-    if (!browserTabId) {
-      return
-    }
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return
-    }
-    renderer.send('browser:download-finished', payload)
-  }
-
-  private async settleClientHostedDownload(
-    download: ActiveDownload,
-    status: BrowserDownloadFinishedEvent['status'],
-    failure: string | null
-  ): Promise<void> {
-    const route = download.clientRoute
-    if (!route) {
-      return
-    }
-    if (status !== 'completed') {
-      download.clientRoute = null
-      await route.abort().catch(() => undefined)
-      this.finishDownloadInternal(download.downloadId, status, failure)
-      return
-    }
-    try {
-      // Why: the route stays on the record for the whole commit, which spans many round trips -- a
-      // cancel arriving mid-stream has to find something to abort or the bytes land anyway.
-      const remoteDestination = await route.complete(download.filename)
-      download.clientRoute = null
-      download.remoteDestination = remoteDestination
-      // Why: the staged copy is deleted, so a client save path would name a file that no longer exists.
-      download.savePath = ''
-      this.finishDownloadInternal(download.downloadId, 'completed', null)
-    } catch (error) {
-      download.clientRoute = null
-      if (download.terminalEvent) {
-        // A cancel already reported the outcome; this rejection is that cancel taking effect.
-        return
-      }
-      console.error('[browser-download] Failed to save download to the remote workspace:', error)
-      this.finishDownloadInternal(
-        download.downloadId,
-        'failed',
-        'Could not save the download to the remote workspace.'
-      )
-    }
-  }
-
-  private cancelDownloadInternal(downloadId: string, reason: string): void {
-    const download = this.downloadsById.get(downloadId)
-    if (!download) {
-      return
-    }
-
-    if (download.cleanup) {
-      download.cleanup()
-      download.cleanup = null
-    }
-    const shouldSendCancel = !download.terminalEvent
-
-    try {
-      download.item.cancel()
-    } catch {
-      // Why: cancel() can throw on an already-finalized item; best-effort since UI state is authoritative.
-    }
-
-    if (shouldSendCancel) {
-      this.finishDownloadInternal(downloadId, 'canceled', reason || null)
-      return
-    }
-
-    this.downloadsById.delete(downloadId)
-  }
-
-  private finishDownloadInternal(
-    downloadId: string,
-    status: BrowserDownloadFinishedEvent['status'],
-    error: string | null
-  ): void {
-    const download = this.downloadsById.get(downloadId)
-    if (!download || download.terminalEvent) {
-      return
-    }
-
-    if (download.cleanup) {
-      download.cleanup()
-      download.cleanup = null
-    }
-    browserDownloadDestinationReservations.release(download.reservationKey)
-    download.reservationKey = null
-    if (download.clientRoute) {
-      // Why: a cancel path can reach here before the relay settled; the staged copy must not survive.
-      void download.clientRoute.abort().catch(() => undefined)
-      download.clientRoute = null
-    }
-    const event: BrowserDownloadFinishedEvent = {
-      browserPageId: download.browserTabId ?? undefined,
-      downloadId: download.downloadId,
-      status,
-      savePath: download.savePath || null,
-      ...(download.remoteDestination ? { remoteDestination: download.remoteDestination } : {}),
-      error
-    }
-    download.terminalEvent = event
-    if (download.browserTabId) {
-      this.sendDownloadStarted(downloadId)
-      this.sendDownloadFinished(download.browserTabId, event)
-      this.downloadsById.delete(downloadId)
-    }
-  }
-
-  private cancelPendingDownloadsForGuest(guestWebContentsId: number): void {
-    const pending = this.pendingDownloadIdsByGuestId.get(guestWebContentsId)
-    this.pendingDownloadIdsByGuestId.delete(guestWebContentsId)
-    if (!pending?.length) {
-      return
-    }
-    for (const downloadId of pending) {
-      const download = this.downloadsById.get(downloadId)
-      if (!download) {
-        continue
-      }
-      if (download.terminalEvent) {
-        this.downloadsById.delete(downloadId)
-        continue
-      }
-      this.cancelDownloadInternal(downloadId, 'Browser page closed before download could be shown.')
-      const afterCancel = this.downloadsById.get(downloadId)
-      if (afterCancel?.terminalEvent && !afterCancel.browserTabId) {
-        this.downloadsById.delete(downloadId)
-      }
-    }
-  }
-
-  private getDownloadReceivedBytes(item: Electron.DownloadItem): number {
-    try {
-      return Math.max(0, item.getReceivedBytes())
-    } catch {
-      return 0
-    }
-  }
-
-  private flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void {
-    const pending = this.pendingLoadFailuresByGuestId.get(guestWebContentsId)
-    if (!pending) {
-      return
-    }
-    this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
-    this.sendGuestLoadFailure(browserTabId, pending)
-  }
-
-  private sendGuestLoadFailure(
-    browserTabId: string,
-    loadError: { code: number; description: string; validatedUrl: string }
-  ): void {
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return
-    }
-
-    // Why: redact Kagi session tokens before the renderer persists validatedUrl to disk.
-    renderer.send('browser:guest-load-failed', {
-      browserPageId: browserTabId,
-      loadError: {
-        ...loadError,
-        validatedUrl: redactKagiSessionToken(loadError.validatedUrl)
-      }
-    })
   }
 
   private openLinkInOrcaTab(browserTabId: string, rawUrl: string): boolean {
