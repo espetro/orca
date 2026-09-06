@@ -578,7 +578,7 @@ export class RuntimeMobileSessionTabSnapshotCommands {
     return order
   }
 
-  private getHeadlessMobileSessionGroupId(worktreeId: string): string {
+  getHeadlessMobileSessionGroupId(worktreeId: string): string {
     return `headless-terminals:${worktreeId}`
   }
 
