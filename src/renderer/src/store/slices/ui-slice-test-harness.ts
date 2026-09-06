@@ -14,12 +14,6 @@ export function createUIStore(): StoreApi<AppState> {
   return createStore<any>()((...args: any[]) => ({
     repos: [],
     worktreesByRepo: {},
-    rightSidebarOpen: false,
-    rightSidebarWidth: 280,
-    markdownTocPanelWidth: 240,
-    combinedDiffFileTreeWidth: 256,
-    rightSidebarTab: 'explorer',
-    rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
