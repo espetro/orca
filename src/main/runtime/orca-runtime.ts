@@ -27,7 +27,6 @@ import type { SkillCloudService } from '../skills/skill-cloud-service'
 import { RuntimeOrchestrationCommands } from './runtime-orchestration-commands'
 import type { RuntimeOrchestrationCommandsDeps } from './runtime-orchestration-commands-deps'
 import { RuntimeOrchestrationGraphReloadCommands } from './runtime-orchestration-graph-reload-commands'
-import type { RuntimeOrchestrationGraphReloadCommandsDeps } from './runtime-orchestration-graph-reload-commands-deps'
 import type {
   AgentSkillShareOperation,
   AgentSkillShareRequest
@@ -495,7 +494,6 @@ import type { RuntimeHeadlessSessionTabPersistenceDeps } from './runtime-headles
 import type { RuntimeClientEventPublishingCommandsDeps } from './runtime-client-event-publishing-commands-deps'
 import type { RuntimeHookAgentRowResolutionCommandsDeps } from './runtime-hook-agent-row-resolution-commands-deps'
 import type { RuntimeMobileSessionTabSnapshotCommandsDeps } from './runtime-mobile-session-tab-snapshot-commands-deps'
-import type { RuntimePtyTitleTrackingCommandsDeps } from './runtime-pty-title-tracking-commands-deps'
 import type { RuntimeTerminalAgentStatusBindingCommandsDeps } from './runtime-terminal-agent-status-binding-commands-deps'
 import { RuntimeClientEventPublishingCommands } from './runtime-client-event-publishing-commands'
 import { RuntimeHookAgentRowResolutionCommands } from './runtime-hook-agent-row-resolution-commands'
@@ -3464,61 +3462,8 @@ export class OrcaRuntimeService {
       handleByLeafKey: this.handleByLeafKey
     }
     this.orchestrationCommands = new RuntimeOrchestrationCommands(orchestrationDeps)
-    const orchestrationGraphReloadDeps: RuntimeOrchestrationGraphReloadCommandsDeps = {
-      store,
-      graphReloadLifecycle: this.graphReloadLifecycle,
-      getRendererGraphEpoch: () => this.rendererGraphEpoch,
-      setRendererGraphEpoch: (value) => {
-        this.rendererGraphEpoch = value
-      },
-      getGraphStatus: () => this.graphStatus,
-      setGraphStatus: (value) => {
-        this.graphStatus = value
-      },
-      getAuthoritativeWindowId: () => this.authoritativeWindowId,
-      setAuthoritativeWindowId: (value) => {
-        this.authoritativeWindowId = value
-      },
-      isHeadlessGraphFallbackAvailable: () => this.headlessGraphFallbackAvailable,
-      setHeadlessGraphFallbackAvailable: (value) => {
-        this.headlessGraphFallbackAvailable = value
-      },
-      getPendingHeadlessPromotionWindowId: () => this.pendingHeadlessPromotionWindowId,
-      setPendingHeadlessPromotionWindowId: (value) => {
-        this.pendingHeadlessPromotionWindowId = value
-      },
-      getRendererGeneration: () => this.rendererGeneration,
-      setRendererGeneration: (value) => {
-        this.rendererGeneration = value
-      },
-      getSessionTabsInventoryPublicationEpoch: () => this.sessionTabsInventoryPublicationEpoch,
-      setSessionTabsInventoryPublicationEpoch: (value) => {
-        this.sessionTabsInventoryPublicationEpoch = value
-      },
-      tabs: this.tabs,
-      leaves: this.leaves,
-      leavesByPtyId: this.leavesByPtyId,
-      handles: this.handles,
-      handleByLeafKey: this.handleByLeafKey,
-      handleByPtyId: this.handleByPtyId,
-      handleByPtyIncarnation: this.handleByPtyIncarnation,
-      detachedPreAllocatedLeaves: this.detachedPreAllocatedLeaves,
-      waitersByHandle: this.waitersByHandle,
-      ptysById: this.ptysById,
-      setTerminalSideEffectConsumerAvailable: (available) =>
-        this.setTerminalSideEffectConsumerAvailable(available),
-      rememberDetachedPreAllocatedLeaves: () => this.rememberDetachedPreAllocatedLeaves(),
-      refreshWritableFlags: () => this.refreshWritableFlags(),
-      adoptPreAllocatedHandle: (leaf) => this.adoptPreAllocatedHandle(leaf),
-      rejectWaitersForHandle: (handle, reason) => this.rejectWaitersForHandle(handle, reason),
-      rejectAllWaiters: (reason) => this.rejectAllWaiters(reason),
-      reconcilePtyIncarnationHandles: () => this.reconcilePtyIncarnationHandles(),
-      clearPtyIncarnationHandles: () => this.clearPtyIncarnationHandles(),
-      markSessionTabsInventoryPublished: () => this.markSessionTabsInventoryPublished(),
-      attachWindow: (windowId) => this.attachWindow(windowId)
-    }
     this.orchestrationGraphReloadCommands = new RuntimeOrchestrationGraphReloadCommands(
-      orchestrationGraphReloadDeps
+      buildOrchestrationGraphReloadDepsImpl(this)
     )
     const headlessSessionTabPersistenceDeps: RuntimeHeadlessSessionTabPersistenceDeps = {
       getWorkspaceSessionForWorktree: (worktreeId) =>
@@ -3566,64 +3511,8 @@ export class OrcaRuntimeService {
     this.terminalAgentStatusBinding = new RuntimeTerminalAgentStatusBindingCommands(
       terminalAgentStatusBindingDeps
     )
-    const ptyTitleTrackingCommandsDeps: RuntimePtyTitleTrackingCommandsDeps = {
-      ptyTitleTrackersByPtyId: this.ptyTitleTrackersByPtyId,
-      ptysById: this.ptysById,
-      mobileSessionTabListeners: this.mobileSessionTabListeners,
-      ptyDelayedForegroundSnapshotTitleObservations: this
-        .ptyDelayedForegroundSnapshotTitleObservations as never,
-      mobileSessionTabsAgentStatusHeartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
-      terminalSideEffectConsumerAvailable: this.terminalSideEffectConsumerAvailable,
-      terminalSideEffectLocalConsumerAvailable: this.terminalSideEffectLocalConsumerAvailable,
-      onTerminalSideEffects: this.onTerminalSideEffects as never,
-      terminalSpawnCommandsByPtyId: this.terminalSpawnCommandsByPtyId,
-      oscTitleScanTailByPtyId: this.oscTitleScanTailByPtyId as never,
-      osc7ScanTailByPtyId: this.osc7ScanTailByPtyId,
-      agentStatusOscProcessorsByPtyId: this.agentStatusOscProcessorsByPtyId as never,
-      agentPromptLifecycleByPtyId: this.agentPromptLifecycleByPtyId,
-      agentPromptPermissionSequenceByPtyId: this.agentPromptPermissionSequenceByPtyId,
-      terminalSideEffectTitleGateKeysByClientEventListener: this
-        .terminalSideEffectTitleGateKeysByClientEventListener as never,
-      wslDistroByPtyId: this.wslDistroByPtyId,
-      terminalCwdByPtyId: this.terminalCwdByPtyId,
-      terminalFileUriHostnameByPtyId: this.terminalFileUriHostnameByPtyId,
-      getLeavesForPty: (ptyId) => this.getLeavesForPty(ptyId),
-      recordTerminalSideEffectFact: (ptyId, fact) => this.recordTerminalSideEffectFact(ptyId, fact),
-      touchMobileSessionSnapshotsForPty: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
-      confirmPtyAgentExit: (ptyId) => this.terminalAgentStatusBinding.confirmPtyAgentExit(ptyId),
-      retirePtyAgentLaunchAuthority: (ptyId) => this.retirePtyAgentLaunchAuthority(ptyId),
-      recordAgentPromptLifecycleState: (ptyId, agentStatus) =>
-        this.recordAgentPromptLifecycleState(ptyId, agentStatus),
-      nextTitleObservationSequence: () => this.nextTitleObservationSequence(),
-      setPtyManagementTitleFromObservedTitle: (pty, normalizedTitle, observedAt) =>
-        this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt),
-      shouldDelayPtyBackedMobileSnapshotForForegroundAgent: (pty, normalizedTitle) =>
-        this.terminalAgentStatusBinding.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
-          pty,
-          normalizedTitle
-        ),
-      refreshPtyForegroundAgentFromController: (ptyId, opts) =>
-        this.terminalAgentStatusBinding.refreshPtyForegroundAgentFromController(ptyId, opts),
-      getPendingForegroundAgentRefreshForTitle: (ptyId, observedAt) =>
-        this.terminalAgentStatusBinding.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt),
-      delayPtyBackedMobileSnapshotForForegroundAgent: (ptyId, observedAt, foregroundRefresh) =>
-        this.terminalAgentStatusBinding.delayPtyBackedMobileSnapshotForForegroundAgent(
-          ptyId,
-          observedAt,
-          foregroundRefresh
-        ),
-      resolvePtyTuiIdleWaiters: (pty, ptyId) => this.resolvePtyTuiIdleWaiters(pty, ptyId),
-      resolveTuiIdleWaiters: (leaf) => this.resolveTuiIdleWaiters(leaf),
-      deliverPendingMessagesForLeaf: (leaf) => this.deliverPendingMessagesForLeaf(leaf),
-      countTerminalSideEffectConsumingClientEventListeners: () =>
-        this.countTerminalSideEffectConsumingClientEventListeners(),
-      clearWaitBlockedCheckState: (ptyId) => this.clearWaitBlockedCheckState(ptyId),
-      primeWaitBlockedBaselineFromSeededTail: (ptyId) =>
-        this.primeWaitBlockedBaselineFromSeededTail(ptyId),
-      clearAgentRowSnapshotsForPty: (ptyId) => this.clearAgentRowSnapshotsForPty(ptyId)
-    }
     this.ptyTitleTrackingCommands = new RuntimePtyTitleTrackingCommands(
-      ptyTitleTrackingCommandsDeps
+      buildPtyTitleTrackingCommandsDepsImpl(this)
     )
     const clientEventPublishingCommandsDeps: RuntimeClientEventPublishingCommandsDeps = {
       store,
@@ -5106,6 +4995,47 @@ export class OrcaRuntimeService {
     return [
       // Why: federation relay state is read/written via bracket access in
       // runtime-orchestration-federation.ts, invisible to noUnusedLocals.
+      this.agentPromptPermissionSequenceByPtyId,
+      this.oscTitleScanTailByPtyId,
+      this.osc7ScanTailByPtyId,
+      this.terminalFileUriHostnameByPtyId,
+      this.terminalCwdByPtyId,
+      this.wslDistroByPtyId,
+      this.terminalSpawnCommandsByPtyId,
+      this.clearAgentRowSnapshotsForPty,
+      this.clearWaitBlockedCheckState,
+      this.countTerminalSideEffectConsumingClientEventListeners,
+      this.primeWaitBlockedBaselineFromSeededTail,
+      this.recordAgentPromptLifecycleState,
+      this.resolvePtyTuiIdleWaiters,
+      this.resolveTuiIdleWaiters,
+      this.setPtyManagementTitleFromObservedTitle,
+      this.retirePtyAgentLaunchAuthority,
+      this.getFreshExplicitAgentStatusForHandle,
+      this.deliverPendingMessagesForLeaf,
+      this.recordTerminalSideEffectFact,
+      this.getLeavesForPty,
+      this.getLivePtyForHandle,
+      this.getPrimaryLeafForPty,
+      this.getLiveLeafForHandle,
+      this.getTerminalAgentStatus,
+      this.agentStatusOscProcessorsByPtyId,
+      this.leavesByPtyId,
+      this.graphReloadLifecycle,
+      this.onTerminalSideEffects,
+      this.clearPtyIncarnationHandles,
+      this.rememberDetachedPreAllocatedLeaves,
+      this.refreshWritableFlags,
+      this.rejectWaitersForHandle,
+      this.rejectAllWaiters,
+      this.reconcilePtyIncarnationHandles,
+      this.markSessionTabsInventoryPublished,
+      this.setTerminalSideEffectConsumerAvailable,
+      this.adoptPreAllocatedHandle,
+      this.attachWindow,
+      this.terminalSideEffectConsumerAvailable,
+      this.terminalSideEffectLocalConsumerAvailable,
+      this.waitersByHandle,
       this.orchestrationFederationTimers,
       this.orchestrationTerminalHistoryRecoveryTimer,
       this.orchestrationTerminalHistoryRecoveryInFlight,
@@ -11376,6 +11306,8 @@ import { RuntimeMobileTabOperations } from './runtime-mobile-tab-operations'
 import { RuntimeWorktreePs } from './runtime-worktree-ps'
 import { RuntimeWindowGraphClientCommands } from './runtime-window-graph-client-commands'
 import { RuntimeTerminalRecoveryCommands } from './runtime-terminal-recovery-commands'
+import { buildOrchestrationGraphReloadDepsImpl } from './runtime-orchestration-graph-reload-wiring'
+import { buildPtyTitleTrackingCommandsDepsImpl } from './runtime-pty-title-tracking-wiring'
 import type {
   RetainedTailRedrawCursor,
   RuntimeWorktreeSummaryPathIndex,
