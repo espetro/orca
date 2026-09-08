@@ -9,6 +9,9 @@
   "compilerOptions": {
     "composite": true,
     "rootDir": "../src",
-    "outDir": "../out/relay"
+    "outDir": "../out/relay",
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./relay.tsbuildinfo"
   }
 }

@@ -286,6 +286,9 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./cli.tsbuildinfo",
     // The CLI runs on Node 24; Node20 models synchronous ESM imports from CommonJS.
     "module": "Node20",
     "moduleResolution": "Node16",

@@ -51,6 +51,9 @@
     "paths": {
       "@renderer/*": ["../src/renderer/src/*"],
       "@/*": ["../src/renderer/src/*"]
-    }
+    },
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./tc.web.tsbuildinfo"
   }
 }
