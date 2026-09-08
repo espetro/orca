@@ -1,23 +1,10 @@
-import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import type { ViteUserConfig } from 'vitest/config'
 
-// Why: cap at cpus-1 (except win32 keeps a low fixed count) to reduce per-worker import cost without starving the machine.
-// ORCA_VITEST_WORKERS=<n> overrides for machines where cpus-1 starves other work; must be >= 2 because
-// Vitest needs a main thread plus at least one worker.
-const testWorkerOptions = (() => {
-  const override = Number(process.env.ORCA_VITEST_WORKERS ?? '')
-  if (Number.isInteger(override) && override >= 2) {
-    return { minWorkers: override, maxWorkers: override }
-  }
-  return process.platform === 'win32'
-    ? { minWorkers: 4, maxWorkers: 4 }
-    : (() => {
-        const workers = Math.max(1, availableParallelism() - 1)
-        return { minWorkers: workers, maxWorkers: workers }
-      })()
-})()
+// Why: default to cpus-1 (win32 keeps a low fixed count) — fine for 32 GB-class dev
+// machines. ORCA_VITEST_WORKERS=<n> (>= 2: Vitest needs a main thread plus a worker)
+// lets low-RAM machines pin a lower count instead of thrashing swap.
 
 // Shared options every project must carry: Vitest 4 projects do NOT inherit
 // root-level test options like setupFiles/timeouts/execArgv.
@@ -59,7 +46,9 @@ export default defineConfig({
   },
   test: {
     ...sharedTestOptions,
-    ...testWorkerOptions,
+    // Why: win32 keeps a low fixed count; other platforms use Vitest's default (cpus-1),
+    // right for 32 GB-class dev machines. ORCA_VITEST_WORKERS=<n> (>= 2) pins lower on low-RAM machines.
+    ...(process.platform === 'win32' ? { minWorkers: 4, maxWorkers: 4 } : {}),
     projects: [
       {
         resolve: sharedResolve,
