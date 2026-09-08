@@ -8,6 +8,7 @@ import {
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
+import { startResourceRecorderIfEnabled } from './metrics/resource-recorder'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -105,6 +106,7 @@ if (preflightReady) {
   // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
   state.osOpenedMarkdownFiles.capture(process.argv)
   registerMainProcessIpcHandlers()
+  startResourceRecorderIfEnabled()
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     await initializeMainProcessReady({
