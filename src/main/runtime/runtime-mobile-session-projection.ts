@@ -137,8 +137,16 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+    // Why: a persisted manual rename outranks every OSC/agent observation; without
+    // this the fresh leaf title masks the rename after a browser reload (#serve).
+    const persistedCustomTitle = tab.customTitle ?? syncedTab?.customTitle ?? null
     const title = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+      persistedCustomTitle ??
+        trackerOnlyTitle ??
+        leafTitle ??
+        ptyTitle ??
+        syncedTab?.title ??
+        tab.title,
       ownerAgent,
       ownerOptions
     )
@@ -254,6 +262,7 @@ export function projectRuntimeMobileSessionTabs(
       leafId: tab.leafId,
       title,
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
+      ...(persistedCustomTitle ? { customTitle: persistedCustomTitle } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,
