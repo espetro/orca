@@ -8,12 +8,51 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
+import type {
+  MobilePairingOffer,
+  PairingOfferUnavailable as ImportPairingOfferUnavailable
+} from '../runtime-rpc/runtime-rpc-pairing-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
   provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  // Why: web clients authenticate over the same WS transport as phones but had no way to mint a
+  // pairing offer (the desktop-only IPC handlers are Electron-shaped); these delegates reuse the
+  // exact server-side offer logic so a web-minted QR is byte-compatible with the phone flow.
+  // Optional because only the WS dispatch path (orcad / desktop serve) can supply them.
+  ensureNetworkExposure?(): Promise<void>
+  createMobilePairingOffer?(args: {
+    address?: string | null
+    connectionMode?: MobilePairingConnectionMode
+    name?: string
+    rotate?: boolean
+  }): Promise<MobilePairingOffer>
+  createRuntimePairingOffer?(args: {
+    address?: string | null
+    rotate?: boolean
+    reach?: RuntimePairingReach
+  }): ReturnType<OrcaRuntimeRpcServerHost['createPairingOffer']>
+}
+
+// Why: structural view of the runtime RPC server; the full class would create an import cycle.
+type OrcaRuntimeRpcServerHost = {
+  createPairingOffer(args: {
+    address?: string | null
+    rotate?: boolean
+    reach?: 'this-computer' | 'network'
+  }):
+    | ImportPairingOfferUnavailable
+    | {
+        available: true
+        pairingUrl: string
+        endpoint: string
+        deviceId: string
+        webClientUrl: string | null
+      }
 }
 
 export type RpcEnvelopeMeta = {

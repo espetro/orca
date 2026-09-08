@@ -5,12 +5,33 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import { fingerprintAuthenticatedPairingCredential } from '../rpc/orchestration-mutation-executor'
 import type { AuthenticatedMobileSocket } from '../rpc/mobile-socket-wiring'
-import type { RpcRequest, RpcResponse } from '../rpc/core'
+import type { PairingRpcContext, RpcRequest, RpcResponse } from '../rpc/core'
 import type { WebSocketTransport } from '../rpc/ws-transport'
-import type { DeviceScope } from '../device-registry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import type { MobilePairingOffer } from './runtime-rpc-pairing-types'
+import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
+import type { DeviceScope } from '../device-registry'
+
+// Why: structural view of the pairing minting surface; the methods live on subclasses in the
+// runtime-rpc mixin chain, so this base class cannot name them directly without a cycle.
+type PairingOfferHost = {
+  ensureNetworkExposure(): Promise<void>
+  createMobilePairingOffer(args: {
+    address?: string | null
+    connectionMode?: MobilePairingConnectionMode
+    name?: string
+    rotate?: boolean
+  }): Promise<MobilePairingOffer>
+  createPairingOffer(args: {
+    address?: string | null
+    rotate?: boolean
+    reach?: RuntimePairingReach
+    scope?: 'runtime' | 'mobile'
+  }): ReturnType<NonNullable<PairingRpcContext['createRuntimePairingOffer']>>
+}
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -128,7 +149,18 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
                   transport: authenticatedSocket.transport
                 },
                 params
-              )
+              ),
+            // Why: the runtime RPC server owns offer minting, but those methods live on subclasses
+            // above this one in the mixin chain, so reach them through a structural host view.
+            ensureNetworkExposure: () =>
+              (this as unknown as PairingOfferHost).ensureNetworkExposure(),
+            createMobilePairingOffer: (args) =>
+              (this as unknown as PairingOfferHost).createMobilePairingOffer(args),
+            createRuntimePairingOffer: (args) =>
+              (this as unknown as PairingOfferHost).createPairingOffer({
+                ...args,
+                scope: 'runtime'
+              })
           }
         : undefined
     try {
