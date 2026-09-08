@@ -139,6 +139,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         upsertStoredRuntimeEnvironment(nextEnvironment)
+        setActiveRuntimeEnvironment(nextEnvironment.id)
       } catch {
         return {
           ok: false,
@@ -149,7 +150,6 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           )
         }
       }
-      setActiveRuntimeEnvironment(nextEnvironment.id)
       getClientForEnvironment(nextEnvironment).statusOwner?.acceptVerified({
         id: 'status.get',
         ok: true,
