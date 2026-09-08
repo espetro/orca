@@ -173,7 +173,11 @@ export function buildMirroredTerminalTabs(
         ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
-        customTitle: existing?.customTitle ?? null,
+        // Why: the host now publishes the persisted rename; adopt it over any stale local value (fresh browser has none).
+        customTitle:
+          (activeSurface.customTitle ?? surfaces.find((s) => s.customTitle)?.customTitle) ||
+          existing?.customTitle ||
+          null,
         color,
         isPinned,
         ...(viewMode ? { viewMode } : {}),
