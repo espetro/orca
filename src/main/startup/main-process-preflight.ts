@@ -32,6 +32,7 @@ import {
 } from '../updater'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
+import { enableMainProcessCompileCache } from './native-code-cache'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
 import { startEventLoopStallProbe } from './event-loop-stall-probe'
 import { startMainThreadChurnProbe } from '../diagnostics/main-thread-churn-probe'
@@ -301,6 +302,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
           recordBreadcrumb: (data) => recordDurableCrashBreadcrumb('gpu_crash_hardware', data)
         })
       : null
+  enableMainProcessCompileCache()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
     platform: process.platform,
