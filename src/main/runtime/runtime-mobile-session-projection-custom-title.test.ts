@@ -94,6 +94,23 @@ describe('projectRuntimeMobileSessionTabs customTitle priority', () => {
     expect(projected[0]!.title).toBe('my rename')
   })
 
+  it('does not normalize a manual rename that looks like an agent title', () => {
+    // A manual rename matching the legacy π shape must survive verbatim.
+    const leaf = {
+      ptyId: 'pty-1',
+      connected: true,
+      paneTitle: 'π > session - repo',
+      paneTitleUpdatedAt: 10,
+      lastOscTitle: 'π > session - repo',
+      lastOscTitleAt: 10
+    } as unknown as RuntimeLeafRecord
+    const projected = project([makeSnapshotTab({ customTitle: 'π > session - repo' })], {
+      leaves: new Map([[`${TAB_ID}:${LEAF_ID}`, leaf]])
+    })
+    expect(projected[0]!.title).toBe('π > session - repo')
+    expect(projected[0]!.customTitle).toBe('π > session - repo')
+  })
+
   it('without customTitle, the OSC leaf title still wins', () => {
     const leaf = {
       ptyId: 'pty-1',
