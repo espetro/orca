@@ -20,6 +20,9 @@
     // even though the harness itself is Node.
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["node"],
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./e2e.tsbuildinfo",
     "paths": {
       "@renderer/*": ["../src/renderer/src/*"],
       "@/*": ["../src/renderer/src/*"]

@@ -13,6 +13,9 @@
   ],
   "compilerOptions": {
     "composite": true,
-    "types": ["electron-vite/node"]
+    "types": ["electron-vite/node"],
+    "incremental": true,
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "./node.tsbuildinfo"
   }
 }
