@@ -220,6 +220,12 @@ export function useRuntimeEnvironmentConnectionActions({
     setSwitchError(null)
     try {
       await window.api.runtimeEnvironments.setActive({ id: environment.id })
+      // Why: the Active badge reads settings.activeRuntimeEnvironmentId, so mirror
+      // the new active id into settings or the old row stays marked Active.
+      await window.api.settings.setActiveRuntimeEnvironmentPreference({
+        environmentId: environment.id
+      })
+      useAppStore.getState().updateSettings({ activeRuntimeEnvironmentId: environment.id })
       useAppStore
         .getState()
         .setRuntimeEnvironmentStatus(
