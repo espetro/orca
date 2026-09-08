@@ -31,8 +31,8 @@ import { headlessMobileSnapshotContentUnchanged } from './mobile-session-snapsho
 /**
  * Why: the hydrate skip path is first-wins, so a rename persisted into
  * workspaceSession after the snapshot was built would never surface. Detect
- * the gap (persisted `customTitle` absent from the snapshot's terminal tab)
- * and let the caller fall through to a full rebuild that carries it.
+ * any divergence (rename added OR cleared to null while the snapshot still
+ * carries one) and let the caller fall through to a full rebuild.
  */
 export function persistedCustomTitleMissingFromSnapshot(
   persistedTabs: readonly TerminalTab[],
@@ -47,7 +47,6 @@ export function persistedCustomTitleMissingFromSnapshot(
   return persistedTabs.some((tab) => {
     const persisted = tab.customTitle ?? null
     return (
-      persisted !== null &&
       snapshotCustomTitleByParentTabId.has(tab.id) &&
       snapshotCustomTitleByParentTabId.get(tab.id) !== persisted
     )
