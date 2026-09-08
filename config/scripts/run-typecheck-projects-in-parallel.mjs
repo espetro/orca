@@ -8,24 +8,19 @@ const projects = ['tsconfig.node.json', 'tsconfig.tc.cli.json', 'tsconfig.tc.web
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 
-// Worker budget: each tsc process peaks near 4 GB and wants multiple cores. Default
-// caps at 1 because concurrent projects swap and thrash on 8 GB machines; set
-// ORCA_TC_WORKERS=<n> (or 0 for auto: one worker per 4 GB of RAM, also bounded by
-// cores/2) on machines with more headroom to overlap projects.
+// Worker budget: each tsc process peaks near 4 GB and wants multiple cores. The
+// default auto-sizes from RAM for 32 GB-class dev machines (6 GB/worker + 2 GB OS
+// headroom, bounded by cores/2). Low-RAM machines should export
+// ORCA_TC_WORKERS=1 in their shell profile to avoid swap-thrash.
 function resolveWorkerLimit() {
   const override = Number(process.env.ORCA_TC_WORKERS ?? '')
   if (Number.isInteger(override) && override > 0) {
     return Math.min(override, projects.length)
   }
-  if (override === 0) {
-    // Why 6 GB per worker, not 4: peak RSS is ~4 GB but the OS, editors, and dev
-    // servers need headroom; 8 GB machines then honestly resolve to 1.
-    const memGb = totalmem() / 2 ** 30
-    const memWorkers = Math.max(1, Math.floor((memGb - 2) / 6))
-    const coreWorkers = Math.max(1, availableParallelism() >> 1)
-    return Math.min(memWorkers, coreWorkers, projects.length)
-  }
-  return 1
+  const memGb = totalmem() / 2 ** 30
+  const memWorkers = Math.max(1, Math.floor((memGb - 2) / 6))
+  const coreWorkers = Math.max(1, availableParallelism() >> 1)
+  return Math.min(memWorkers, coreWorkers, projects.length)
 }
 function checkProject(project) {
   return new Promise((resolve, reject) => {
