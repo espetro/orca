@@ -27,7 +27,9 @@ export default function WebConnect({
   initialPairingInput,
   onConnected
 }: WebConnectProps): React.JSX.Element {
-  const savedState = useMemo(() => readStoredWebRuntimeEnvironments(), [])
+  // Why: keep the rendered registry in state so forget/activate updates immediately.
+  const [savedState, setSavedState] = useState(() => readStoredWebRuntimeEnvironments())
+  const refreshSavedState = (): void => setSavedState(readStoredWebRuntimeEnvironments())
   const existingEnvironment =
     savedState.environments.find((env) => env.id === savedState.activeEnvironmentId) ?? null
   const [name, setName] = useState(existingEnvironment?.name ?? 'Orca Server')
@@ -42,7 +44,8 @@ export default function WebConnect({
   // the caller decides whether the offer must parse first.
   const connectEnvironment = async (
     environment: StoredWebRuntimeEnvironment,
-    offer = parsedOffer
+    offer = parsedOffer,
+    mode: 'add' | 'reconnect' = 'add'
   ): Promise<void> => {
     setError(null)
     if (!offer) {
@@ -87,8 +90,10 @@ export default function WebConnect({
         )
         return
       }
+      // Why: add pairs a genuinely new host into a fresh environment; reconnect
+      // only refreshes the row's runtimeId after a successful probe.
       const nextEnvironment =
-        offer === parsedOffer
+        mode === 'reconnect'
           ? {
               ...environment,
               runtimeId: response._meta.runtimeId,
@@ -99,7 +104,22 @@ export default function WebConnect({
               offer,
               previousEnvironment: environment
             })
-      saveStoredWebRuntimeEnvironment(nextEnvironment)
+      // Why: add activates the newly paired host; reconnect keeps the current active row.
+      if (mode === 'add') {
+        const state = readStoredWebRuntimeEnvironments()
+        const exists = state.environments.some((entry) => entry.id === nextEnvironment.id)
+        saveStoredWebRuntimeEnvironments({
+          environments: exists
+            ? state.environments.map((entry) =>
+                entry.id === nextEnvironment.id ? nextEnvironment : entry
+              )
+            : [...state.environments, nextEnvironment],
+          activeEnvironmentId: nextEnvironment.id
+        })
+      } else {
+        saveStoredWebRuntimeEnvironment(nextEnvironment)
+      }
+      refreshSavedState()
       onConnected()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -115,13 +135,17 @@ export default function WebConnect({
     const preferred =
       environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
       environment.endpoints[0]
-    await connectEnvironment(environment, {
-      v: 2,
-      endpoint: preferred.endpoint,
-      deviceToken: preferred.deviceToken,
-      publicKeyB64: preferred.publicKeyB64,
-      ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
-    })
+    await connectEnvironment(
+      environment,
+      {
+        v: 2,
+        endpoint: preferred.endpoint,
+        deviceToken: preferred.deviceToken,
+        publicKeyB64: preferred.publicKeyB64,
+        ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
+      },
+      'reconnect'
+    )
   }
 
   // Why: a deep-linked offer that reaches this screen either has mobile scope
@@ -138,6 +162,7 @@ export default function WebConnect({
 
   const forget = (): void => {
     clearStoredWebRuntimeEnvironment()
+    refreshSavedState()
     setPairingCode('')
     setError(null)
   }
@@ -214,7 +239,10 @@ export default function WebConnect({
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground hover:text-red-400"
-                    onClick={() => forgetSaved(environment)}
+                    onClick={() => {
+                      forgetSaved(environment)
+                      refreshSavedState()
+                    }}
                     disabled={connectingId !== null}
                     aria-label={translate('auto.web.WebConnect.aeb26635d2', 'Remove {{value0}}', {
                       value0: environment.name
