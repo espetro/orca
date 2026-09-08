@@ -90,6 +90,24 @@ describe('persistedCustomTitleMissingFromSnapshot', () => {
     ).toBe(false)
   })
 
+  it('flags a cleared rename (null persisted) still carried by the snapshot', () => {
+    expect(
+      persistedCustomTitleMissingFromSnapshot(
+        [makePersistedTab({ customTitle: null })],
+        [makeSnapshotTab({ customTitle: 'stale rename' })]
+      )
+    ).toBe(true)
+  })
+
+  it('passes when the rename is cleared on both sides', () => {
+    expect(
+      persistedCustomTitleMissingFromSnapshot(
+        [makePersistedTab({ customTitle: null })],
+        [makeSnapshotTab()]
+      )
+    ).toBe(false)
+  })
+
   it('passes when nothing is persisted', () => {
     expect(persistedCustomTitleMissingFromSnapshot([makePersistedTab()], [makeSnapshotTab()])).toBe(
       false
