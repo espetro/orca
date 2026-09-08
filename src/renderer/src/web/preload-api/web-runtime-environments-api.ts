@@ -132,6 +132,12 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         upsertStoredRuntimeEnvironment(nextEnvironment)
+        setActiveRuntimeEnvironment(nextEnvironment.id)
+        return {
+          ok: true,
+          environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
+          runtimeStatus
+        }
       } catch {
         return {
           ok: false,
@@ -141,13 +147,6 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
             'Orca verified the host but could not save it. Check browser storage and try again.'
           )
         }
-      }
-      upsertStoredRuntimeEnvironment(nextEnvironment)
-      setActiveRuntimeEnvironment(nextEnvironment.id)
-      return {
-        ok: true,
-        environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
-        runtimeStatus
       }
     },
     resolve: async ({ selector }) =>
