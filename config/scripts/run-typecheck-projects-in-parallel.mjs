@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import { availableParallelism } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 // The three projects overlap heavily in src/shared but have no build dependency on
@@ -8,9 +7,8 @@ const projects = ['tsconfig.node.json', 'tsconfig.tc.cli.json', 'tsconfig.tc.web
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 
-// Why serialize on a single-core runner: three tsc processes there thrash rather than overlap.
-const concurrent = availableParallelism() > 1
-
+// Why sequential: each tsc process peaks near 4 GB and wants multiple cores, so
+// concurrent projects swap and thrash on 8 GB machines instead of speeding anything up.
 function checkProject(project) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [tsc, '--noEmit', '-p', `config/${project}`], {
@@ -32,16 +30,11 @@ function checkProject(project) {
 }
 
 let failures = []
-if (concurrent) {
-  const results = await Promise.allSettled(projects.map(checkProject))
-  failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
-} else {
-  for (const project of projects) {
-    try {
-      await checkProject(project)
-    } catch (error) {
-      failures.push(error)
-    }
+for (const project of projects) {
+  try {
+    await checkProject(project)
+  } catch (error) {
+    failures.push(error)
   }
 }
 
