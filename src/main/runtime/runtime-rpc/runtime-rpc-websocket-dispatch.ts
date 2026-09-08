@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import { fingerprintAuthenticatedPairingCredential } from '../rpc/orchestration-mutation-executor'
 import type { AuthenticatedMobileSocket } from '../rpc/mobile-socket-wiring'
-import type { PairingRpcContext, RpcRequest } from '../rpc/core'
+import type { PairingRpcContext, RpcRequest, RpcResponse } from '../rpc/core'
 import type { WebSocketTransport } from '../rpc/ws-transport'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
@@ -14,7 +14,6 @@ import type { MobilePairingOffer } from './runtime-rpc-pairing-types'
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
 import type { DeviceScope } from '../device-registry'
-import type { RpcResponse } from '../rpc/core'
 
 // Why: structural view of the pairing minting surface; the methods live on subclasses in the
 // runtime-rpc mixin chain, so this base class cannot name them directly without a cycle.
