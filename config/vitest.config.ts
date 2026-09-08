@@ -4,13 +4,20 @@ import { defineConfig } from 'vitest/config'
 import type { ViteUserConfig } from 'vitest/config'
 
 // Why: cap at cpus-1 (except win32 keeps a low fixed count) to reduce per-worker import cost without starving the machine.
-const testWorkerOptions =
-  process.platform === 'win32'
+// ORCA_VITEST_WORKERS=<n> overrides for machines where cpus-1 starves other work; must be >= 2 because
+// Vitest needs a main thread plus at least one worker.
+const testWorkerOptions = (() => {
+  const override = Number(process.env.ORCA_VITEST_WORKERS ?? '')
+  if (Number.isInteger(override) && override >= 2) {
+    return { minWorkers: override, maxWorkers: override }
+  }
+  return process.platform === 'win32'
     ? { minWorkers: 4, maxWorkers: 4 }
     : (() => {
         const workers = Math.max(1, availableParallelism() - 1)
         return { minWorkers: workers, maxWorkers: workers }
       })()
+})()
 
 // Shared options every project must carry: Vitest 4 projects do NOT inherit
 // root-level test options like setupFiles/timeouts/execArgv.
