@@ -135,7 +135,8 @@ describe('web repos preload API', () => {
       { id: 'repo-a', executionHostId: 'runtime:web-server-a' }
     ])
     await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject({
-      environments: [{ id: 'web-server-a' }, { id: paired.environment.id, name: 'Server B' }]
+      environments: [{ id: 'web-server-a' }, { id: paired.environment.id, name: 'Server B' }],
+      activeEnvironmentId: paired.environment.id
     })
   })
 
