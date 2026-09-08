@@ -36,6 +36,7 @@ import {
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
+import { enableMainProcessCompileCache } from './native-code-cache'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
 import { startEventLoopStallProbe } from './event-loop-stall-probe'
 import {
@@ -365,6 +366,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   startCrashpadCapture()
   state.crashReports = CrashReportStore.fromUserData()
   state.gpuCrashDiagnostics = createGpuCrashDiagnosticsRecorder()
+  enableMainProcessCompileCache()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
     platform: process.platform,
