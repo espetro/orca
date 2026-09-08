@@ -13,6 +13,11 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
+const children = new Set()
+
+process.on('SIGINT', terminateAll)
+process.on('SIGTERM', terminateAll)
+
 const exitCodes = await Promise.all(
   ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
     (scriptName) => runPnpmScript(scriptName)
@@ -20,16 +25,27 @@ const exitCodes = await Promise.all(
 )
 process.exit(Math.max(...exitCodes))
 
+function terminateAll() {
+  for (const child of children) {
+    child.kill('SIGTERM')
+  }
+}
+
 function runPnpmScript(scriptName) {
   const { command, prefixArgs, shell } = resolvePnpmCliInvocation()
   const child = spawn(command, [...prefixArgs, 'run', scriptName], { stdio: 'inherit', shell })
+  children.add(child)
 
   return new Promise((resolve) => {
     child.on('error', () => resolve(1))
     child.on('close', (code, signal) => {
+      children.delete(child)
       if (signal) {
-        child.kill(signal)
         process.kill(process.pid, signal)
+      }
+      if (code !== 0) {
+        // fail fast: stop sibling builds so they don't keep writing artifacts
+        terminateAll()
       }
       resolve(code ?? 1)
     })
