@@ -18,9 +18,13 @@ if (process.platform !== 'darwin') {
 // process group so cleanup can signal the whole tree (POSIX only — this file
 // returns early on win32).
 const children = new Map()
+// Why: distinguish "user/OS sent us a signal" from "fail-fast killed a sibling" —
+// only the former should re-raise on the parent; the latter must resolve normally.
+let externalSignal = null
+const signalHandlers = new Map()
 
-process.on('SIGINT', () => terminateAll('SIGINT'))
-process.on('SIGTERM', () => terminateAll('SIGTERM'))
+process.on('SIGINT', handlerFor('SIGINT'))
+process.on('SIGTERM', handlerFor('SIGTERM'))
 
 const exitCodes = await Promise.all(
   ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
@@ -28,6 +32,16 @@ const exitCodes = await Promise.all(
   )
 )
 process.exit(Math.max(...exitCodes))
+
+function handlerFor(signal) {
+  if (!signalHandlers.has(signal)) {
+    signalHandlers.set(signal, () => {
+      externalSignal = signal
+      terminateAll(signal)
+    })
+  }
+  return signalHandlers.get(signal)
+}
 
 function terminateAll(signal) {
   for (const [child, label] of children) {
@@ -67,14 +81,19 @@ function runPnpmScript(scriptName) {
         return
       }
       children.delete(child)
-      if (exitSignal) {
-        // Why: restore default disposition so this process dies with the same
-        // signal it received (our handlers would otherwise swallow it).
+      // Why: only re-raise a signal the parent itself received (Ctrl-C, kill).
+      // A sibling's fail-fast SIGTERM must fall through and resolve with its code,
+      // otherwise Promise.all never settles and the build hangs.
+      if (externalSignal) {
         for (const received of ['SIGINT', 'SIGTERM']) {
           process.removeListener(received, handlerFor(received))
         }
-        process.kill(process.pid, exitSignal)
+        process.kill(process.pid, externalSignal)
         return
+      }
+      if (exitSignal) {
+        // A child killed by a non-external signal is unexpected; treat as failure.
+        exitCode = exitCode ?? 1
       }
       if (exitCode !== 0) {
         // fail fast: stop sibling builds so they don't keep writing artifacts
@@ -92,14 +111,6 @@ function runPnpmScript(scriptName) {
       settle()
     })
   })
-}
-
-const signalHandlers = new Map()
-function handlerFor(signal) {
-  if (!signalHandlers.has(signal)) {
-    signalHandlers.set(signal, () => terminateAll(signal))
-  }
-  return signalHandlers.get(signal)
 }
 
 function pipePrefixed(stream, label, target) {
