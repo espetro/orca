@@ -8,7 +8,7 @@ export const STATUS_METHODS: RpcMethod[] = [
     handler: (_params, { runtime, pairedDeviceId }) => {
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
       return {
-        ...runtime.getStatus(),
+        ...runtime.getStatus(pairedDeviceId ?? null),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
         remoteUpdateSupport: snapshot.support

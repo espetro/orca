@@ -653,7 +653,10 @@ describe('OrcaRuntimeService', () => {
       }))
     })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Why: getStatus now reads the workspace session once for the preferred-active-worktree
+    // pick, so the implicit return-path call counts as two reads. The point of this test is
+    // that the scan runs once per session load, not once per worktree.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(2)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
@@ -674,7 +677,7 @@ describe('OrcaRuntimeService', () => {
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(2)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 })

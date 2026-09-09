@@ -68,4 +68,47 @@ describe('runtime updater RPC methods', () => {
       remoteUpdateSupport: snapshot.support
     })
   })
+
+  it('passes preferredActiveWorktreeId through status.get when the runtime publishes it', async () => {
+    const runtimeWithPreferred = {
+      getRuntimeId: () => 'runtime-rpc',
+      getStatus: vi.fn(() => ({
+        runtimeId: 'runtime-rpc',
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        preferredActiveWorktreeId: 'wt-x'
+      }))
+    }
+    const result = (await handler(STATUS_METHODS, 'status.get')(undefined, {
+      runtime: runtimeWithPreferred
+    } as never)) as Record<string, unknown>
+    expect(result.preferredActiveWorktreeId).toBe('wt-x')
+    expect(runtimeWithPreferred.getStatus).toHaveBeenCalledWith(null)
+  })
+
+  it('omits preferredActiveWorktreeId from status.get when the runtime does not publish it', async () => {
+    const runtimeWithoutPreferred = {
+      getRuntimeId: () => 'runtime-rpc',
+      getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 0, liveLeafCount: 0 })
+    }
+    const result = (await handler(STATUS_METHODS, 'status.get')(undefined, {
+      runtime: runtimeWithoutPreferred
+    } as never)) as Record<string, unknown>
+    expect('preferredActiveWorktreeId' in result).toBe(false)
+  })
+
+  it('forwards pairedDeviceId to runtime.getStatus so it can rank the device selection', async () => {
+    const getStatus = vi.fn(() => ({
+      runtimeId: 'runtime-rpc',
+      liveTabCount: 0,
+      liveLeafCount: 0,
+      preferredActiveWorktreeId: 'wt-y'
+    }))
+    const runtimeWithDevice = { getRuntimeId: () => 'runtime-rpc', getStatus }
+    await handler(STATUS_METHODS, 'status.get')(undefined, {
+      runtime: runtimeWithDevice,
+      pairedDeviceId: 'paired-device-1'
+    } as never)
+    expect(getStatus).toHaveBeenCalledWith('paired-device-1')
+  })
 })
