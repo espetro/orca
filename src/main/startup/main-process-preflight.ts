@@ -302,6 +302,8 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
           recordBreadcrumb: (data) => recordDurableCrashBreadcrumb('gpu_crash_hardware', data)
         })
       : null
+  // Why: the main graph is already cached by the build-time banner; this only pins
+  // NODE_COMPILE_CACHE for forked children and covers banner-less entry paths.
   enableMainProcessCompileCache()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
