@@ -13,10 +13,14 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
-const children = new Set()
+// Why detached: native builds spawn swift/swiftc descendants; killing the pnpm
+// process alone can leave them writing artifacts. Each build runs in its own
+// process group so cleanup can signal the whole tree (POSIX only — this file
+// returns early on win32).
+const children = new Map()
 
-process.on('SIGINT', terminateAll)
-process.on('SIGTERM', terminateAll)
+process.on('SIGINT', () => terminateAll('SIGINT'))
+process.on('SIGTERM', () => terminateAll('SIGTERM'))
 
 const exitCodes = await Promise.all(
   ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
@@ -25,30 +29,94 @@ const exitCodes = await Promise.all(
 )
 process.exit(Math.max(...exitCodes))
 
-function terminateAll() {
-  for (const child of children) {
-    child.kill('SIGTERM')
+function terminateAll(signal) {
+  for (const [child, label] of children) {
+    console.log(`[native-build] stopping ${label} (${signal})`)
+    try {
+      // negative pid signals the whole detached process group
+      process.kill(-child.pid, signal)
+    } catch {
+      // group already gone
+      try {
+        child.kill(signal)
+      } catch {}
+    }
   }
 }
 
 function runPnpmScript(scriptName) {
+  const label = scriptName.replace(/^build:|-macos$/g, '')
   const { command, prefixArgs, shell } = resolvePnpmCliInvocation()
-  const child = spawn(command, [...prefixArgs, 'run', scriptName], { stdio: 'inherit', shell })
-  children.add(child)
+  const child = spawn(command, [...prefixArgs, 'run', scriptName], {
+    // Why detached: own process group, see terminateAll above.
+    detached: true,
+    shell,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  children.set(child, scriptName)
+  pipePrefixed(child.stdout, label, process.stdout)
+  pipePrefixed(child.stderr, label, process.stderr)
 
   return new Promise((resolve) => {
-    child.on('error', () => resolve(1))
-    child.on('close', (code, signal) => {
+    let exitCode = null
+    let exitSignal = null
+    // Why settle only on close: 'error' (e.g. spawn ENOENT) can fire before/without
+    // close; resolving early would let Promise.all exit while children still run.
+    const settle = () => {
+      if (exitCode === null && exitSignal === null) {
+        return
+      }
       children.delete(child)
-      if (signal) {
-        process.kill(process.pid, signal)
+      if (exitSignal) {
+        // Why: restore default disposition so this process dies with the same
+        // signal it received (our handlers would otherwise swallow it).
+        for (const received of ['SIGINT', 'SIGTERM']) {
+          process.removeListener(received, handlerFor(received))
+        }
+        process.kill(process.pid, exitSignal)
+        return
       }
-      if (code !== 0) {
+      if (exitCode !== 0) {
         // fail fast: stop sibling builds so they don't keep writing artifacts
-        terminateAll()
+        terminateAll('SIGTERM')
       }
-      resolve(code ?? 1)
+      resolve(exitCode ?? 1)
+    }
+    child.on('error', () => {
+      exitCode = 1
+      settle()
     })
+    child.on('close', (code, signal) => {
+      exitCode = code
+      exitSignal = signal
+      settle()
+    })
+  })
+}
+
+const signalHandlers = new Map()
+function handlerFor(signal) {
+  if (!signalHandlers.has(signal)) {
+    signalHandlers.set(signal, () => terminateAll(signal))
+  }
+  return signalHandlers.get(signal)
+}
+
+function pipePrefixed(stream, label, target) {
+  stream.setEncoding('utf8')
+  let buffer = ''
+  stream.on('data', (chunk) => {
+    buffer += chunk
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      target.write(`[${label}] ${line}\n`)
+    }
+  })
+  stream.on('end', () => {
+    if (buffer.length > 0) {
+      target.write(`[${label}] ${buffer}\n`)
+    }
   })
 }
 
