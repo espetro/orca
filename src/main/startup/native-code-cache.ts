@@ -1,5 +1,4 @@
 import { join } from 'node:path'
-import type { Session } from 'electron'
 import { app } from 'electron'
 
 export type NativeCodeCacheResult = {
@@ -8,7 +7,10 @@ export type NativeCodeCacheResult = {
   error?: string
 }
 
-// Why: persist compiled V8 bytecode to disk so warm launches bypass JS parsing and AST allocation spikes.
+// Why: the main-process graph itself is cached by the build-time compile-cache banner
+// prepended to out/main/index.js (see electron.vite.config.ts) — this runtime call is
+// only the idempotent fallback for entry paths that skip the banner. It pins the
+// resolved cache dir into NODE_COMPILE_CACHE so forked children reuse the same cache.
 export function enableMainProcessCompileCache(customCacheDir?: string): NativeCodeCacheResult {
   try {
     const nodeModule = require('node:module') as {
@@ -40,24 +42,5 @@ export function enableMainProcessCompileCache(customCacheDir?: string): NativeCo
       directory: null,
       error: error instanceof Error ? error.message : String(error)
     }
-  }
-}
-
-// Why: ensure Chromium session stores compiled web script bytecode persistently in user profile.
-export function configureSessionCodeCache(
-  targetSession: Pick<Session, 'setCodeCachePath'>
-): boolean {
-  try {
-    if (
-      typeof targetSession?.setCodeCachePath === 'function' &&
-      typeof app?.getPath === 'function'
-    ) {
-      const codeCachePath = join(app.getPath('userData'), 'Code Cache')
-      targetSession.setCodeCachePath(codeCachePath)
-      return true
-    }
-    return false
-  } catch {
-    return false
   }
 }

@@ -366,6 +366,8 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   startCrashpadCapture()
   state.crashReports = CrashReportStore.fromUserData()
   state.gpuCrashDiagnostics = createGpuCrashDiagnosticsRecorder()
+  // Why: the main graph is already cached by the build-time banner; this only pins
+  // NODE_COMPILE_CACHE for forked children and covers banner-less entry paths.
   enableMainProcessCompileCache()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
