@@ -312,7 +312,7 @@ export default function WebConnect({
             {environments.length > 0 ? (
               <Button type="button" variant="outline" onClick={forget} className="gap-2">
                 <Trash2 size={15} aria-hidden />
-                {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
+                {translate('auto.web.WebConnect.2cf9e5a294', 'Clear all saved servers')}
               </Button>
             ) : (
               <span />
