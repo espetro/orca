@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableMainProcessCompileCache } from './native-code-cache'
 
@@ -18,15 +20,16 @@ describe('enableMainProcessCompileCache', () => {
   })
 
   it('enables compile cache and sets process.env.NODE_COMPILE_CACHE', () => {
-    const result = enableMainProcessCompileCache('/tmp/mock-cache')
+    const result = enableMainProcessCompileCache(join(tmpdir(), 'orca-compile-cache-test'))
     expect(result.enabled).toBe(true)
     expect(result.directory).toBeTruthy()
     expect(process.env.NODE_COMPILE_CACHE).toBe(result.directory)
   })
 
   it('is idempotent: repeat calls keep reporting the enabled state without throwing', () => {
-    const first = enableMainProcessCompileCache('/tmp/mock-cache')
-    const second = enableMainProcessCompileCache('/tmp/mock-cache')
+    const cacheDir = join(tmpdir(), 'orca-compile-cache-test')
+    const first = enableMainProcessCompileCache(cacheDir)
+    const second = enableMainProcessCompileCache(cacheDir)
     expect(first.enabled).toBe(true)
     // Node returns ALREADY_ENABLED with the original directory; the wrapper must
     // still report enabled so callers cannot mistake the state for a failure.
