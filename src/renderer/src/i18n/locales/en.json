@@ -328,7 +328,7 @@
     "web": {
       "WebConnect": {
         "b411ec0069": "Connect",
-        "2cf9e5a294": "Clear saved server",
+        "2cf9e5a294": "Clear all saved servers",
         "4a4c017be1": "Endpoint:",
         "27393856e4": "orca://pair?code=...",
         "7a566540de": "Pairing URL or code",
