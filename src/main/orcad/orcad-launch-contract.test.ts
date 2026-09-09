@@ -2,6 +2,7 @@
  * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
  * code means. Both are part of the ops contract in docs/reference/orcad-operations.md.
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   ORCAD_EXIT_CONFIGURATION,
@@ -39,5 +40,18 @@ describe('resolveOrcadExitCode', () => {
     expect(resolveOrcadExitCode(new OrcadBindAddressError('bad'))).toBe(ORCAD_EXIT_CONFIGURATION)
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
+  })
+})
+
+describe('headless graph publication', () => {
+  it('publishes the empty headless graph like the serve launch path, before RPCs can arrive', async () => {
+    // Why source-level parity: startOrcadRuntime drags in the daemon, the store and the
+    // whole runtime stack; the serve path at main-process-runtime-launch.ts is the
+    // reference for this line and the orcad entry must keep matching it.
+    const entry = readFileSync(new URL('./orcad-entry.ts', import.meta.url), 'utf8')
+    expect(entry).toContain('runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID')
+    expect(entry.indexOf('runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID')).toBeLessThan(
+      entry.indexOf('await rpc.start()')
+    )
   })
 })

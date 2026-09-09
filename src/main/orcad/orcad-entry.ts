@@ -146,6 +146,7 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
+  const { HEADLESS_RUNTIME_WINDOW_ID } = await import('../../shared/runtime-types')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -199,6 +200,10 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+
+  // Why: headless servers have no renderer graph publisher; publish an explicit empty graph
+  // so graph-gated RPCs (terminal.create) don't throw `runtime_unavailable` forever.
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
   const bindHost = resolveOrcadBindHost(options.bind)
   const rpc = new OrcaRuntimeRpcServer({
