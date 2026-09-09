@@ -116,6 +116,9 @@ function mapProxyPrefixedStaticPathname(pathname: string): string {
   if (pathname === '/web-index.html' || pathname.endsWith('/web-index.html')) {
     return '/web-index.html'
   }
+  if (pathname === '/web/index.html' || pathname.endsWith('/web/index.html')) {
+    return '/web-index.html'
+  }
   const assetMarker = '/assets/'
   const assetIndex = pathname.indexOf(assetMarker)
   if (assetIndex !== -1) {
