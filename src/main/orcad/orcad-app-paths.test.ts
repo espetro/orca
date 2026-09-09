@@ -120,3 +120,24 @@ describe('resolveOrcadInstallRoot', () => {
     }
   })
 })
+
+describe('resolveOrcadWebClientRoot', () => {
+  it('finds the web bundle beside the install root and falls back to undefined', async () => {
+    const { resolveOrcadWebClientRoot } = await import('./orcad-app-paths')
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const root = mkdtempSync(join(tmpdir(), 'orcad-web-root-'))
+    try {
+      const bundle = join(root, 'orcad')
+      mkdirSync(bundle)
+      expect(resolveOrcadWebClientRoot(join(bundle, 'orcad.js'))).toBeUndefined()
+      const web = join(root, 'web')
+      mkdirSync(web)
+      writeFileSync(join(web, 'web-index.html'), '')
+      expect(resolveOrcadWebClientRoot(join(bundle, 'orcad.js'))).toBe(web)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})

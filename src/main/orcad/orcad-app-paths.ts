@@ -7,6 +7,7 @@
  * beside, or resolves resources against. The failure surfaces far from here, as a missing
  * file rather than a missing implementation.
  */
+import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -55,6 +56,18 @@ export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
     )
   }
   return dirname(resolve(scriptPath))
+}
+
+/**
+ * The deployed web client lives beside the bundle (`<install>/../web`, the deploy
+ * layout of `orca-serve`), mirroring the desktop `getBundledWebClientRoot()` roots.
+ * Undefined when absent: the transport then serves WS-only with no static listener,
+ * which is why an undeployed web dir must surface as a missing URL, not a dead port.
+ */
+export function resolveOrcadWebClientRoot(scriptPath = process.argv[1]): string | undefined {
+  const installRoot = resolveOrcadInstallRoot(scriptPath)
+  const roots = [join(installRoot, 'web'), join(dirname(installRoot), 'web')]
+  return roots.find((root) => existsSync(join(root, 'web-index.html')))
 }
 
 export function resolveOrcadPath(name: AppPathName): string {

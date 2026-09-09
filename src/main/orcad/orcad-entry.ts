@@ -147,6 +147,7 @@ async function startOrcadRuntime(
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
   const { HEADLESS_RUNTIME_WINDOW_ID } = await import('../../shared/runtime-types')
+  const { resolveOrcadWebClientRoot } = await import('./orcad-app-paths')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -215,6 +216,9 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
+    // Why: without a static root the transport installs no HTTP listener at all, so the
+    // web client 404s at the TCP level and readiness prints no "Web client URL".
+    webClientRoot: resolveOrcadWebClientRoot(),
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
