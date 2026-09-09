@@ -7,7 +7,14 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
-import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
+import {
+  DAEMON_SESSION_SCROLLBACK_ROWS,
+  resolveDaemonSessionScrollbackRows
+} from './daemon-session-scrollback-window'
+
+// Why: the live window depth is tier-dependent (500 on low-RAM hosts), so assertions on
+// persisted snapshot depth must use the resolved value, not the mid/high-tier constant.
+const EXPECTED_LIVE_SCROLLBACK_ROWS = resolveDaemonSessionScrollbackRows()
 import { getHistorySessionDirName } from './history-paths'
 import { getDaemonSocketPath } from './daemon-spawner'
 import { HeadlessEmulator } from './headless-emulator'
@@ -435,7 +442,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         })
         expect(snapshotText(restored ?? {})).toContain(NEWEST_WRITTEN_LINE)
         expect(snapshotText(restored ?? {})).toContain('TAIL_AFTER_HISTORY_LOSS')
-        expect(restored?.scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+        expect(restored?.scrollbackLines).toBe(EXPECTED_LIVE_SCROLLBACK_ROWS)
         expect(warn).toHaveBeenCalledWith(
           '[history] durable continuity unproven; using live snapshot:',
           id
@@ -513,7 +520,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         ignoreCleanEnd: true
       })
       expect(snapshotText(restored ?? {})).not.toContain(OLDEST_WRITTEN_LINE)
-      expect(restored?.scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(restored?.scrollbackLines).toBe(EXPECTED_LIVE_SCROLLBACK_ROWS)
       expect(warn).toHaveBeenCalledWith(
         '[history] durable continuity unproven; using live snapshot:',
         id
@@ -643,7 +650,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         ignoreCleanEnd: true
       })
       expect(snapshotText(restore ?? {})).toContain(FRESH_AFTER_CHECKPOINT)
-      expect(checkpoint.mock.calls.at(-1)?.[1].scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(checkpoint.mock.calls.at(-1)?.[1].scrollbackLines).toBe(EXPECTED_LIVE_SCROLLBACK_ROWS)
       expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(false)
 
       checkpoint.mockResolvedValueOnce('retryable')
@@ -732,7 +739,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(`${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`).toContain(
         FRESH_AFTER_CHECKPOINT
       )
-      expect(checkpoint.mock.calls.at(-1)?.[1].scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
+      expect(checkpoint.mock.calls.at(-1)?.[1].scrollbackLines).toBe(EXPECTED_LIVE_SCROLLBACK_ROWS)
     })
 
     it('uses the post-drain sequence for output produced during an overlay', async () => {

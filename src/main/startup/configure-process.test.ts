@@ -552,7 +552,7 @@ describe('configureElectronNetworkCompatibility', () => {
 })
 
 const EXPECTED_DISABLED_FEATURES =
-  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers'
+  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers,Translate,InterestFeedContentSuggestions,OptimizationHints'
 
 describe('disableUnsupportedChromiumFeatures', () => {
   it('matches the shared list the real-Electron egress probes launch with', async () => {

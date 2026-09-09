@@ -6,6 +6,7 @@ const processMocks = vi.hoisted(() => ({ fork: vi.fn() }))
 vi.mock('node:child_process', () => ({ fork: processMocks.fork }))
 
 import { startPluginWorker } from './plugin-host-process'
+import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 
 class FakeChild extends EventEmitter {
   connected = true
@@ -38,16 +39,19 @@ afterEach(() => {
 })
 
 describe('startPluginWorker', () => {
-  it('does not inherit Orca execArgv', async () => {
+  it('does not inherit Orca execArgv and caps heap based on host budget', async () => {
     const child = new FakeChild()
     const pending = start(child)
     child.emit('message', { type: 'ready', commands: [] })
     await pending
 
+    const budget = deriveHostMemoryBudget()
     expect(processMocks.fork).toHaveBeenCalledWith(
       '/host.js',
       [],
-      expect.objectContaining({ execArgv: [] })
+      expect.objectContaining({
+        execArgv: [`--max-old-space-size=${budget.pluginHostMaxOldSpaceMb}`]
+      })
     )
   })
 
