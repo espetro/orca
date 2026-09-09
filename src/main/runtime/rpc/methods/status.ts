@@ -11,7 +11,7 @@ export const STATUS_METHODS = [
       await runtime.machineNameReady()
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
       return {
-        ...runtime.getStatus(),
+        ...runtime.getStatus(pairedDeviceId ?? null),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
         remoteUpdateSupport: snapshot.support
