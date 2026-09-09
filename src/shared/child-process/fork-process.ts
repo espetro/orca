@@ -29,6 +29,8 @@ export type ForkSpec = {
   stdio?: NodeSpawnOptions['stdio']
   /** Run a different Node/Electron binary — e.g. a relocated executable image. */
   execPath?: string
+  /** V8 flags for the child, e.g. a heap ceiling; inherits process.execArgv when unset. */
+  execArgv?: readonly string[]
 }
 
 export function forkProcess(spec: ForkSpec): SpawnedProcess {
@@ -39,7 +41,8 @@ export function forkProcess(spec: ForkSpec): SpawnedProcess {
     stdio: spec.stdio,
     // Why conditional rather than `execPath: spec.execPath`: an explicit `undefined` is not the
     // same as absent to Node, which reads the key to decide whether to override its own binary.
-    ...(spec.execPath ? { execPath: spec.execPath } : {})
+    ...(spec.execPath ? { execPath: spec.execPath } : {}),
+    ...(spec.execArgv ? { execArgv: [...spec.execArgv] } : {})
   }
   // Node forwards this undocumented fork option to spawn, preventing console flashes on Windows.
   return nodeFork(

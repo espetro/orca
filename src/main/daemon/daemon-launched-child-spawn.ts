@@ -3,6 +3,7 @@ import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/ru
 import { getAppEnvironment } from '../../shared/app-environment'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
+import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 
 export type DaemonChildSpawnOptions = {
   entryPath: string
@@ -73,11 +74,13 @@ export function spawnDaemonChildProcess(
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   }
+  const heapArgv = `--max-old-space-size=${deriveHostMemoryBudget().daemonMaxOldSpaceMb}`
   if (!useDurableScope) {
     return forkProcess({
       ...childOptions,
       modulePath: forkEntryPath,
       args: scriptArgs,
+      execArgv: [heapArgv],
       // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
       ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
       env: daemonEnv
@@ -85,7 +88,7 @@ export function spawnDaemonChildProcess(
   }
   const scoped = buildDurableDaemonScopeCommand(
     relocatedExecPath ?? process.execPath,
-    [forkEntryPath, ...scriptArgs, '--fresh-daemon-scope'],
+    [heapArgv, forkEntryPath, ...scriptArgs, '--fresh-daemon-scope'],
     launchNonce,
     daemonEnv
   )

@@ -17,23 +17,23 @@ afterEach(() => {
 const GIB = 1024 * 1024 * 1024
 
 describe('computeRendererHeapCeilingMb', () => {
-  it('leaves Chromium default (null) below the ~8 GB gate to avoid OS memory pressure', () => {
-    expect(computeRendererHeapCeilingMb(4 * GIB)).toBeNull()
-    expect(computeRendererHeapCeilingMb(6 * GIB)).toBeNull() // 6 GB reports ~5.7 GiB
-    expect(computeRendererHeapCeilingMb(7 * GIB)).toBeNull() // below the 7.5 GiB gate
+  it('returns low-tier ceiling (768 MB) for memory < 12 GiB', () => {
+    expect(computeRendererHeapCeilingMb(4 * GIB)).toBe(768)
+    expect(computeRendererHeapCeilingMb(6 * GIB)).toBe(768)
+    expect(computeRendererHeapCeilingMb(8 * GIB)).toBe(768)
+    expect(computeRendererHeapCeilingMb(11.9 * GIB)).toBe(768)
   })
 
-  it('includes 8 GB machines that report below 8 GiB (Linux MemTotal excludes reserved RAM)', () => {
-    // A real 8 GB Linux box reports ~7.7 GiB; it must still get the headroom.
-    expect(computeRendererHeapCeilingMb(7.7 * GIB)).toBe(3072)
-    expect(computeRendererHeapCeilingMb(7.5 * GIB)).toBe(3072)
+  it('returns mid-tier ceiling (2048 MB) for 12 GiB <= memory < 24 GiB', () => {
+    expect(computeRendererHeapCeilingMb(12 * GIB)).toBe(2048)
+    expect(computeRendererHeapCeilingMb(16 * GIB)).toBe(2048)
+    expect(computeRendererHeapCeilingMb(23.9 * GIB)).toBe(2048)
   })
 
-  it('raises the ceiling toward the 4 GB pointer-compression cage, floored and capped', () => {
-    expect(computeRendererHeapCeilingMb(8 * GIB)).toBe(3072) // floor: 8 GB default ~2.2 GB -> 3072
-    expect(computeRendererHeapCeilingMb(12 * GIB)).toBe(4096) // 0.4*12 -> 4096 (cage)
-    expect(computeRendererHeapCeilingMb(16 * GIB)).toBe(4096) // cage cap
-    expect(computeRendererHeapCeilingMb(128 * GIB)).toBe(4096) // cage cap, never higher
+  it('returns high-tier ceiling (4096 MB) for memory >= 24 GiB', () => {
+    expect(computeRendererHeapCeilingMb(24 * GIB)).toBe(4096)
+    expect(computeRendererHeapCeilingMb(32 * GIB)).toBe(4096)
+    expect(computeRendererHeapCeilingMb(128 * GIB)).toBe(4096)
   })
 
   it('honors a positive ORCA_RENDERER_HEAP_MB override regardless of RAM', () => {
@@ -54,18 +54,35 @@ describe('computeRendererHeapCeilingMb', () => {
   })
 
   it('falls through to RAM tiers for blank/invalid overrides', () => {
-    expect(computeRendererHeapCeilingMb(16 * GIB, '')).toBe(4096)
-    expect(computeRendererHeapCeilingMb(16 * GIB, 'abc')).toBe(4096)
+    expect(computeRendererHeapCeilingMb(16 * GIB, '')).toBe(2048)
+    expect(computeRendererHeapCeilingMb(16 * GIB, 'abc')).toBe(2048)
+    expect(computeRendererHeapCeilingMb(32 * GIB, '')).toBe(4096)
   })
 
   it('returns null for a non-finite / non-positive RAM reading', () => {
     expect(computeRendererHeapCeilingMb(Number.NaN)).toBeNull()
     expect(computeRendererHeapCeilingMb(0)).toBeNull()
+    expect(computeRendererHeapCeilingMb(-1)).toBeNull()
   })
 })
 
 describe('enableRendererHeapHeadroom', () => {
-  it('appends --max-old-space-size as a js-flags switch on a RAM-capable machine', async () => {
+  it('configures optimize-for-size, 768MB heap, and expose-gc on low-tier machines', async () => {
+    const { app } = await import('electron')
+    const { enableRendererHeapHeadroom } = await import('./renderer-heap-headroom')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('')
+
+    enableRendererHeapHeadroom({ totalMemoryBytes: 8 * GIB, env: {} })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'js-flags',
+      '--optimize-for-size --max-old-space-size=768 --expose-gc'
+    )
+  })
+
+  it('appends mid-tier 2048MB heap cap without optimize-for-size on mid-RAM machines', async () => {
     const { app } = await import('electron')
     const { enableRendererHeapHeadroom } = await import('./renderer-heap-headroom')
 
@@ -76,18 +93,33 @@ describe('enableRendererHeapHeadroom', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'js-flags',
-      '--max-old-space-size=4096'
+      '--max-old-space-size=2048'
     )
   })
 
-  it('does not set a switch on low-RAM machines', async () => {
+  it('appends high-tier 4096MB heap cap on high-RAM machines', async () => {
     const { app } = await import('electron')
     const { enableRendererHeapHeadroom } = await import('./renderer-heap-headroom')
 
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('')
 
-    enableRendererHeapHeadroom({ totalMemoryBytes: 4 * GIB, env: {} })
+    enableRendererHeapHeadroom({ totalMemoryBytes: 32 * GIB, env: {} })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'js-flags',
+      '--max-old-space-size=4096'
+    )
+  })
+
+  it('does not set a switch on non-positive RAM readings', async () => {
+    const { app } = await import('electron')
+    const { enableRendererHeapHeadroom } = await import('./renderer-heap-headroom')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('')
+
+    enableRendererHeapHeadroom({ totalMemoryBytes: 0, env: {} })
 
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('js-flags', expect.anything())
   })
@@ -115,7 +147,7 @@ describe('enableRendererHeapHeadroom', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'js-flags',
-      '--no-opt --max-old-space-size=4096'
+      '--no-opt --max-old-space-size=2048'
     )
   })
 })
