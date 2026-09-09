@@ -139,7 +139,15 @@ export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends Or
     while (true) {
       const publicationEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
       if (publicationEpoch === null) {
-        await this.waitForSessionTabsInventoryPublication(signal)
+        // Why: headless serve has no renderer to re-sync the graph, so a cleared
+        // publication epoch would never be republished and this wait hung forever
+        // on cold start. Bound it and fall through to a non-authoritative serve.
+        await this.waitForSessionTabsInventoryPublication(signal, 3_000)
+        if (this.getAuthoritativeSessionTabsInventoryEpoch() === null) {
+          const inventory = await this.collectAllMobileSessionTabs(clientNavigationId)
+          this.assertSessionTabsInventoryRequestActive(signal)
+          return { snapshots: inventory.snapshots, changeSequence: inventory.changeSequence }
+        }
         continue
       }
       const inventory = await this.collectAllMobileSessionTabs(clientNavigationId)
