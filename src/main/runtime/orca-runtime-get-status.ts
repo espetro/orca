@@ -23,6 +23,7 @@ import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
+import { pickPreferredActiveWorktreeId } from './preferred-active-worktree'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
@@ -45,7 +46,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     return this as unknown as RuntimeStatusHost
   }
 
-  getStatus(): RuntimeStatus {
+  getStatus(pairedDeviceId?: string | null): RuntimeStatus {
     // Why: browser panes need a backend that can create and stream a page. A
     // desktop renderer provides one via <webview>; a headless serve provides one
     // via the offscreen backend. Either way the same browser.screencast.v1 path
@@ -100,6 +101,11 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     if (terminalDegradation) {
       degradations.push(terminalDegradation)
     }
+    // Why: a freshly paired client with empty local state has no way to pick a
+    // worktree on its own. Surface a best-guess so it can land on real workspace
+    // tabs instead of staring at an empty UI; omit the field when no eligible
+    // candidate exists so old clients never see `preferredActiveWorktreeId: null`.
+    const preferredActiveWorktreeId = this.resolvePreferredActiveWorktreeId(pairedDeviceId)
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -120,8 +126,37 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
-      minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+      minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+      ...(preferredActiveWorktreeId ? { preferredActiveWorktreeId } : {})
     }
+  }
+
+  private resolvePreferredActiveWorktreeId(pairedDeviceId?: string | null): string | null {
+    const store = this.store
+    if (!store) {
+      return null
+    }
+    const session = store.getWorkspaceSession?.()
+    if (!session) {
+      return null
+    }
+    // Why: some test mocks expose a partial store (no getAllWorktreeMeta); treat
+    // missing data as "no eligible worktree" rather than crashing the status
+    // response. The runtime's real Store always provides both.
+    const repos = store.getRepos?.() ?? []
+    const reposById: Record<string, { id: string; path: string }> = {}
+    for (const repo of repos) {
+      reposById[repo.id] = { id: repo.id, path: repo.path }
+    }
+    return pickPreferredActiveWorktreeId({
+      session,
+      reposById,
+      worktreeMetaById: store.getAllWorktreeMeta?.() ?? {},
+      ...(store.getMobileClientTabSelections
+        ? { mobileClientTabSelectionsByDeviceId: store.getMobileClientTabSelections() }
+        : {}),
+      pairedDeviceId: pairedDeviceId ?? null
+    })
   }
 
   setPtyController(controller: RuntimePtyController | null): void {

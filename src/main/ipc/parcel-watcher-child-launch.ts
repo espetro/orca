@@ -7,6 +7,7 @@ import {
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
 import { registerWatcherChildPhysicalExit } from './parcel-watcher-child-termination'
 import type { WatcherToHostMessage } from './parcel-watcher-process-protocol'
+import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 
 export type LaunchedWatcherChild = {
   child: ChildProcess
@@ -27,9 +28,11 @@ export function launchWatcherChild(
     throw new WatcherChildCapacityError()
   }
   const canaryDir = currentCanaryDir ?? createWatcherCanaryDirectory()
+  const budget = deriveHostMemoryBudget()
   let child: ChildProcess
   try {
     child = fork(entryPath, [], {
+      execArgv: [`--max-old-space-size=${budget.parcelWatcherMaxOldSpaceMb}`],
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
       env: {
         ...process.env,

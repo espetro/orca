@@ -95,6 +95,12 @@ export type RuntimeStatus = {
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for older mobile builds.
   protocolVersion?: number
   minCompatibleMobileVersion?: number
+  /**
+   * Server's best-guess preferred active worktree id for a freshly paired
+   * client with empty local state. Absent when no eligible candidate exists.
+   * Never returns `global-floating-terminal` unless it actually holds tabs.
+   */
+  preferredActiveWorktreeId?: string | null
 }
 
 export type CliRuntimeState =
@@ -131,6 +137,8 @@ export type RuntimeSyncedTab = {
   tabId: string
   worktreeId: string
   title: string | null
+  /** Persisted manual rename mirrored into the graph sync (optional for wire compat). */
+  customTitle?: string | null
   activeLeafId: string | null
   layout: TerminalPaneLayoutNode | null
 }

@@ -63,7 +63,19 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+// Derive slug from product name: 'Orca Canary' -> 'canary' (strip 'Orca ', lowercase, spaces to '-')
+function deriveProductSlug(productName) {
+  if (!productName || productName === 'Orca') {
+    return null
+  }
+  return productName
+    .replace(/^Orca\s+/i, '')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+}
+
+const productSlug = deriveProductSlug(process.env.ORCA_PRODUCT_NAME)
+const appId = productSlug ? `com.stablyai.orca.${productSlug}` : 'com.stablyai.orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -150,8 +162,8 @@ const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: process.env.ORCA_PRODUCT_NAME || 'Orca',
+  protocols: [{ name: process.env.ORCA_PRODUCT_NAME || 'Orca', schemes: ['orca'] }],
   toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
@@ -459,7 +471,7 @@ module.exports = {
       role: 'Editor',
       rank: 'Alternate'
     })),
-    icon: 'resources/build/icon.icns',
+    icon: productSlug ? 'resources/build/icon-canary.icns' : 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {

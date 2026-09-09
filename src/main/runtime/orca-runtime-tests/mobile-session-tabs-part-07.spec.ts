@@ -255,7 +255,10 @@ describe('OrcaRuntimeService', () => {
     } as never)
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(2)
+    // Why: getStatus reads the workspace session twice now (once for the snapshot body,
+    // once for the preferred-active-worktree pick), so the implicit return-path call
+    // adds one extra read on top of the explicit hydration read.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(3)
 
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
       expect.objectContaining({

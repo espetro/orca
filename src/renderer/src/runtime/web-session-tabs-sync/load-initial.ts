@@ -23,6 +23,10 @@ import {
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import { isHostMirroredWorktree } from './visibility-types'
+import {
+  applyAdoptedPreferredWorktree,
+  decideAdoptPreferredWorktree
+} from '../../web/web-adopt-preferred-worktree'
 
 export type InitialSessionTabsLoadArgs = {
   environmentId: string
@@ -43,6 +47,61 @@ export function loadInitialWebSessionTabs({
   // Why: listAll is bootstrap fallback; a stream received after this boundary owns the result.
   const requestReceivedFrame = nextReceivedSessionTabsFrame()
   let settleHydration: (() => void) | null = null
+  // Why: parallel to the snapshot bootstrap. The web client has no localStorage
+  // selection on first pairing, so we ask the server for its preferred active
+  // worktree once and only seed `activeWorktreeId`/`activeRepoId` when the
+  // local store is empty. Failures are silent — listAll still drives the rest.
+  // Why guard: older preloads and the bootstrap test harness may not expose
+  // `getStatus` on `runtimeEnvironments`; without this guard, an absent method
+  // throws synchronously inside the boot path and aborts the subscribeAll
+  // subscription the rest of the renderer relies on.
+  const runtimeEnvironmentsApi = window.api.runtimeEnvironments as {
+    getStatus?: (args: {
+      selector: string
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<unknown>>
+  }
+  if (typeof runtimeEnvironmentsApi.getStatus === 'function') {
+    void runtimeEnvironmentsApi
+      .getStatus({ selector: environmentId, timeoutMs: 15_000 })
+      .then((statusResponse: RuntimeRpcResponse<unknown>) => {
+        if (
+          !isCurrent() ||
+          getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+        ) {
+          return
+        }
+        if (statusResponse.ok !== true) {
+          return
+        }
+        const preferred = (
+          statusResponse.result as { preferredActiveWorktreeId?: string | null } | null | undefined
+        )?.preferredActiveWorktreeId
+        const decision = decideAdoptPreferredWorktree(useAppStore.getState(), preferred)
+        if (decision.adopt) {
+          applyAdoptedPreferredWorktree(useAppStore.setState, decision)
+        } else if (
+          decision.reason !== 'local-selection-present' &&
+          decision.reason !== 'worktree-id-missing'
+        ) {
+          // Why: the only expected skip is "local selection wins"; everything
+          // else means the server named a worktree the renderer hasn't hydrated
+          // yet, which is useful to surface during bring-up.
+          console.debug(
+            '[web-session-tabs-sync] preferredActiveWorktreeId not adopted:',
+            decision.reason
+          )
+        }
+      })
+      .catch((error) => {
+        if (isCurrent()) {
+          console.debug(
+            '[web-session-tabs-sync] getStatus for preferredActiveWorktreeId failed:',
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+      })
+  }
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,

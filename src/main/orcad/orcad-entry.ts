@@ -11,6 +11,8 @@
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
@@ -30,6 +32,13 @@ import {
 } from './orcad-instance-lock'
 
 let runOrcadQuitHandlers = (): void => {}
+
+// Why: without a webClientRoot the WS transport serves HTTP with no request
+// listener, and Node holds plain GET requests open forever instead of 404ing.
+function resolveBundledWebClientRoot(): string | undefined {
+  const root = join(resolveOrcadInstallRoot(), '..', 'web')
+  return existsSync(join(root, 'web-index.html')) ? root : undefined
+}
 
 function createNodeAppEnvironment(): AppEnvironment {
   const quitHandlers: (() => void)[] = []
@@ -210,6 +219,7 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
+    webClientRoot: resolveBundledWebClientRoot(),
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()

@@ -27,6 +27,7 @@ vi.mock('./parcel-watcher-child-termination', () => ({
 
 import { launchWatcherChild } from './parcel-watcher-child-launch'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 
 class LaunchChild extends EventEmitter {
   pid = 1234
@@ -72,5 +73,17 @@ describe('launchWatcherChild', () => {
     expect(onGone).toHaveBeenCalledTimes(2)
     expect(signalPhysicalExitMock).toHaveBeenCalledTimes(1)
     expect(releaseReservationMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes memory cap in execArgv based on host budget', () => {
+    expect(launchWatcherChild('/watcher.js', null, vi.fn(), vi.fn())).not.toBeNull()
+    const budget = deriveHostMemoryBudget()
+    expect(forkMock).toHaveBeenCalledWith(
+      '/watcher.js',
+      [],
+      expect.objectContaining({
+        execArgv: [`--max-old-space-size=${budget.parcelWatcherMaxOldSpaceMb}`]
+      })
+    )
   })
 })

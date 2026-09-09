@@ -3,6 +3,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import { daemonLogArgs } from './daemon-launch-paths'
+import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
 
@@ -76,6 +77,7 @@ export async function launchDaemonChild(
       // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
       detached: true,
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      execArgv: [`--max-old-space-size=${deriveHostMemoryBudget().daemonMaxOldSpaceMb}`],
       // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
       ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
       // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.

@@ -24,7 +24,9 @@ const ORCA_RESPONSIBLE_IDENTIFIERS = new Set([
   'com.stablyai.orca.dev',
   'com.stablyai.orca.dev.helper',
   'com.stablyai.orca.local',
-  'com.stablyai.orca.local.helper'
+  'com.stablyai.orca.local.helper',
+  'com.stablyai.orca.canary',
+  'com.stablyai.orca.canary.helper'
 ])
 
 /** Why: the prompt classes #9756 is about — other-apps' data plus the protected home folders agents sweep. */
