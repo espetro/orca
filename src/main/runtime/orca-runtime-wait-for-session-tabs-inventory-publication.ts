@@ -3,14 +3,21 @@
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './orca-runtime-collect-mobile-visible-graph-changed-worktrees'
 
 export class OrcaRuntimeWithWaitForSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
-  protected waitForSessionTabsInventoryPublication(signal?: AbortSignal): Promise<void> {
+  protected waitForSessionTabsInventoryPublication(
+    signal?: AbortSignal,
+    timeoutMs?: number
+  ): Promise<void> {
     if (this.getAuthoritativeSessionTabsInventoryEpoch() !== null) {
       return Promise.resolve()
     }
     return new Promise<void>((resolve, reject) => {
+      let timeout: ReturnType<typeof setTimeout> | null = null
       const cleanup = (): void => {
         this.sessionTabsInventoryWaiters.delete(onPublished)
         signal?.removeEventListener('abort', onAbort)
+        if (timeout !== null) {
+          clearTimeout(timeout)
+        }
       }
       const onPublished = (): void => {
         cleanup()
@@ -20,8 +27,15 @@ export class OrcaRuntimeWithWaitForSessionTabsInventoryPublication extends OrcaR
         cleanup()
         reject(new Error('client_disconnected'))
       }
+      const onTimeout = (): void => {
+        cleanup()
+        resolve()
+      }
       this.sessionTabsInventoryWaiters.add(onPublished)
       signal?.addEventListener('abort', onAbort, { once: true })
+      if (timeoutMs !== undefined) {
+        timeout = setTimeout(onTimeout, timeoutMs)
+      }
       if (signal?.aborted) {
         onAbort()
       } else if (this.getAuthoritativeSessionTabsInventoryEpoch() !== null) {
