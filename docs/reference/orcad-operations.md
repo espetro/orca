@@ -204,6 +204,54 @@ because those terminals die with orcad. A daemon that answered and then failed i
 probe is also `degraded`, not `absent`: it still holds live sessions, and calling those
 exited would be the verdict `ssh-execution-boundary.md` forbids guessing.
 
+## Installing from a release artifact
+
+Release builds of orcad are published as GitHub release artifacts. A build runs when a tag
+matching `orcad-v*` is pushed, or manually via `workflow_dispatch` on
+`.github/workflows/release-orcad.yml`. Each artifact is a self-contained bundle for its
+platform: `orcad.js`, the native prebuilds, the sidecar entries, and a `web/` directory whose
+`web-index.html` is what the WS transport serves to browser clients.
+
+### The install script
+
+`config/scripts/install-orcad.sh` downloads the bundle for the current platform, verifies its
+checksum, and installs it under `~/.local/share/orca-serve`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/espetro/orca/main/config/scripts/install-orcad.sh | bash -s -- --version orcad-v0.1.0
+```
+
+- `--version vX.Y.Z` pins the release tag to install. Without it the script installs the
+  latest release. The same value can come from the `ORCAD_VERSION` environment variable.
+- `--health-port N` performs a best-effort boot check after install: it starts orcad on port
+  N and reports whether the readiness payload arrives, so a broken install is caught before
+  the supervisor ever sees it.
+
+The install is a **staged swap**, not an in-place overwrite: the new bundle lands in
+`~/.local/share/orca-serve.staging`, the previous one is moved to `~/.local/share/orca-serve.old`,
+and only then does staging take the live name. An interrupted install leaves the running
+bundle untouched, and the `.old` copy is the rollback path.
+
+### oxmgr supervision per host
+
+For hosts supervised by oxmgr, import the sample definition from `deploy/oxmgr/orcad.oxfile`
+and apply it, scoped to the `orca-serve` app:
+
+```sh
+oxmgr import deploy/oxmgr/orcad.oxfile
+oxmgr apply deploy/oxmgr/orcad.oxfile --only orca-serve
+```
+
+The sample runs `node ~/.local/share/orca-serve/orcad/orcad.js --port 6800 --bind 127.0.0.1`
+under `restart_policy = "always"` and probes `http://127.0.0.1:6800/web-index.html` every 30
+seconds. Comments in the file cover the two common deviations: `--bind 0.0.0.0` for a
+Tailscale-exposed host (orcad accepts literal IPs only), and `ORCA_USER_DATA` (or
+`XDG_DATA_HOME`) for a non-default data root.
+
+On hosts that already run an upstream orca systemd service (for example ovhcloud), leave
+`orca.service` running untouched. orcad may be installed alongside it for evaluation: give the
+oxmgr-managed instance port 6801 so the two never contend for the pinned port.
+
 ## What is not covered
 
 Named here so nothing reads as implemented that is not:
