@@ -162,7 +162,21 @@ describe('run-release-memory-benchmark helpers', () => {
     expect(artifact.dump).toBe(dump)
     expect(artifact.externalCrossCheck).toEqual({ start: { atMs: 1 }, end: { atMs: 2 } })
     expect(artifact.gitCommit).toBe('abc123')
+    expect(artifact.hostMemoryBudget).toBeNull()
     expect(() => buildResourceBenchArtifact({ label: 'x' })).toThrow('dump is required')
+  })
+
+  it('stamps hostMemoryBudget tier + totalGib when provided', () => {
+    const artifact = buildResourceBenchArtifact({
+      label: 'Orca',
+      fixture: 'no-editor',
+      runIndex: 0,
+      settleSeconds: 30,
+      windowSeconds: 60,
+      dump: { schema: 'orca.resource-dump', schemaVersion: 1, ticks: [], markers: [] },
+      hostMemoryBudget: { tier: 'low', totalGib: 8, rendererMaxOldSpaceMb: 768 }
+    })
+    expect(artifact.hostMemoryBudget).toEqual({ tier: 'low', totalGib: 8 })
   })
 
   it('builds per-run artifact paths and exposes a no-editor preset', () => {

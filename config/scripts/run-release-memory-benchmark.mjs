@@ -23,6 +23,13 @@ import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '../../src/shared/child-process/process-tree-termination.ts'
+import { deriveHostMemoryBudget } from '../../src/main/startup/host-memory-budget.ts'
+import {
+  aggregateHeapSnapshotRetainedByConstructor,
+  takeHeapSnapshotSummary
+} from './release-memory-heap-snapshot.mjs'
+
+export { aggregateHeapSnapshotRetainedByConstructor, takeHeapSnapshotSummary }
 
 export const DEFAULT_CDP_PORT = 9223
 export const DEFAULT_SETTLE_SECONDS = 30
@@ -211,42 +218,6 @@ export function summarizeRoleRss(samples) {
   return summary
 }
 
-// Aggregate a V8 heap snapshot (already-parsed object with snapshot.meta +
-// nodes + strings) into total heap size plus self-size per constructor.
-export function aggregateHeapSnapshotRetainedByConstructor(snapshot, topN = 10) {
-  const meta = snapshot?.snapshot?.meta
-  const nodes = snapshot?.nodes
-  const strings = snapshot?.strings
-  if (!Array.isArray(nodes) || !Array.isArray(strings) || !meta?.node_fields) {
-    throw new Error('Invalid V8 heap snapshot: missing nodes/strings/meta')
-  }
-  const fields = meta.node_fields
-  const fieldTypes = meta.node_types ?? []
-  const typeIndex = fields.indexOf('type')
-  const nameIndex = fields.indexOf('name')
-  const selfSizeIndex = fields.indexOf('self_size')
-  const nodeWidth = fields.length
-  const objectTypeIndex = Array.isArray(fieldTypes[typeIndex])
-    ? fieldTypes[typeIndex].indexOf('object')
-    : -1
-  const byConstructor = new Map()
-  let totalSelfBytes = 0
-  for (let offset = 0; offset + nodeWidth <= nodes.length; offset += nodeWidth) {
-    if (objectTypeIndex !== -1 && nodes[offset + typeIndex] !== objectTypeIndex) {
-      continue
-    }
-    const selfBytes = nodes[offset + selfSizeIndex] ?? 0
-    totalSelfBytes += selfBytes
-    const name = strings[nodes[offset + nameIndex]] ?? '(unknown)'
-    byConstructor.set(name, (byConstructor.get(name) ?? 0) + selfBytes)
-  }
-  const topConstructors = [...byConstructor.entries()]
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, topN)
-    .map(([name, selfSizeBytes]) => ({ name, selfSizeBytes }))
-  return { totalSelfBytes, nodeWidth, topConstructors }
-}
-
 // Shape the final bench:compare artifact. `summary` must only contain finite
 // numbers — compare-benchmark-artifacts.mjs flattens it into `summary.*` keys
 // and infers 'bytes' units from the Bytes suffix.
@@ -302,6 +273,7 @@ export function buildResourceBenchArtifact({
   heapIdle,
   postGc = null,
   mainAttribution = null,
+  hostMemoryBudget = null,
   gitCommit = null
 }) {
   if (!dump) {
@@ -315,6 +287,11 @@ export function buildResourceBenchArtifact({
     runIndex,
     settleSeconds,
     windowSeconds,
+    // tier + totalGib the benched app derives from this host/env, so runs from
+    // different machines or ORCA_HOST_MEMORY_TIER overrides stay comparable.
+    hostMemoryBudget: hostMemoryBudget
+      ? { tier: hostMemoryBudget.tier, totalGib: hostMemoryBudget.totalGib }
+      : null,
     dump,
     externalCrossCheck: {
       start: externalCrossCheck?.start ?? null,
@@ -602,6 +579,7 @@ async function main() {
         heapIdle: idleHeapSummary,
         postGc,
         mainAttribution,
+        hostMemoryBudget: deriveHostMemoryBudget(),
         gitCommit: gitCommit()
       })
       mkdirSync(path.dirname(path.resolve(artifactPath)), { recursive: true })
