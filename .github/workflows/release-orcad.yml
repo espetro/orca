@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           tar -czf orca-serve-${{ matrix.platform }}.tar.gz -C dist orca-serve-${{ matrix.platform }}
-          shasum -a 256 orca-serve-${{ matrix.platform }}.tar.gz > orca-serve-${{ matrix.platform }}.tar.gz.sha256
+          sha256sum orca-serve-${{ matrix.platform }}.tar.gz > orca-serve-${{ matrix.platform }}.tar.gz.sha256
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
