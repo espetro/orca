@@ -10,6 +10,10 @@ import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 // Shared options every project must carry: Vitest 4 projects do NOT inherit
 // root-level test options like setupFiles/timeouts/execArgv.
 const sharedTestOptions = {
+  // Why: upstream shard balancing sequences tests by recorded timings; off by default locally.
+  ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+    ? { sequence: { sequencer: TimingSequencer } }
+    : {}),
   // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
   setupFiles: [
     resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
@@ -47,9 +51,6 @@ export default defineConfig({
   },
   test: {
     ...sharedTestOptions,
-    ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
-      ? { sequence: { sequencer: TimingSequencer } }
-      : {}),
     // Why: win32 keeps a low fixed count; other platforms use Vitest's default (cpus-1),
     // right for 32 GB-class dev machines. ORCA_VITEST_WORKERS=<n> (>= 2) pins lower on low-RAM machines.
     ...(process.platform === 'win32' ? { minWorkers: 4, maxWorkers: 4 } : {}),
