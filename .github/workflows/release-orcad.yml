@@ -57,10 +57,11 @@ jobs:
       - name: Prepare Node native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=node
 
-      - name: Build orcad and web
+      - name: Build orcad, web and CLI
         run: |
           pnpm run build:orcad
           pnpm run build:web
+          pnpm run build:cli
 
       - name: Assemble release tree
         run: node config/scripts/assemble-orcad-release.mjs --platform ${{ matrix.platform }}
