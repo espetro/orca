@@ -105,10 +105,7 @@ export type MobilePairingRpcAccessors = {
 }
 
 type RuntimeWithMobilePairingAccessors = {
-  getMobilePairingRpcAccessors?(): {
-    getWebSocketEndpoint(): string | null
-    isDesktopRelayProviderAttached(): boolean
-  } | null
+  getMobilePairingRpcAccessors?(): MobilePairingRpcAccessors | null
   getStatus(): {
     desktopWindowStatus?: string | null
     hostMode?: MobileHostMode
@@ -120,11 +117,7 @@ type RuntimeWithMobilePairingAccessors = {
 function resolveAccessors(
   runtime: RuntimeWithMobilePairingAccessors
 ): MobilePairingRpcAccessors | null {
-  const accessors = runtime.getMobilePairingRpcAccessors?.() ?? null
-  // Why: the runtime's typed accessor only promises the two methods getStatus uses; in practice
-  // the rpc server hands the full surface (pairing offer, device registry) so a structural cast
-  // is the bridge. If the cast target is missing methods, those branches fail at runtime.
-  return accessors as unknown as MobilePairingRpcAccessors | null
+  return runtime.getMobilePairingRpcAccessors?.() ?? null
 }
 // Why: derives the host mode without a dedicated accessor — the runtime's own getStatus already
 // reports `desktopWindowStatus: 'available'` only when a live renderer is attached, so 'desktop' iff
