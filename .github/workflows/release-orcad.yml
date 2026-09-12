@@ -1,0 +1,109 @@
+name: release-orcad
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Release tag (e.g. orcad-v1.2.3). Set to also publish a GitHub release; leave empty for a build-only validation run.'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'orcad-v*'
+
+concurrency:
+  group: release-orcad-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Note: ubuntu-22.04 has glibc 2.35, above the repo's glibc 2.31 floor
+          # (docs/reference/linux-glibc-compatibility.md). Acceptable for prebuilt
+          # native modules bundled here; revisit if the floor is enforced for
+          # prebuilt binaries.
+          - os: ubuntu-22.04
+            platform: linux-x64
+          - os: macos-14
+            platform: darwin-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || 'develop' }}
+
+      - name: Read pnpm version
+        id: pnpm_version
+        run: echo "version=$(node -p "require('./package.json').packageManager.split('@')[1].split('+')[0]")" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ steps.pnpm_version.outputs.version }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare Node native runtime
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=node
+
+      - name: Build orcad and web
+        run: |
+          pnpm run build:orcad
+          pnpm run build:web
+
+      - name: Assemble release tree
+        run: node config/scripts/assemble-orcad-release.mjs --platform ${{ matrix.platform }}
+
+      - name: Smoke boot orcad
+        run: node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad
+
+      - name: Create tarball
+        run: |
+          tar -czf orca-serve-${{ matrix.platform }}.tar.gz -C dist orca-serve-${{ matrix.platform }}
+          shasum -a 256 orca-serve-${{ matrix.platform }}.tar.gz > orca-serve-${{ matrix.platform }}.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orca-serve-${{ matrix.platform }}
+          path: |
+            orca-serve-${{ matrix.platform }}.tar.gz
+            orca-serve-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: [build]
+    if: github.event_name == 'push' || inputs.version_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artifacts
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.version_tag }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            artifacts/orca-serve-*.tar.gz artifacts/orca-serve-*.tar.gz.sha256

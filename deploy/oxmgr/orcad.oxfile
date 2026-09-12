@@ -1,0 +1,18 @@
+# Sample oxmgr supervision for orcad.
+# Import with: oxmgr import deploy/oxmgr/orcad.oxfile
+# Apply with:  oxmgr apply deploy/oxmgr/orcad.oxfile --only orca-serve
+#
+# For Tailscale-exposed hosts, change --bind to 0.0.0.0 (orcad accepts literal IPs only;
+# hostnames are refused). Set the ORCA_USER_DATA env var (or XDG_DATA_HOME) to point orcad
+# at a non-default data root, e.g.:
+#   command = "env ORCA_USER_DATA=$HOME/.local/share/orca-serve/data node ..."
+
+[[apps]]
+name = "orca-serve"
+command = "node $HOME/.local/share/orca-serve/orcad/orcad.js --port 6800 --bind 127.0.0.1"
+restart_policy = "always"
+crash_restart_limit = 5
+health_cmd = "curl -fsS --max-time 4 http://127.0.0.1:6800/web-index.html"
+health_interval = 30
+health_timeout = 5
+health_max_failures = 3
