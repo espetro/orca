@@ -101,6 +101,12 @@ export type RuntimeStatus = {
    * Never returns `global-floating-terminal` unless it actually holds tabs.
    */
   preferredActiveWorktreeId?: string | null
+  /** 'desktop' on the desktop app, 'serve' on headless `orca serve`. Optional for old hosts. */
+  hostMode?: 'desktop' | 'serve'
+  /** True only when the desktop shell attached a relay provider. Optional for old hosts. */
+  relayAvailable?: boolean
+  /** Reachable runtime WS endpoint ('ws://host:port') or null when down. Optional for old hosts. */
+  webSocketEndpoint?: string | null
 }
 
 export type CliRuntimeState =

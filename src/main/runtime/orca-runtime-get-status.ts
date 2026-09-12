@@ -41,9 +41,26 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
+type RpcStateAccessors = {
+  getWebSocketEndpoint(): string | null
+  isDesktopRelayProviderAttached(): boolean
+}
+
 export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+  private rpcStateAccessors: RpcStateAccessors | null = null
+
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
+  }
+
+  // Why: the RPC server owns the WebSocket listener and the desktop relay provider, so the
+  // runtime exposes them here; absent accessor → hostMode 'serve' / null endpoint (older hosts).
+  setMobilePairingRpcAccessors(accessors: RpcStateAccessors | null): void {
+    this.rpcStateAccessors = accessors
+  }
+
+  getMobilePairingRpcAccessors(): RpcStateAccessors | null {
+    return this.rpcStateAccessors
   }
 
   getStatus(pairedDeviceId?: string | null): RuntimeStatus {
@@ -106,6 +123,12 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     // tabs instead of staring at an empty UI; omit the field when no eligible
     // candidate exists so old clients never see `preferredActiveWorktreeId: null`.
     const preferredActiveWorktreeId = this.resolvePreferredActiveWorktreeId(pairedDeviceId)
+    // Why: mobile pairing RPC needs the host mode at a glance; 'desktop' iff a live renderer is
+    // attached, else 'serve' — derivable purely from runtime state.
+    const hostMode: 'desktop' | 'serve' = hasRenderer ? 'desktop' : 'serve'
+    // Why: relay + WS endpoint live on the RPC server, not the runtime; absent accessor → old host.
+    const webSocketEndpoint = this.rpcStateAccessors?.getWebSocketEndpoint() ?? null
+    const relayAvailable = this.rpcStateAccessors?.isDesktopRelayProviderAttached() ?? false
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -127,6 +150,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+      hostMode,
+      // Why: omit absent fields so old clients never see a relay flag they don't know how to render.
+      ...(this.rpcStateAccessors ? { relayAvailable, webSocketEndpoint } : {}),
       ...(preferredActiveWorktreeId ? { preferredActiveWorktreeId } : {})
     }
   }
