@@ -75,7 +75,6 @@ jobs:
               'config/**',
               '!config/**/*.test.*',
               '!config/reliability-gates.jsonc',
-              '!config/max-lines-baseline.txt',
               '!config/vitest.config.ts',
               'native/**',
               'resources/**',

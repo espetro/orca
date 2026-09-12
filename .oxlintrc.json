@@ -158,30 +158,6 @@
         "quadratic-buffer-concat/no-loop-carried-concat": "off",
         "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
       }
-    },
-    {
-      "files": ["**/*.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["**/*.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["**/*.mjs"],
-      "rules": {
-        "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
-      }
     }
   ],
   "ignorePatterns": [

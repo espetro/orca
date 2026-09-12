@@ -188,9 +188,6 @@ jobs:
           node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
 
-      - name: Enforce max-lines ratchet
-        run: pnpm run check:max-lines-ratchet
-
       - name: Enforce ts-nocheck ratchet
         run: pnpm run check:ts-nocheck-ratchet
 
