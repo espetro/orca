@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import type { ViteUserConfig } from 'vitest/config'
+import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 
 // Why: default to cpus-1 (win32 keeps a low fixed count) — fine for 32 GB-class dev
 // machines. ORCA_VITEST_WORKERS=<n> (>= 2: Vitest needs a main thread plus a worker)
@@ -46,6 +47,9 @@ export default defineConfig({
   },
   test: {
     ...sharedTestOptions,
+    ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+      ? { sequence: { sequencer: TimingSequencer } }
+      : {}),
     // Why: win32 keeps a low fixed count; other platforms use Vitest's default (cpus-1),
     // right for 32 GB-class dev machines. ORCA_VITEST_WORKERS=<n> (>= 2) pins lower on low-RAM machines.
     ...(process.platform === 'win32' ? { minWorkers: 4, maxWorkers: 4 } : {}),
