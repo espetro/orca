@@ -45,7 +45,11 @@ const ipcMainMock: IpcMainMock = {
 }
 
 export type ElectronModuleMock = {
-  app: { on: MainWindowSpy; removeListener: MainWindowSpy }
+  app: {
+    on: MainWindowSpy
+    removeListener: MainWindowSpy
+    commandLine: { getSwitchValue: MainWindowSpy }
+  }
   BrowserWindow: typeof browserWindowMock
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
