@@ -23,6 +23,7 @@ import {
   type MobilePairingAddressChange,
   useMobilePairingAddressPreference
 } from './use-mobile-pairing-address-preference'
+import { useMobileHostStatus } from './use-mobile-host-status'
 
 export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
@@ -311,6 +312,13 @@ export default function MobilePage(): React.JSX.Element {
 
   useMobilePageEscape(closeMobilePage)
 
+  // Why: when a desktop window is open on this host, another renderer already owns the
+  // QR-mint UI. Surface the paired-device list with a "pair from desktop" notice instead
+  // of letting the page ask the user to scan a code that's coming from another window.
+  const hostStatusState = useMobileHostStatus()
+  const isRemoteRendererReadOnly =
+    hostStatusState.state === 'loaded' && hostStatusState.status.desktopWindowStatus === 'available'
+
   return (
     <MobilePageContent
       closeMobilePage={closeMobilePage}
@@ -360,6 +368,8 @@ export default function MobilePage(): React.JSX.Element {
       stage={stage}
       stepIdx={stepIdx}
       toggleMobileSidebarButton={toggleMobileSidebarButton}
+      isRemoteRendererReadOnly={isRemoteRendererReadOnly}
+      hostStatus={hostStatusState.state === 'loaded' ? hostStatusState.status : null}
     />
   )
 }

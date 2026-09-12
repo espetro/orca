@@ -25,6 +25,7 @@ import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-min
 import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
 import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
+import { useMobileHostStatus } from '../mobile/use-mobile-host-status'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
@@ -390,6 +391,42 @@ export function MobilePane(): React.JSX.Element {
     }
   }
 
+  // Why: a remote renderer with a desktop window open falls into read-only — another window owns the QR mint UI.
+  const hostStatusState = useMobileHostStatus()
+  const isRemoteRendererReadOnly =
+    hostStatusState.state === 'loaded' && hostStatusState.status.desktopWindowStatus === 'available'
+  const hideAnywhere = hostStatusState.state === 'loaded' && !hostStatusState.status.relayAvailable
+
+  if (isRemoteRendererReadOnly) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-md border border-border/60 bg-muted/30 px-4 py-3 text-sm">
+          <h3 className="mb-1 font-medium">
+            {translate(
+              'auto.components.settings.MobilePane.e094c608c3',
+              'Pair from the desktop app'
+            )}
+          </h3>
+          <p className="text-muted-foreground">
+            {translate(
+              'auto.components.settings.MobilePane.72c13751b3',
+              'Pair Orca Mobile from the desktop app on this host.'
+            )}
+          </p>
+        </div>
+        <MobilePairedDevicesSection
+          devices={devices}
+          hasQrCode={false}
+          onRevokeDevice={(id) => void revokeDevice(id)}
+        />
+        <MobileAutoRestoreFitSection
+          autoRestoreFitMs={autoRestoreFitMs}
+          onAutoRestoreFitChange={(ms) => void updateSettings({ mobileAutoRestoreFitMs: ms })}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <MobilePairingSetupSection
@@ -404,6 +441,11 @@ export function MobilePane(): React.JSX.Element {
             relayMintRetrying={
               relayMintFailure != null && connectionMode === 'automatic' && loading
             }
+            hideAnywhere={hideAnywhere}
+            relayUnavailableReason={translate(
+              'auto.components.settings.MobilePane.64181587f2',
+              'Anywhere mode is unavailable on `orca serve` hosts.'
+            )}
           />
         }
         networkInterfaces={networkInterfaces}

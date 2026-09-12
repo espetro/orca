@@ -7,25 +7,32 @@ type MobilePageToolbarProps = {
   showMobileButton: boolean
   onClose: () => void
   onToggleMobileSidebarButton: () => void
+  /** When true, the toolbar reflects the "another renderer owns the QR" notice. */
+  isRemoteRendererReadOnly?: boolean
 }
 
 export function MobilePageToolbar({
   showMobileButton,
   onClose,
-  onToggleMobileSidebarButton
+  onToggleMobileSidebarButton,
+  isRemoteRendererReadOnly = false
 }: MobilePageToolbarProps): React.JSX.Element {
+  // Why: a remote renderer with a desktop window open cannot mint QR codes here, so the
+  // sidebar toggle's label stays honest about what this surface actually does.
   const sidebarToggleLabel = showMobileButton
     ? translate('auto.components.mobile.MobilePageToolbar.c669abcf8f', 'Hide from sidebar')
     : translate('auto.components.mobile.MobilePageToolbar.fb5f28330e', 'Show in sidebar')
-  const sidebarToggleTooltip = showMobileButton
-    ? translate(
-        'auto.components.mobile.MobilePageToolbar.e1c7b4a92d',
-        'Configure in Settings > Mobile.'
-      )
-    : translate(
-        'auto.components.mobile.MobilePageToolbar.f3d8e5b71a',
-        'Adds the shortcut back to the sidebar.'
-      )
+  const sidebarToggleTooltip = isRemoteRendererReadOnly
+    ? translate('auto.components.mobile.MobilePageToolbar.14bb2d336a', 'Pair from the desktop app')
+    : showMobileButton
+      ? translate(
+          'auto.components.mobile.MobilePageToolbar.e1c7b4a92d',
+          'Configure in Settings > Mobile.'
+        )
+      : translate(
+          'auto.components.mobile.MobilePageToolbar.f3d8e5b71a',
+          'Adds the shortcut back to the sidebar.'
+        )
 
   return (
     <div className="mp-page-toolbar">

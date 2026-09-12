@@ -22,7 +22,8 @@ type StoreState = {
 }
 
 const mocks = vi.hoisted(() => ({
-  storeState: {} as StoreState
+  storeState: {} as StoreState,
+  callRuntimeResult: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -41,6 +42,9 @@ vi.mock('./use-mobile-install-qr', () => ({ useMobileInstallQr: () => null }))
 vi.mock('./use-mobile-page-escape', () => ({ useMobilePageEscape: vi.fn() }))
 vi.mock('../settings/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: vi.fn()
+}))
+vi.mock('@/web/preload-api/web-runtime-calls', () => ({
+  callRuntimeResult: mocks.callRuntimeResult
 }))
 
 vi.mock('./MobilePageContent', () => ({
@@ -68,6 +72,8 @@ vi.mock('./MobilePageContent', () => ({
     refreshingNetworkInterfaces: boolean
     stage: string | null
     stepIdx: number
+    isRemoteRendererReadOnly?: boolean
+    hostStatus?: { hostMode: 'desktop' | 'serve' } | null
   }) => (
     <div>
       <span data-testid="stage">{props.stage ?? 'loading'}</span>
@@ -83,6 +89,8 @@ vi.mock('./MobilePageContent', () => ({
       <span data-testid="selected-address-is-custom">{String(props.selectedAddressIsCustom)}</span>
       <span data-testid="custom-addresses">{props.customAddresses.join(',')}</span>
       <span data-testid="refreshing-addresses">{String(props.refreshingNetworkInterfaces)}</span>
+      <span data-testid="read-only">{String(props.isRemoteRendererReadOnly ?? false)}</span>
+      <span data-testid="host-mode">{props.hostStatus?.hostMode ?? 'none'}</span>
       <button type="button" onClick={props.enterFlow}>
         Enter flow
       </button>
@@ -131,10 +139,10 @@ vi.mock('./MobilePageContent', () => ({
 
 import MobilePage from './MobilePage'
 
-describe('MobilePage pairing connection mode', () => {
-  const getPairingQR = vi.fn()
-  const listNetworkInterfaces = vi.fn()
+const getPairingQR = vi.fn()
+const listNetworkInterfaces = vi.fn()
 
+describe('MobilePage pairing connection mode', () => {
   beforeEach(() => {
     getPairingQR.mockReset().mockResolvedValue({
       available: true,
@@ -143,6 +151,11 @@ describe('MobilePage pairing connection mode', () => {
       pairingUrl: 'orca://pair#automatic'
     })
     listNetworkInterfaces.mockReset().mockResolvedValue({ interfaces: [] })
+    // Why: older hosts don't implement mobile.hostStatus; default to unavailable so the
+    // existing tests keep today's full-pairing behavior.
+    mocks.callRuntimeResult
+      .mockReset()
+      .mockRejectedValue(Object.assign(new Error('method_not_found'), { code: 'method_not_found' }))
     mocks.storeState = {
       closeMobilePage: vi.fn(),
       orcaProfileAuthStatus: { state: 'connected' },
@@ -588,5 +601,73 @@ describe('MobilePage pairing connection mode', () => {
       connectionMode: 'automatic',
       rotate: true
     })
+  })
+})
+
+describe('MobilePage host-status gate', () => {
+  beforeEach(() => {
+    getPairingQR.mockReset().mockResolvedValue({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,qr',
+      qrSize: 218,
+      pairingUrl: 'orca://pair#automatic'
+    })
+    listNetworkInterfaces.mockReset().mockResolvedValue({ interfaces: [] })
+    mocks.storeState = {
+      closeMobilePage: vi.fn(),
+      orcaProfileAuthStatus: { state: 'connected' },
+      settings: { showMobileButton: true },
+      updateSettings: vi.fn().mockResolvedValue(undefined),
+      fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(null)
+    }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        mobile: {
+          getPairingQR,
+          listDevices: vi.fn().mockResolvedValue({ devices: [] }),
+          listNetworkInterfaces
+        },
+        shell: { openUrl: vi.fn() },
+        ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
+      }
+    })
+  })
+
+  afterEach(cleanup)
+
+  it('passes isRemoteRendererReadOnly=true when the host reports desktopWindowStatus=available', async () => {
+    mocks.callRuntimeResult.mockReset().mockResolvedValue({
+      desktopWindowStatus: 'available',
+      hostMode: 'desktop',
+      relayAvailable: true,
+      webSocketEndpoint: 'ws://host:9223'
+    })
+    render(<MobilePage />)
+    await waitFor(() => expect(screen.getByTestId('read-only')).toHaveTextContent('true'))
+    expect(screen.getByTestId('host-mode')).toHaveTextContent('desktop')
+  })
+
+  it('passes isRemoteRendererReadOnly=false on a `serve` host with no desktop window', async () => {
+    mocks.callRuntimeResult.mockReset().mockResolvedValue({
+      desktopWindowStatus: 'blocked',
+      hostMode: 'serve',
+      relayAvailable: false,
+      webSocketEndpoint: null
+    })
+    render(<MobilePage />)
+    await waitFor(() => expect(screen.getByTestId('read-only')).toHaveTextContent('false'))
+    expect(screen.getByTestId('host-mode')).toHaveTextContent('serve')
+  })
+
+  it('falls back to hostStatus=null when the host does not implement the RPC', async () => {
+    mocks.callRuntimeResult
+      .mockReset()
+      .mockRejectedValue(Object.assign(new Error('method_not_found'), { code: 'method_not_found' }))
+    render(<MobilePage />)
+    // Why: the gate must keep the existing full pairing UI on older hosts — read-only=false
+    // and no hostStatus payload — so today's behavior is preserved.
+    await waitFor(() => expect(screen.getByTestId('read-only')).toHaveTextContent('false'))
+    expect(screen.getByTestId('host-mode')).toHaveTextContent('none')
   })
 })

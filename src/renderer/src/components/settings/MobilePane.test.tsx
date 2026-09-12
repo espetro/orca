@@ -51,7 +51,8 @@ const mocks = vi.hoisted(() => {
     revokeDevice: vi.fn(),
     toastError: vi.fn(),
     toastSuccess: vi.fn(),
-    updateSettings: vi.fn()
+    updateSettings: vi.fn(),
+    callRuntimeResult: vi.fn()
   }
 })
 
@@ -66,6 +67,9 @@ vi.mock('sonner', () => ({
   }
 }))
 vi.mock('./mobile-pairing-device-polling', () => ({ useMobilePairingDevicePolling: vi.fn() }))
+vi.mock('@/web/preload-api/web-runtime-calls', () => ({
+  callRuntimeResult: mocks.callRuntimeResult
+}))
 
 // Stub the child sections so the test targets MobilePane's own connection-mode
 // safety wiring (effective mode, canGenerate gate, persistence) in isolation.
@@ -126,14 +130,22 @@ vi.mock('./MobilePairingSetupSection', () => ({
 vi.mock('./MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: (props: {
     onChange: (mode: MobilePairingConnectionMode) => void
+    hideAnywhere?: boolean
+    relayUnavailableReason?: string
   }) => (
-    <div>
-      <button type="button" onClick={() => props.onChange('automatic')}>
-        choose-anywhere
-      </button>
+    <div data-testid="connection-options">
+      <span data-testid="hide-anywhere">{String(props.hideAnywhere ?? false)}</span>
+      {props.hideAnywhere ? null : (
+        <button type="button" onClick={() => props.onChange('automatic')}>
+          choose-anywhere
+        </button>
+      )}
       <button type="button" onClick={() => props.onChange('local-only')}>
         choose-local
       </button>
+      {props.relayUnavailableReason ? (
+        <span data-testid="relay-unavailable-reason">{props.relayUnavailableReason}</span>
+      ) : null}
     </div>
   )
 }))
@@ -184,6 +196,12 @@ describe('MobilePane pairing connection mode', () => {
     mocks.listNetworkInterfaces.mockReset().mockResolvedValue({ interfaces: [] })
     mocks.revokeDevice.mockReset().mockResolvedValue({ revoked: true })
     updateSettings.mockReset().mockResolvedValue(undefined)
+    // Default: the host does not implement mobile.hostStatus (older build) so the gate
+    // falls through to the existing surface. Individual tests override this to exercise
+    // read-only / serve-host branches.
+    mocks.callRuntimeResult
+      .mockReset()
+      .mockRejectedValue(Object.assign(new Error('method_not_found'), { code: 'method_not_found' }))
     mocks.holder.state = {
       orcaProfileAuthStatus: { state: 'connected' },
       settingsSearchQuery: '',
@@ -922,5 +940,97 @@ describe('MobilePane', () => {
     })
 
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
+  })
+})
+
+describe('MobilePane host-status gate', () => {
+  function setHostStatus(value: Promise<unknown>): void {
+    mocks.callRuntimeResult.mockReset().mockReturnValue(value)
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    _resetPairedMobileDevicesCacheForTests()
+    mocks.listDevices.mockReset().mockResolvedValue({ devices: [] })
+    mocks.listNetworkInterfaces.mockReset().mockResolvedValue({ interfaces: [] })
+    mocks.revokeDevice.mockReset().mockResolvedValue({ revoked: true })
+    mocks.updateSettings.mockReset().mockResolvedValue(undefined)
+    // Why: the rejected default is consumed only when a test happens to render that lets the hook
+    // observe it; tests that swap the mock first leave the rejection dangling, so attach a catch
+    // up-front so vitest never sees it as unhandled.
+    const defaultRejection = Promise.reject(
+      Object.assign(new Error('method_not_found'), { code: 'method_not_found' })
+    )
+    defaultRejection.catch(() => {})
+    setHostStatus(defaultRejection)
+    mocks.holder.state = {
+      orcaProfileAuthStatus: { state: 'connected' },
+      settingsSearchQuery: '',
+      settings: { mobileAutoRestoreFitMs: null },
+      updateSettings: mocks.updateSettings,
+      recordFeatureInteraction: vi.fn(),
+      fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(null)
+    }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        mobile: {
+          getPairingQR: mocks.getPairingQR,
+          listDevices: mocks.listDevices,
+          listNetworkInterfaces: mocks.listNetworkInterfaces,
+          revokeDevice: mocks.revokeDevice
+        },
+        ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
+      }
+    })
+  })
+  afterEach(() => {
+    cleanup()
+    _resetPairedMobileDevicesCacheForTests()
+    document.body.innerHTML = ''
+  })
+
+  it('renders the read-only surface when the host reports desktopWindowStatus=available', async () => {
+    setHostStatus(
+      Promise.resolve({
+        desktopWindowStatus: 'available',
+        hostMode: 'desktop',
+        relayAvailable: true,
+        webSocketEndpoint: 'ws://host:9223'
+      })
+    )
+    render(<MobilePane />)
+    await waitFor(() => expect(screen.getByText('Pair from the desktop app')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Generate' })).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Pair Orca Mobile from the desktop app on this host.')
+    ).toBeInTheDocument()
+  })
+
+  it('hides Anywhere when the host is `orca serve` (relayAvailable=false)', async () => {
+    setHostStatus(
+      Promise.resolve({
+        desktopWindowStatus: 'blocked',
+        hostMode: 'serve',
+        relayAvailable: false,
+        webSocketEndpoint: null
+      })
+    )
+    render(<MobilePane />)
+    await waitFor(() => expect(screen.getByTestId('connection-options')).toBeInTheDocument())
+    expect(screen.getByTestId('hide-anywhere')).toHaveTextContent('true')
+    expect(screen.queryByRole('button', { name: 'choose-anywhere' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'choose-local' })).toBeInTheDocument()
+    expect(screen.getByTestId('relay-unavailable-reason')).toHaveTextContent(
+      'Anywhere mode is unavailable on `orca serve` hosts.'
+    )
+  })
+
+  it('falls back to the existing full pairing UI when the host does not implement the RPC', async () => {
+    render(<MobilePane />)
+    await waitFor(() => expect(screen.getByTestId('connection-options')).toBeInTheDocument())
+    expect(screen.getByTestId('hide-anywhere')).toHaveTextContent('false')
+    expect(screen.getByRole('button', { name: 'choose-anywhere' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'choose-local' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument()
   })
 })

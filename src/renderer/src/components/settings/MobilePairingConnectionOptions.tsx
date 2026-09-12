@@ -56,7 +56,9 @@ export function MobilePairingConnectionOptions({
   onChange,
   compact = false,
   relayMintFailed = false,
-  relayMintRetrying = false
+  relayMintRetrying = false,
+  hideAnywhere = false,
+  relayUnavailableReason
 }: {
   value: MobilePairingConnectionMode
   onChange: (value: MobilePairingConnectionMode) => void
@@ -64,6 +66,10 @@ export function MobilePairingConnectionOptions({
   /** When true, show Unavailable on the Relay row (mint failed; no QR). */
   relayMintFailed?: boolean
   relayMintRetrying?: boolean
+  /** When true, hide the Relay/Anywhere radio entirely (host cannot serve it). */
+  hideAnywhere?: boolean
+  /** Reason line shown next to LAN when Anywhere is hidden (e.g. `orca serve`). */
+  relayUnavailableReason?: string
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connecting = useAppStore((state) => state.orcaProfileConnecting)
@@ -149,121 +155,133 @@ export function MobilePairingConnectionOptions({
         onKeyDown={handleArrowKeys}
         className="overflow-hidden rounded-md border border-border"
       >
-        <MobilePairingPathOption
-          selected={value === 'automatic'}
-          tabIndex={value === 'automatic' && !relayDisabled ? 0 : -1}
-          disabled={relayDisabled}
-          positionInSet={1}
-          setSize={2}
-          optionRef={(el) => {
-            optionRefs.current.automatic = el
-          }}
-          onSelect={() => onChange('automatic')}
-          title={translate(
-            'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
-            'Orca Relay'
-          )}
-          description={
-            relayUnavailable
-              ? translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
-                  'Orca Relay isn’t available in this build. Use LAN.'
-                )
-              : translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
-                  'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
-                )
-          }
-          trailing={
-            relayUnavailable ? (
-              <Badge variant="outline" className="text-[11px]">
-                {translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.unavailable',
-                  'Unavailable'
-                )}
-              </Badge>
-            ) : signedIn && value === 'automatic' ? (
-              <Badge variant="outline" className="text-[11px]">
-                {relayMintRetrying
-                  ? translate(
-                      'auto.components.settings.MobilePairingConnectionOptions.retrying',
-                      'Retrying'
-                    )
-                  : relayMintFailed
-                    ? translate(
-                        'auto.components.settings.MobilePairingConnectionOptions.unavailable',
-                        'Unavailable'
-                      )
-                    : relayStatusLabel(relayStatus)}
-              </Badge>
-            ) : null
-          }
-        />
-        {needsSignIn ? (
-          <div
-            // Why: indent under the Relay radio so Sign in reads as a Relay
-            // sub-step, not a requirement for the whole connection section/LAN.
-            // Deliberately role-less: a `group` here would be an invalid owned
-            // element of the radiogroup, and its label would double-announce the
-            // button it wraps. The plain div contributes nothing to the a11y
-            // tree, leaving the CTA reachable by Tab as an ordinary button.
-            onKeyDown={(event) => {
-              // Why: nested controls live inside the radiogroup for layout; do not
-              // let arrow keys bubble and flip the selected path.
-              if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
-                event.stopPropagation()
-              }
-            }}
-            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-accent/40 py-2.5 pl-10 pr-3"
-            data-testid="anywhere-sign-in-panel"
-          >
-            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-                'Relay only — LAN does not need an account.'
-              )}
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              className="shrink-0"
-              disabled={connecting}
-              onClick={() => {
-                onChange('automatic')
-                void connect()
+        {hideAnywhere ? null : (
+          <>
+            <MobilePairingPathOption
+              selected={value === 'automatic'}
+              tabIndex={value === 'automatic' && !relayDisabled ? 0 : -1}
+              disabled={relayDisabled}
+              positionInSet={1}
+              setSize={2}
+              optionRef={(el) => {
+                optionRefs.current.automatic = el
               }}
-            >
-              {connecting ? <Loader2 className="animate-spin" /> : null}
-              {reconnectRequired
-                ? translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
-                    'Sign in again for Relay'
-                  )
-                : translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.signIn',
-                    'Sign in for Relay'
+              onSelect={() => onChange('automatic')}
+              title={translate(
+                'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
+                'Orca Relay'
+              )}
+              description={
+                relayUnavailable
+                  ? translate(
+                      'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
+                      'Orca Relay isn’t available in this build. Use LAN.'
+                    )
+                  : translate(
+                      'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
+                      'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
+                    )
+              }
+              trailing={
+                relayUnavailable ? (
+                  <Badge variant="outline" className="text-[11px]">
+                    {translate(
+                      'auto.components.settings.MobilePairingConnectionOptions.unavailable',
+                      'Unavailable'
+                    )}
+                  </Badge>
+                ) : signedIn && value === 'automatic' ? (
+                  <Badge variant="outline" className="text-[11px]">
+                    {relayMintRetrying
+                      ? translate(
+                          'auto.components.settings.MobilePairingConnectionOptions.retrying',
+                          'Retrying'
+                        )
+                      : relayMintFailed
+                        ? translate(
+                            'auto.components.settings.MobilePairingConnectionOptions.unavailable',
+                            'Unavailable'
+                          )
+                        : relayStatusLabel(relayStatus)}
+                  </Badge>
+                ) : null
+              }
+            />
+            {needsSignIn ? (
+              <div
+                // Why: indent under the Relay radio so Sign in reads as a Relay
+                // sub-step, not a requirement for the whole connection section/LAN.
+                // Deliberately role-less: a `group` here would be an invalid owned
+                // element of the radiogroup, and its label would double-announce the
+                // button it wraps. The plain div contributes nothing to the a11y
+                // tree, leaving the CTA reachable by Tab as an ordinary button.
+                onKeyDown={(event) => {
+                  // Why: nested controls live inside the radiogroup for layout; do not
+                  // let arrow keys bubble and flip the selected path.
+                  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                    event.stopPropagation()
+                  }
+                }}
+                className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-accent/40 py-2.5 pl-10 pr-3"
+                data-testid="anywhere-sign-in-panel"
+              >
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
+                    'Relay only — LAN does not need an account.'
                   )}
-            </Button>
-          </div>
-        ) : null}
-        {value === 'automatic' && relayCell ? (
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={connecting}
+                  onClick={() => {
+                    onChange('automatic')
+                    void connect()
+                  }}
+                >
+                  {connecting ? <Loader2 className="animate-spin" /> : null}
+                  {reconnectRequired
+                    ? translate(
+                        'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
+                        'Sign in again for Relay'
+                      )
+                    : translate(
+                        'auto.components.settings.MobilePairingConnectionOptions.signIn',
+                        'Sign in for Relay'
+                      )}
+                </Button>
+              </div>
+            ) : null}
+            {value === 'automatic' && relayCell ? (
+              <p
+                className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"
+                data-testid="relay-cell-line"
+              >
+                {translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.relayCell',
+                  'Relay cell'
+                )}
+                {`: ${relayCell}`}
+              </p>
+            ) : null}
+            <div className="border-t border-border" />
+          </>
+        )}
+        {relayUnavailableReason ? (
           <p
-            className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"
-            data-testid="relay-cell-line"
+            className="border-t border-border/60 px-3 py-2 text-xs text-muted-foreground first:border-t-0"
+            data-testid="anywhere-unavailable-reason"
           >
-            {translate(
-              'auto.components.settings.MobilePairingConnectionOptions.relayCell',
-              'Relay cell'
-            )}
-            {`: ${relayCell}`}
+            {relayUnavailableReason}
           </p>
         ) : null}
-        <div className="border-t border-border" />
         <MobilePairingPathOption
           selected={value === 'local-only'}
           tabIndex={value === 'local-only' || relayDisabled ? 0 : -1}
-          positionInSet={2}
-          setSize={2}
+          positionInSet={hideAnywhere ? 1 : 2}
+          setSize={hideAnywhere ? 1 : 2}
           optionRef={(el) => {
             optionRefs.current['local-only'] = el
           }}
