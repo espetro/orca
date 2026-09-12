@@ -17,7 +17,8 @@ const platform = platformIndex !== -1 ? process.argv[platformIndex + 1] : undefi
 
 const WATCHER_BACKEND = {
   'linux-x64': '@parcel/watcher-linux-x64-glibc',
-  'darwin-arm64': '@parcel/watcher-darwin-arm64'
+  'darwin-arm64': '@parcel/watcher-darwin-arm64',
+  'win-x64': '@parcel/watcher-win32-x64'
 }
 
 if (!platform || !WATCHER_BACKEND[platform]) {
