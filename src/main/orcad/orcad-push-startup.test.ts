@@ -104,6 +104,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     async reconcileLegacyWorkerTerminals() {}
     async stopLegacyWorkerTerminalRecovery() {}
     syncWindowGraph() {}
+    setMobilePairingRpcAccessors() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {
