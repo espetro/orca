@@ -113,6 +113,16 @@ is made each time the tunnel starts (`orcad-managed-tunnel-transport.ts`), so no
 recorded per host, and only a host where even the bridge cannot run keeps the relay, recorded as
 `ssh_tunnel_unavailable`.
 
+## Mobile pairing RPC
+
+After `rpc.start()`, orcad wires the runtime's mobile pairing accessor seam
+(`setMobilePairingRpcAccessors`), which is what the `mobile.*` RPC methods resolve their
+pairing surface through; if any call answers "not wired" (`rpc_accessors_unavailable`), that
+setter was skipped. The desktop relay provider is never attached on a headless host, so
+`automatic` connection mode fails closed with `relay_mint_failed` (`relay_provider_unavailable`)
+rather than shipping a LAN-only QR under the Relay label — use `local-only` there. `mobile.hostStatus`
+reports `relayAvailable: false`, which is the honest answer, not a fault.
+
 ## Data root and the instance lock
 
 The data root is `$ORCA_USER_DATA`, else `$XDG_DATA_HOME/Orca`, else `~/.orca`.
