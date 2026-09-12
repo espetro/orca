@@ -54,6 +54,11 @@ function startBuild(mode, options = {}) {
     }
     setInterval(() => {
       if (!existsSync(process.env.NATIVE_BUILD_GATE)) return
+      if (process.env.NATIVE_BUILD_MODE.startsWith('output-closed-')) {
+        const target = process.env.NATIVE_BUILD_MODE.endsWith('stderr') ? process.stderr : process.stdout
+        if (name.includes('computer')) target.write('compiler progress\\n')
+        return
+      }
       if (process.env.NATIVE_BUILD_MODE === 'success') { record('completed'); process.exit(0) }
       if (name.includes('computer')) { record('failed'); process.exit(7) }
     }, 10)
@@ -66,6 +71,12 @@ function startBuild(mode, options = {}) {
         ? [
             '--import',
             `data:text/javascript,${encodeURIComponent(`Object.defineProperty(process, 'platform', { value: '${options.platform}' })`)}`
+          ]
+        : []),
+      ...(options.lateOutputError
+        ? [
+            '--import',
+            `data:text/javascript,${encodeURIComponent(`process.once('beforeExit', () => process.${options.lateOutputError}.emit('error', new Error('late output failure')))`)}`
           ]
         : []),
       buildScript
@@ -165,6 +176,37 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       expect(() => process.kill(pid, 0)).toThrow()
     }
   })
+
+  it.each(['stdout', 'stderr'])(
+    'stops quiet siblings when the %s consumer closes',
+    async (target) => {
+      const build = startBuild(`output-closed-${target}`)
+      await build.ready
+      build.child[target].destroy()
+      build.release()
+
+      const result = await build.closed
+      expect(result).toMatchObject({ code: 1, signal: null })
+      expect(result.stderr).not.toContain('Unhandled')
+      for (const { pid } of build.events().filter(({ event }) => event === 'started')) {
+        expect(() => process.kill(pid, 0)).toThrow()
+      }
+    }
+  )
+
+  it.each(['stdout', 'stderr'])(
+    'fails on a late %s error after successful child exits',
+    async (target) => {
+      const build = startBuild('success', { lateOutputError: target })
+      await build.ready
+      build.release()
+
+      const result = await build.closed
+      expect(result).toMatchObject({ code: 1, signal: null })
+      expect(result.stderr).not.toContain('Unhandled')
+      expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+    }
+  )
 
   it('reports a missing build command without waiting forever', async () => {
     const build = startBuild('success', { missingCli: true })

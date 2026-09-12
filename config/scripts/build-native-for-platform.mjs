@@ -17,11 +17,19 @@ if (process.platform !== 'darwin') {
 const children = new Map()
 let externalSignal = null
 let stopping = false
+let outputFailed = false
 let forceTimer
 const signalHandlers = new Map()
 
 process.on('SIGINT', handlerFor('SIGINT'))
 process.on('SIGTERM', handlerFor('SIGTERM'))
+for (const target of [process.stdout, process.stderr]) {
+  target.on('error', () => {
+    outputFailed = true
+    process.exitCode = 1
+    stopBuilds()
+  })
+}
 
 const exitCodes = await Promise.all(
   ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
@@ -35,7 +43,7 @@ for (const [signal, handler] of signalHandlers) {
 if (externalSignal) {
   process.kill(process.pid, externalSignal)
 } else {
-  process.exitCode = Math.max(...exitCodes)
+  process.exitCode = Math.max(outputFailed ? 1 : 0, ...exitCodes)
 }
 
 function handlerFor(signal) {
@@ -54,7 +62,9 @@ function stopBuilds(signal = 'SIGTERM') {
   }
   stopping = true
   terminateAll(signal)
-  forceTimer ??= setTimeout(() => terminateAll('SIGKILL'), 2_000)
+  if (children.size > 0) {
+    forceTimer ??= setTimeout(() => terminateAll('SIGKILL'), 2_000)
+  }
 }
 
 function terminateAll(signal) {
@@ -113,6 +123,9 @@ function pipePrefixed(stream, label, target) {
   stream.setEncoding('utf8')
   let buffer = ''
   stream.on('data', (chunk) => {
+    if (target.destroyed) {
+      return
+    }
     buffer += chunk
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
@@ -121,7 +134,7 @@ function pipePrefixed(stream, label, target) {
     }
   })
   stream.on('end', () => {
-    if (buffer.length > 0) {
+    if (buffer.length > 0 && !target.destroyed) {
       target.write(`[${label}] ${buffer}\n`)
     }
   })
