@@ -95,6 +95,39 @@ describe('MOBILE_PAIRING_METHODS manifest', () => {
   })
 })
 
+describe('mobile pairing RPC wiring', () => {
+  let server: OrcaRuntimeRpcServer | null = null
+
+  afterEach(async () => {
+    if (server) {
+      await server.stop()
+      server = null
+    }
+  })
+
+  it('delegates createPairingOffer to the server, reusing the pending offer across calls', async () => {
+    // runtime-rpc-pairing.ts uses getOrCreatePendingDevice, so identical args return the
+    // same deviceId until the offer is rotated — the delegation orcad-entry installs must
+    // preserve that reuse semantics.
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    const accessors = ctx.runtime.getMobilePairingRpcAccessors?.()
+    const delegating: MobilePairingRpcAccessors = {
+      ...accessors,
+      createPairingOffer: (args) => server!.createPairingOffer(args)
+    }
+    const first = delegating.createPairingOffer({ name: 'delegate-test' })
+    const second = delegating.createPairingOffer({ name: 'delegate-test' })
+    const direct = ctx.server.createPairingOffer({ name: 'delegate-test' })
+    expect(first.available).toBe(true)
+    expect(direct.available).toBe(true)
+    if (first.available && second.available && direct.available) {
+      expect(second.deviceId).toBe(first.deviceId)
+      expect(direct.deviceId).toBe(first.deviceId)
+    }
+  })
+})
+
 describe('mobile.hostStatus', () => {
   let server: OrcaRuntimeRpcServer | null = null
 
