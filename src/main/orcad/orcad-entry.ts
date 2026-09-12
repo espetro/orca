@@ -241,7 +241,7 @@ async function startOrcadRuntime(
     createPairingOffer: (args) => rpc.createPairingOffer(args),
     getDeviceRegistry: () => rpc.getDeviceRegistry(),
     revokeMobileDevice: (deviceId) => rpc.revokeMobileDevice(deviceId),
-    // Why: headless never attaches the desktop relay; 'automatic' connection mode degrades to local-only.
+    // Why: headless never attaches the desktop relay; 'automatic' fails closed with relay_mint_failed (use local-only).
     isDesktopRelayProviderAttached: () => false,
     encodePairingQr: (pairingUrl) => encodeMobilePairingQr(pairingUrl)
   })
