@@ -168,7 +168,7 @@ ${removed.map((file) => `  - ${file}`).join('\n')}
 // Why pathToFileURL and not a `file://` template: on Windows process.argv[1] is a
 // native path (C:\repo\...) while import.meta.url is file:///C:/repo/..., so the
 // template never matches and the gate would exit 0 without checking anything — a
-// lint gate that fails open. Same idiom as check-max-lines-ratchet.mjs:225.
+// lint gate that fails open. Same idiom as check-ts-nocheck-ratchet.mjs.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main()
 }

@@ -7539,7 +7539,10 @@
           "pairingCodeReady": "Pairing code ready",
           "copyPairingCode": "Copy pairing code",
           "diagnosticsCopied": "Diagnostics copied",
-          "diagnosticsCopyFailed": "Failed to copy diagnostics"
+          "diagnosticsCopyFailed": "Failed to copy diagnostics",
+          "e094c608c3": "Pair from the desktop app",
+          "72c13751b3": "Pair Orca Mobile from the desktop app on this host.",
+          "64181587f2": "Anywhere mode is unavailable on `orca serve` hosts."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -13736,7 +13739,10 @@
           "1b4509a8a1": "paired",
           "c5909374cf": "intro",
           "diagnosticsCopied": "Diagnostics copied",
-          "diagnosticsCopyFailed": "Failed to copy diagnostics"
+          "diagnosticsCopyFailed": "Failed to copy diagnostics",
+          "c736088782": "Pair from the desktop app",
+          "a62011e553": "Pair Orca Mobile from the desktop app on this host.",
+          "48a4dc003b": "Anywhere mode is unavailable on `orca serve` hosts."
         },
         "MobilePageToolbar": {
           "ad2284a9e2": "Close · Esc",
@@ -13746,7 +13752,8 @@
           "e1c7b4a92d": "Configure in Settings > Mobile.",
           "a4f8c2d91e": "Hide from sidebar",
           "b7e3d1c84a": "Show in sidebar",
-          "f3d8e5b71a": "Adds the shortcut back to the sidebar."
+          "f3d8e5b71a": "Adds the shortcut back to the sidebar.",
+          "14bb2d336a": "Pair from the desktop app"
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal session",
