@@ -48,6 +48,7 @@ function makeHost(
     getLiveBrowserTabs: () => new Map(),
     getProviderSessionRows: () => undefined,
     getProviderSessionSnapshot: () => [],
+    getStatusSnapshot: () => [],
     getLeafKey: (tabId, leafId) => `${tabId}:${leafId}`,
     findPty: () => emptyPty,
     getRetainedStatus: () => null,

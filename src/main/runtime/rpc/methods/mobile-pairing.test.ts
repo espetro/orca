@@ -111,7 +111,7 @@ describe('mobile pairing RPC wiring', () => {
     // preserve that reuse semantics.
     const ctx = await createRuntimeWithDevice()
     server = ctx.server
-    const accessors = ctx.runtime.getMobilePairingRpcAccessors?.()
+    const accessors = ctx.accessors
     const delegating: MobilePairingRpcAccessors = {
       ...accessors,
       createPairingOffer: (args) => server!.createPairingOffer(args)
