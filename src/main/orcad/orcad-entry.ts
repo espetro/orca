@@ -155,6 +155,9 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
+  const { getPairingNetworkInterfaces, getDefaultPairingAddress } =
+    await import('../runtime/pairing-network-interfaces')
+  const { encodeMobilePairingQr } = await import('../runtime/mobile-pairing-qr')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -223,6 +226,25 @@ async function startOrcadRuntime(
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
+  // Why: the mobile.* RPC handlers resolve the pairing surface through this seam; unwired, every mobile.* call fails closed.
+  runtime.setMobilePairingRpcAccessors({
+    getWebSocketEndpoint: () => rpc.getWebSocketEndpoint(),
+    // Why: the pairing helper omits `family`; the mobile wire contract requires it.
+    getPairingNetworkInterfaces: async () =>
+      (await getPairingNetworkInterfaces()).map(({ name, address }) => ({
+        name,
+        address,
+        family: address.includes(':') ? ('IPv6' as const) : ('IPv4' as const)
+      })),
+    getDefaultPairingAddress: () => getDefaultPairingAddress(),
+    createMobilePairingOffer: (args) => rpc.createMobilePairingOffer(args),
+    createPairingOffer: (args) => rpc.createPairingOffer(args),
+    getDeviceRegistry: () => rpc.getDeviceRegistry(),
+    revokeMobileDevice: (deviceId) => rpc.revokeMobileDevice(deviceId),
+    // Why: headless never attaches the desktop relay; 'automatic' fails closed with relay_mint_failed (use local-only).
+    isDesktopRelayProviderAttached: () => false,
+    encodePairingQr: (pairingUrl) => encodeMobilePairingQr(pairingUrl)
+  })
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const boundEndpoint = rpc.getWebSocketEndpoint()
@@ -273,6 +295,7 @@ async function startOrcadRuntime(
     readiness,
     stop: async () => {
       try {
+        runtime.setMobilePairingRpcAccessors(null)
         await rpc.stop()
       } finally {
         // Why disconnect and not shut down: the daemon must outlive this process, or an

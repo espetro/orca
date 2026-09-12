@@ -32,6 +32,7 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
+import type { MobilePairingRpcAccessors } from './rpc/methods/mobile-pairing'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -41,25 +42,20 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
-type RpcStateAccessors = {
-  getWebSocketEndpoint(): string | null
-  isDesktopRelayProviderAttached(): boolean
-}
-
 export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
-  private rpcStateAccessors: RpcStateAccessors | null = null
+  private rpcStateAccessors: MobilePairingRpcAccessors | null = null
 
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
 
-  // Why: the RPC server owns the WebSocket listener and the desktop relay provider, so the
-  // runtime exposes them here; absent accessor → hostMode 'serve' / null endpoint (older hosts).
-  setMobilePairingRpcAccessors(accessors: RpcStateAccessors | null): void {
+  // Why: the RPC server owns pairing/relay state, so the runtime exposes it here; absent
+  // accessor → hostMode 'serve' / null endpoint (older hosts).
+  setMobilePairingRpcAccessors(accessors: MobilePairingRpcAccessors | null): void {
     this.rpcStateAccessors = accessors
   }
 
-  getMobilePairingRpcAccessors(): RpcStateAccessors | null {
+  getMobilePairingRpcAccessors(): MobilePairingRpcAccessors | null {
     return this.rpcStateAccessors
   }
 

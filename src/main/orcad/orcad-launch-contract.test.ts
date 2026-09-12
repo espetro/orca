@@ -29,6 +29,18 @@ describe('parseArgs', () => {
   })
 })
 
+describe('mobile pairing RPC wiring', () => {
+  it('wires the mobile.* accessor seam into the runtime after the RPC server starts', async () => {
+    // Why source parity: the seam is runtime state, not an export — a regression back to
+    // unwired accessors is only visible in the boot sequence text itself.
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('./orcad-entry.ts', import.meta.url), 'utf8')
+    expect(source).toContain('setMobilePairingRpcAccessors(')
+    // Headless contract: the desktop relay is never attached, so 'automatic' degrades to local-only.
+    expect(source).toContain('isDesktopRelayProviderAttached: () => false')
+  })
+})
+
 describe('resolveOrcadExitCode', () => {
   it('separates a configuration fault from a generic failure', () => {
     // A supervisor must be able to stop restarting on faults that restarting cannot fix:
