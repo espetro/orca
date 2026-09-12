@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import type { ViteUserConfig } from 'vitest/config'
+import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 
 // Why: default to cpus-1 (win32 keeps a low fixed count) — fine for 32 GB-class dev
 // machines. ORCA_VITEST_WORKERS=<n> (>= 2: Vitest needs a main thread plus a worker)
@@ -9,6 +10,10 @@ import type { ViteUserConfig } from 'vitest/config'
 // Shared options every project must carry: Vitest 4 projects do NOT inherit
 // root-level test options like setupFiles/timeouts/execArgv.
 const sharedTestOptions = {
+  // Why: upstream shard balancing sequences tests by recorded timings; off by default locally.
+  ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+    ? { sequence: { sequencer: TimingSequencer } }
+    : {}),
   // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
   setupFiles: [
     resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
@@ -54,6 +59,7 @@ export default defineConfig({
         resolve: sharedResolve,
         test: {
           ...sharedTestOptions,
+          ...forkedPoolExecArgv,
           name: 'fast',
           environment: 'node',
           // Why: forks, not threads — tests here call process.umask(), which

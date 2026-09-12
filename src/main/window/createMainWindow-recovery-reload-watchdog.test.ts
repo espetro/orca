@@ -86,7 +86,8 @@ describe('renderer recovery reload watchdog', () => {
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
+      send: vi.fn(),
+      executeJavaScript: vi.fn(async () => undefined)
     }
     const browserWindowInstance = {
       webContents,

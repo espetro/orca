@@ -3,7 +3,7 @@
 // The runtime exposes a `getMobilePairingRpcAccessors()` seam that the main process wires up to
 // the live RPC server (so handlers can mint offers / manage devices without back-references).
 import { z } from 'zod'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type {
   MobileHostMode,
@@ -126,7 +126,7 @@ function deriveHostMode(status: { desktopWindowStatus?: string | null }): Mobile
   return status.desktopWindowStatus === 'available' ? 'desktop' : 'serve'
 }
 
-export const MOBILE_PAIRING_METHODS: readonly RpcAnyMethod[] = [
+export const MOBILE_PAIRING_METHODS = [
   defineMethod({
     name: 'mobile.hostStatus',
     params: null,
