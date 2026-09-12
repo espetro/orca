@@ -70,7 +70,12 @@ export type BrowserManagerModuleMock = {
 // re-declaring the shared electron surface.
 export function electronModuleMock(): ElectronModuleMock {
   return {
-    app: { on: vi.fn(), removeListener: vi.fn() },
+    app: {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      // Why: main-window-state-lifecycle reads this to decide idle-GC tiering.
+      commandLine: { getSwitchValue: vi.fn(() => '') }
+    },
     BrowserWindow: browserWindowMock,
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },

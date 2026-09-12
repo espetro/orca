@@ -59,6 +59,7 @@ export default defineConfig({
         resolve: sharedResolve,
         test: {
           ...sharedTestOptions,
+          ...forkedPoolExecArgv,
           name: 'fast',
           environment: 'node',
           // Why: forks, not threads — tests here call process.umask(), which
