@@ -4,6 +4,7 @@
 // the live RPC server (so handlers can mint offers / manage devices without back-references).
 import { z } from 'zod'
 import { defineMethod } from '../core'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../../network-exposure-guidance'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type {
   MobileHostMode,
@@ -41,7 +42,8 @@ const MobileGetRuntimePairingUrlParamsSchema = z
   .object({
     address: z.string().optional(),
     rotate: z.boolean().optional(),
-    reach: z.union([z.literal('this-computer'), z.literal('network')]).optional()
+    reach: z.union([z.literal('this-computer'), z.literal('network')]).optional(),
+    ttlMs: z.number().int().positive().max(2592000000).optional()
   })
   .optional()
 
@@ -96,6 +98,8 @@ export type MobilePairingRpcAccessors = {
     }[]
   } | null
   revokeMobileDevice(deviceId: string): Promise<boolean>
+  // Why: STA-2370 widening seam; absent on hosts wired before it existed → handler no-ops.
+  ensureNetworkExposure?(): Promise<void>
   isDesktopRelayProviderAttached(): boolean
   encodePairingQr(
     pairingUrl: string
@@ -266,11 +270,35 @@ export const MOBILE_PAIRING_METHODS = [
       if (!ip) {
         return { available: false }
       }
-      const offer = accessors.createPairingOffer({
+      // Why: STA-2370 — a LAN offer for a loopback-only listener is a dead link; mirror the IPC path.
+      if ((params?.reach ?? 'network') !== 'this-computer') {
+        try {
+          // Why: absent on older hosts → no-op; the offer is still minted (mixed-version callers).
+          await accessors.ensureNetworkExposure?.()
+        } catch {
+          return {
+            available: false,
+            reason: 'network_exposure_failed',
+            guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+          }
+        }
+      }
+      // Why: ttlMs cast — the registry threads the param in parallel.
+      const offer = (
+        accessors.createPairingOffer as (args: {
+          address?: string | null
+          name?: string
+          rotate?: boolean
+          scope?: 'mobile' | 'runtime'
+          reach?: RuntimePairingReach
+          ttlMs?: number
+        }) => ReturnType<MobilePairingRpcAccessors['createPairingOffer']>
+      )({
         address: ip,
         rotate: params?.rotate,
         scope: 'runtime',
-        reach: params?.reach ?? 'network'
+        reach: params?.reach ?? 'network',
+        ttlMs: params?.ttlMs
       })
       if (!offer.available) {
         return { available: false, reason: offer.reason, guidance: offer.guidance }
