@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
 import { MOBILE_PAIRING_METHODS } from './mobile-pairing'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../../network-exposure-guidance'
 import { buildRegistry } from '../core'
 import type { MobilePairingRpcAccessors } from './mobile-pairing'
 
@@ -417,6 +418,142 @@ describe('mobile.getRuntimePairingUrl', () => {
       deviceToken: ctx.device.token
     })
     expect(reply).toMatchObject({ ok: true, result: { available: false } })
+  })
+
+  function withSuccessfulOffer(accessors: MobilePairingRpcAccessors): void {
+    accessors.getDefaultPairingAddress = async () => '192.168.1.10'
+    accessors.createPairingOffer = (() => ({
+      available: true as const,
+      pairingUrl: 'orca://pair?x=1',
+      endpoint: 'ws://192.168.1.10:9999',
+      deviceId: 'dev1',
+      webClientUrl: null
+    })) as MobilePairingRpcAccessors['createPairingOffer']
+  }
+
+  it.each([
+    ['network', { reach: 'network' as const }],
+    ['absent reach', undefined]
+  ])('widens network exposure before minting (%s)', async (_name, params) => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    withSuccessfulOffer(ctx.accessors)
+    const expose = vi.fn(async () => {})
+    ctx.accessors.ensureNetworkExposure = expose
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'widen',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token,
+      ...(params !== undefined ? { params } : {})
+    })
+    expect(expose).toHaveBeenCalledTimes(1)
+    expect(reply).toMatchObject({
+      ok: true,
+      result: { available: true, pairingUrl: 'orca://pair?x=1' }
+    })
+  })
+
+  it('skips widening for reach this-computer', async () => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    withSuccessfulOffer(ctx.accessors)
+    const expose = vi.fn(async () => {})
+    ctx.accessors.ensureNetworkExposure = expose
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'no_widen',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token,
+      params: { reach: 'this-computer' }
+    })
+    expect(expose).not.toHaveBeenCalled()
+    expect(reply).toMatchObject({ ok: true, result: { available: true } })
+  })
+
+  it('returns network_exposure_failed with guidance when widening throws', async () => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    withSuccessfulOffer(ctx.accessors)
+    ctx.accessors.ensureNetworkExposure = async () => {
+      throw new Error('bind refused')
+    }
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'widen_fail',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token
+    })
+    expect(reply).toMatchObject({
+      ok: true,
+      result: {
+        available: false,
+        reason: 'network_exposure_failed',
+        guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+      }
+    })
+  })
+
+  it('still mints an offer when ensureNetworkExposure is absent (mixed-version host)', async () => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    withSuccessfulOffer(ctx.accessors)
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'no_seam',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token
+    })
+    expect(reply).toMatchObject({
+      ok: true,
+      result: { available: true, pairingUrl: 'orca://pair?x=1' }
+    })
+  })
+
+  it.each([
+    ['negative', { ttlMs: -1 }],
+    ['zero', { ttlMs: 0 }],
+    ['over 30d cap', { ttlMs: 2592000001 }],
+    ['non-integer', { ttlMs: 1.5 }]
+  ])('rejects %s ttlMs', async (_name, params) => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    const reply = await dispatch(ctx.server, {
+      id: 'bad_ttl',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token,
+      params
+    })
+    expect(reply).toMatchObject({ ok: false })
+  })
+
+  it('accepts an absent or valid ttlMs', async () => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    withSuccessfulOffer(ctx.accessors)
+    const offers: unknown[] = []
+    ctx.accessors.createPairingOffer = ((args: { ttlMs?: number }) => {
+      offers.push(args)
+      return {
+        available: true as const,
+        pairingUrl: 'orca://pair?x=1',
+        endpoint: 'ws://192.168.1.10:9999',
+        deviceId: 'dev1',
+        webClientUrl: null
+      }
+    }) as MobilePairingRpcAccessors['createPairingOffer']
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    for (const params of [undefined, { ttlMs: 60000 }]) {
+      await dispatch(ctx.server, {
+        id: 'ttl_ok',
+        method: 'mobile.getRuntimePairingUrl',
+        deviceToken: ctx.device.token,
+        ...(params !== undefined ? { params } : {})
+      })
+    }
+    expect(offers[0]).toMatchObject({ scope: 'runtime' })
+    expect((offers[0] as { ttlMs?: number }).ttlMs).toBeUndefined()
+    expect(offers[1]).toMatchObject({ ttlMs: 60000 })
   })
 })
 
