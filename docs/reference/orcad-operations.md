@@ -57,6 +57,19 @@ setter was skipped. The desktop relay provider is never attached on a headless h
 rather than shipping a LAN-only QR under the Relay label — use `local-only` there. `mobile.hostStatus`
 reports `relayAvailable: false`, which is the honest answer, not a fault.
 
+## Pairing state and offer lifetime
+
+Pairing state lives in `<data-root>/orca-devices.json` alongside the E2EE
+keypair material; clients store their enrolled environments in their own
+`<userData>/orca-environments.json` with mode `0600`. An unclaimed pairing
+offer expires at its TTL if one was set; the default is no expiry, which is a
+standing leak risk, so `orca server link --rotate` is the remediation once a
+URL may have escaped. `--ttl` never affects paired devices: once a client has
+claimed the offer, its session lifetime is governed by `lastSeenAt` exactly as
+before. The loopback-refusal semantics in the bind policy above are unchanged;
+a pinned loopback bind still refuses to mint a network-reachable offer with
+`network_exposure_failed`.
+
 ## Data root and the instance lock
 
 The data root is `$ORCA_USER_DATA`, else `$XDG_DATA_HOME/Orca`, else `~/.orca`.
