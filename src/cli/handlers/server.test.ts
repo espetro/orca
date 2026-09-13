@@ -84,7 +84,7 @@ describe('server link handler', () => {
     await SERVER_HANDLERS['server link']!(
       ctx({
         call,
-        flags: new Map([
+        flags: new Map<string, string | boolean>([
           ['ttl', '24h'],
           ['rotate', true],
           ['reach', 'network']

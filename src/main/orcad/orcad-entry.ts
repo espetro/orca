@@ -309,6 +309,7 @@ async function startOrcadRuntime(
     getDefaultPairingAddress: () => getDefaultPairingAddress(),
     createMobilePairingOffer: (args) => rpc.createMobilePairingOffer(args),
     createPairingOffer: (args) => rpc.createPairingOffer(args),
+    ensureNetworkExposure: () => rpc.ensureNetworkExposure(),
     getDeviceRegistry: () => rpc.getDeviceRegistry(),
     revokeMobileDevice: (deviceId) => rpc.revokeMobileDevice(deviceId),
     // Why: headless never attaches the desktop relay; 'automatic' fails closed with relay_mint_failed (use local-only).

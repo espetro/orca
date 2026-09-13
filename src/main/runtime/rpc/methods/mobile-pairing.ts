@@ -79,6 +79,7 @@ export type MobilePairingRpcAccessors = {
     rotate?: boolean
     scope?: 'mobile' | 'runtime'
     reach?: RuntimePairingReach
+    ttlMs?: number
   }):
     | {
         available: true
@@ -283,17 +284,7 @@ export const MOBILE_PAIRING_METHODS = [
           }
         }
       }
-      // Why: ttlMs cast — the registry threads the param in parallel.
-      const offer = (
-        accessors.createPairingOffer as (args: {
-          address?: string | null
-          name?: string
-          rotate?: boolean
-          scope?: 'mobile' | 'runtime'
-          reach?: RuntimePairingReach
-          ttlMs?: number
-        }) => ReturnType<MobilePairingRpcAccessors['createPairingOffer']>
-      )({
+      const offer = accessors.createPairingOffer({
         address: ip,
         rotate: params?.rotate,
         scope: 'runtime',
