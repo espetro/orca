@@ -159,9 +159,21 @@ rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
 tar -xzf "${TMP_DIR}/${TARBALL}" -C "$STAGING_DIR"
 
+# The tarball wraps everything in a top-level orca-serve-<platform>/ directory; flatten it so
+# the installed tree is orca-serve/{orcad,web,node_modules}, which is what the health check,
+# the next-steps hint and deploy/oxmgr/orcad.oxfile all expect.
+extracted="$(find "$STAGING_DIR" -mindepth 1 -maxdepth 1 -type d -name "orca-serve-*" | head -1)"
+if [ -n "$extracted" ]; then
+  # Dot-delete whatever else is at the top level besides the wrapper (none today, defensive).
+  find "$STAGING_DIR" -mindepth 1 -maxdepth 1 ! -path "$extracted" -exec rm -rf {} +
+  mv "$extracted" "$STAGING_DIR.tmp-flat"
+  rmdir "$STAGING_DIR"
+  mv "$STAGING_DIR.tmp-flat" "$STAGING_DIR"
+fi
+
 # Sanity check the staged tree before swapping. The bundle ships orcad.js
-# (see config/scripts/build-orcad.mjs) next to its entry output.
-[ -f "$STAGING_DIR/orcad.js" ] || fail "staged bundle is missing orcad.js; refusing to swap a broken install."
+# (see config/scripts/build-orcad.mjs) inside the orcad/ directory.
+[ -f "$STAGING_DIR/orcad/orcad.js" ] || fail "staged bundle is missing orcad/orcad.js; refusing to swap a broken install."
 
 cleanup_staging() { rm -rf "$STAGING_DIR"; }
 trap cleanup_staging EXIT
@@ -189,7 +201,7 @@ health_check() {
   local port="$1"
   local log_file pid
   log_file="$(mktemp)"
-  node "${INSTALL_DIR}/orcad.js" --port "$port" --json >"$log_file" 2>&1 &
+  node "${INSTALL_DIR}/orcad/orcad.js" --port "$port" --json >"$log_file" 2>&1 &
   pid=$!
   for _ in $(seq 1 30); do
     if ! kill -0 "$pid" 2>/dev/null; then
@@ -228,5 +240,5 @@ Next steps:
   1. Import the orcad oxmgr config:
        oxmgr import deploy/oxmgr/orcad.oxfile
   2. Start orcad through oxmgr, or manually:
-       node ${INSTALL_DIR}/orcad.js --port <port>
+       node ${INSTALL_DIR}/orcad/orcad.js --port <port>
 EOF
