@@ -34,6 +34,8 @@ export type DeviceEntry = {
   // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
   // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
   pairingReach?: RuntimePairingReach
+  // Why: absent on offers minted without a TTL; paired devices ignore it entirely.
+  expiresAt?: number
   // Why: survives a desktop restart so the host can keep pushing without the phone
   // re-registering. Absent on every registry written before background push existed.
   pushRegistration?: MobilePushRegistration
@@ -77,16 +79,18 @@ export class DeviceRegistry {
   addDevice(
     name: string,
     scope: DeviceScope = 'mobile',
-    pairingReach: RuntimePairingReach = 'network'
+    pairingReach: RuntimePairingReach = 'network',
+    options: { ttlMs?: number } = {}
   ): DeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach)
+    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, options)
   }
 
   private createAndPersistDevice(
     existingDevices: DeviceEntry[],
     name: string,
     scope: DeviceScope,
-    pairingReach: RuntimePairingReach
+    pairingReach: RuntimePairingReach,
+    options: { ttlMs?: number } = {}
   ): DeviceEntry {
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
@@ -95,13 +99,37 @@ export class DeviceRegistry {
       scope,
       pairedAt: Date.now(),
       lastSeenAt: 0,
-      pairingReach
+      pairingReach,
+      // Stamp the deadline at mint time instead of paying a second write.
+      ...(options.ttlMs === undefined ? {} : { expiresAt: Date.now() + options.ttlMs })
     }
-    const nextDevices = [...existingDevices, entry]
+    const nextDevices = this.gcExpiredPending([...existingDevices, entry])
     // Why: a credential is not valid until its durable registry write succeeds.
     this.save(nextDevices)
     this.devices = nextDevices
     return entry
+  }
+
+  // undefined means "no expiry change needed"; otherwise the entry gets expiresAt set or stripped.
+  private pendingExpiry(
+    existing: DeviceEntry,
+    ttlMs: number | undefined
+  ): number | null | undefined {
+    return ttlMs === undefined
+      ? existing.expiresAt === undefined
+        ? undefined
+        : null
+      : Date.now() + ttlMs
+  }
+  private persistUpdatedDevice(existing: DeviceEntry, expiresAt: number | null): DeviceEntry {
+    const { expiresAt: _dropped, ...rest } = existing
+    const updated: DeviceEntry = expiresAt === null ? rest : { ...existing, expiresAt }
+    const nextDevices = this.gcExpiredPending(
+      this.devices.map((device) => (device.deviceId === existing.deviceId ? updated : device))
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return updated
   }
 
   // Why: coalesce repeated QR-regenerate clicks onto a single pending token.
@@ -113,17 +141,23 @@ export class DeviceRegistry {
   getOrCreatePendingDevice(
     name: string,
     scope: DeviceScope = 'mobile',
-    pairingReach: RuntimePairingReach = 'network'
+    pairingReach: RuntimePairingReach = 'network',
+    options: { ttlMs?: number } = {}
   ): DeviceEntry {
     const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
     if (existing) {
+      // Why: re-advertising extends (or clears) the offer's deadline so repeat links stay deterministic.
+      const expiry = this.pendingExpiry(existing, options.ttlMs)
+      if (expiry !== undefined) {
+        return this.persistUpdatedDevice(existing, expiry)
+      }
       // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
       // or a link already handed out for off-host use would stop being served after the next launch.
       return pairingReach === 'network' && existing.pairingReach === 'this-computer'
         ? this.setPairingReach(existing, 'network')
         : existing
     }
-    return this.addDevice(name, scope, pairingReach)
+    return this.addDevice(name, scope, pairingReach, options)
   }
 
   private setPairingReach(existing: DeviceEntry, pairingReach: RuntimePairingReach): DeviceEntry {
@@ -236,7 +270,14 @@ export class DeviceRegistry {
   }
 
   validateToken(token: string): DeviceEntry | null {
-    return this.devices.find((d) => d.token === token) ?? null
+    // Why: only never-scanned offers can lapse; a paired device's token never expires.
+    return (
+      this.devices.find(
+        (d) =>
+          d.token === token &&
+          !(d.lastSeenAt === 0 && d.expiresAt !== undefined && d.expiresAt < Date.now())
+      ) ?? null
+    )
   }
 
   updateLastSeen(deviceId: string): void {
@@ -338,13 +379,22 @@ export class DeviceRegistry {
     }
   }
 
+  // Why: GC before the memory swap too, or an expired offer would stay visible in-process after the write drops it.
+  private gcExpiredPending(devices: DeviceEntry[]): DeviceEntry[] {
+    const now = Date.now()
+    return devices.filter(
+      (d) => d.lastSeenAt !== 0 || d.expiresAt === undefined || d.expiresAt >= now
+    )
+  }
+
   private save(devices: DeviceEntry[]): void {
     if (this.registryUnreadable) {
       throw new Error(
         `Cannot read the device registry at ${this.registryPath}: the read failed. Refusing to overwrite it, which would revoke every paired device.`
       )
     }
-    writeSecureJsonFile(this.registryPath, devices)
+    // GC on write: drop never-scanned offers whose expiry has lapsed.
+    writeSecureJsonFile(this.registryPath, this.gcExpiredPending(devices))
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()
   }
