@@ -47,6 +47,8 @@ for (const [signal, handler] of signalHandlers) {
 if (externalSignal) {
   process.kill(process.pid, externalSignal)
 } else if (firstFailure?.signal) {
+  // Node ignores some signals (SIGPIPE); the build still failed if the re-raise is a no-op.
+  process.exitCode = 1
   process.kill(process.pid, firstFailure.signal)
 } else {
   process.exitCode = firstFailure?.code ?? Math.max(outputFailed ? 1 : 0, ...exitCodes)
@@ -115,7 +117,32 @@ function runPnpmScript(scriptName) {
       }
       stopBuilds()
     })
+    let exited = false
     let closeTimer
+    // A descendant that inherited the pipes must not hold the launcher open forever.
+    const armReap = () => {
+      clearTimeout(closeTimer)
+      // A backpressure pause also delays 'close'; only count time spent actually draining.
+      if (child.stdout.isPaused() || child.stderr.isPaused()) {
+        return
+      }
+      closeTimer = setTimeout(() => {
+        console.error(`[native-build] ${label} left descendants holding its output; reaping them`)
+        try {
+          process.kill(-child.pid, 'SIGKILL')
+        } catch {}
+        child.stdout.destroy()
+        child.stderr.destroy()
+      }, 2_000)
+    }
+    for (const stream of [child.stdout, child.stderr]) {
+      stream.on('pause', () => clearTimeout(closeTimer))
+      stream.on('resume', () => {
+        if (exited) {
+          armReap()
+        }
+      })
+    }
     child.on('exit', (code, signal) => {
       if (code !== 0 || signal) {
         if (!stopping) {
@@ -123,15 +150,8 @@ function runPnpmScript(scriptName) {
         }
         stopBuilds()
       }
-      // A descendant that inherited the pipes must not hold the launcher open forever.
-      closeTimer = setTimeout(() => {
-        console.log(`[native-build] ${label} left descendants holding its output; reaping them`)
-        try {
-          process.kill(-child.pid, 'SIGKILL')
-        } catch {}
-        child.stdout.destroy()
-        child.stderr.destroy()
-      }, 2_000)
+      exited = true
+      armReap()
     })
     // Re-raise the parent's signal only after every child and its output pipes close.
     child.on('close', (code, signal) => {

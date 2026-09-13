@@ -43,7 +43,7 @@ function startBuild(mode, options = {}) {
     import { spawn } from 'node:child_process'
     const name = process.argv.at(-1)
     const delay = name.includes('computer') ? 0 : name.includes('keyboard') ? 200 : 400
-    const record = (event) => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name, event, pid: process.pid }) + '\\n')
+    const record = (event, extra = {}) => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name, event, pid: process.pid, ...extra }) + '\\n')
     const finish = (signal) => { record(signal); process.exit(process.env.NATIVE_BUILD_MODE === 'failure-status' ? 9 : 0) }
     if (process.env.NATIVE_BUILD_MODE !== 'signal-default') process.on('SIGTERM', () => { if (process.env.NATIVE_BUILD_MODE !== 'ignore') setTimeout(() => finish('SIGTERM'), delay) })
     if (process.env.NATIVE_BUILD_MODE !== 'signal-default' || !name.includes('computer')) process.on('SIGINT', () => setTimeout(() => finish('SIGINT'), delay))
@@ -70,9 +70,19 @@ function startBuild(mode, options = {}) {
         return
       }
       if (['success', 'descendant-success'].includes(process.env.NATIVE_BUILD_MODE)) { record('completed'); process.exit(0) }
+      if (process.env.NATIVE_BUILD_MODE === 'stalled-consumer') {
+        if (!name.includes('computer') || existsSync(process.env.NATIVE_BUILD_GATE + '-exit')) { record('completed'); process.exit(0) }
+        if (flooding) return
+        flooding = true
+        // Each callback means the kernel pipe accepted the line, so it survives our exit.
+        const pump = (line) => process.stdout.write('line ' + line + ' ' + 'x'.repeat(190) + '\\n', () => { record('accepted', { line }); pump(line + 1) })
+        pump(1)
+        return
+      }
       if (!name.includes('computer')) return
       record('failed')
       if (process.env.NATIVE_BUILD_MODE === 'failure-signal') process.kill(process.pid, 'SIGALRM')
+      else if (process.env.NATIVE_BUILD_MODE === 'failure-sigpipe') { process.on('SIGPIPE', () => {}); process.removeAllListeners('SIGPIPE'); process.kill(process.pid, 'SIGPIPE') }
       else process.exit(7)
     }, 10)
   `
@@ -143,12 +153,25 @@ function startBuild(mode, options = {}) {
     closed,
     descendants: () => descendantPids,
     release: () => writeFileSync(join(directory, 'release'), ''),
+    releaseExit: () => writeFileSync(join(directory, 'release-exit'), ''),
     events: () =>
       readFileSync(journal, 'utf8')
         .trim()
         .split('\n')
         .filter(Boolean)
         .map((line) => JSON.parse(line))
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function waitFor(condition, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error('timed out waiting for condition')
+    }
+    await sleep(50)
   }
 }
 
@@ -194,6 +217,14 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: null, signal: 'SIGALRM' })
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+  })
+
+  it('fails when the signal that killed a build is one the launcher ignores', async () => {
+    const build = startBuild('failure-sigpipe')
+    await build.ready
+    build.release()
+    expect(await build.closed).toMatchObject({ code: 1, signal: null })
     expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
   })
 
@@ -284,6 +315,36 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       .map(({ bytes }) => bytes)
     expect(buffered.length).toBeGreaterThan(0)
     expect(Math.max(...buffered)).toBeLessThan(1_000_000)
+  })
+
+  it('delivers every compiler line when its own stdout consumer stalls past the reap timeout', async () => {
+    const build = startBuild('stalled-consumer', { reportBuffered: true })
+    await build.ready
+    build.child.stdout.pause()
+    build.release()
+    // Launcher stops reading once its stdout hits the high-water mark; then let the compiler fill its pipe.
+    await waitFor(() =>
+      build.events().some(({ event, bytes }) => event === 'buffered' && bytes >= 16_384)
+    )
+    await sleep(300)
+    build.releaseExit()
+    await waitFor(() => build.events().some(({ event }) => event === 'completed'))
+    const accepted = Math.max(
+      ...build
+        .events()
+        .filter(({ event }) => event === 'accepted')
+        .map(({ line }) => line)
+    )
+    expect(accepted).toBeGreaterThan(0)
+    await sleep(3_000)
+    build.child.stdout.resume()
+
+    const result = await build.closed
+    expect(result).toMatchObject({ code: 0, signal: null })
+    const delivered = [...result.output.matchAll(/^\[computer\] line (\d+) /gm)].map((match) =>
+      Number(match[1])
+    )
+    expect(delivered).toEqual(Array.from({ length: accepted }, (_, index) => index + 1))
   })
 
   it.each(['linux', 'win32'])('keeps the %s entry point out of macOS builds', async (platform) => {
