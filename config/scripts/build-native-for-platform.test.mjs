@@ -44,14 +44,16 @@ function startBuild(mode, options = {}) {
     const name = process.argv.at(-1)
     const delay = name.includes('computer') ? 0 : name.includes('keyboard') ? 200 : 400
     const record = (event) => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name, event, pid: process.pid }) + '\\n')
-    const finish = (signal) => { record(signal); process.exit(0) }
+    const finish = (signal) => { record(signal); process.exit(process.env.NATIVE_BUILD_MODE === 'failure-status' ? 9 : 0) }
     if (process.env.NATIVE_BUILD_MODE !== 'signal-default') process.on('SIGTERM', () => { if (process.env.NATIVE_BUILD_MODE !== 'ignore') setTimeout(() => finish('SIGTERM'), delay) })
     if (process.env.NATIVE_BUILD_MODE !== 'signal-default' || !name.includes('computer')) process.on('SIGINT', () => setTimeout(() => finish('SIGINT'), delay))
+    process.on('SIGHUP', () => setTimeout(() => finish('SIGHUP'), delay))
     record('started')
     process.stdout.write('ready ' + process.pid + '\\n')
-    if (process.env.NATIVE_BUILD_MODE === 'descendant') {
+    if (process.env.NATIVE_BUILD_MODE.startsWith('descendant')) {
       spawn(process.execPath, ['-e', ${JSON.stringify("process.on('SIGTERM', () => {}); console.log('descendant ' + process.pid); setInterval(() => {}, 1000)")}], { stdio: 'inherit' })
     }
+    let flooding = false
     setInterval(() => {
       if (!existsSync(process.env.NATIVE_BUILD_GATE)) return
       if (process.env.NATIVE_BUILD_MODE.startsWith('output-closed-')) {
@@ -59,8 +61,19 @@ function startBuild(mode, options = {}) {
         if (name.includes('computer')) target.write('compiler progress\\n')
         return
       }
-      if (process.env.NATIVE_BUILD_MODE === 'success') { record('completed'); process.exit(0) }
-      if (name.includes('computer')) { record('failed'); process.exit(7) }
+      if (process.env.NATIVE_BUILD_MODE === 'flood') {
+        if (flooding) return
+        flooding = true
+        const chunk = 'f'.repeat(65535) + '\\n'
+        const pump = () => { while (process.stdout.write(chunk)) {} ; process.stdout.once('drain', pump) }
+        pump()
+        return
+      }
+      if (['success', 'descendant-success'].includes(process.env.NATIVE_BUILD_MODE)) { record('completed'); process.exit(0) }
+      if (!name.includes('computer')) return
+      record('failed')
+      if (process.env.NATIVE_BUILD_MODE === 'failure-signal') process.kill(process.pid, 'SIGALRM')
+      else process.exit(7)
     }, 10)
   `
   )
@@ -71,6 +84,12 @@ function startBuild(mode, options = {}) {
         ? [
             '--import',
             `data:text/javascript,${encodeURIComponent(`Object.defineProperty(process, 'platform', { value: '${options.platform}' })`)}`
+          ]
+        : []),
+      ...(options.reportBuffered
+        ? [
+            '--import',
+            `data:text/javascript,${encodeURIComponent(`import { appendFileSync } from 'node:fs'; setInterval(() => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name: 'launcher', event: 'buffered', bytes: process.stdout.writableLength }) + '\\n'), 50).unref()`)}`
           ]
         : []),
       ...(options.lateOutputError
@@ -107,7 +126,7 @@ function startBuild(mode, options = {}) {
     for (const pid of pids) {
       buildPids.add(pid)
     }
-    if (pids.length === 3 && (mode !== 'descendant' || descendantPids.length === 3)) {
+    if (pids.length === 3 && (!mode.startsWith('descendant') || descendantPids.length === 3)) {
       readyResolve()
     }
   })
@@ -143,19 +162,38 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
   })
 
-  it.each(['SIGINT', 'SIGTERM'])('waits for every sibling before re-raising %s', async (signal) => {
-    const build = startBuild('signal')
-    await build.ready
-    build.child.kill(signal)
-    expect(await build.closed).toMatchObject({ code: null, signal })
-    expect(build.events().filter(({ event }) => event === signal)).toHaveLength(3)
-  })
+  it.each(['SIGINT', 'SIGTERM', 'SIGHUP'])(
+    'waits for every sibling before re-raising %s',
+    async (signal) => {
+      const build = startBuild('signal')
+      await build.ready
+      build.child.kill(signal)
+      expect(await build.closed).toMatchObject({ code: null, signal })
+      expect(build.events().filter(({ event }) => event === signal)).toHaveLength(3)
+    }
+  )
 
   it('waits for sibling cancellation when a build fails', async () => {
     const build = startBuild('failure')
     await build.ready
     build.release()
     expect(await build.closed).toMatchObject({ code: 7, signal: null })
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+  })
+
+  it('reports the first failure, not the status of siblings it cancelled', async () => {
+    const build = startBuild('failure-status')
+    await build.ready
+    build.release()
+    expect(await build.closed).toMatchObject({ code: 7, signal: null })
+    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
+  })
+
+  it('re-raises the signal that killed a build', async () => {
+    const build = startBuild('failure-signal')
+    await build.ready
+    build.release()
+    expect(await build.closed).toMatchObject({ code: null, signal: 'SIGALRM' })
     expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(2)
   })
 
@@ -221,6 +259,31 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     for (const pid of build.descendants()) {
       expect(() => process.kill(pid, 0)).toThrow()
     }
+  })
+
+  it("reaps descendants that keep a finished build's pipes open instead of hanging", async () => {
+    const build = startBuild('descendant-success')
+    await build.ready
+    build.release()
+    expect(await build.closed).toMatchObject({ code: 0, signal: null })
+    expect(build.events().filter(({ event }) => event === 'completed')).toHaveLength(3)
+    for (const pid of build.descendants()) {
+      expect(() => process.kill(pid, 0)).toThrow()
+    }
+  })
+
+  it('stops reading compiler output while its own stdout is blocked', async () => {
+    const build = startBuild('flood', { reportBuffered: true })
+    await build.ready
+    build.child.stdout.pause()
+    build.release()
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    const buffered = build
+      .events()
+      .filter(({ event }) => event === 'buffered')
+      .map(({ bytes }) => bytes)
+    expect(buffered.length).toBeGreaterThan(0)
+    expect(Math.max(...buffered)).toBeLessThan(1_000_000)
   })
 
   it.each(['linux', 'win32'])('keeps the %s entry point out of macOS builds', async (platform) => {

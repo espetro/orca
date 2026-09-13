@@ -18,11 +18,15 @@ const children = new Map()
 let externalSignal = null
 let stopping = false
 let outputFailed = false
+// Status of the child whose failure started cancellation; siblings we stop are not failures.
+let firstFailure = null
 let forceTimer
 const signalHandlers = new Map()
 
 process.on('SIGINT', handlerFor('SIGINT'))
 process.on('SIGTERM', handlerFor('SIGTERM'))
+// Own sessions do not see a terminal hangup; forward it so compilers do not outlive the shell.
+process.on('SIGHUP', handlerFor('SIGHUP'))
 for (const target of [process.stdout, process.stderr]) {
   target.on('error', () => {
     outputFailed = true
@@ -42,8 +46,10 @@ for (const [signal, handler] of signalHandlers) {
 }
 if (externalSignal) {
   process.kill(process.pid, externalSignal)
+} else if (firstFailure?.signal) {
+  process.kill(process.pid, firstFailure.signal)
 } else {
-  process.exitCode = Math.max(outputFailed ? 1 : 0, ...exitCodes)
+  process.exitCode = firstFailure?.code ?? Math.max(outputFailed ? 1 : 0, ...exitCodes)
 }
 
 function handlerFor(signal) {
@@ -104,15 +110,32 @@ function runPnpmScript(scriptName) {
     child.on('error', (error) => {
       failed = true
       console.error(`[${label}] ${error.message}`)
+      if (!stopping) {
+        firstFailure = { code: 1, signal: null }
+      }
       stopBuilds()
     })
+    let closeTimer
     child.on('exit', (code, signal) => {
       if (code !== 0 || signal) {
+        if (!stopping) {
+          firstFailure = { code: code ?? 1, signal }
+        }
         stopBuilds()
       }
+      // A descendant that inherited the pipes must not hold the launcher open forever.
+      closeTimer = setTimeout(() => {
+        console.log(`[native-build] ${label} left descendants holding its output; reaping them`)
+        try {
+          process.kill(-child.pid, 'SIGKILL')
+        } catch {}
+        child.stdout.destroy()
+        child.stderr.destroy()
+      }, 2_000)
     })
     // Re-raise the parent's signal only after every child and its output pipes close.
     child.on('close', (code, signal) => {
+      clearTimeout(closeTimer)
       children.delete(child)
       resolve(failed || signal ? 1 : (code ?? 1))
     })
@@ -131,6 +154,16 @@ function pipePrefixed(stream, label, target) {
     buffer = lines.pop() ?? ''
     for (const line of lines) {
       target.write(`[${label}] ${line}\n`)
+    }
+    if (target.writableNeedDrain) {
+      stream.pause()
+      const resume = () => {
+        target.off('drain', resume)
+        target.off('close', resume)
+        stream.resume()
+      }
+      target.once('drain', resume)
+      target.once('close', resume)
     }
   })
   stream.on('end', () => {
