@@ -372,6 +372,85 @@ a file Orca does not own already holds that name (ownership is a marker on the
 second line of the file). A host that really does run the screen reader keeps
 its own `orca`.
 
+## Programmatic pairing
+
+`orca serve` prints its pairing URL once at startup. Two CLI commands cover
+re-pairing and client enrollment against an already-running server without
+restarting the service.
+
+### Minting a fresh pairing URL on the server
+
+`orca server link` asks the local runtime over its RPC port for a fresh
+pairing URL, so it works on a server that has been running for months. It must
+run **on the server machine**, typically over SSH:
+
+```bash
+ssh orca@server orca-ide server link --json
+```
+
+Options:
+
+- `--rotate`: invalidates every previously printed link before minting the new
+  one. This is the leak-response story: if a URL was captured anywhere, rotate.
+- `--ttl <duration>`: bounds the unclaimed offer. See below.
+- `--address <ip>`: override the advertised address for this link only.
+- `--json`: emit a machine-readable object with the `pairingUrl`.
+
+The command never spawns a server. When no daemon runs or pairing is off it
+fails with a stable reason: `disabled_by_operator`, `websocket_unavailable`,
+or `network_exposure_failed`. A host whose runtime predates expiry support
+ignores `--ttl` gracefully rather than failing.
+
+### Enrolling a client
+
+`orca server add <url-or-code> --name <name>` saves the pairing code as a named
+environment on the operator machine. The secret can be supplied four ways:
+
+- as the positional URL or code,
+- with `--pairing-code <code>`,
+- with `--pairing-code-file <path>`,
+- on stdin with `--pairing-code -`.
+
+File and stdin forms exist so provisioning tools never place the secret in
+`argv`, where any local user can read it through `ps`. `orca environment add
+--pairing-code` keeps working and writes to the same store.
+
+A full provisioning flow:
+
+```bash
+# On the server (over SSH): mint a link and write it to a root-only file
+ssh orca@server 'orca-ide server link --json | jq -r .pairingUrl' \
+  > /tmp/pairing-url && chmod 600 /tmp/pairing-url
+
+# On the operator machine: enroll from the staged file
+scp orca@server:/tmp/pairing-url /tmp/pairing-url
+orca server add "$(cat /tmp/pairing-url)" --name rebuild-1 \
+  --pairing-code-file /tmp/pairing-url
+shred -u /tmp/pairing-url
+```
+
+After a machine is rebuilt, seeding its runtime state from your secret store
+(`<userData>/orca-devices.json` plus the E2EE keypair material) restores
+identity; on the client side, named environments live in
+`<userData>/orca-environments.json` with mode `0600`.
+
+### Offer lifetime and rotation
+
+`--ttl` bounds only the **unclaimed** offer, that is, the window before the
+first client connects. Omitting it means no expiry, which is the default.
+Repeating `orca server link --ttl` extends the deadline of the pending offer;
+earlier links to the same offer simply stop working at the old deadline.
+`--rotate` is the stronger action: it invalidates all previously printed links
+and mints a fresh code, so use it whenever a URL may have leaked.
+
+### Never log the pairing URL
+
+`--json` output carries a bearer token and an endpoint. Anything that captures
+stdout can capture it: systemd units with `StandardOutput=journal` will hold
+it in journald indefinitely. Prefer piping straight into `--pairing-code-file`
+or stdin on the consuming side, and rotate immediately after any accidental
+capture. Never send the URL to a log line, an issue, or a chat message.
+
 ## Pairing troubleshooting
 
 - A pairing offer is a capability containing a device credential and E2EE
