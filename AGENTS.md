@@ -76,6 +76,10 @@ A rule that reads what an agent CLI paints on a terminal — readiness, blocked 
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## Cross-instance Host Architecture
+
+Every Orca install is its own host (its own `relayHostId` from its own X25519 keypair), and the mobile races three transports (`lan`, `tailscale`, `relay`) to reach each one. Before changing anything that touches host identity, transport selection, multi-host semantics, or how state is shared across a paired mobile / desktop / `orca serve` deployment, read [`docs/reference/cross-instance-host-architecture.md`](./docs/reference/cross-instance-host-architecture.md). The execution host owns its own worktrees, PTYs, and agent sessions — no other host can read or take over that state, and turning one host off never affects another host's sessions.
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).

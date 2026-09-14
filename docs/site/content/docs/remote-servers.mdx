@@ -110,6 +110,8 @@ That means:
 - reconnecting the client or reopening Orca returns you to the server-owned workspace, tab, and visible-pane state without duplicating paired tabs;
 - projects you delete on the server disappear from every paired client's sidebar (no permanent ghost rows).
 
+The server, your laptop's desktop, and the mobile app are three independent hosts when you connect to all three. Sessions, worktrees, and provider credentials live on the host that owns them — turning off your laptop does not affect work owned by the server, and turning off the server does not affect work owned by the laptop. The mobile picks whichever path is reachable and falls back to the Orca Relay when direct connections fail. See [Cross-instance host architecture](/docs/reference/cross-instance-host-architecture) for the model underneath.
+
 ## Access and security
 
 Orca creates a separate, revocable token for each paired client. The server lists these under **Shared Server Access**.
