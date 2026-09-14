@@ -114,11 +114,18 @@ export async function syncEnvironmentsFromServer(): Promise<StoredWebRuntimeEnvi
   // Why: probe with the active environment when set, otherwise fall back to
   // the most recently used known environment so a stored-but-never-activated
   // environment still hydrates from the server on first run.
+  // Why: a freshly paired environment has lastUsedAt: null until first use, so
+  // the fallback must consider null entries too; otherwise the common
+  // pair-then-reload path would never hydrate server-saved environments.
   const active =
     readStoredWebRuntimeEnvironment() ??
-    [...local.environments]
-      .filter((entry) => typeof entry.lastUsedAt === 'number')
-      .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))[0] ??
+    [...local.environments].sort((a, b) => {
+      const usedAtDiff = (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0)
+      if (usedAtDiff !== 0) {
+        return usedAtDiff
+      }
+      return b.updatedAt - a.updatedAt
+    })[0] ??
     null
   if (!active) {
     return local
