@@ -7,6 +7,11 @@ import { parseWebPairingInput } from '../web-pairing'
 import { WebRuntimeClient } from '../web-runtime-client'
 import { isWebRuntimeUnauthorizedError } from '../web-runtime-client-error'
 import {
+  addEnvironmentOnServer,
+  removeEnvironmentOnServer,
+  syncEnvironmentsFromServer
+} from '../web-environment-sync'
+import {
   createStoredWebRuntimeEnvironment,
   redactStoredWebRuntimeEnvironment
 } from '../web-runtime-environment'
@@ -36,10 +41,19 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
-    list: async () => ({
-      environments: listStoredRuntimeEnvironments().map(redactStoredWebRuntimeEnvironment),
-      activeEnvironmentId: webRuntimeState.activeEnvironment?.id ?? null
-    }),
+    list: async () => {
+      // Why: try the server-backed list first; older orcad builds without
+      // environmentStore.* fall back to the localStorage registry untouched.
+      try {
+        await syncEnvironmentsFromServer()
+      } catch {
+        // fall through to local registry
+      }
+      return {
+        environments: listStoredRuntimeEnvironments().map(redactStoredWebRuntimeEnvironment),
+        activeEnvironmentId: webRuntimeState.activeEnvironment?.id ?? null
+      }
+    },
     addFromPairingCode: async ({ name, pairingCode }) => {
       const offer = parseWebPairingInput(pairingCode)
       if (!offer) {
@@ -51,6 +65,14 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         previousEnvironment: webRuntimeState.activeEnvironment
       })
       upsertStoredRuntimeEnvironment(nextEnvironment)
+      // Why: persist to the server store too so the CLI and other browsers see it.
+      // Best-effort: the local registry already has the entry, so a server failure
+      // must not block pairing.
+      try {
+        await addEnvironmentOnServer({ environment: nextEnvironment, pairingCode })
+      } catch {
+        // keep the locally paired environment usable
+      }
       setActiveRuntimeEnvironment(nextEnvironment.id)
       return { environment: redactStoredWebRuntimeEnvironment(nextEnvironment) }
     },
@@ -148,7 +170,13 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           )
         }
       }
-      upsertStoredRuntimeEnvironment(nextEnvironment)
+      // Why: mirror to the server store when available; the verified pairing code is
+      // exactly what the CLI stores, so both registries converge on the same record.
+      try {
+        await addEnvironmentOnServer({ environment: nextEnvironment, pairingCode })
+      } catch {
+        // the local pairing remains usable
+      }
       setActiveRuntimeEnvironment(nextEnvironment.id)
       getClientForEnvironment(nextEnvironment).statusOwner?.acceptVerified({
         id: 'status.get',
@@ -183,6 +211,11 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         throw new Error(`Unknown Orca runtime environment: ${selector}`)
       }
       removeStoredRuntimeEnvironment(environment.id)
+      try {
+        await removeEnvironmentOnServer(environment.id)
+      } catch {
+        // local removal already applied; server may be older or offline
+      }
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },

@@ -51,9 +51,26 @@ import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-ap
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { setEnvironmentStoreCaller } from './web-environment-sync'
+import { callEnvironmentEnvelope } from './preload-api/web-runtime-calls'
+import { requireActiveEnvironment } from './preload-api/web-runtime-session'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
+  // Why: the sync reuses the app's shared runtime client/queue through this
+  // caller, so probes never open extra sockets or bypass manual disconnects.
+  setEnvironmentStoreCaller(async <TResult>(method, params) => {
+    // Why: callEnvironmentEnvelope treats its first argument as an environment
+    // selector, so pass the active environment's id explicitly. The method name
+    // is never a valid selector and would throw "Unknown Orca runtime
+    // environment" before the RPC is ever queued.
+    const environment = requireActiveEnvironment()
+    const response = await callEnvironmentEnvelope<TResult>(environment.id, method, params, 15_000)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result
+  })
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
   window.electron = createFallbackProxy(['electron']) as Window['electron']

@@ -18,6 +18,7 @@ import {
   saveStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
+import { syncEnvironmentsFromServer } from './web-environment-sync'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 
@@ -95,6 +96,11 @@ function WebRootBoundary(): React.JSX.Element {
     </RecoverableRenderErrorBoundary>
   )
 }
+
+// Why: pull server-side saved servers (added via the CLI) into the local
+// registry before the app renders its environment lists. Best-effort: an
+// older orcad without environmentStore.* keeps the localStorage behavior.
+void syncEnvironmentsFromServer().catch(() => undefined)
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <I18nProvider>
