@@ -41,6 +41,7 @@ import { RUNTIME_CLIENT_CAPABILITY_METHODS } from './runtime-client-capabilities
 import { EMULATOR_METHODS } from './emulator'
 import { PAIRING_METHODS } from './pairing'
 import { MOBILE_PAIRING_METHODS } from './mobile-pairing'
+import { ENVIRONMENT_STORE_METHODS } from './environment-store'
 import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
@@ -98,5 +99,6 @@ export const ALL_RPC_METHODS = [
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
   ...MOBILE_PAIRING_METHODS,
+  ...ENVIRONMENT_STORE_METHODS,
   ...UPDATER_METHODS
 ]

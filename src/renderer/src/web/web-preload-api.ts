@@ -39,7 +39,7 @@ import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-rev
 import { callRuntimeResult } from './preload-api/web-runtime-calls'
 import { createWebRuntimeApi } from './preload-api/web-runtime-api'
 import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environments-api'
-import { webRuntimeState } from './preload-api/web-runtime-session'
+import { requireActiveEnvironmentOrNull, webRuntimeState } from './preload-api/web-runtime-session'
 import { createWebSettingsApi } from './preload-api/web-settings-api'
 import { createShellApi } from './preload-api/web-shell-api'
 import { createWebStarNagApi } from './preload-api/web-star-nag-api'
@@ -51,9 +51,35 @@ import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-ap
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { setEnvironmentStoreCaller } from './web-environment-sync'
+import { callEnvironmentEnvelope } from './preload-api/web-runtime-calls'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
+  // Why: the sync reuses the app's shared runtime client/queue through this
+  // caller, so probes never open extra sockets or bypass manual disconnects.
+  setEnvironmentStoreCaller(async <TResult>(method, params) => {
+    // Why: callEnvironmentEnvelope treats its first argument as an environment
+    // selector, so pass an environment id explicitly. The method name is never
+    // a valid selector and would throw "Unknown Orca runtime environment"
+    // before the RPC is ever queued.
+    // Why: prefer the active environment, but fall back to the most recently
+    // used known environment so server-scoped RPCs work before any environment
+    // is activated (e.g. a fresh browser on the Connect screen).
+    const environment =
+      requireActiveEnvironmentOrNull() ??
+      [...webRuntimeState.environments]
+        .filter((entry) => typeof entry.lastUsedAt === 'number')
+        .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))[0]
+    if (!environment) {
+      throw new Error('Pair this web client with an Orca server first.')
+    }
+    const response = await callEnvironmentEnvelope<TResult>(environment.id, method, params, 15_000)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result
+  })
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
   window.electron = createFallbackProxy(['electron']) as Window['electron']

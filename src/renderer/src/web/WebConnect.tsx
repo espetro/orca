@@ -14,6 +14,13 @@ import {
 } from './web-runtime-environment'
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
+import {
+  addEnvironmentOnServer,
+  getServerPairingOfferCode,
+  markEnvironmentRemovedOnServer,
+  removeEnvironmentOnServer,
+  syncEnvironmentsFromServer
+} from './web-environment-sync'
 import { WebRuntimeClient } from './web-runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { translate } from '@/i18n/i18n'
@@ -100,6 +107,17 @@ export default function WebConnect({
               previousEnvironment: environment
             })
       saveStoredWebRuntimeEnvironment(nextEnvironment)
+      // Why: mirror the pairing to the server store (best-effort) so the CLI and
+      // other browsers see this host. The offer carries the full connection
+      // material, so it re-encodes as a pairing code the store can parse.
+      try {
+        await addEnvironmentOnServer({
+          environment: nextEnvironment,
+          pairingCode: getServerPairingOfferCode(offer)
+        })
+      } catch {
+        // local pairing remains usable
+      }
       onConnected()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -328,6 +346,15 @@ function forgetSaved(environment: StoredWebRuntimeEnvironment): void {
   if (environments.length === state.environments.length) {
     return
   }
+  // Why: mirror the removal to the server store when available; the local
+  // removal is already applied so a server failure must not block the UI.
+  // A failed server remove would let the next sync resurrect the entry, so
+  // tombstone the id until the server list no longer contains it.
+  void removeEnvironmentOnServer(environment.id)
+    .catch(() => markEnvironmentRemovedOnServer(environment.id))
+    .then(() => {
+      void syncEnvironmentsFromServer()
+    })
   if (environments.length === 0) {
     clearStoredWebRuntimeEnvironment()
   } else {

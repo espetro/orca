@@ -18,6 +18,7 @@ import {
   saveStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
+import { syncEnvironmentsFromServer } from './web-environment-sync'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 
@@ -72,6 +73,12 @@ function WebRoot(): React.JSX.Element {
   }
 
   installWebPreloadApi()
+  // Why: the sync must run only after the caller is installed, otherwise the
+  // first-load probe fails with "environment store caller not installed".
+  // Pull server-side saved servers (added via the CLI) into the local registry
+  // before the app renders its environment lists. Best-effort: an older orcad
+  // without environmentStore.* keeps the localStorage behavior.
+  void syncEnvironmentsFromServer().catch(() => undefined)
   return (
     <Suspense fallback={<div className="min-h-dvh bg-background" />}>
       <App />
