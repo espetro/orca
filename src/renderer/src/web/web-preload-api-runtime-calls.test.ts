@@ -16,6 +16,84 @@ describe('web preload runtime calls', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('falls back to the most recently used known environment when none is active', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const environment = {
+      id: 'env-inactive',
+      name: 'Inactive runtime',
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: 500,
+      runtimeId: null,
+      preferredEndpointId: 'ws-env-inactive',
+      endpoints: [
+        {
+          id: 'ws-env-inactive',
+          kind: 'websocket' as const,
+          label: 'WebSocket',
+          endpoint: 'ws://127.0.0.1:1234',
+          deviceToken: 'token',
+          publicKeyB64: 'public-key'
+        }
+      ]
+    }
+    // Stored registry entry with no active environment (Connect-screen state).
+    globals.storage.setItem(
+      'orca.web.runtimeEnvironments.v2',
+      JSON.stringify({ environments: [environment], activeEnvironmentId: null })
+    )
+    const seenSelectors: string[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          seenSelectors.push(method)
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { value: 1 },
+            _meta: { runtimeId: 'rt' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { syncEnvironmentsFromServer } = await import('./web-environment-sync')
+    installWebPreloadApi()
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await expect(syncEnvironmentsFromServer()).resolves.toMatchObject({
+      environments: [{ id: 'env-inactive' }]
+    })
+    warn.mockRestore()
+    expect(seenSelectors.length).toBeGreaterThan(0)
+  })
+
+  it('leaves the sync probe retriable when no environment is known at all', async () => {
+    installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { syncEnvironmentsFromServer, isServerBackedEnvironmentSync, setEnvironmentStoreCaller } =
+      await import('./web-environment-sync')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    installWebPreloadApi()
+    await expect(syncEnvironmentsFromServer()).resolves.toEqual({
+      environments: [],
+      activeEnvironmentId: null
+    })
+    // No environment known: the probe never fires, so serverBacked stays
+    // unresolved (not latched false) and a later list can retry.
+    expect(isServerBackedEnvironmentSync()).toBe(false)
+    let probed = false
+    setEnvironmentStoreCaller((async () => {
+      probed = true
+      throw new Error('should not be called')
+    }) as never)
+    await syncEnvironmentsFromServer()
+    expect(probed).toBe(false)
+    warn.mockRestore()
+  })
+
   it('preserves success and failure envelopes while persisting response runtime metadata', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
