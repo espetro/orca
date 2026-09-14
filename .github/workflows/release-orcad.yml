@@ -95,6 +95,14 @@ jobs:
     if: github.event_name == 'push' || inputs.version_tag != ''
     runs-on: ubuntu-latest
     steps:
+      # Why: gh release create --generate-notes shells out to git for the tag
+      # range, which fails with "not a git repository" without a checkout.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || 'develop' }}
+          fetch-depth: 0
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -108,5 +116,6 @@ jobs:
         run: |
           gh release create "$TAG" \
             --title "$TAG" \
+            --verify-tag \
             --generate-notes \
             artifacts/orca-serve-*.tar.gz artifacts/orca-serve-*.tar.gz.sha256
