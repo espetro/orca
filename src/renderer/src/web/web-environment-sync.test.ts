@@ -135,6 +135,32 @@ describe('web environment sync', () => {
     expect(calls).toEqual(['environmentStore.list'])
   })
 
+  it('probes the server when only a never-used (null lastUsedAt) environment is stored', async () => {
+    // Regression: freshly paired environments have lastUsedAt: null until first
+    // use; the fallback used to filter them out and early-return, so server
+    // hydration never ran on the pair-then-reload path.
+    const globals = installBrowserGlobals()
+    globals.storage.setItem(
+      'orca.web.runtimeEnvironments.v2',
+      JSON.stringify({
+        environments: [serverEnvironment('web-env-1', 'Test runtime')],
+        activeEnvironmentId: null
+      })
+    )
+    const calls: { method: string; params: unknown }[] = []
+    setEnvironmentStoreCaller((async (method: string, params?: unknown) => {
+      calls.push({ method, params })
+      return [serverEnvironment('srv-1', 'CLI server')] as never
+    }) as EnvironmentStoreCaller)
+
+    const synced = await syncEnvironmentsFromServer()
+
+    expect(calls).toEqual([{ method: 'environmentStore.list', params: undefined }])
+    expect(synced.environments.map((entry) => entry.id)).toEqual(['srv-1', 'web-env-1'])
+    expect(isServerBackedEnvironmentSync()).toBe(true)
+    resetEnvironmentSyncProbe()
+  })
+
   it('pushes browser-paired environments to the server store under the server id', async () => {
     const globals = installBrowserGlobals()
     writeStoredRuntimeEnvironment(globals.storage, 'srv-active')
