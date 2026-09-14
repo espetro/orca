@@ -110,8 +110,16 @@ async function callEnvironmentStore<TResult>(
 }
 
 export async function syncEnvironmentsFromServer(): Promise<StoredWebRuntimeEnvironments> {
-  const active = readStoredWebRuntimeEnvironment()
   const local = readStoredWebRuntimeEnvironments()
+  // Why: probe with the active environment when set, otherwise fall back to
+  // the most recently used known environment so a stored-but-never-activated
+  // environment still hydrates from the server on first run.
+  const active =
+    readStoredWebRuntimeEnvironment() ??
+    [...local.environments]
+      .filter((entry) => typeof entry.lastUsedAt === 'number')
+      .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))[0] ??
+    null
   if (!active) {
     return local
   }

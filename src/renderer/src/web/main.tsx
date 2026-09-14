@@ -73,6 +73,12 @@ function WebRoot(): React.JSX.Element {
   }
 
   installWebPreloadApi()
+  // Why: the sync must run only after the caller is installed, otherwise the
+  // first-load probe fails with "environment store caller not installed".
+  // Pull server-side saved servers (added via the CLI) into the local registry
+  // before the app renders its environment lists. Best-effort: an older orcad
+  // without environmentStore.* keeps the localStorage behavior.
+  void syncEnvironmentsFromServer().catch(() => undefined)
   return (
     <Suspense fallback={<div className="min-h-dvh bg-background" />}>
       <App />
@@ -96,11 +102,6 @@ function WebRootBoundary(): React.JSX.Element {
     </RecoverableRenderErrorBoundary>
   )
 }
-
-// Why: pull server-side saved servers (added via the CLI) into the local
-// registry before the app renders its environment lists. Best-effort: an
-// older orcad without environmentStore.* keeps the localStorage behavior.
-void syncEnvironmentsFromServer().catch(() => undefined)
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <I18nProvider>
