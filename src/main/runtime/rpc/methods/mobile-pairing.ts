@@ -8,6 +8,8 @@ import {
   MobileGetRuntimePairingUrlParamsSchema,
   MobileRevokeDeviceParamsSchema
 } from '../../../../shared/mobile-pairing-rpc-contract'
+import { resolveAdvertisedPairingHostname } from '../../pairing-endpoint'
+import { classifyRemotePairingHostname } from '../../../../shared/remote-pairing-address'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../../network-exposure-guidance'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type {
@@ -233,12 +235,24 @@ export const MOBILE_PAIRING_METHODS = [
       if (!accessors) {
         return { available: false, reason: 'rpc_accessors_unavailable' }
       }
-      const ip = params?.address ?? (await accessors.getDefaultPairingAddress())
-      if (!ip) {
+      const reach = params?.reach ?? 'network'
+      // Why: this-computer asks for a loopback offer — resolving a LAN default here mints a
+      // link the loopback listener cannot serve (a dead offer); only a network reach needs
+      // the LAN address.
+      const ip =
+        params?.address ?? (reach === 'network' ? await accessors.getDefaultPairingAddress() : null)
+      if (reach === 'network' && !ip) {
         return { available: false }
       }
       // Why: STA-2370 — a LAN offer for a loopback-only listener is a dead link; mirror the IPC path.
-      if ((params?.reach ?? 'network') !== 'this-computer') {
+      // Skip the widen only when the offer truly advertises loopback: an explicit non-loopback
+      // --address still opts in, and an absent one always resolves to 127.0.0.1.
+      const advertisedHostname = resolveAdvertisedPairingHostname(ip)
+      const thisComputerOnly =
+        reach === 'this-computer' &&
+        (advertisedHostname === null ||
+          classifyRemotePairingHostname(advertisedHostname) === 'loopback')
+      if (!thisComputerOnly) {
         try {
           // Why: absent on older hosts → no-op; the offer is still minted (mixed-version callers).
           await accessors.ensureNetworkExposure?.()
@@ -251,10 +265,10 @@ export const MOBILE_PAIRING_METHODS = [
         }
       }
       const offer = accessors.createPairingOffer({
-        address: ip,
+        address: ip ?? undefined,
         rotate: params?.rotate,
         scope: 'runtime',
-        reach: params?.reach ?? 'network'
+        reach
       })
       if (!offer.available) {
         return { available: false, reason: offer.reason, guidance: offer.guidance }

@@ -425,6 +425,104 @@ describe('mobile.getRuntimePairingUrl', () => {
     })
     expect(reply).toMatchObject({ ok: true, result: { available: false } })
   })
+
+  it('reach=this-computer without --address mints a loopback offer and never widens', async () => {
+    // Regression: the handler used to resolve a LAN default address before checking
+    // reach, so `orca server link --reach this-computer` advertised an IP the
+    // loopback-pinned listener could not serve — a dead offer.
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    let defaultAddressCalls = 0
+    let widenCalls = 0
+    let offerAddress: string | null | undefined
+    ctx.accessors.getDefaultPairingAddress = async () => {
+      defaultAddressCalls += 1
+      return '192.168.1.10'
+    }
+    ctx.accessors.ensureNetworkExposure = async () => {
+      widenCalls += 1
+    }
+    ctx.accessors.createPairingOffer = (args) => {
+      offerAddress = args.address
+      return {
+        available: true as const,
+        pairingUrl: 'pair://loopback',
+        endpoint: 'ws://127.0.0.1:9999',
+        deviceId: 'd-1',
+        webClientUrl: null
+      }
+    }
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'runtime_url_this_computer',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token,
+      params: { reach: 'this-computer' }
+    })
+    expect(reply).toMatchObject({
+      ok: true,
+      result: { available: true, endpoint: 'ws://127.0.0.1:9999' }
+    })
+    expect(defaultAddressCalls).toBe(0)
+    expect(widenCalls).toBe(0)
+    expect(offerAddress).toBeUndefined()
+  })
+
+  it('reach=this-computer with a non-loopback --address still widens before minting', async () => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    let widenCalls = 0
+    ctx.accessors.ensureNetworkExposure = async () => {
+      widenCalls += 1
+    }
+    ctx.accessors.createPairingOffer = () => ({
+      available: true as const,
+      pairingUrl: 'pair://lan',
+      endpoint: 'ws://192.168.1.10:9999',
+      deviceId: 'd-1',
+      webClientUrl: null
+    })
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'runtime_url_this_computer_lan',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token,
+      params: { reach: 'this-computer', address: '192.168.1.10' }
+    })
+    expect(reply).toMatchObject({ ok: true, result: { available: true } })
+    expect(widenCalls).toBe(1)
+  })
+
+  it('reach=network still resolves the LAN default and widens', async () => {
+    const ctx = await createRuntimeWithDevice()
+    server = ctx.server
+    let defaultAddressCalls = 0
+    let widenCalls = 0
+    ctx.accessors.getDefaultPairingAddress = async () => {
+      defaultAddressCalls += 1
+      return '192.168.1.10'
+    }
+    ctx.accessors.ensureNetworkExposure = async () => {
+      widenCalls += 1
+    }
+    ctx.accessors.createPairingOffer = () => ({
+      available: true as const,
+      pairingUrl: 'pair://lan',
+      endpoint: 'ws://192.168.1.10:9999',
+      deviceId: 'd-1',
+      webClientUrl: null
+    })
+    runtime_setAccessors(ctx.runtime, ctx.accessors)
+    const reply = await dispatch(ctx.server, {
+      id: 'runtime_url_network',
+      method: 'mobile.getRuntimePairingUrl',
+      deviceToken: ctx.device.token,
+      params: { reach: 'network' }
+    })
+    expect(reply).toMatchObject({ ok: true, result: { available: true } })
+    expect(defaultAddressCalls).toBe(1)
+    expect(widenCalls).toBe(1)
+  })
 })
 
 describe('mobile-scope rejection', () => {
