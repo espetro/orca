@@ -5,6 +5,7 @@ import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createCompileCacheBanner } from './config/scripts/compile-cache-banner'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import {
   CLI_MAIN_ENTRY_NAMES,
@@ -52,20 +53,17 @@ function isExternalMainModule(source: string): boolean {
 // JSON.stringify below folds to the literal `null`. Ambient declarations
 // for the two constants live in `src/types/build-constants.d.ts`.
 const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
+const envLiteral = (name: string): string => {
+  const value = process.env[name]
+  return typeof value === 'string' && value.length > 0 ? JSON.stringify(value) : 'null'
+}
 const ORCA_BUILD_IDENTITY_LITERAL =
   orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
     ? JSON.stringify(orcaBuildIdentity)
     : 'null'
-const orcaPostHogWriteKey = process.env.ORCA_POSTHOG_WRITE_KEY
-const ORCA_POSTHOG_WRITE_KEY_LITERAL =
-  typeof orcaPostHogWriteKey === 'string' && orcaPostHogWriteKey.length > 0
-    ? JSON.stringify(orcaPostHogWriteKey)
-    : 'null'
-const orcaDiagnosticsTokenUrl = process.env.ORCA_DIAGNOSTICS_TOKEN_URL
-const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
-  typeof orcaDiagnosticsTokenUrl === 'string' && orcaDiagnosticsTokenUrl.length > 0
-    ? JSON.stringify(orcaDiagnosticsTokenUrl)
-    : 'null'
+const ORCA_PRODUCT_NAME_LITERAL = envLiteral('ORCA_PRODUCT_NAME')
+const ORCA_POSTHOG_WRITE_KEY_LITERAL = envLiteral('ORCA_POSTHOG_WRITE_KEY')
+const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL = envLiteral('ORCA_DIAGNOSTICS_TOKEN_URL')
 
 function createStartupDiagnosticsBanner(chunkName: string): string {
   return `
@@ -176,32 +174,6 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
     } catch (error) {
       writeLine('[bootstrap] require-trace-install-error error=' + safeJson(String(error)))
     }
-  }
-})();
-`
-}
-
-function createCompileCacheBanner(): string {
-  // Why here and not in main-process-preflight: module.enableCompileCache() is not
-  // retroactive — by preflight time the entire static import graph of index.ts has
-  // already been evaluated, so nothing of the main process's own startup would be
-  // cached. Prepending to the bundle entry caches the real startup graph.
-  // No-arg call uses Node's default cache dir (per-user, outside userData), so the
-  // later dev/E2E userData redirect cannot misplace it; entries are keyed by chunk
-  // content hash, which is identical across profiles.
-  return `
-;(() => {
-  try {
-    const nodeModule = require('node:module')
-    if (typeof nodeModule.enableCompileCache === 'function') {
-      const result = nodeModule.enableCompileCache()
-      if (result && result.directory && typeof process !== 'undefined' && process.env) {
-        // Why: child processes (daemon, plugin-host, sidecars) inherit env and reuse the cache.
-        process.env.NODE_COMPILE_CACHE = result.directory
-      }
-    }
-  } catch {
-    // A cache-dir failure must never block startup.
   }
 })();
 `
@@ -324,6 +296,7 @@ export const electronViteConfig: UserConfig = {
     // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
+      ORCA_PRODUCT_NAME: ORCA_PRODUCT_NAME_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
     },

@@ -19,10 +19,10 @@ export type DevInstanceIdentity = AppIdentity & {
  * Whether app.setName must be applied before the `ready` event.
  *
  * Why: Electron resolves the macOS safeStorage Keychain service name
- * ("<app name> Safe Storage") before `ready`, so a post-ready setName cannot move it.
- * Dev-only on purpose — a packaged build must keep deriving its key from its own
- * CFBundleName, which downstream forks ship differently ("Orca ALab Edition").
- * Renaming it pre-ready would orphan their encrypted secrets.
+ * ("<app name> Safe Storage", from Browser::GetName()) before `ready`, so a
+ * post-ready setName cannot move it. Dev-only on purpose: a packaged build (incl.
+ * Canary and downstream forks like "Orca ALab Edition") derives its key from its
+ * own CFBundleName; renaming it pre-ready would orphan its encrypted secrets.
  */
 export function shouldApplyPreReadyAppName(identity: Pick<AppIdentity, 'isDev'>): boolean {
   return identity.isDev
@@ -53,6 +53,17 @@ function formatLabel(branch: string | null, worktreeName: string | null): string
   return branch ?? worktreeName
 }
 
+/**
+ * Slug for a baked product variant: "Orca Canary" → "canary".
+ * Must match deriveProductSlug in config/electron-builder.config.cjs (appId suffix).
+ */
+export function productVariantSlug(productName: string): string {
+  return productName
+    .replace(/^Orca\s+/i, '')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+}
+
 function createDevAppUserModelId(identityKey: string | null): string {
   if (!identityKey) {
     return BASE_APP_USER_MODEL_ID
@@ -66,16 +77,26 @@ export function getDevInstanceIdentity(
   env: NodeJS.ProcessEnv = process.env
 ): DevInstanceIdentity {
   if (!isDev) {
+    // A build baked with ORCA_PRODUCT_NAME (e.g. "Orca Canary") is a full variant:
+    // its own name, appName (→ its own "<name> Safe Storage" key) and AUMID, so it
+    // installs and runs beside stable without sharing identity or secrets.
+    const bakedProductName =
+      typeof ORCA_PRODUCT_NAME !== 'undefined'
+        ? ORCA_PRODUCT_NAME
+        : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+    const productName =
+      bakedProductName && bakedProductName !== BASE_APP_NAME ? bakedProductName : BASE_APP_NAME
+    const slug = productName === BASE_APP_NAME ? null : productVariantSlug(productName)
     return {
-      name: BASE_APP_NAME,
-      appName: BASE_APP_NAME,
+      name: productName,
+      appName: productName,
       isDev: false,
       devLabel: null,
       devBranch: null,
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
-      appUserModelId: BASE_APP_USER_MODEL_ID
+      appUserModelId: slug ? `${BASE_APP_USER_MODEL_ID}.${slug}` : BASE_APP_USER_MODEL_ID
     }
   }
 
