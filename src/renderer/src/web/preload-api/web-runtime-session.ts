@@ -76,7 +76,13 @@ export async function observeWebRuntimeStatus(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const existing = webRuntimeState.activeClient?.statusOwner
+  // Why: the snapshot belongs to the ACTIVE client — a selector naming a different
+  // environment must fall through to the transient call instead of answering the
+  // wrong environment's status.
+  const existing =
+    webRuntimeState.activeClientEnvironmentId === environment.id
+      ? webRuntimeState.activeClient?.statusOwner
+      : undefined
   if (existing) {
     return existing.refresh({ timeoutMs, observeOnly: true })
   }
