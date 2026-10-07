@@ -372,7 +372,7 @@ async function main() {
       // empty `<workspaces>/<repo-name>/` container behind. Every run would leak one.
       const worktreePath = seeded.worktreeId.split('::')[1]
       if (removed.status === 0 && worktreePath) {
-        rmSync(dirname(worktreePath), { recursive: true, force: true })
+        rmSync(dirname(worktreePath), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
       }
       if (removed.status !== 0) {
         log(
@@ -397,9 +397,11 @@ async function main() {
         fail(`server did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`)
       }
     }
-    rmSync(userDataDir, { recursive: true, force: true })
+    // Why retries: on Windows the exited child can leave handles (pty host,
+    // sqlite, watchers) releasing a beat later — a single rmSync hits EBUSY.
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     if (seeded?.repoPath) {
-      rmSync(seeded.repoPath, { recursive: true, force: true })
+      rmSync(seeded.repoPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
     }
   }
 
