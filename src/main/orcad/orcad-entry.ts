@@ -281,6 +281,10 @@ async function startOrcadRuntime(
 
   // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
   observedStatusCapture.attach(runtime)
+  // Why before the RPC server binds: like `--serve`, the first client must find a ready graph —
+  // without it every session.tabs.createTerminal throws runtime_unavailable.
+  const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
+  publishHeadlessRuntimeGraph(runtime)
 
   const bindHost = resolveOrcadBindHost(options.bind)
   rpc = new OrcaRuntimeRpcServer({
