@@ -7,6 +7,7 @@ import { NODE_RUNTIME_INCLUDE } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+const vitestWorkerOverride = Number(process.env.ORCA_VITEST_WORKERS ?? '')
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const transforms = {
   define: { ORCA_FEATURE_WALL_ENABLED: 'true' },
@@ -103,6 +104,12 @@ export default defineConfig({
         }
       : {}),
     projects,
-    ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
+    // Why: ORCA_VITEST_WORKERS=<n> pins the pool for machines where the default
+    // oversubscribes or starves other work; win32 keeps its low fixed count.
+    ...(Number.isInteger(vitestWorkerOverride) && vitestWorkerOverride >= 2
+      ? { minWorkers: vitestWorkerOverride, maxWorkers: vitestWorkerOverride }
+      : process.platform === 'win32'
+        ? { maxWorkers: 4 }
+        : {})
   }
 })
