@@ -76,7 +76,9 @@ export function installWebPreloadApi(): void {
     }
     const response = await callEnvironmentEnvelope<TResult>(environment.id, method, params, 15_000)
     if (!response.ok) {
-      throw new Error(response.error.message)
+      // Why keep the code: sync callers classify definitive failures (method_not_found
+      // latches serverBacked=false) by token; the message alone carries none.
+      throw Object.assign(new Error(response.error.message), { code: response.error.code })
     }
     return response.result
   })
