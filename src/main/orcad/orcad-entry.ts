@@ -14,7 +14,12 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
+import {
+  resolveBundledWebClientRoot,
+  resolveOrcadInstallRoot,
+  resolveOrcadPath,
+  resolveUserDataPath
+} from './orcad-app-paths'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import { buildOrcadMobilePairingAccessors } from './orcad-mobile-pairing-accessors'
 import {
@@ -33,8 +38,6 @@ import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
-
-export { parseArgs }
 
 let runOrcadQuitHandlers = (): void => {}
 let closeOrcadObservability = (): void => {}
@@ -348,6 +351,7 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
+    webClientRoot: resolveBundledWebClientRoot(),
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   // Stops first: no RPC may write while the rest of the runtime is torn down.
