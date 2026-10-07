@@ -135,6 +135,29 @@ describe('web environment sync', () => {
     expect(calls).toEqual(['environmentStore.list'])
   })
 
+  it('retries the probe on the next sync after a transient failure', async () => {
+    // Regression: a single failed boot probe used to latch serverBacked=false
+    // for the session, hiding server-saved environments until a full reload.
+    const globals = installBrowserGlobals()
+    writeStoredRuntimeEnvironment(globals.storage)
+    const calls: string[] = []
+    setEnvironmentStoreCaller((async (method: string) => {
+      calls.push(method)
+      throw new Error('runtime_unavailable')
+    }) as EnvironmentStoreCaller)
+    await syncEnvironmentsFromServer()
+
+    setEnvironmentStoreCaller((async (method: string) => {
+      calls.push(method)
+      return [serverEnvironment('srv-env-1', 'Server runtime')]
+    }) as EnvironmentStoreCaller)
+    const synced = await syncEnvironmentsFromServer()
+
+    expect(calls).toEqual(['environmentStore.list', 'environmentStore.list'])
+    expect(isServerBackedEnvironmentSync()).toBe(true)
+    expect(synced.environments.map((entry) => entry.id)).toContain('srv-env-1')
+  })
+
   it('probes the server when only a never-used (null lastUsedAt) environment is stored', async () => {
     // Regression: freshly paired environments have lastUsedAt: null until first
     // use; the fallback used to filter them out and early-return, so server
