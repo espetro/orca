@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   send: vi.fn(async () => ({ ok: true, results: [] }))
 }))
 vi.mock('./orcad-app-paths', () => ({
+  resolveBundledWebClientRoot: () => undefined,
   resolveOrcadInstallRoot: () => state.root,
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
