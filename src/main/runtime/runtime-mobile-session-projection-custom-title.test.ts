@@ -10,6 +10,29 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 const TAB_ID = 'tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+function makeLeaf(overrides: Partial<RuntimeLeafRecord> = {}): RuntimeLeafRecord {
+  return {
+    tabId: TAB_ID,
+    worktreeId: 'repo1::/path/wt1',
+    leafId: LEAF_ID,
+    paneRuntimeId: 1,
+    ptyId: 'pty-1',
+    waitBlockedAt: null,
+    ptyGeneration: 1,
+    connected: true,
+    writable: true,
+    lastOutputAt: null,
+    lastExitCode: null,
+    lastExitCause: null,
+    lastAgentStatus: null,
+    lastAgentStatusObservedLive: false,
+    lastOscTitle: null,
+    lastOscTitleAt: null,
+    paneTitleUpdatedAt: null,
+    ...overrides
+  }
+}
+
 function makeSnapshotTab(
   overrides: Partial<RuntimeMobileSessionTerminalTab> = {}
 ): RuntimeMobileSessionTerminalTab {
@@ -48,11 +71,14 @@ function makeHost(
     getLiveBrowserTabs: () => new Map(),
     getProviderSessionRows: () => undefined,
     getProviderSessionSnapshot: () => [],
+    getStatusSnapshot: () => [],
     getLeafKey: (tabId, leafId) => `${tabId}:${leafId}`,
     findPty: () => emptyPty,
     getRetainedStatus: () => null,
     getTrackedTitle: () => null,
+    getTitleDisplayClear: () => null,
     issuePtyHandle: () => '',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pty record's fields are never read in this projection unit test.
     recordPty: () => ({}) as RuntimePtyWorktreeRecord,
     buildPtyStatus: () => ({}),
     sanitizeGroups: (groups) => groups,
@@ -67,19 +93,19 @@ function project(
   hostOverrides: Partial<RuntimeMobileSessionProjectionHost> = {}
 ): RuntimeMobileSessionTerminalTab[] {
   const result = projectRuntimeMobileSessionTabs(makeSnapshot(tabs), makeHost(hostOverrides))
-  return result.tabs.filter((tab) => tab.type === 'terminal') as RuntimeMobileSessionTerminalTab[]
+  return result.tabs.filter(
+    (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+  )
 }
 
 describe('projectRuntimeMobileSessionTabs customTitle priority', () => {
   it('a persisted customTitle beats a fresh OSC leaf title', () => {
-    const leaf = {
-      ptyId: 'pty-1',
-      connected: true,
+    const leaf = makeLeaf({
       paneTitle: 'Claude working',
       paneTitleUpdatedAt: 10,
       lastOscTitle: 'Claude working',
       lastOscTitleAt: 10
-    } as unknown as RuntimeLeafRecord
+    })
     const projected = project([makeSnapshotTab({ customTitle: 'my rename' })], {
       leaves: new Map([[`${TAB_ID}:${LEAF_ID}`, leaf]])
     })
@@ -96,14 +122,12 @@ describe('projectRuntimeMobileSessionTabs customTitle priority', () => {
 
   it('does not normalize a manual rename that looks like an agent title', () => {
     // A manual rename matching the legacy π shape must survive verbatim.
-    const leaf = {
-      ptyId: 'pty-1',
-      connected: true,
+    const leaf = makeLeaf({
       paneTitle: 'π > session - repo',
       paneTitleUpdatedAt: 10,
       lastOscTitle: 'π > session - repo',
       lastOscTitleAt: 10
-    } as unknown as RuntimeLeafRecord
+    })
     const projected = project([makeSnapshotTab({ customTitle: 'π > session - repo' })], {
       leaves: new Map([[`${TAB_ID}:${LEAF_ID}`, leaf]])
     })
@@ -112,14 +136,12 @@ describe('projectRuntimeMobileSessionTabs customTitle priority', () => {
   })
 
   it('without customTitle, the OSC leaf title still wins', () => {
-    const leaf = {
-      ptyId: 'pty-1',
-      connected: true,
+    const leaf = makeLeaf({
       paneTitle: 'Claude working',
       paneTitleUpdatedAt: 10,
       lastOscTitle: 'Claude working',
       lastOscTitleAt: 10
-    } as unknown as RuntimeLeafRecord
+    })
     const projected = project([makeSnapshotTab()], {
       leaves: new Map([[`${TAB_ID}:${LEAF_ID}`, leaf]])
     })

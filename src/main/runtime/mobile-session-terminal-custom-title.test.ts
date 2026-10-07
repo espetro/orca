@@ -21,8 +21,12 @@ function makePersistedTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
 
 function makeSession(tabs: TerminalTab[]): WorkspaceSessionState {
   return {
-    tabsByWorktree: { 'repo1::/path/wt1': tabs }
-  } as unknown as WorkspaceSessionState
+    activeRepoId: null,
+    activeWorktreeId: null,
+    activeTabId: null,
+    tabsByWorktree: { 'repo1::/path/wt1': tabs },
+    terminalLayoutsByTabId: {}
+  }
 }
 
 describe('buildHeadlessMobileSessionTerminalTabs customTitle', () => {
