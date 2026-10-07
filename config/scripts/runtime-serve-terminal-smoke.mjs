@@ -397,11 +397,19 @@ async function main() {
         fail(`server did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`)
       }
     }
-    // Why retries: on Windows the exited child can leave handles (pty host,
-    // sqlite, watchers) releasing a beat later — a single rmSync hits EBUSY.
-    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
+    // Why retries + non-fatal: on Windows the exited child can leave handles
+    // (pty host, sqlite, watchers, daemon grandchildren) releasing seconds later,
+    // and rmSync EBUSY shouldn't fail a smoke whose assertions already passed.
+    const cleanupDir = (dir) => {
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+      } catch (err) {
+        log(`WARN: could not remove ${dir}: ${err.code || err.message}`)
+      }
+    }
+    cleanupDir(userDataDir)
     if (seeded?.repoPath) {
-      rmSync(seeded.repoPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
+      cleanupDir(seeded.repoPath)
     }
   }
 
