@@ -11,13 +11,13 @@ import {
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import {
   codexRunningOrOpeningTurn,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import {
+  codexAnsweredTurn,
   codexDispatchRejection,
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
@@ -61,6 +61,8 @@ export type CodexTurnHost = {
   catalogAccess?: CodexSessionCatalogAccess
   dispatchEchoes: CodexDispatchEchoes
   activeTurnIds?: ReadonlySet<string>
+  /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
+  abortedTurnIds?: ReadonlySet<string>
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
@@ -154,11 +156,15 @@ export async function startCodexTurn(
   if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
   }
+  // A turn whose interrupt Codex answered has aborted, though its end may still be on the wire:
+  // the send opens its own turn.
+  const steerable = (turnId: string | null | undefined): turnId is string =>
+    typeof turnId === 'string' && turnId !== '' && !host.abortedTurnIds?.has(turnId)
   const runningTurnId = await codexRunningOrOpeningTurn(host)
-  let steered = runningTurnId ? await steerCodexTurn(host, runningTurnId, input) : null
+  let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
   // Refused because a turn Orca heard of meanwhile is running: steer that one, once.
   const runningSince = steered ? undefined : [...(host.activeTurnIds ?? [])].at(-1)
-  if (runningSince && runningSince !== runningTurnId) {
+  if (steerable(runningSince) && runningSince !== runningTurnId) {
     steered = await steerCodexTurn(host, runningSince, input)
   }
   if (steered) {
@@ -228,10 +234,7 @@ export async function dispatchCodexTurn(
   return rejection && answer.turnId
     ? {
         state: 'rejected',
-        answeredInTurn: {
-          turn: codexTurnLifecycleIdentity(input.sessionId, answer.turnId),
-          via: answer.via
-        },
+        ...codexAnsweredTurn(session, input.sessionId, answer.turnId, answer.via),
         ...rejection
       }
     : { state: 'admitted' }

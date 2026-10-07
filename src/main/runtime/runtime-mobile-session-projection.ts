@@ -179,11 +179,17 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
-    const title = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
-      ownerAgent,
-      ownerOptions
-    )
+    // Why: a persisted manual rename outranks every OSC/agent observation; without
+    // this the fresh leaf title masks the rename after a browser reload (#serve).
+    // Raw, never normalized — the user typed exactly this.
+    const persistedCustomTitle = tab.customTitle ?? syncedTab?.customTitle ?? null
+    const title =
+      persistedCustomTitle ??
+      normalizeCompatibleAgentTitleForOwner(
+        trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+        ownerAgent,
+        ownerOptions
+      )
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =
@@ -256,17 +262,14 @@ export function projectRuntimeMobileSessionTabs(
           }
         : null
     // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
-    const terminalHandle = liveLeafPtyId
-      ? host.issuePtyHandle(
-          host.recordPty(liveLeafPtyId, snapshot.worktree, {
-            tabId: tab.parentTabId,
-            paneKey,
-            connected: true
-          })
-        )
+    const terminalPty = liveLeafPtyId
+      ? host.recordPty(liveLeafPtyId, snapshot.worktree, {
+          tabId: tab.parentTabId,
+          paneKey,
+          connected: true
+        })
       : livePty
-        ? host.issuePtyHandle(livePty)
-        : null
+    const terminalHandle = terminalPty ? host.issuePtyHandle(terminalPty) : null
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
@@ -299,6 +302,9 @@ export function projectRuntimeMobileSessionTabs(
       leafId: tab.leafId,
       title,
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
+      // Bind identity to the handle's live owner, never a stale persisted surface.
+      ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
+      ...(persistedCustomTitle ? { customTitle: persistedCustomTitle } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,

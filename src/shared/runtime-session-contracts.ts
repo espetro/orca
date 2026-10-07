@@ -79,7 +79,8 @@ export type RuntimeStatus = {
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number
   }
-  /** True only when this Windows host can prove process creation times for PID ownership. */
+  /** True only when this Windows host can read process creation times. TEMPORARY: read only by
+   *  older clients, which keep re-probing WSL until it is true; remove after their window. */
   windowsProcessStartTimeAvailable?: boolean
   /**
    * Optional for mixed-version peers. Absence means the host predates structured
@@ -136,6 +137,8 @@ export type RuntimeSyncedTab = {
   tabId: string
   worktreeId: string
   title: string | null
+  /** Persisted manual rename mirrored into the graph sync (optional for wire compat). */
+  customTitle?: string | null
   activeLeafId: string | null
   layout: TerminalPaneLayoutNode | null
 }

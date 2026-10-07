@@ -34,6 +34,7 @@ import {
 } from './codex-structured-provider-events'
 import {
   codexDispatchRejection,
+  noteCodexTurnOpened,
   settleCodexSendsInEndedTurn
 } from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
@@ -79,8 +80,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
   }
 
-  supportsLocation = (location: Parameters<typeof supportsCodexStructuredLocation>[0]): boolean =>
-    supportsCodexStructuredLocation(location, this.deps.isWindowsProcessStartTimeAvailable)
+  supportsLocation = supportsCodexStructuredLocation
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
@@ -125,6 +125,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (event.type === 'notification' && !session.backgroundTasks.canObserve(event)) {
       return { accepted: false, reason: 'failed' }
     }
+    if (event.type === 'notification') {
+      noteCodexTurnOpened(session, event.method, event.params)
+    }
     const admission = session.translator?.handle(event) ?? { accepted: true }
     if (!admission.accepted) {
       return admission
@@ -167,6 +170,17 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
    *  owner of "what runs", and this stays only so tests can hold the two rule sets side by side. */
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
+
+  // `ended` is set in the same turn as the connection's own exit report.
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return (
+      session?.acquisitionGeneration === acquisitionGeneration &&
+      session.connection.pid !== undefined &&
+      !session.ended &&
+      session.exitObservedAt === undefined
+    )
+  }
 
   // Codex exposes no honest stop for a child thread or a persistent command.
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (

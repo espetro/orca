@@ -1,4 +1,3 @@
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type {
@@ -125,6 +124,10 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
+    false
+
   stopEndsSession = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
 
@@ -159,8 +162,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   awaitOptionWritable = (sessionId: string): Promise<void> =>
     this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
-  awaitStarted = (sessionId: string): Promise<void | SubmissionRejectionFact> =>
-    this.liveOwnerOrNull(sessionId)?.awaitStarted?.(sessionId) ?? Promise.resolve()
+  startAnswered = (sessionId: string): boolean | undefined =>
+    this.liveOwnerOrNull(sessionId)?.startAnswered?.(sessionId)
 
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)
