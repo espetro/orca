@@ -118,4 +118,5 @@ jobs:
             --title "$TAG" \
             --verify-tag \
             --generate-notes \
-            artifacts/orca-serve-*.tar.gz artifacts/orca-serve-*.tar.gz.sha256
+            artifacts/orca-serve-*.tar.gz artifacts/orca-serve-*.tar.gz.sha256 \
+            config/scripts/install-orcad.sh
