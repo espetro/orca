@@ -67,7 +67,7 @@ jobs:
         run: node config/scripts/assemble-orcad-release.mjs --platform ${{ matrix.platform }}
 
       - name: Smoke boot orcad
-        run: node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad
+        run: node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad --entry dist/orca-serve-${{ matrix.platform }}/orcad/orcad.js
 
       - name: Create tarball
         shell: bash

@@ -173,10 +173,15 @@ function resolveLaunch(userDataDir) {
   const target =
     flagIndex !== -1 ? process.argv[flagIndex + 1] : (process.env.ORCA_SMOKE_TARGET ?? 'electron')
   if (target === 'orcad') {
+    // Why --entry: the release workflow must smoke the ASSEMBLED artifact, not the
+    // build output — an incomplete dist tree (missing runtimes/) only fails here.
+    const entryIndex = process.argv.indexOf('--entry')
+    const entry =
+      entryIndex !== -1 ? resolve(process.argv[entryIndex + 1]) : ORCAD_ENTRY
     return {
-      label: `orcad (${ORCAD_ENTRY})`,
+      label: `orcad (${entry})`,
       command: process.execPath,
-      args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
+      args: [entry, '--port', String(PORT), '--json'],
       env: { ORCA_USER_DATA: userDataDir }
     }
   }

@@ -47,15 +47,22 @@ mkdirSync(outDir, { recursive: true })
 
 const orcadOut = join(repoRoot, 'out', 'orcad')
 const webOut = join(repoRoot, 'out', 'web')
+const runtimesOut = join(repoRoot, 'out', 'runtimes')
 if (!existsSync(orcadOut)) {
   throw new Error(`missing build output: ${orcadOut}`)
 }
 if (!existsSync(webOut)) {
   throw new Error(`missing build output: ${webOut}`)
 }
+// The slot's .runtime-node marker names a pinned Node under ../runtimes — without
+// it every packaged boot fails with "bundled Orca runtime is missing".
+if (!existsSync(runtimesOut)) {
+  throw new Error(`missing build output: ${runtimesOut}`)
+}
 
 copyDir(orcadOut, join(outDir, 'orcad'))
 copyDir(webOut, join(outDir, 'web'))
+copyDir(runtimesOut, join(outDir, 'runtimes'))
 
 const packages = [
   'node-pty',
