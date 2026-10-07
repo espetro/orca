@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const clientInstances: { close: ReturnType<typeof vi.fn> }[] = []
+let clientConstructorFailure: Error | null = null
 
 vi.mock('../web-runtime-client', () => ({
   WebRuntimeClient: class {
     close = vi.fn()
     constructor() {
+      if (clientConstructorFailure) {
+        throw clientConstructorFailure
+      }
       clientInstances.push({ close: this.close })
     }
   }
@@ -71,6 +75,7 @@ function seedRegistry(
 beforeEach(() => {
   vi.resetModules()
   clientInstances.length = 0
+  clientConstructorFailure = null
   vi.mocked(readStoredWebRuntimeEnvironments).mockReturnValue({
     environments: [],
     activeEnvironmentId: null
@@ -302,5 +307,62 @@ describe('web runtime session registry', () => {
     expect(clientInstances[0].close).toHaveBeenCalledTimes(1)
     expect(session.webRuntimeState.activeClient).toBeNull()
     expect(session.listStoredRuntimeEnvironments()).toHaveLength(1)
+  })
+
+  it('rehydrateRuntimeEnvironmentsFromRegistry mirrors a storage merge into memory', async () => {
+    const a = makeEnvironment('web-a')
+    const merged = makeEnvironment('srv-merged')
+    seedRegistry([a], 'web-a')
+    const session = await loadSession()
+    // Simulate the server-sync merge writing localStorage directly.
+    vi.mocked(readStoredWebRuntimeEnvironments).mockReturnValue({
+      environments: [a, merged],
+      activeEnvironmentId: 'web-a'
+    })
+    session.rehydrateRuntimeEnvironmentsFromRegistry()
+    expect(session.listStoredRuntimeEnvironments().map((env) => env.id)).toEqual([
+      'web-a',
+      'srv-merged'
+    ])
+    expect(session.webRuntimeState.environmentById.get('srv-merged')).toBe(merged)
+    expect(session.webRuntimeState.activeEnvironment?.id).toBe('web-a')
+  })
+
+  it('rebuilds the client when the cached status owner was disposed', async () => {
+    const a = makeEnvironment('web-a')
+    seedRegistry([a], 'web-a')
+    const session = await loadSession()
+    session.getClientForEnvironment(a)
+    expect(clientInstances).toHaveLength(1)
+    // A disposed status owner latches "disconnected or replaced" forever — the registry
+    // must rebuild instead of serving it. (Status owner shape cast: the mock client has
+    // no real owner; we inject a retired snapshot reader.)
+    const cached = session.webRuntimeState.activeClient as unknown as {
+      statusOwner: { read: () => { retired: true } }
+    }
+    cached.statusOwner = { read: () => ({ retired: true }) }
+
+    session.getClientForEnvironment(a)
+
+    expect(clientInstances).toHaveLength(2)
+    expect(clientInstances[0].close).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the cached client slot when construction throws', async () => {
+    const a = makeEnvironment('web-a')
+    const b = makeEnvironment('web-b')
+    seedRegistry([a, b], 'web-a')
+    const session = await loadSession()
+    session.getClientForEnvironment(a)
+    expect(clientInstances).toHaveLength(1)
+    clientConstructorFailure = new Error('malformed endpoint')
+
+    expect(() => session.getClientForEnvironment(b)).toThrow('malformed endpoint')
+
+    // The closed web-a client must not stay latched as activeClient — the next call
+    // retries a fresh construct instead of serving the disposed latch forever.
+    expect(session.webRuntimeState.activeClient).toBeNull()
+    expect(session.webRuntimeState.activeClientEnvironmentId).toBeNull()
+    expect(clientInstances[0].close).toHaveBeenCalledTimes(1)
   })
 })

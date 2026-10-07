@@ -116,9 +116,18 @@ export function getClientForEnvironment(
   }
   if (
     !webRuntimeState.activeClient ||
-    webRuntimeState.activeClientEnvironmentId !== environment.id
+    webRuntimeState.activeClientEnvironmentId !== environment.id ||
+    // Why: a client whose status owner was disposed only ever answers "disconnected or
+    // replaced" — a retired owner must be rebuilt, not served from the latch forever.
+    webRuntimeState.activeClient.statusOwner?.read().retired === true
   ) {
-    webRuntimeState.activeClient?.close()
+    // Why: clear the cache slot before constructing — a throw inside getPreferredWebPairingOffer
+    // or the WebRuntimeClient constructor must not leave the closed client cached as this
+    // environment's owner (it would then answer every status.get with the disposed latch).
+    const previous = webRuntimeState.activeClient
+    webRuntimeState.activeClient = null
+    webRuntimeState.activeClientEnvironmentId = null
+    previous?.close()
     webRuntimeState.activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
       status: {
         environmentId: environment.id,
@@ -294,6 +303,17 @@ function restoreActiveFromRegistry(): void {
   webRuntimeState.activeEnvironment = stored.activeEnvironmentId
     ? (stored.environments.find((env) => env.id === stored.activeEnvironmentId) ?? null)
     : null
+}
+
+// Why: server-synced merges write localStorage without touching this module's state —
+// rehydrate so list()/resolveEnvironment see merged envs in-session instead of after a
+// reload, and so the next persist from memory does not clobber them back out of storage.
+export function rehydrateRuntimeEnvironmentsFromRegistry(): void {
+  const stored = readStoredWebRuntimeEnvironments()
+  webRuntimeState.environments = stored.environments
+  webRuntimeState.environmentById = new Map(stored.environments.map((env) => [env.id, env]))
+  const activeId = webRuntimeState.activeEnvironment?.id ?? stored.activeEnvironmentId
+  webRuntimeState.activeEnvironment = stored.environments.find((env) => env.id === activeId) ?? null
 }
 
 export function assertActiveEnvironment(environmentId: string): void {
