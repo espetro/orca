@@ -15,7 +15,9 @@ const LOCAL_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
 const NO_LAYOUTS: Record<string, TerminalLayoutSnapshot> = {}
 
 function makeSnapshot(
-  surfaceOverrides: Partial<RuntimeMobileSessionTerminalClientTab> = {}
+  surfaceOverrides: Partial<
+    Pick<RuntimeMobileSessionTerminalClientTab, 'customTitle' | 'title'>
+  > = {}
 ): RuntimeMobileSessionTabsResult {
   return {
     worktree: WT,

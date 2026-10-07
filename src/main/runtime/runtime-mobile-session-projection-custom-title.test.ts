@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type {
+  RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
@@ -29,6 +30,15 @@ function makeLeaf(overrides: Partial<RuntimeLeafRecord> = {}): RuntimeLeafRecord
     lastOscTitle: null,
     lastOscTitleAt: null,
     paneTitleUpdatedAt: null,
+    tailBuffer: [],
+    tailTranscriptBuffer: [],
+    tailTranscriptChars: 0,
+    tailPartialLine: '',
+    tailPendingAnsi: '',
+    tailRedrawCursor: null,
+    tailTruncated: false,
+    tailLinesTotal: 0,
+    preview: '',
     ...overrides
   }
 }
@@ -91,10 +101,10 @@ function makeHost(
 function project(
   tabs: RuntimeMobileSessionTerminalTab[],
   hostOverrides: Partial<RuntimeMobileSessionProjectionHost> = {}
-): RuntimeMobileSessionTerminalTab[] {
+): RuntimeMobileSessionTerminalClientTab[] {
   const result = projectRuntimeMobileSessionTabs(makeSnapshot(tabs), makeHost(hostOverrides))
   return result.tabs.filter(
-    (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    (tab): tab is RuntimeMobileSessionTerminalClientTab => tab.type === 'terminal'
   )
 }
 

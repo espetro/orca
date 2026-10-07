@@ -3,6 +3,7 @@
   "include": [
     "../electron.vite.config.*",
     "./vitest.config.ts",
+    "./scripts/compile-cache-banner.ts",
     "./build-plugins/**/*",
     "./scripts/vitest-host-ports-setup.ts",
     "./scripts/vitest-caller-identity-env-setup.ts",

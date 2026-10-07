@@ -39,8 +39,10 @@ import {
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
 
-let runOrcadQuitHandlers = (): void => {}
-let closeOrcadObservability = (): void => {}
+export { parseArgs }
+
+let runOrcadQuitHandlers = (): void => {},
+  closeOrcadObservability = (): void => {}
 
 function createNodeAppEnvironment(): AppEnvironment {
   const quitHandlers: (() => void)[] = []

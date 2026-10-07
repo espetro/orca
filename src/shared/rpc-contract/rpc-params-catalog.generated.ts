@@ -788,6 +788,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
+  'environmentStore.list': null,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1251,6 +1252,8 @@ export const RPC_PARAMS_BY_METHOD = {
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
+  'environmentStore.add',
+  'environmentStore.remove',
   'orchestration.send',
   'orchestration.taskUpdate'
 ]
