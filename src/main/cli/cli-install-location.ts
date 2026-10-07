@@ -22,7 +22,7 @@ import {
   splitPathEntries,
   uniquePathEntries
 } from './cli-install-path-format'
-import { productVariantSlug } from '../startup/dev-instance-identity'
+import { productVariantSlug, resolveBakedProductName } from '../startup/dev-instance-identity'
 import { runMacPrivilegedCommand, writeWindowsUserPath } from './cli-privileged-processes'
 import {
   invalidateWindowsUserPathRegistryCache,
@@ -70,10 +70,7 @@ export abstract class CliInstallLocation {
       return LINUX_CLI_COMMAND_NAME
     }
     // A baked product variant ("Orca Canary") gets its own command so both CLIs coexist.
-    const bakedProductName =
-      typeof ORCA_PRODUCT_NAME !== 'undefined'
-        ? ORCA_PRODUCT_NAME
-        : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+    const bakedProductName = resolveBakedProductName()
     if (bakedProductName && bakedProductName !== 'Orca') {
       return `orca-${productVariantSlug(bakedProductName)}`
     }

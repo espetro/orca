@@ -31,10 +31,12 @@ afterAll(() => {
 
 /** Read the `app.*` termination statement from a pre-ready gate in the shipped entrypoint. */
 function readPreReadyTermination(gate: string): string {
-  const source = readFileSync(
-    join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-    'utf8'
-  )
+  const source = [
+    'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/main-process-instance-admission.ts'
+  ]
+    .map((file) => readFileSync(join(process.cwd(), file), 'utf8'))
+    .join('\n')
   const start = source.indexOf(gate)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf('\n  }', start)

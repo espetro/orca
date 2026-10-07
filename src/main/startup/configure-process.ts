@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
+import { resolveBakedProductName } from './dev-instance-identity'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
@@ -12,11 +13,9 @@ import {
   readPersistedHttp1CompatibilityMode
 } from './http1-compatibility-profile-state'
 
-const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
-let devParentShutdownRequested = false
 
 type NetworkCompatibilityOptions = {
   env?: NodeJS.ProcessEnv
@@ -96,26 +95,6 @@ function appendDisabledChromiumFeatures(features: string[]): void {
 
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
-}
-
-function requestDevParentShutdown(): void {
-  devParentShutdownRequested = true
-  app.quit()
-
-  const forceExitTimer = setTimeout(() => {
-    // Why: app.quit() may stall on macOS quit handlers or window-close guards, so force-exit after a grace period to avoid a hung dev app.
-    app.exit(0)
-  }, DEV_PARENT_SHUTDOWN_GRACE_MS)
-
-  forceExitTimer.unref()
-}
-
-export function isDevParentShutdownRequested(): boolean {
-  return devParentShutdownRequested
-}
-
-export function resetDevParentShutdownRequestForTests(): void {
-  devParentShutdownRequested = false
 }
 
 export function patchPackagedProcessPath(): void {
@@ -215,10 +194,7 @@ export function configureDevUserDataPath(isDev: boolean): void {
     return
   }
 
-  const bakedProductName =
-    typeof ORCA_PRODUCT_NAME !== 'undefined'
-      ? ORCA_PRODUCT_NAME
-      : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+  const bakedProductName = resolveBakedProductName()
   if (bakedProductName && bakedProductName !== 'Orca') {
     // Why: pin the variant's profile dir explicitly instead of relying on
     // Electron deriving it from app.getName() later in startup.
@@ -256,70 +232,6 @@ export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
   // Why: managed hooks now target Orca-owned Codex homes, not ~/.codex, so keep install on for all agents until each gets its own seam.
   return true
-}
-
-export function installDevParentDisconnectQuit(isDev: boolean): void {
-  if (!isDev || typeof process.send !== 'function') {
-    return
-  }
-
-  // Why: on macOS Ctrl+C can stop the electron-vite parent without closing the window, so quit when the IPC channel disconnects.
-  process.once('disconnect', () => {
-    requestDevParentShutdown()
-  })
-}
-
-export function installDevParentWatchdog(isDev: boolean): void {
-  if (!isDev) {
-    return
-  }
-
-  const initialParentPid = process.ppid
-  if (!Number.isInteger(initialParentPid) || initialParentPid <= 1) {
-    return
-  }
-
-  const timer = setInterval(() => {
-    const parentPidChanged = process.ppid !== initialParentPid
-    let parentMissing = false
-
-    try {
-      process.kill(initialParentPid, 0)
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error as NodeJS.ErrnoException).code === 'ESRCH'
-      ) {
-        parentMissing = true
-      } else {
-        throw error
-      }
-    }
-
-    if (parentPidChanged || parentMissing) {
-      clearInterval(timer)
-      // Why: the dev runner spawns Electron without IPC, so on macOS Ctrl+C leaves Orca open; watch the parent PID to couple shutdown.
-      requestDevParentShutdown()
-    }
-  }, 1000)
-
-  timer.unref()
-}
-
-export function installDevParentSignalQuit(isDev: boolean): void {
-  if (!isDev) {
-    return
-  }
-
-  const onSignal = (): void => {
-    // Why: run-electron-vite-dev forwards terminal shutdown signals here, so don't preserve the detached daemon for warm reattach.
-    requestDevParentShutdown()
-  }
-
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
 }
 
 export function enableMainProcessGpuFeatures(options: { isServeMode?: boolean } = {}): void {

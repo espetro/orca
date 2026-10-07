@@ -337,6 +337,7 @@ describe('web runtime session registry', () => {
     // A disposed status owner latches "disconnected or replaced" forever — the registry
     // must rebuild instead of serving it. (Status owner shape cast: the mock client has
     // no real owner; we inject a retired snapshot reader.)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test injects a retired snapshot reader; only statusOwner.read is called.
     const cached = session.webRuntimeState.activeClient as unknown as {
       statusOwner: { read: () => { retired: true } }
     }

@@ -10,7 +10,9 @@ import {
 } from '../../../../shared/runtime-environment-store'
 import { ENVIRONMENT_STORE_METHODS } from './environment-store'
 
-const { getUserDataPathMock } = vi.hoisted(() => ({ getUserDataPathMock: vi.fn() }))
+const { getUserDataPathMock } = vi.hoisted(() => ({
+  getUserDataPathMock: vi.fn()
+}))
 
 vi.mock('../../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: getUserDataPathMock })
@@ -62,17 +64,22 @@ describe('environmentStore RPC methods', () => {
       pairingCode: pairingCode()
     })
 
-    const listed = (await method('environmentStore.list').handler(undefined, {} as never)) as
-      | unknown[]
-      | PromiseLike<unknown>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx; the result cast asserts the shape the test then verifies.
+    const listed = (await method('environmentStore.list').handler(
+      undefined,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
+      {} as never
+    )) as unknown[] | PromiseLike<unknown>
     expect(listed).toHaveLength(1)
   })
 
   it('adds an environment from a pairing code into the same store the CLI reads', async () => {
     const userDataPath = withStore()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
     const result = (await method('environmentStore.add').handler(
       { name: 'dev box', pairingCode: pairingCode('ws://192.0.2.11:6768') },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
       {} as never
     )) as { name: string; endpoints: { deviceToken: string }[] }
 
@@ -90,6 +97,7 @@ describe('environmentStore RPC methods', () => {
       async () =>
         await method('environmentStore.add').handler(
           { name: 'dev box', pairingCode: 'not-a-pairing-code' },
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
           {} as never
         )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
@@ -97,12 +105,16 @@ describe('environmentStore RPC methods', () => {
 
   it('surfaces duplicate names as invalid_argument instead of a generic failure', async () => {
     const userDataPath = withStore()
-    addEnvironmentFromPairingCode(userDataPath, { name: 'dev box', pairingCode: pairingCode() })
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode()
+    })
 
     await expect(
       async () =>
         await method('environmentStore.add').handler(
           { name: 'dev box', pairingCode: pairingCode('ws://192.0.2.12:6768') },
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
           {} as never
         )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
@@ -115,14 +127,19 @@ describe('environmentStore RPC methods', () => {
       pairingCode: pairingCode()
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
     const removed = (await method('environmentStore.remove').handler(
       { selector: 'dev box' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
       {} as never
     )) as { id: string; name: string }
 
     expect(removed.name).toBe('dev box')
     expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, { name: 'dev box', pairingCode: pairingCode() })
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'dev box',
+        pairingCode: pairingCode()
+      })
     ).not.toThrow()
   })
 })

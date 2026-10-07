@@ -44,7 +44,10 @@ describe('configureDevUserDataPath', () => {
   it('uses baked product name for packaged userData path when set and not Orca', async () => {
     const { app } = await import('electron')
     const { configureDevUserDataPath } = await import('./configure-process')
-    const g = globalThis as typeof globalThis & { ORCA_PRODUCT_NAME?: string | null }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: writes the same optional baked-define field the production code reads.
+    const g = globalThis as typeof globalThis & {
+      ORCA_PRODUCT_NAME?: string | null
+    }
     g.ORCA_PRODUCT_NAME = 'Orca Canary'
 
     try {

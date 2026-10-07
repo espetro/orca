@@ -134,7 +134,7 @@ describe('Electron recovery preflight', () => {
     const start = source.indexOf('export function runMainProcessPreflight(')
     const recovery = source.indexOf('if (runProfileStateRecoveryPreflight())', start)
     const redirect = source.indexOf('const cliLaunchRedirect = maybeRedirectCliLaunch(', start)
-    const admission = source.indexOf('acquireProfileStateRuntimeAdmission(', start)
+    const admission = source.indexOf('admitDesktopInstance(', start)
     expect(start).toBeGreaterThanOrEqual(0)
     expect(recovery).toBeGreaterThan(start)
     expect(redirect).toBeGreaterThan(recovery)

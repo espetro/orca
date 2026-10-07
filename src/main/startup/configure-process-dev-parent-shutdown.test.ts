@@ -20,7 +20,7 @@ describe('installDevParentDisconnectQuit', () => {
       installDevParentDisconnectQuit,
       isDevParentShutdownRequested,
       resetDevParentShutdownRequestForTests
-    } = await import('./configure-process')
+    } = await import('./configure-process-dev-parent')
 
     vi.useFakeTimers()
     resetDevParentShutdownRequestForTests()
@@ -28,9 +28,12 @@ describe('installDevParentDisconnectQuit', () => {
     const originalOnce = process.once.bind(process)
     const disconnectHandlers: (() => void)[] = []
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test stubs only the send surface the disconnect hook checks.
     process.send = (() => true) as unknown as NodeJS.Process['send']
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test stubs only the once surface the hooks register through.
     process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
       if (event === 'disconnect') {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener registered for 'disconnect' takes no arguments.
         disconnectHandlers.push(listener as () => void)
       }
       return process
@@ -57,12 +60,13 @@ describe('installDevParentDisconnectQuit', () => {
   })
 
   it('does not register the disconnect hook outside dev ipc launches', async () => {
-    const { installDevParentDisconnectQuit } = await import('./configure-process')
+    const { installDevParentDisconnectQuit } = await import('./configure-process-dev-parent')
     const originalSend = process.send
     const originalOnce = process.once.bind(process)
     const onceSpy = vi.fn(originalOnce)
 
     process.send = undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy is shaped for the only once() registration the hook makes.
     process.once = onceSpy as NodeJS.Process['once']
 
     try {
@@ -84,7 +88,7 @@ describe('installDevParentWatchdog', () => {
       installDevParentWatchdog,
       isDevParentShutdownRequested,
       resetDevParentShutdownRequestForTests
-    } = await import('./configure-process')
+    } = await import('./configure-process-dev-parent')
 
     vi.useFakeTimers()
     resetDevParentShutdownRequestForTests()
@@ -92,11 +96,13 @@ describe('installDevParentWatchdog', () => {
     vi.mocked(app.exit).mockClear()
 
     let parentExists = true
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test stubs only the kill signature the watchdog calls.
     vi.spyOn(process, 'kill').mockImplementation(((
       pid: number,
       signal?: NodeJS.Signals | number
     ) => {
       if (signal === 0 && pid === 4242 && !parentExists) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: code is assigned on the next line, completing the ErrnoException shape.
         const error = new Error('missing') as NodeJS.ErrnoException
         error.code = 'ESRCH'
         throw error
@@ -131,7 +137,7 @@ describe('installDevParentWatchdog', () => {
   })
 
   it('does not start the watchdog outside dev mode', async () => {
-    const { installDevParentWatchdog } = await import('./configure-process')
+    const { installDevParentWatchdog } = await import('./configure-process-dev-parent')
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
 
     installDevParentWatchdog(false)
@@ -147,14 +153,16 @@ describe('installDevParentSignalQuit', () => {
       installDevParentSignalQuit,
       isDevParentShutdownRequested,
       resetDevParentShutdownRequestForTests
-    } = await import('./configure-process')
+    } = await import('./configure-process-dev-parent')
 
     vi.useFakeTimers()
     resetDevParentShutdownRequestForTests()
     const originalOnce = process.once.bind(process)
     const signalHandlers = new Map<string | symbol, () => void>()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test stubs only the once surface the hooks register through.
     process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener registered for a signal takes no arguments.
       signalHandlers.set(event, listener as () => void)
       return process
     }) as NodeJS.Process['once']
@@ -183,10 +191,11 @@ describe('installDevParentSignalQuit', () => {
   })
 
   it('does not register signal handlers outside supervised dev runs', async () => {
-    const { installDevParentSignalQuit } = await import('./configure-process')
+    const { installDevParentSignalQuit } = await import('./configure-process-dev-parent')
     const originalOnce = process.once.bind(process)
     const onceSpy = vi.fn(originalOnce)
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy is shaped for the only once() registration the hook makes.
     process.once = onceSpy as NodeJS.Process['once']
 
     try {

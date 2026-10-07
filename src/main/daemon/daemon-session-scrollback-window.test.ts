@@ -18,23 +18,33 @@ const GIB = 1024 * 1024 * 1024
 
 describe('resolveDaemonSessionScrollbackRows', () => {
   it('defaults to 500 rows on low memory tier and 1000 rows on mid/high memory tier', () => {
-    expect(resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv, 8 * GIB)).toBe(
-      DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS
-    )
-    expect(resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv, 16 * GIB)).toBe(
-      DAEMON_SESSION_SCROLLBACK_ROWS
-    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub env only needs to prove the override key is absent.
+    expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub env only needs to prove the override key is absent.
+      resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv, 8 * GIB)
+    ).toBe(DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub env only needs to prove the override key is absent.
+    expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub env only needs to prove the override key is absent.
+      resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv, 16 * GIB)
+    ).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
   })
 
   it('accepts the inclusive override bounds and rejects everything outside them', () => {
     for (const raw of ['100', '2500', '5000']) {
-      const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub env supplies only the override key the resolver reads.
+      const env = {
+        ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw
+      } as NodeJS.ProcessEnv
       expect(resolveDaemonSessionScrollbackRows(env)).toBe(Number(raw))
     }
     // Why bounded: 0 loses the visible screen's context; huge values silently reintroduce the
     // unbounded retention this window exists to prevent.
     for (const raw of ['0', '50', '99', '5001', '50000', '-1', '3.5', 'nonsense', '']) {
-      const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub env supplies only the override key the resolver reads.
+      const env = {
+        ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw
+      } as NodeJS.ProcessEnv
       expect(resolveDaemonSessionScrollbackRows(env, 16 * GIB)).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
       expect(resolveDaemonSessionScrollbackRows(env, 8 * GIB)).toBe(
         DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS
@@ -49,6 +59,7 @@ describe('daemon session scrollback window', () => {
 
   function createMockSubprocess(): SubprocessHandle {
     let onExitCb: ((code: number) => void) | null = null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies every member the launched child lifecycle calls.
     return {
       pid: 4242,
       getForegroundProcess: vi.fn(() => null),
@@ -68,6 +79,7 @@ describe('daemon session scrollback window', () => {
       },
       dispose: vi.fn()
     } as SubprocessHandle
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies every member the launched child lifecycle calls.
   }
 
   beforeEach(() => {

@@ -1,6 +1,6 @@
 import { antigravityHookService } from '../antigravity/hook-service'
 import { getRelocatedDaemonHost } from '../daemon/daemon-host-relocation'
-import { app, ipcMain, powerMonitor, session } from 'electron'
+import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -13,12 +13,14 @@ import {
   configureOrcaUserDataPathEnv,
   disableUnsupportedChromiumFeatures,
   enableMainProcessGpuFeatures,
-  installDevParentDisconnectQuit,
-  installDevParentSignalQuit,
-  installDevParentWatchdog,
   patchPackagedProcessPath,
   optOutOfHiddenPageWakeUpThrottling
 } from './configure-process'
+import {
+  installDevParentDisconnectQuit,
+  installDevParentSignalQuit,
+  installDevParentWatchdog
+} from './configure-process-dev-parent'
 import { installServeSupervisorDisconnectQuit } from '../serve-update-handoff'
 import {
   installUncaughtPipeErrorGuard,
@@ -48,32 +50,14 @@ import { setSpawnObserver } from '../../shared/child-process/spawn-observer'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-desktop-activation'
-import {
-  shouldBypassSingleInstanceLock,
-  shouldSkipSingleInstanceLock,
-  acquireSingleInstanceLock,
-  logSingleInstanceLockBypass,
-  logSingleInstanceLockFailure,
-  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
-} from './single-instance-lock'
+import { admitDesktopInstance } from './main-process-instance-admission'
+import { installDesktopRuntimeSurface } from './main-process-desktop-runtime-surface'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'
-import { setPtyHostBindings } from '../ipc/pty-host-bindings'
-import { electronRuntimeDesktopSurface } from '../host/electron-runtime-desktop-surface'
-import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
-import { electronRuntimeBrowserCommandsFactory } from '../host/electron-browser-commands'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { electronHttpClient } from '../host/electron-http-client'
-import { setMainHttpClient } from '../network/http-client'
-import { electronSpeechServiceFactories } from '../host/electron-speech-services'
-import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
-import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
-import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
-import { setDefaultProxySessionResolver } from '../network/proxy-settings'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
 import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
@@ -105,12 +89,8 @@ import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
 import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
-import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
-import {
-  acquireDesktopProfileLockOrExplain,
-  handleMainProcessPreflightFailure
-} from './main-process-preflight-failure'
+import { handleMainProcessPreflightFailure } from './main-process-preflight-failure'
 import { ensureWindowsAppDataPath } from './windows-app-data-path'
 
 export type MainProcessPreflightOptions = {
@@ -250,39 +230,18 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     // this every spawnProcess/runProcess child (rg, ps, pty helpers) is invisible.
     setSpawnObserver(recordSubprocessSpawn)
   }
-  startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
-  // Why: acquire AFTER configureDevUserDataPath — Electron derives lock identity from `userData`, so dev/packaged lock in separate namespaces.
-  // Why dev locks too: two processes on one profile corrupt its stores (PR #1326 / #1312); parallel `pnpm dev` needs ORCA_DEV_USER_DATA_PATH per copy.
-  const bypass = shouldBypassSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
-  const skip = shouldSkipSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
-  if (bypass) {
-    // Why: diagnostic escape hatch for macOS builds where Electron reports a false lock loss before any app logs exist.
-    logSingleInstanceLockBypass()
-  }
-  const hasLock = skip || bypass || acquireSingleInstanceLock(app, options.requestDesktopActivation)
-  if (state.startupDiagnosticsEnabled) {
-    logStartupDiagnostic('single-instance-lock-result', {
-      acquired: hasLock,
-      bypassed: bypass,
-      skippedForE2E: skip
-    })
-  }
-  if (!hasLock) {
-    // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
-    // In dev it is the line `pnpm dev` prints before exiting.
-    logSingleInstanceLockFailure({
-      isDevDesktop: isDev && !state.isServeMode,
-      userDataPath: app.getPath('userData')
-    })
-    // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
-    app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+  startMainThreadChurnProbe({
+    extraStats: () => ({ diffCache: settledDiffCache.stats() })
+  })
+  const admission = admitDesktopInstance({
+    isDev,
+    isServeMode: state.isServeMode,
+    requestDesktopActivation: options.requestDesktopActivation
+  })
+  if (!admission.proceed) {
     return false
   }
-  // Why after Electron's lock: that one fences other desktops; this one fences orcad `orca serve`.
-  if (!skip && !bypass && !acquireDesktopProfileLockOrExplain(getCanonicalUserDataPath())) {
-    return false
-  }
-  state.profileStateAdmission = acquireProfileStateRuntimeAdmission(getCanonicalUserDataPath())
+  state.profileStateAdmission = admission.profileStateAdmission
   // Renderer and worker defaults must be fixed before any session exists.
   initializeBrowserProcessUserAgent(
     initializeBrowserIdentityModeStore(getCanonicalUserDataPath()).appliedMode
@@ -298,32 +257,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Safe here — nothing above resolves a credential, and the probe inside is bounded.
   selectLinuxKeyringBackend()
   setSecretStore(new ElectronSecretStore())
-  // Why at process level, not per-window: pty.ts registers against injected surfaces so
-  // it can load without electron, and an Electron main process always has ipcMain —
-  // whether a window exists is irrelevant. Installing this in attachMainWindowServices
-  // meant `orca serve` registered its PTY handlers against no-ops before any window
-  // attached, so a paired desktop owner never received them.
-  setPtyHostBindings({ ipc: ipcMain, power: powerMonitor })
-  // Why also at process level: the runtime's notification, window-lookup and
-  // tab-create-reply channel are desktop-only. A Node host installs none and the
-  // runtime routes notifications to paired clients instead.
-  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
-  // Why here: constructing RuntimeBrowserCommands is what pulls the Chromium browser
-  // cluster into the graph. The desktop installs it; a Node host installs none and every
-  // browser RPC rejects, which capability filtering already tells clients about.
-  setRuntimeBrowserCommandsFactory(electronRuntimeBrowserCommandsFactory)
-  // Why here: proxy-settings only needed electron for `session.defaultSession`. The
-  // desktop supplies it; a Node host has no Chromium proxy config to consult, so the
-  // environment variables are the whole answer there.
-  setDefaultProxySessionResolver(() => session.defaultSession)
-  // Why here: integrations use Chromium's network stack on the desktop. A Node host
-  // falls back to the platform default, which is a real behavioural difference (proxy
-  // read from the environment, Node's user agent) rather than a transparent swap.
-  setMainHttpClient(electronHttpClient)
-  // Why here: constructing the speech services is what pulls Electron's streaming net
-  // request in. A host without them rejects speech calls rather than pretending.
-  setSpeechServiceFactories(electronSpeechServiceFactories)
-  setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
+  installDesktopRuntimeSurface()
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = isDev && !state.isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)

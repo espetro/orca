@@ -13,8 +13,12 @@ export type NativeCodeCacheResult = {
 // resolved cache dir into NODE_COMPILE_CACHE so forked children reuse the same cache.
 export function enableMainProcessCompileCache(customCacheDir?: string): NativeCodeCacheResult {
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only enableCompileCache is read and it is optional-chained.
     const nodeModule = require('node:module') as {
-      enableCompileCache?: (dir?: string) => { status: number; directory: string }
+      enableCompileCache?: (dir?: string) => {
+        status: number
+        directory: string
+      }
     }
 
     if (typeof nodeModule.enableCompileCache !== 'function') {

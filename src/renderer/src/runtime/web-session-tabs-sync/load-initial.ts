@@ -54,6 +54,7 @@ export function loadInitialWebSessionTabs({
   // `getStatus` on `runtimeEnvironments`; without this guard, an absent method
   // throws synchronously inside the boot path and aborts the subscribeAll
   // subscription the rest of the renderer relies on.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads an optional method older preload installs may not carry.
   const runtimeEnvironmentsApi = window.api.runtimeEnvironments as {
     getStatus?: (args: {
       selector: string
@@ -73,9 +74,12 @@ export function loadInitialWebSessionTabs({
         if (statusResponse.ok !== true) {
           return
         }
-        const preferred = (
-          statusResponse.result as { preferredActiveWorktreeId?: string | null } | null | undefined
-        )?.preferredActiveWorktreeId
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads an optional field older hosts may not publish.
+        const statusResult = statusResponse.result as
+          | { preferredActiveWorktreeId?: string | null }
+          | null
+          | undefined
+        const preferred = statusResult?.preferredActiveWorktreeId
         const decision = decideAdoptPreferredWorktree(useAppStore.getState(), preferred)
         if (decision.adopt) {
           applyAdoptedPreferredWorktree(useAppStore.setState, decision)

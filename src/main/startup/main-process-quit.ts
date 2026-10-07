@@ -30,7 +30,7 @@ import { stopTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
-import { isDevParentShutdownRequested } from './configure-process'
+import { isDevParentShutdownRequested } from './configure-process-dev-parent'
 import { getCanonicalUserDataPath } from '../persistence'
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
@@ -122,7 +122,9 @@ function installWillQuitHandler(): void {
       recordUpdaterLifecycle(
         'will_quit_cleanup_started',
         { daemonTeardown: 'disconnect' },
-        { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
+        {
+          message: 'will-quit cleanup for update install; daemonTeardown=disconnect'
+        }
       )
     }
     // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
@@ -269,15 +271,23 @@ function installWillQuitHandler(): void {
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },
       { name: 'ref-maintenance', promise: refMaintenanceShutdown },
-      { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
-      { name: 'structured-agent-session', promise: structuredAgentSessionShutdown },
+      {
+        name: 'codex-backfill-recovery',
+        promise: codexBackfillRecoveryShutdown
+      },
+      {
+        name: 'structured-agent-session',
+        promise: structuredAgentSessionShutdown
+      },
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
     ])
       .then((pendingTeardowns) => {
         if (pendingTeardowns.length > 0) {
-          console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
+          console.warn('[shutdown] Quit teardown deadline reached', {
+            pendingTeardowns
+          })
         }
       })
       .then(() => shutdownTelemetry())
