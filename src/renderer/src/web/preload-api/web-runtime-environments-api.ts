@@ -28,6 +28,7 @@ import {
   getStoredRuntimeEnvironmentById,
   listStoredRuntimeEnvironments,
   manuallyDisconnectedEnvironmentIds,
+  rehydrateRuntimeEnvironmentsFromRegistry,
   removeStoredRuntimeEnvironment,
   resolveEnvironment,
   setActiveRuntimeEnvironment,
@@ -49,6 +50,9 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       } catch {
         // fall through to local registry
       }
+      // Why: the merge writes localStorage directly; mirror it into the in-memory registry
+      // or server-saved environments stay invisible and get clobbered on the next persist.
+      rehydrateRuntimeEnvironmentsFromRegistry()
       return {
         environments: listStoredRuntimeEnvironments().map(redactStoredWebRuntimeEnvironment),
         activeEnvironmentId: webRuntimeState.activeEnvironment?.id ?? null

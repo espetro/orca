@@ -158,9 +158,14 @@ export async function syncEnvironmentsFromServer(): Promise<StoredWebRuntimeEnvi
     return mergeServerEnvironments(local, serverEnvironments)
   } catch (error) {
     // Why: older orcad builds do not expose environmentStore.*; keep the
-    // localStorage registry authoritative so nothing breaks.
+    // localStorage registry authoritative so nothing breaks. Only that
+    // definitive shape latches — a transient failure (server still starting,
+    // transport drop) stays unarmed so the next list() retries instead of
+    // hiding server-saved environments until a full reload.
     console.warn('[web-environment-sync] environmentStore.list failed:', describeSyncError(error))
-    syncState.serverBacked = false
+    if (describeSyncError(error) === 'method_not_found') {
+      syncState.serverBacked = false
+    }
     return local
   }
 }

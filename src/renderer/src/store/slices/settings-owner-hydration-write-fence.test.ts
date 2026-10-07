@@ -12,7 +12,9 @@ it('does not overwrite a settings write with an older owner hydration', async ()
         get: vi.fn().mockReturnValue(settingsRead),
         set: vi.fn().mockResolvedValue({ pluginSystemEnabled: true })
       },
-      runtimeEnvironments: { list: vi.fn().mockResolvedValue([]) }
+      runtimeEnvironments: {
+        list: vi.fn().mockResolvedValue({ environments: [], activeEnvironmentId: null })
+      }
     }
   })
   const store = createTestStore()
@@ -36,7 +38,7 @@ it('preserves host defaults added while owner hydration is in flight', async () 
       },
       runtimeEnvironments: {
         call: vi.fn().mockReturnValue(ownerRead),
-        list: vi.fn().mockResolvedValue([])
+        list: vi.fn().mockResolvedValue({ environments: [], activeEnvironmentId: null })
       }
     }
   })
@@ -79,7 +81,7 @@ it('publishes startup settings before remote owner hydration and local catalog w
       },
       runtimeEnvironments: {
         call: vi.fn().mockReturnValue(ownerRead),
-        list: vi.fn().mockResolvedValue([])
+        list: vi.fn().mockResolvedValue({ environments: [], activeEnvironmentId: null })
       }
     }
   })
@@ -121,7 +123,7 @@ it('preserves deferred owner hydration across a no-op runtime selection', async 
       },
       runtimeEnvironments: {
         call: vi.fn().mockReturnValue(ownerRead),
-        list: vi.fn().mockResolvedValue([])
+        list: vi.fn().mockResolvedValue({ environments: [], activeEnvironmentId: null })
       }
     }
   })
@@ -172,7 +174,7 @@ it('waits for a replacement owner hydration before publishing remote rows', asyn
       },
       runtimeEnvironments: {
         call: runtimeCall,
-        list: vi.fn().mockResolvedValue([])
+        list: vi.fn().mockResolvedValue({ environments: [], activeEnvironmentId: null })
       }
     }
   })
@@ -222,7 +224,7 @@ it('preserves owner defaults when an unrelated settings write settles after hydr
       },
       runtimeEnvironments: {
         call: vi.fn().mockReturnValue(ownerRead),
-        list: vi.fn().mockResolvedValue([])
+        list: vi.fn().mockResolvedValue({ environments: [], activeEnvironmentId: null })
       }
     }
   })

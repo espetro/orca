@@ -111,7 +111,10 @@ beforeEach(() => {
   listHostSetups.mockResolvedValue([])
   projectGroupsList.mockResolvedValue([localProjectGroup])
   folderWorkspacesList.mockResolvedValue([localFolderWorkspace])
-  runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1', name: 'lobster' }])
+  runtimeEnvironmentsList.mockResolvedValue({
+    environments: [{ id: 'env-1', name: 'lobster' }],
+    activeEnvironmentId: null
+  })
   runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     if (args.method === 'repo.list') {
       return {
@@ -214,10 +217,13 @@ describe('all-host folder workspace startup catalogs', () => {
       id: 'remote-folder-2',
       projectGroupId: secondRemoteGroup.id
     }
-    runtimeEnvironmentsList.mockResolvedValue([
-      { id: 'env-1', name: 'lobster' },
-      { id: 'env-2', name: 'shrimp' }
-    ])
+    runtimeEnvironmentsList.mockResolvedValue({
+      environments: [
+        { id: 'env-1', name: 'lobster' },
+        { id: 'env-2', name: 'shrimp' }
+      ],
+      activeEnvironmentId: null
+    })
     runtimeEnvironmentCall.mockImplementation(
       (args: RuntimeEnvironmentCallRequest & { selector: string }) => {
         if (args.method === 'folderWorkspace.list') {

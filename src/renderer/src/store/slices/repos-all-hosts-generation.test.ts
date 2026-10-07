@@ -51,7 +51,10 @@ beforeEach(() => {
         listHostSetups: vi.fn().mockResolvedValue([])
       },
       runtimeEnvironments: {
-        list: vi.fn().mockResolvedValue([{ id: 'env-1', name: 'Remote' }]),
+        list: vi.fn().mockResolvedValue({
+          environments: [{ id: 'env-1', name: 'Remote' }],
+          activeEnvironmentId: null
+        }),
         call: (args: RuntimeEnvironmentCallRequest) =>
           createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
       }

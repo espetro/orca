@@ -36,7 +36,6 @@ import { createWebPlatformApi } from './preload-api/web-platform-api'
 import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
 import { createReposApi } from './preload-api/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
 import { createWebRuntimeApi } from './preload-api/web-runtime-api'
 import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environments-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './preload-api/web-runtime-session'
@@ -52,7 +51,7 @@ import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-sessio
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
 import { setEnvironmentStoreCaller } from './web-environment-sync'
-import { callEnvironmentEnvelope } from './preload-api/web-runtime-calls'
+import { callEnvironmentEnvelope, callRuntimeResult } from './preload-api/web-runtime-calls'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -76,7 +75,9 @@ export function installWebPreloadApi(): void {
     }
     const response = await callEnvironmentEnvelope<TResult>(environment.id, method, params, 15_000)
     if (!response.ok) {
-      throw new Error(response.error.message)
+      // Why keep the code: sync callers classify definitive failures (method_not_found
+      // latches serverBacked=false) by token; the message alone carries none.
+      throw Object.assign(new Error(response.error.message), { code: response.error.code })
     }
     return response.result
   })

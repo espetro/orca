@@ -79,7 +79,7 @@ describe('remote Orca server reconnect', () => {
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
-          list: vi.fn(async () => [environment()]),
+          list: vi.fn(async () => ({ environments: [environment()], activeEnvironmentId: null })),
           getStatus: vi.fn(async () => {
             // Captured before the block so a probe that is still dialing answers with the
             // runtime it was dispatched against, not with whatever restarted meanwhile.

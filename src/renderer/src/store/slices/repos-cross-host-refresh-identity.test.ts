@@ -99,7 +99,10 @@ beforeEach(() => {
   reposList.mockImplementation(async () => [clone(localRepo)])
   projectsList.mockImplementation(async () => [clone(localProject)])
   listHostSetups.mockImplementation(async () => [clone(setup('local-repo', '/local/orca'))])
-  runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1', name: 'awin' }])
+  runtimeEnvironmentsList.mockResolvedValue({
+    environments: [{ id: 'env-1', name: 'awin' }],
+    activeEnvironmentId: null
+  })
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
     if (compatible) {

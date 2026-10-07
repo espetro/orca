@@ -40,6 +40,18 @@ describe('mobile pairing RPC wiring', () => {
     // Headless contract: the desktop relay is never attached, so 'automatic' degrades to local-only.
     expect(source).toContain('isDesktopRelayProviderAttached: () => false')
   })
+
+  it('publishes the headless runtime graph before the RPC server binds', async () => {
+    // Regression: orcad booted without a graph publisher, so the graph never read ready and
+    // every session.tabs.createTerminal threw runtime_unavailable (same fix as --serve).
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('./orcad-entry.ts', import.meta.url), 'utf8')
+    const publishIndex = source.indexOf('publishHeadlessRuntimeGraph(runtime)')
+    const bindIndex = source.indexOf('new OrcaRuntimeRpcServer({')
+    expect(publishIndex).toBeGreaterThan(-1)
+    expect(bindIndex).toBeGreaterThan(-1)
+    expect(publishIndex).toBeLessThan(bindIndex)
+  })
 })
 
 describe('resolveOrcadExitCode', () => {

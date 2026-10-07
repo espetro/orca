@@ -32,10 +32,13 @@ beforeEach(() => {
   reposList.mockReset().mockResolvedValue([])
   projectsList.mockReset().mockResolvedValue([])
   listHostSetups.mockReset().mockResolvedValue([])
-  runtimeEnvironmentsList.mockReset().mockResolvedValue([
-    { id: 'node-a', name: 'A' },
-    { id: 'node-b', name: 'B' }
-  ])
+  runtimeEnvironmentsList.mockReset().mockResolvedValue({
+    environments: [
+      { id: 'node-a', name: 'A' },
+      { id: 'node-b', name: 'B' }
+    ],
+    activeEnvironmentId: null
+  })
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation(

@@ -57,6 +57,10 @@ setter was skipped. The desktop relay provider is never attached on a headless h
 rather than shipping a LAN-only QR under the Relay label — use `local-only` there. `mobile.hostStatus`
 reports `relayAvailable: false`, which is the honest answer, not a fault.
 
+Running more than one orcad (a VPS, a second computer) with several mobiles is a
+placement problem of its own — see
+[`orcad-multi-server-topology.md`](./orcad-multi-server-topology.md).
+
 ## Pairing state and offer lifetime
 
 Pairing state lives in `<data-root>/orca-devices.json` alongside the E2EE
