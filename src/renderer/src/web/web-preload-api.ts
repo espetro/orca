@@ -36,7 +36,6 @@ import { createWebPlatformApi } from './preload-api/web-platform-api'
 import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
 import { createReposApi } from './preload-api/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
 import { createWebRuntimeApi } from './preload-api/web-runtime-api'
 import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environments-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './preload-api/web-runtime-session'
@@ -52,7 +51,7 @@ import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-sessio
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
 import { setEnvironmentStoreCaller } from './web-environment-sync'
-import { callEnvironmentEnvelope } from './preload-api/web-runtime-calls'
+import { callEnvironmentEnvelope, callRuntimeResult } from './preload-api/web-runtime-calls'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()

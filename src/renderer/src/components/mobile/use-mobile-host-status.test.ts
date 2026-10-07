@@ -3,7 +3,6 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileHostStatus } from './use-mobile-host-status'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeResult: vi.fn()
@@ -13,7 +12,11 @@ vi.mock('@/web/preload-api/web-runtime-calls', () => ({
   callRuntimeResult: mocks.callRuntimeResult
 }))
 
-import { useMobileHostStatus, type MobileHostStatusState } from './use-mobile-host-status'
+import {
+  useMobileHostStatus,
+  type MobileHostStatus,
+  type MobileHostStatusState
+} from './use-mobile-host-status'
 import type { RuntimeDesktopWindowStatus } from '../../../../shared/runtime-session-contracts'
 
 let latest: MobileHostStatusState | null = null
