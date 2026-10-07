@@ -74,7 +74,7 @@ export function readStoredWebRuntimeEnvironments(): StoredWebRuntimeEnvironments
   }
   const empty: StoredWebRuntimeEnvironments = { environments: [], activeEnvironmentId: null }
   try {
-    const parsed = JSON.parse(rawV2) as StoredWebRuntimeEnvironments
+    const parsed: StoredWebRuntimeEnvironments = JSON.parse(rawV2)
     if (!Array.isArray(parsed.environments)) {
       return empty
     }

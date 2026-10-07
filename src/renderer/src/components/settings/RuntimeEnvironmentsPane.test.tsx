@@ -134,6 +134,7 @@ type SettingsOverrides = Partial<{
 function makeSettings(
   overrides: SettingsOverrides = {}
 ): ComponentProps<typeof RuntimeEnvironmentsPane>['settings'] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: overrides is a Partial; the returned object is only the subset each test supplies plus the id default.
   return {
     activeRuntimeEnvironmentId: null,
     ...overrides
@@ -144,11 +145,7 @@ function mockListResult(
   environments: PublicKnownRuntimeEnvironment[],
   activeEnvironmentId: string | null = environments[0]?.id ?? null
 ): void {
-  // Why: the settings hook currently consumes list() as a bare array while the
-  // API migrates to { environments, activeEnvironmentId }; satisfy both shapes
-  // so this suite survives either side of the migration.
-  const result = Object.assign([...environments], { environments, activeEnvironmentId })
-  apiMocks.list.mockResolvedValue(result as unknown as PublicKnownRuntimeEnvironment[])
+  apiMocks.list.mockResolvedValue({ environments, activeEnvironmentId })
 }
 
 beforeEach(() => {
@@ -164,6 +161,7 @@ beforeEach(() => {
   apiMocks.remove.mockResolvedValue({ removed: makeEnvironment() })
   apiMocks.connect.mockResolvedValue({ ok: false, error: { code: 'x', message: 'offline' } })
   apiMocks.getStatus.mockRejectedValue(new Error('offline'))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite stubs only the runtimeEnvironments surface it drives.
   window.api = {
     runtimeEnvironments: apiMocks
   } as unknown as typeof window.api
@@ -509,6 +507,7 @@ describe('RuntimeEnvironmentsPane server list', () => {
     expect(activateButton).toBeTruthy()
 
     await act(async () => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: toBeTruthy above narrows the found element.
       ;(activateButton as HTMLButtonElement).click()
     })
 
@@ -535,6 +534,7 @@ describe('RuntimeEnvironmentsPane server list', () => {
     expect(removeButton).toBeTruthy()
 
     await act(async () => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: toBeTruthy above narrows the found element.
       ;(removeButton as HTMLButtonElement).click()
     })
     // Confirmation dialog opens before the API call.
@@ -551,6 +551,7 @@ describe('RuntimeEnvironmentsPane server list', () => {
       })
     )
     await act(async () => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: toBeTruthy above narrows the found element.
       ;(confirmButton as HTMLButtonElement).click()
     })
     expect(apiMocks.remove).toHaveBeenCalledWith({ selector: 'env-2' })

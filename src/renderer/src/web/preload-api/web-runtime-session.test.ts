@@ -36,6 +36,7 @@ async function loadSession(): Promise<typeof sessionModule> {
 import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
 
 function makeEnvironment(id: string, name = id): StoredWebRuntimeEnvironment {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal fixture omits optional registry fields; tests only read id/name/endpoints.
   return {
     id,
     name,

@@ -238,7 +238,6 @@ export default function WebConnect({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    className="text-muted-foreground hover:text-red-400"
                     onClick={() => {
                       forgetSaved(environment)
                       refreshSavedState()
@@ -310,7 +309,7 @@ export default function WebConnect({
         {addFormOpen ? (
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             {environments.length > 0 ? (
-              <Button type="button" variant="outline" onClick={forget} className="gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={forget}>
                 <Trash2 size={15} aria-hidden />
                 {translate('auto.web.WebConnect.2cf9e5a294', 'Clear all saved servers')}
               </Button>

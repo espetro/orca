@@ -158,10 +158,10 @@ describe('web runtime environment identity', () => {
   it('ignores malformed persisted compatibility ids when resolving selectors', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
-    const registry = JSON.parse(
+    const registry: { environments: Record<string, unknown>[] } = JSON.parse(
       globals.storage.getItem('orca.web.runtimeEnvironments.v2') ?? '{}'
-    ) as { environments: Record<string, unknown>[] }
-    const stored = registry.environments[0] as Record<string, unknown>
+    )
+    const stored = registry.environments[0]
     stored.compatibleEnvironmentIds = { old: 'web-server-old' }
     registry.environments[0] = stored
     globals.storage.setItem('orca.web.runtimeEnvironments.v2', JSON.stringify(registry))
@@ -176,10 +176,10 @@ describe('web runtime environment identity', () => {
   it('ignores malformed persisted paired device identity', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const registry = JSON.parse(
+    const registry: { environments: Record<string, unknown>[] } = JSON.parse(
       globals.storage.getItem('orca.web.runtimeEnvironments.v2') ?? '{}'
-    ) as { environments: Record<string, unknown>[] }
-    const stored = registry.environments[0] as Record<string, unknown>
+    )
+    const stored = registry.environments[0]
     stored.pairedDeviceId = { invalid: true }
     registry.environments[0] = stored
     globals.storage.setItem('orca.web.runtimeEnvironments.v2', JSON.stringify(registry))
