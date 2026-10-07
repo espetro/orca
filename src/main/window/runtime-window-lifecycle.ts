@@ -11,6 +11,7 @@ import type {
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
@@ -143,6 +144,9 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
+    publishAgentLaunchTab: (request) =>
+      requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
+    agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
         paneKey,
@@ -169,20 +173,22 @@ export function registerRuntimeWindowLifecycle(
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?) =>
       send('ui:openFileFromMobile', {
         worktreeId,
         filePath,
         relativePath,
-        runtimeEnvironmentId
+        runtimeEnvironmentId,
+        ...(navigation ? { navigation } : {})
       }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?) =>
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?, navigation?) =>
       send('ui:openDiffFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         staged,
-        runtimeEnvironmentId
+        runtimeEnvironmentId,
+        ...(navigation ? { navigation } : {})
       }),
     readMobileMarkdownTab: (worktreeId, tabId) =>
       requestMobileMarkdownFromRenderer(mainWindow, {
@@ -198,7 +204,8 @@ export function registerRuntimeWindowLifecycle(
         baseVersion,
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
-    closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
+    closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
+    closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),

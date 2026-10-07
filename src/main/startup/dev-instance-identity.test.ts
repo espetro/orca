@@ -14,7 +14,10 @@ describe('dev-instance-identity', () => {
   })
 
   it('makes a baked product name a full standalone variant identity', () => {
-    const g = globalThis as typeof globalThis & { ORCA_PRODUCT_NAME?: string | null }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: writes the same optional baked-define field the production code reads.
+    const g = globalThis as typeof globalThis & {
+      ORCA_PRODUCT_NAME?: string | null
+    }
     g.ORCA_PRODUCT_NAME = 'Orca Canary'
     try {
       const identity = getDevInstanceIdentity(false, {})

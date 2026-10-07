@@ -40,6 +40,7 @@ async function loadSession(): Promise<typeof sessionModule> {
 import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
 
 function makeEnvironment(id: string, name = id): StoredWebRuntimeEnvironment {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal fixture omits optional registry fields; tests only read id/name/endpoints.
   return {
     id,
     name,
@@ -79,7 +80,8 @@ beforeEach(() => {
     environments: [],
     activeEnvironmentId: null
   })
-  vi.mocked(saveStoredWebRuntimeEnvironments).mockClear()
+  vi.mocked(saveStoredWebRuntimeEnvironments).mockReset()
+  vi.mocked(saveStoredWebRuntimeEnvironments).mockImplementation(() => {})
 })
 
 describe('web runtime session registry', () => {
@@ -151,6 +153,50 @@ describe('web runtime session registry', () => {
     expect(() => session.setActiveRuntimeEnvironment('web-nope')).toThrow(
       'Unknown Orca runtime environment: web-nope'
     )
+  })
+
+  it('setActive leaves session state untouched when persistence fails', async () => {
+    const a = makeEnvironment('web-a')
+    const b = makeEnvironment('web-b')
+    seedRegistry([a, b], 'web-a')
+    const session = await loadSession()
+    session.getClientForEnvironment(a)
+    const oldClose = clientInstances[0].close
+    vi.mocked(saveStoredWebRuntimeEnvironments).mockImplementation(() => {
+      throw new Error('storage full')
+    })
+
+    expect(() => session.setActiveRuntimeEnvironment('web-b')).toThrow('storage full')
+
+    expect(session.webRuntimeState.activeEnvironment).toBe(a)
+    expect(oldClose).not.toHaveBeenCalled()
+  })
+
+  it('removeStoredRuntimeEnvironment leaves state untouched when persistence fails', async () => {
+    const a = makeEnvironment('web-a')
+    seedRegistry([a], 'web-a')
+    const session = await loadSession()
+    session.getClientForEnvironment(a)
+    vi.mocked(saveStoredWebRuntimeEnvironments).mockImplementation(() => {
+      throw new Error('storage full')
+    })
+
+    expect(() => session.removeStoredRuntimeEnvironment('web-a')).toThrow('storage full')
+
+    expect(session.webRuntimeState.environments.map((env) => env.id)).toEqual(['web-a'])
+    expect(session.webRuntimeState.activeEnvironment).toBe(a)
+    expect(clientInstances[0].close).not.toHaveBeenCalled()
+  })
+
+  it('rejects a name selector that matches multiple environments', async () => {
+    const a = makeEnvironment('web-a', 'dup')
+    const b = makeEnvironment('web-b', 'dup')
+    seedRegistry([a, b], 'web-a')
+    const session = await loadSession()
+    expect(() => session.resolveEnvironment('dup')).toThrow(
+      'Ambiguous Orca runtime environment name: dup'
+    )
+    expect(session.resolveEnvironment('web-b')).toBe(b)
   })
 
   it('removing a non-active environment leaves the active environment and client untouched', async () => {
@@ -291,6 +337,7 @@ describe('web runtime session registry', () => {
     // A disposed status owner latches "disconnected or replaced" forever — the registry
     // must rebuild instead of serving it. (Status owner shape cast: the mock client has
     // no real owner; we inject a retired snapshot reader.)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test injects a retired snapshot reader; only statusOwner.read is called.
     const cached = session.webRuntimeState.activeClient as unknown as {
       statusOwner: { read: () => { retired: true } }
     }

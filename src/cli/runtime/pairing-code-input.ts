@@ -63,6 +63,7 @@ export async function resolvePairingCodeInput(args: PairingCodeInputArgs): Promi
     }
     return code
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: flag is declared string|boolean in the spec; the string case is what reaches this line (boolean flag means 'read stdin', handled above).
   return (positional ?? (flagValue as string)).trim()
 }
 

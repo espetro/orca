@@ -4,10 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
-} from '../../shared/protocol-version'
+import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 
@@ -102,6 +100,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -109,6 +108,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      removeWorkspaceSessionHost: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -143,6 +143,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:getStatusSnapshots',
       'runtimeEnvironments:list',
+      'runtimeEnvironments:setActive',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
@@ -154,6 +155,23 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
+      'runtimeEnvironments:linkSshAccess',
+      'runtimeEnvironments:unlinkSshAccess',
+      'runtimeEnvironments:createOrcadSshHost',
+      'runtimeEnvironments:resumeOrcadSshHost',
+      'runtimeEnvironments:listPendingOrcadSshProvisioning',
+      'runtimeEnvironments:deployOrcad',
+      'runtimeEnvironments:getOrcadStatus',
+      'runtimeEnvironments:convertSshHostToManagedOrcad',
+      'runtimeEnvironments:listPendingOrcadMigrations',
+      'runtimeEnvironments:previewOrcadDeltaMove',
+      'runtimeEnvironments:moveOrcadDelta',
+      'runtimeEnvironments:keepOrcadServerVersion',
+      'runtimeEnvironments:updateOrcad',
+      'runtimeEnvironments:rollbackOrcad',
+      'runtimeEnvironments:recoverOrcad',
+      'runtimeEnvironments:stopOrcad',
+      'runtimeEnvironments:cancelOrcadStop',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe'
     ])
@@ -167,6 +185,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
+      'runtimeEnvironments:setActive',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
@@ -180,6 +199,23 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe',
+      'runtimeEnvironments:linkSshAccess',
+      'runtimeEnvironments:unlinkSshAccess',
+      'runtimeEnvironments:deployOrcad',
+      'runtimeEnvironments:getOrcadStatus',
+      'runtimeEnvironments:updateOrcad',
+      'runtimeEnvironments:rollbackOrcad',
+      'runtimeEnvironments:recoverOrcad',
+      'runtimeEnvironments:stopOrcad',
+      'runtimeEnvironments:cancelOrcadStop',
+      'runtimeEnvironments:convertSshHostToManagedOrcad',
+      'runtimeEnvironments:listPendingOrcadMigrations',
+      'runtimeEnvironments:previewOrcadDeltaMove',
+      'runtimeEnvironments:moveOrcadDelta',
+      'runtimeEnvironments:keepOrcadServerVersion',
+      'runtimeEnvironments:createOrcadSshHost',
+      'runtimeEnvironments:resumeOrcadSshHost',
+      'runtimeEnvironments:listPendingOrcadSshProvisioning',
       'runtimeEnvironments:retryConnectionsNow'
     ])
     expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
@@ -227,9 +263,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     expect(JSON.stringify(added)).not.toContain('device-token')
     expect(JSON.stringify(added)).not.toContain('publicKeyB64')
-    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
-    expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
-    expect(JSON.stringify(await list(null, undefined))).not.toContain('device-token')
+    const list = handler<undefined, { environments: { id: string; name: string }[] }>(
+      'runtimeEnvironments:list'
+    )
+    const listed = await list(null, undefined)
+    expect(listed.environments).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+    expect(JSON.stringify(listed)).not.toContain('device-token')
 
     const resolve = handler<{ selector: string }, { id: string; name: string }>(
       'runtimeEnvironments:resolve'
@@ -249,8 +288,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
+    // A removed server's session partition goes too, so listings stop naming it as a host.
+    expect(store.removeWorkspaceSessionHost).toHaveBeenCalledWith(
+      `runtime:${encodeURIComponent(added.environment.id)}`
+    )
     expect(JSON.stringify(removed)).not.toContain('device-token')
-    expect(await list(null, undefined)).toEqual([])
+    expect((await list(null, undefined)).environments).toEqual([])
   })
 
   it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
@@ -468,8 +511,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith('desk')
 
-    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
-    expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+    const list = handler<undefined, { environments: { id: string; name: string }[] }>(
+      'runtimeEnvironments:list'
+    )
+    expect((await list(null, undefined)).environments).toMatchObject([
+      { id: added.environment.id, name: 'desk' }
+    ])
 
     const getStatus = handler<{ selector: string }, { ok: boolean; error?: { code: string } }>(
       'runtimeEnvironments:getStatus'
@@ -528,11 +575,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       source: 'ephemeral-vm'
     })
 
-    const list = handler<undefined, { id: string; name: string; source?: string }[]>(
-      'runtimeEnvironments:list'
-    )
+    const list = handler<
+      undefined,
+      { environments: { id: string; name: string; source?: string }[] }
+    >('runtimeEnvironments:list')
 
-    expect(await list(null, undefined)).toMatchObject([
+    expect((await list(null, undefined)).environments).toMatchObject([
       { id: added.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
     ])
   })

@@ -10,12 +10,12 @@ reachability between daemons and clients.
 
 ## Roles
 
-| Role    | Process                       | Serves                                                   | Connects to                                    |
-| ------- | ----------------------------- | -------------------------------------------------------- | ---------------------------------------------- |
-| orcad   | `orcad` (headless Node)       | `ws://<bind>:<port>` RPC; `orca-environments.json` store | nothing — it is the target                     |
-| web app | `orcad --serve` static bundle | the browser UI itself                                    | one orcad per registered environment           |
-| browser | any tab                       | —                                                        | `ws://` each registered environment            |
-| mobile  | the app                       | —                                                        | `ws://` each paired host, `/h/[hostId]` routes |
+| Role | Process | Serves | Connects to |
+| ---- | ------- | ------ | ----------- |
+| orcad | `orcad` (headless Node) | `ws://<bind>:<port>` RPC; `orca-environments.json` store | nothing — it is the target |
+| web app | `orcad --serve` static bundle | the browser UI itself | one orcad per registered environment |
+| browser | any tab | — | `ws://` each registered environment |
+| mobile | the app | — | `ws://` each paired host, `/h/[hostId]` routes |
 
 A single orcad can be both a target and a `--serve` host. The web bundle is identical
 everywhere; whichever orcad serves it only decides where assets come from, not which
@@ -43,14 +43,14 @@ daemons the tab can reach — that is the browser's own environment registry.
 
 "Main computer" = the machine that normally serves the web app.
 
-| Path                     | Main computer on                    | Main computer off                                      |
-| ------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| browser → home orcad     | direct `ws://` or SSH `-L`          | unreachable — serve the web app from the VPS instead   |
-| browser → other-PC orcad | same LAN `ws://`                    | still works — the tab only needs the target's endpoint |
-| browser → VPS orcad      | `ws://` public/overlay, or SSH `-L` | still works                                            |
-| mobile → home orcad      | direct                              | unreachable — it _is_ the main computer                |
-| mobile → other-PC orcad  | direct (same LAN or overlay)        | works if the PC is up and reachable                    |
-| mobile → VPS orcad       | direct                              | works — no dependency on the home machine              |
+| Path | Main computer on | Main computer off |
+| ---- | ---------------- | ----------------- |
+| browser → home orcad | direct `ws://` or SSH `-L` | unreachable — serve the web app from the VPS instead |
+| browser → other-PC orcad | same LAN `ws://` | still works — the tab only needs the target's endpoint |
+| browser → VPS orcad | `ws://` public/overlay, or SSH `-L` | still works |
+| mobile → home orcad | direct | unreachable — it *is* the main computer |
+| mobile → other-PC orcad | direct (same LAN or overlay) | works if the PC is up and reachable |
+| mobile → VPS orcad | direct | works — no dependency on the home machine |
 
 The pairing credential lives on the target orcad (`deviceToken` + `publicKeyB64` in the
 client's stored endpoint, and the matching record in that orcad's pairing store). Nothing in
@@ -62,7 +62,7 @@ the steady state routes through the home machine — the only home-dependent flo
 Every arrow is created once, then persists until rotated:
 
 - **VPS orcad ↔ mobile**: run `orca server link --reach network --address <vps-ip>` (or the
-  overlay address) _on the VPS_ — the URL is minted from that machine's own runtime state
+  overlay address) *on the VPS* — the URL is minted from that machine's own runtime state
   and refuses remote-selection flags on purpose. Enter or scan it on the phone.
 - **other-PC orcad ↔ mobile**: same command on that PC; `--reach network` resolves the LAN
   default. While an orcad's bind is pinned to loopback, a network offer is refused with
@@ -79,11 +79,11 @@ not for anything crossing a network.
 
 ## Exposure choices per orcad
 
-| Path                   | Command                                                        | When                                                                    |
-| ---------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Loopback + SSH forward | `--bind 127.0.0.1` (default), `ssh -L <port>:127.0.0.1:<port>` | upstream's model; safest on any host that has SSH                       |
-| Explicit interface     | `--bind <lan-ip>`                                              | LAN-scoped reach                                                        |
-| All interfaces         | `--bind 0.0.0.0`                                               | VPS or trusted overlay only — the pairing token is the whole credential |
+| Path | Command | When |
+| ---- | ------- | ---- |
+| Loopback + SSH forward | `--bind 127.0.0.1` (default), `ssh -L <port>:127.0.0.1:<port>` | upstream's model; safest on any host that has SSH |
+| Explicit interface | `--bind <lan-ip>` | LAN-scoped reach |
+| All interfaces | `--bind 0.0.0.0` | VPS or trusted overlay only — the pairing token is the whole credential |
 
 The bind is pinned at launch and only the documented widenings (a `network`-reach offer,
 an already-connected device) rebind it. A pinned loopback `--port` that collides still
@@ -133,4 +133,4 @@ Named here so nothing reads as implemented that is not:
   `automatic` connection mode fails closed with `relay_mint_failed` there. All links above
   are direct `ws://` or SSH-forwarded.
 - **Credential administration.** Listing, revoking, or expiring already-paired devices is
-  not implemented — `--rotate` replaces the _offer_, not issued device credentials.
+  not implemented — `--rotate` replaces the *offer*, not issued device credentials.

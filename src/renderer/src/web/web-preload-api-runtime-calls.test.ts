@@ -40,7 +40,10 @@ describe('web preload runtime calls', () => {
     // Stored registry entry with no active environment (Connect-screen state).
     globals.storage.setItem(
       'orca.web.runtimeEnvironments.v2',
-      JSON.stringify({ environments: [environment], activeEnvironmentId: null })
+      JSON.stringify({
+        environments: [environment],
+        activeEnvironmentId: null
+      })
     )
     const seenSelectors: string[] = []
     vi.doMock('./web-runtime-client', () => ({
@@ -85,6 +88,7 @@ describe('web preload runtime calls', () => {
     // unresolved (not latched false) and a later list can retry.
     expect(isServerBackedEnvironmentSync()).toBe(false)
     let probed = false
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async () => {
       probed = true
       throw new Error('should not be called')
@@ -102,7 +106,11 @@ describe('web preload runtime calls', () => {
             return Promise.resolve({
               id: method,
               ok: false,
-              error: { code: 'remote_failure', message: 'Remote failed', data: { retry: false } },
+              error: {
+                code: 'remote_failure',
+                message: 'Remote failed',
+                data: { retry: false }
+              },
               _meta: { runtimeId: 'runtime-failure' }
             })
           }
@@ -135,7 +143,11 @@ describe('web preload runtime calls', () => {
     await expect(globals.window.api.runtime.call({ method: 'runtime.failure' })).resolves.toEqual({
       id: 'runtime.failure',
       ok: false,
-      error: { code: 'remote_failure', message: 'Remote failed', data: { retry: false } },
+      error: {
+        code: 'remote_failure',
+        message: 'Remote failed',
+        data: { retry: false }
+      },
       _meta: { runtimeId: 'runtime-failure' }
     })
     expect(
@@ -175,12 +187,14 @@ describe('web preload runtime calls', () => {
     }
 
     expect(rejection).toEqual(
-      Object.assign(new Error('Repository catalog is unavailable'), { code: 'repo_unavailable' })
+      Object.assign(new Error('Repository catalog is unavailable'), {
+        code: 'repo_unavailable'
+      })
     )
     if (!(rejection instanceof Error)) {
       throw new Error('Expected a domain Error rejection')
     }
-    expect(Reflect.get(rejection, 'code')).toBe('repo_unavailable')
+    expect('code' in rejection ? rejection.code : undefined).toBe('repo_unavailable')
     expect(
       JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironments.v2') ?? '{}').environments[0]
     ).toMatchObject({ runtimeId: 'runtime-domain-failure' })
@@ -212,7 +226,9 @@ describe('web preload runtime calls', () => {
     const accepted = Array.from({ length: 264 }, (_, index) =>
       globals.window.api.runtime.call({ method: `runtime.blocked.${index}` })
     )
-    const overloaded = globals.window.api.runtime.call({ method: 'runtime.overloaded' })
+    const overloaded = globals.window.api.runtime.call({
+      method: 'runtime.overloaded'
+    })
 
     await expect(overloaded).rejects.toMatchObject({
       code: 'runtime_rpc_queue_overloaded',
@@ -281,6 +297,8 @@ describe('web preload runtime calls', () => {
     release()
     await Promise.all(blockers)
     await expect(queued).resolves.toMatchObject({ ok: true, result: 'done' })
-    expect(call).toHaveBeenLastCalledWith('runtime.queued-timeout', undefined, { timeoutMs: 25 })
+    expect(call).toHaveBeenLastCalledWith('runtime.queued-timeout', undefined, {
+      timeoutMs: 25
+    })
   })
 })

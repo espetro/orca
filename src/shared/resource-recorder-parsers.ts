@@ -1,4 +1,7 @@
-export type PsFootprintRow = { rssBytes: number; footprintBytes: number | null }
+export type PsFootprintRow = {
+  rssBytes: number
+  footprintBytes: number | null
+}
 
 /**
  * Parses `ps -o pid=,rss=,phys_footprint= -p <pids>` stdout.
@@ -39,10 +42,12 @@ export function parseFootprintTool(stdout: string): number | null {
   const units = { KB: 1024, MB: 1048576, GB: 1073741824 } as const
   const detail = stdout.match(/^\s*phys_footprint:\s+(\d+)\s+(KB|MB|GB)\b/m)
   if (detail) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the regex's unit group is proven present by the match; units keys are the literal set.
     return Number(detail[1]) * units[detail[2] as keyof typeof units]
   }
   const summary = stdout.match(/^\s*Footprint:\s+(\d+)\s+(KB|MB|GB)\b/m)
   if (summary) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the regex's unit group is proven present by the match; units keys are the literal set.
     return Number(summary[1]) * units[summary[2] as keyof typeof units]
   }
   return null

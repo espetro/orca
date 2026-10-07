@@ -2,6 +2,7 @@ import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
 } from '../../../../shared/runtime-host-status'
+import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
 import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
 import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
@@ -18,6 +19,8 @@ import { translate } from '@/i18n/i18n'
 
 export const webRuntimeState: {
   activeEnvironment: StoredWebRuntimeEnvironment | null
+  zcodePlanSiteRuntimeOwner: string | null
+  zcodePlanSiteRuntimeValue: ZcodePlanSite | null
   environments: StoredWebRuntimeEnvironment[]
   environmentById: Map<string, StoredWebRuntimeEnvironment>
   worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null
@@ -30,6 +33,8 @@ export const webRuntimeState: {
 
 function loadInitialState(): {
   activeEnvironment: StoredWebRuntimeEnvironment | null
+  zcodePlanSiteRuntimeOwner: string | null
+  zcodePlanSiteRuntimeValue: ZcodePlanSite | null
   environments: StoredWebRuntimeEnvironment[]
   environmentById: Map<string, StoredWebRuntimeEnvironment>
   worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null
@@ -44,6 +49,8 @@ function loadInitialState(): {
     activeEnvironment: stored.activeEnvironmentId
       ? (stored.environments.find((env) => env.id === stored.activeEnvironmentId) ?? null)
       : null,
+    zcodePlanSiteRuntimeOwner: null,
+    zcodePlanSiteRuntimeValue: null,
     environments: stored.environments,
     environmentById: new Map(stored.environments.map((env) => [env.id, env])),
     worktreeVisibilityDefaultsRuntimeEnvironmentId: null,
@@ -187,10 +194,11 @@ export function setActiveRuntimeEnvironment(id: string): StoredWebRuntimeEnviron
   if (!environment) {
     throw new Error(`Unknown Orca runtime environment: ${id}`)
   }
+  // Why: persist before mutating in-memory state so a storage failure leaves state untouched.
+  persistRegistry(id)
   closeActiveRuntimeClients()
   manuallyDisconnectedEnvironmentIds.delete(id)
   webRuntimeState.activeEnvironment = environment
-  persistRegistry(id)
   invalidateRuntimeWorktreeCaches()
   return environment
 }
@@ -200,13 +208,22 @@ export function removeStoredRuntimeEnvironment(id: string): boolean {
   if (!existing) {
     return false
   }
-  webRuntimeState.environments = webRuntimeState.environments.filter((env) => env.id !== id)
+  const environments = webRuntimeState.environments.filter((env) => env.id !== id)
+  const removingActive = webRuntimeState.activeEnvironment?.id === id
+  const nextActiveId: string | null = removingActive ? (environments[0]?.id ?? null) : null
+  // Why: persist before mutating in-memory state so a storage failure leaves state untouched.
+  saveStoredWebRuntimeEnvironments({
+    environments,
+    activeEnvironmentId: removingActive
+      ? nextActiveId
+      : (webRuntimeState.activeEnvironment?.id ?? null)
+  })
+  webRuntimeState.environments = environments
   webRuntimeState.environmentById.delete(id)
-  if (webRuntimeState.activeEnvironment?.id === id) {
+  if (removingActive) {
     closeActiveRuntimeClients()
-    webRuntimeState.activeEnvironment = webRuntimeState.environments[0] ?? null
+    webRuntimeState.activeEnvironment = environments[0] ?? null
   }
-  persistRegistry(webRuntimeState.activeEnvironment?.id ?? null)
   return true
 }
 
@@ -243,7 +260,7 @@ export function manuallyDisconnectedResponse(
 
 export function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {
   const active = requireActiveEnvironment()
-  if (selector === active.id || selector === active.name || selector === 'active') {
+  if (selector === active.id || selector === 'active') {
     return active
   }
   if (active.compatibleEnvironmentIds?.includes(selector)) {
@@ -253,9 +270,13 @@ export function resolveEnvironment(selector: string): StoredWebRuntimeEnvironmen
   if (byId) {
     return byId
   }
-  const byName = webRuntimeState.environments.find((env) => env.name === selector)
-  if (byName) {
-    return byName
+  // Why: duplicate user-provided names would make a name selector ambiguous.
+  const byName = webRuntimeState.environments.filter((env) => env.name === selector)
+  if (byName.length === 1) {
+    return byName[0]
+  }
+  if (byName.length > 1) {
+    throw new Error(`Ambiguous Orca runtime environment name: ${selector}`)
   }
   throw new Error(`Unknown Orca runtime environment: ${selector}`)
 }

@@ -1,6 +1,7 @@
 // Why: Web/desktop/CLI clients drive pairing over the runtime WebSocket transport; the IPC surface in
 // `src/main/ipc/mobile.ts` stays for the Electron renderer. Names here are wire-stable — mixed-version
 // hosts and clients must agree exactly, so changes here are remote-wire-compatibility changes.
+import { z } from 'zod'
 import type { RuntimeDesktopWindowStatus } from './runtime-session-contracts'
 
 export type MobileHostMode = 'desktop' | 'serve'
@@ -76,3 +77,21 @@ export type MobileRuntimePairingUrlAvailable = {
 export type MobileRuntimePairingUrlResult =
   | MobileRuntimePairingUrlUnavailable
   | MobileRuntimePairingUrlAvailable
+
+export const MobileGetPairingQrParamsSchema = z
+  .object({
+    address: z.string().optional(),
+    connectionMode: z.union([z.literal('local-only'), z.literal('automatic')]).optional(),
+    rotate: z.boolean().optional()
+  })
+  .optional()
+
+export const MobileRevokeDeviceParamsSchema = z.object({ deviceId: z.string().min(1) })
+
+export const MobileGetRuntimePairingUrlParamsSchema = z
+  .object({
+    address: z.string().optional(),
+    rotate: z.boolean().optional(),
+    reach: z.union([z.literal('this-computer'), z.literal('network')]).optional()
+  })
+  .optional()

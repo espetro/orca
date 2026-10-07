@@ -134,10 +134,7 @@ beforeEach(() => {
   listHostSetups.mockResolvedValue([localProjectHostSetup])
   projectGroupsList.mockResolvedValue([localProjectGroup])
   folderWorkspacesList.mockResolvedValue([localFolderWorkspace])
-  runtimeEnvironmentsList.mockResolvedValue({
-    environments: [{ id: 'env-1', name: 'lobster' }],
-    activeEnvironmentId: null
-  })
+  runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1', name: 'lobster' }])
   runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     if (args.method === 'repo.list') {
       return {
@@ -823,13 +820,10 @@ describe('fetchReposForAllHosts', () => {
   })
 
   it('starts remote repo catalog loads concurrently for all configured runtimes', async () => {
-    runtimeEnvironmentsList.mockResolvedValue({
-      environments: [
-        { id: 'env-1', name: 'first' },
-        { id: 'env-2', name: 'second' }
-      ],
-      activeEnvironmentId: null
-    })
+    runtimeEnvironmentsList.mockResolvedValue([
+      { id: 'env-1', name: 'first' },
+      { id: 'env-2', name: 'second' }
+    ])
     const firstStatusResolvers = new Map<string, (value: unknown) => void>()
     let resolveBothStatusProbes = (): void => {}
     const bothStatusProbesStarted = new Promise<void>((resolve, reject) => {

@@ -7,6 +7,7 @@
  * beside, or resolves resources against. The failure surfaces far from here, as a missing
  * file rather than a missing implementation.
  */
+import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -79,4 +80,11 @@ export function resolveOrcadPath(name: AppPathName): string {
     case 'downloads':
       return env('XDG_DOWNLOAD_DIR') ?? join(homedir(), 'Downloads')
   }
+}
+
+// Why: without a webClientRoot the WS transport serves HTTP with no request
+// listener, and Node holds plain GET requests open forever instead of 404ing.
+export function resolveBundledWebClientRoot(): string | undefined {
+  const root = join(resolveOrcadInstallRoot(), '..', 'web')
+  return existsSync(join(root, 'web-index.html')) ? root : undefined
 }

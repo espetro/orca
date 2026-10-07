@@ -1,17 +1,21 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
+import { resolveBakedProductName } from './dev-instance-identity'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import {
+  hasMissingProfileStateDatabaseWithRetainedAuthority,
+  readActiveProfileId,
+  readPersistedHttp1CompatibilityMode
+} from './http1-compatibility-profile-state'
 
-const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
-let devParentShutdownRequested = false
 
 type NetworkCompatibilityOptions = {
   env?: NodeJS.ProcessEnv
@@ -32,22 +36,6 @@ function parseBooleanEnvFlag(value: string | undefined): boolean | null {
   return null
 }
 
-function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
-  const dataFile = join(userDataPath, 'orca-data.json')
-  if (!existsSync(dataFile)) {
-    return false
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
-      settings?: { electronHttp1CompatibilityMode?: unknown }
-    }
-    return parsed.settings?.electronHttp1CompatibilityMode === true
-  } catch {
-    return false
-  }
-}
-
 export function shouldDisableHttp2ForElectronNetworking(
   options: NetworkCompatibilityOptions = {}
 ): boolean {
@@ -56,11 +44,22 @@ export function shouldDisableHttp2ForElectronNetworking(
     return envValue
   }
   const userDataPath = options.userDataPath ?? app.getPath('userData')
+  const activeProfileId = readActiveProfileId(userDataPath)
   // Why the marker first: this runs before app.whenReady(), and the settings file is the multi-MB
-  // orca-data.json the Store parses again moments later. The marker is refreshed whenever settings
-  // change, so the full read only happens on a profile that has never written one.
+  // profile document the Store parses again moments later. The marker is refreshed whenever
+  // settings change; an untrusted SQLite profile fails closed rather than falling back to JSON.
+  if (
+    activeProfileId !== undefined &&
+    activeProfileId !== null &&
+    hasMissingProfileStateDatabaseWithRetainedAuthority(userDataPath, activeProfileId)
+  ) {
+    return false
+  }
   return (
-    readHttp1CompatibilityMarker(userDataPath) ?? readPersistedHttp1CompatibilityMode(userDataPath)
+    (activeProfileId === null
+      ? null
+      : readHttp1CompatibilityMarker(userDataPath, activeProfileId)) ??
+    readPersistedHttp1CompatibilityMode(userDataPath)
   )
 }
 
@@ -96,26 +95,6 @@ function appendDisabledChromiumFeatures(features: string[]): void {
 
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
-}
-
-function requestDevParentShutdown(): void {
-  devParentShutdownRequested = true
-  app.quit()
-
-  const forceExitTimer = setTimeout(() => {
-    // Why: app.quit() may stall on macOS quit handlers or window-close guards, so force-exit after a grace period to avoid a hung dev app.
-    app.exit(0)
-  }, DEV_PARENT_SHUTDOWN_GRACE_MS)
-
-  forceExitTimer.unref()
-}
-
-export function isDevParentShutdownRequested(): boolean {
-  return devParentShutdownRequested
-}
-
-export function resetDevParentShutdownRequestForTests(): void {
-  devParentShutdownRequested = false
 }
 
 export function patchPackagedProcessPath(): void {
@@ -215,10 +194,7 @@ export function configureDevUserDataPath(isDev: boolean): void {
     return
   }
 
-  const bakedProductName =
-    typeof ORCA_PRODUCT_NAME !== 'undefined'
-      ? ORCA_PRODUCT_NAME
-      : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+  const bakedProductName = resolveBakedProductName()
   if (bakedProductName && bakedProductName !== 'Orca') {
     // Why: pin the variant's profile dir explicitly instead of relying on
     // Electron deriving it from app.getName() later in startup.
@@ -258,71 +234,7 @@ export function shouldInstallManagedHooks(isDev: boolean): boolean {
   return true
 }
 
-export function installDevParentDisconnectQuit(isDev: boolean): void {
-  if (!isDev || typeof process.send !== 'function') {
-    return
-  }
-
-  // Why: on macOS Ctrl+C can stop the electron-vite parent without closing the window, so quit when the IPC channel disconnects.
-  process.once('disconnect', () => {
-    requestDevParentShutdown()
-  })
-}
-
-export function installDevParentWatchdog(isDev: boolean): void {
-  if (!isDev) {
-    return
-  }
-
-  const initialParentPid = process.ppid
-  if (!Number.isInteger(initialParentPid) || initialParentPid <= 1) {
-    return
-  }
-
-  const timer = setInterval(() => {
-    const parentPidChanged = process.ppid !== initialParentPid
-    let parentMissing = false
-
-    try {
-      process.kill(initialParentPid, 0)
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error as NodeJS.ErrnoException).code === 'ESRCH'
-      ) {
-        parentMissing = true
-      } else {
-        throw error
-      }
-    }
-
-    if (parentPidChanged || parentMissing) {
-      clearInterval(timer)
-      // Why: the dev runner spawns Electron without IPC, so on macOS Ctrl+C leaves Orca open; watch the parent PID to couple shutdown.
-      requestDevParentShutdown()
-    }
-  }, 1000)
-
-  timer.unref()
-}
-
-export function installDevParentSignalQuit(isDev: boolean): void {
-  if (!isDev) {
-    return
-  }
-
-  const onSignal = (): void => {
-    // Why: run-electron-vite-dev forwards terminal shutdown signals here, so don't preserve the detached daemon for warm reattach.
-    requestDevParentShutdown()
-  }
-
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
-}
-
-export function enableMainProcessGpuFeatures(): void {
+export function enableMainProcessGpuFeatures(options: { isServeMode?: boolean } = {}): void {
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
     // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
     app.disableHardwareAcceleration()
@@ -361,11 +273,23 @@ export function enableMainProcessGpuFeatures(): void {
   const features = [
     // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
     ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    // Why: serve keeps hidden offscreen tabs alive indefinitely; PurgeAndSuspend lets Chromium
+    // reclaim their GPU-side caches instead of the GPU process growing unbounded.
+    ...(options.isServeMode ? ['PurgeAndSuspend'] : []),
     existingFeatures
   ]
     .filter(Boolean)
     .join(',')
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
+  }
+
+  if (options.isServeMode) {
+    // Why: bounds the GPU-process cache pressure that grows with hidden offscreen browser tabs; env override for experiments.
+    const gpuMemMb = Number.parseInt(process.env.ORCA_GPU_MEM_AVAILABLE_MB ?? '', 10)
+    app.commandLine.appendSwitch(
+      'force-gpu-mem-available-mb',
+      String(Number.isFinite(gpuMemMb) && gpuMemMb > 0 ? gpuMemMb : 512)
+    )
   }
 }

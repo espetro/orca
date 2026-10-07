@@ -57,6 +57,14 @@ function formatLabel(branch: string | null, worktreeName: string | null): string
  * Slug for a baked product variant: "Orca Canary" → "canary".
  * Must match deriveProductSlug in config/electron-builder.config.cjs (appId suffix).
  */
+/** Product name baked into the build (e.g. "Orca Canary"), or null on a plain Orca build. */
+export function resolveBakedProductName(): string | null {
+  return typeof ORCA_PRODUCT_NAME !== 'undefined'
+    ? ORCA_PRODUCT_NAME
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the define exists only in packaged builds; under tsc the guarded globalThis read is the real optional shape.
+      ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+}
+
 export function productVariantSlug(productName: string): string {
   return productName
     .replace(/^Orca\s+/i, '')
@@ -80,10 +88,7 @@ export function getDevInstanceIdentity(
     // A build baked with ORCA_PRODUCT_NAME (e.g. "Orca Canary") is a full variant:
     // its own name, appName (→ its own "<name> Safe Storage" key) and AUMID, so it
     // installs and runs beside stable without sharing identity or secrets.
-    const bakedProductName =
-      typeof ORCA_PRODUCT_NAME !== 'undefined'
-        ? ORCA_PRODUCT_NAME
-        : ((globalThis as { ORCA_PRODUCT_NAME?: string | null }).ORCA_PRODUCT_NAME ?? null)
+    const bakedProductName = resolveBakedProductName()
     const productName =
       bakedProductName && bakedProductName !== BASE_APP_NAME ? bakedProductName : BASE_APP_NAME
     const slug = productName === BASE_APP_NAME ? null : productVariantSlug(productName)

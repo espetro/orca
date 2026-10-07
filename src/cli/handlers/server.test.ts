@@ -15,6 +15,7 @@ vi.mock('../runtime/environments', async (importOriginal) => {
 
 const addEnvironmentFromPairingCodeMock = vi.mocked(addEnvironmentFromPairingCode)
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal shape for the call-site narrowing vi.mocked applies.
 const REDACTED_ENVIRONMENT = {
   name: 'homelab',
   id: 'env-1',
@@ -30,6 +31,7 @@ function ctx(overrides: {
 }) {
   return {
     flags: overrides.flags ?? new Map<string, string | boolean>(),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handlers only invoke client.call; the rest of the client surface is unused in tests.
     client: { call: overrides.call ?? vi.fn() } as never,
     cwd: '/tmp',
     json: overrides.json ?? false
@@ -311,7 +313,7 @@ describe('server add handler', () => {
       )
       expect.unreachable()
     } catch (error) {
-      expect(String((error as Error).message)).not.toContain('super-secret-code')
+      expect(String(error)).not.toContain('super-secret-code')
       reportCliError(error, false, { commandPath: ['server', 'add'] })
     }
     expect(err.mock.calls.map((c) => String(c[0])).join('\n')).not.toContain('super-secret-code')

@@ -14,7 +14,6 @@ import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
-import type { MobileHostStatus } from './use-mobile-host-status'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -62,12 +61,6 @@ type MobilePageContentProps = {
   stage: MobilePageStage | null
   stepIdx: StepIndex
   toggleMobileSidebarButton: () => void
-  /** Optional override: when true, render the read-only "Pair from desktop" surface. */
-  isRemoteRendererReadOnly?: boolean
-  /** Optional override: when true, hide the Anywhere radio and show the unavailable reason. */
-  hideAnywhere?: boolean
-  /** Read-only context for the toolbar button hint. */
-  hostStatus: MobileHostStatus | null
 }
 
 export function MobilePageContent({
@@ -115,9 +108,7 @@ export function MobilePageContent({
   showPairedDevices,
   stage,
   stepIdx,
-  toggleMobileSidebarButton,
-  isRemoteRendererReadOnly = false,
-  hostStatus = null
+  toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
   return (
     <div className="mobile-page-root scrollbar-sleek">
@@ -125,29 +116,10 @@ export function MobilePageContent({
         showMobileButton={showMobileButton}
         onClose={closeMobilePage}
         onToggleMobileSidebarButton={toggleMobileSidebarButton}
-        isRemoteRendererReadOnly={isRemoteRendererReadOnly}
       />
       <section className="mp-hero">
         <div className="mp-hero-copy">
-          {isRemoteRendererReadOnly ? (
-            <div
-              className="rounded-md border border-border/60 bg-muted/30 px-4 py-3 text-sm"
-              data-testid="remote-renderer-notice"
-            >
-              <h2 className="mb-1 font-medium">
-                {translate(
-                  'auto.components.mobile.MobilePage.c736088782',
-                  'Pair from the desktop app'
-                )}
-              </h2>
-              <p className="text-muted-foreground">
-                {translate(
-                  'auto.components.mobile.MobilePage.a62011e553',
-                  'Pair Orca Mobile from the desktop app on this host.'
-                )}
-              </p>
-            </div>
-          ) : stage === null ? null : stage === 'intro' ? (
+          {stage === null ? null : stage === 'intro' ? (
             <HeroIntro onStart={enterFlow} />
           ) : stage === 'paired' ? (
             <HeroPaired
@@ -202,7 +174,6 @@ export function MobilePageContent({
         <div
           className="mp-stage"
           aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
-          data-host-mode={hostStatus?.hostMode ?? 'unknown'}
         >
           <PhoneCarousel />
         </div>

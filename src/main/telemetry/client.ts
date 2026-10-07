@@ -13,6 +13,7 @@ import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/
 import type { Store } from '../persistence'
 import { loadPostHogModule } from './posthog-module-loader'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { waitForCaptureEnqueue } from './telemetry-capture-enqueue'
 import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
 import { commonPropsSchema, validate } from './validator'
@@ -26,11 +27,13 @@ const TELEMETRY_ENABLED = true
 const BUILD_IDENTITY: 'stable' | 'rc' | null =
   typeof ORCA_BUILD_IDENTITY !== 'undefined'
     ? ORCA_BUILD_IDENTITY
-    : ((globalThis as { ORCA_BUILD_IDENTITY?: 'stable' | 'rc' | null }).ORCA_BUILD_IDENTITY ?? null)
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the define exists only in packaged builds; under tsc the guarded globalThis read is the real optional shape.
+      ((globalThis as { ORCA_BUILD_IDENTITY?: 'stable' | 'rc' | null }).ORCA_BUILD_IDENTITY ?? null)
 const WRITE_KEY: string | null =
   typeof ORCA_POSTHOG_WRITE_KEY !== 'undefined'
     ? ORCA_POSTHOG_WRITE_KEY
-    : ((globalThis as { ORCA_POSTHOG_WRITE_KEY?: string | null }).ORCA_POSTHOG_WRITE_KEY ?? null)
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the define exists only in packaged builds; under tsc the guarded globalThis read is the real optional shape.
+      ((globalThis as { ORCA_POSTHOG_WRITE_KEY?: string | null }).ORCA_POSTHOG_WRITE_KEY ?? null)
 const IS_OFFICIAL_BUILD: boolean =
   (BUILD_IDENTITY === 'stable' || BUILD_IDENTITY === 'rc') &&
   typeof WRITE_KEY === 'string' &&
@@ -42,8 +45,6 @@ let sessionId: string | null = null
 let commonProps: CommonProps | null = null
 let shuttingDown = false
 let storeRef: Store | null = null
-
-const OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS = 1_000
 
 // Test-only transport-gate override (`_enableTransportForTests`) so tests exercise the full pipeline without a real CI build.
 let testTransportEnabled = false
@@ -89,6 +90,7 @@ export function initTelemetry(store: Store): void {
     installId,
     sessionId,
     // Non-null here: `IS_OFFICIAL_BUILD` gated this branch to the `'stable' | 'rc'` arm.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the IS_OFFICIAL_BUILD gate on the branch above already narrowed identity to stable|rc.
     BUILD_IDENTITY as 'stable' | 'rc'
   )
 
@@ -101,6 +103,7 @@ export function initTelemetry(store: Store): void {
     return
   }
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WRITE_KEY is a build-time define absent under tsc; packaged builds always provide it.
   posthog = new (loadPostHogModule().PostHog)(WRITE_KEY as string, {
     host: 'https://us.i.posthog.com',
     flushAt: 20,
@@ -128,68 +131,47 @@ export function shouldOptOutSdkAtInit(consent: ConsentState): boolean {
   return consent.effective === 'disabled'
 }
 
-function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-    let stopListening: (() => void) | null = null
-    let timeout: ReturnType<typeof setTimeout> | null = null
-
-    const settle = (enqueued: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-      stopListening?.()
-      resolve(enqueued)
-    }
-
-    // Why: posthog-node capture() enqueues async; this SDK event is the durable boundary before optOut().
-    stopListening = client.on('capture', (payload: unknown) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const message = payload as { event?: unknown; uuid?: unknown }
-      if (message.event === event && message.uuid === uuid) {
-        settle(true)
-      }
-    })
-
-    timeout = setTimeout(() => settle(false), OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS)
-  })
+/** Lets producers avoid preparing usage payloads when transmission is disabled. */
+export function isTelemetryEnabled(): boolean {
+  return (
+    (testTransportEnabled || (IS_OFFICIAL_BUILD && TELEMETRY_ENABLED)) &&
+    !shuttingDown &&
+    posthog !== null &&
+    commonProps !== null &&
+    storeRef !== null &&
+    resolveConsent(storeRef.getSettings()).effective === 'enabled'
+  )
 }
 
 // No-op in contributor / non-official builds; only official stable/rc builds (CI-injected `ORCA_BUILD_IDENTITY` + `ORCA_POSTHOG_WRITE_KEY`) transmit.
-export function track<N extends EventName>(name: N, props: EventProps<N>): void {
+export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
-    return
+    return false
   }
 
   // (1) Shutdown gate: late IPC arrivals must not enqueue against a flushing client.
   if (shuttingDown) {
-    return
+    return false
   }
   if (!posthog || !commonProps || !storeRef) {
-    return
+    return false
   }
 
   // (2) Burst cap before consent: the O(1) cap drops floods before the costly settings read, so a compromised opted-out renderer can't burn CPU.
   if (!consumeBurstToken(name)) {
-    return
+    return false
   }
 
   // (3) Consent resolve — reads live settings every call so it can't drift from persisted state / env-var precedence.
   const consent = resolveConsent(storeRef.getSettings())
   if (consent.effective !== 'enabled') {
-    return
+    return false
   }
 
   // (4) Validator — single enforcement point for schema, enum, key set, and length caps.
   const result = validate(name, props)
   if (!result.ok) {
-    return
+    return false
   }
 
   // (5) Capture. `$process_person_profile: false` stops posthog-node creating a person per install_id (no init-time equivalent).
@@ -202,6 +184,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): void 
       $process_person_profile: false
     }
   })
+  return true
 }
 
 export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
@@ -216,7 +199,10 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   // Deep-merge (persistence.ts:552) so flipping `optedIn` won't clobber `installId` / `existedBeforeTelemetryRelease`.
   storeRef.updateSettings({
     telemetry: {
-      ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
+      ...(settings.telemetry ?? {
+        installId: '',
+        existedBeforeTelemetryRelease: true
+      }),
       optedIn
     }
   })
@@ -276,7 +262,10 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
   // Fallback only used if the `telemetry` block is absent (migration invariant broken); updateSettings deep-merges it (persistence.ts:560).
   storeRef.updateSettings({
     telemetry: {
-      ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
+      ...(settings.telemetry ?? {
+        installId: '',
+        existedBeforeTelemetryRelease: true
+      }),
       optedIn: true
     }
   })

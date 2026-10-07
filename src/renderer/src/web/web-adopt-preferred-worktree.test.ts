@@ -8,10 +8,12 @@ import {
 } from './web-adopt-preferred-worktree'
 
 function makeRepo(id: string): Repo {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the fields the adoption path reads.
   return { id } as unknown as Repo
 }
 
 function makeWorktree(id: string, repoId: string): Worktree {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the fields the adoption path reads.
   return { id, repoId } as unknown as Worktree
 }
 
@@ -28,6 +30,7 @@ function makeState(partial: Partial<MinimalAppState> = {}): AppState {
     activeRepoId: null,
     ...partial
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the fields the adoption path reads.
   return state as unknown as AppState
 }
 
@@ -113,9 +116,15 @@ describe('decideAdoptPreferredWorktree', () => {
 describe('applyAdoptedPreferredWorktree', () => {
   it('writes activeWorktreeId and activeRepoId through the supplied setter', () => {
     const set = vi.fn()
-    applyAdoptedPreferredWorktree(set, { adopt: true, worktreeId: 'wt-x', repoId: 'repo-x' })
+    applyAdoptedPreferredWorktree(set, {
+      adopt: true,
+      worktreeId: 'wt-x',
+      repoId: 'repo-x'
+    })
     expect(set).toHaveBeenCalledTimes(1)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the set mock records its updater; the state stub only needs the fields the updater reads.
     const updater = set.mock.calls[0]![0] as (state: AppState) => Partial<AppState>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the state stub only needs the fields the updater reads.
     const patch = updater({} as AppState)
     expect(patch).toEqual({ activeWorktreeId: 'wt-x', activeRepoId: 'repo-x' })
   })

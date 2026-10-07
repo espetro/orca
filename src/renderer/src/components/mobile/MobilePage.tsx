@@ -23,7 +23,6 @@ import {
   type MobilePairingAddressChange,
   useMobilePairingAddressPreference
 } from './use-mobile-pairing-address-preference'
-import { useMobileHostStatus } from './use-mobile-host-status'
 
 export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
@@ -63,6 +62,13 @@ export default function MobilePage(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const hasGeneratedRef = useRef(false)
   const pairingRequestIdRef = useRef(0)
+  // Why: each flow entry starts its own address lookup. Gating the Step 2 mint on
+  // "has this visit's lookup settled" is false until it answers, where "is a lookup
+  // running" cannot tell overlapping lookups apart and clears on the first to land.
+  const [pairingFlowVisit, setPairingFlowVisit] = useState(0)
+  const [addressedFlowVisit, setAddressedFlowVisit] = useState<number | null>(null)
+  const pairingAddressSettled = addressedFlowVisit === pairingFlowVisit
+  const networkInterfacesRequestIdRef = useRef(0)
   const mountedRef = useMountedRef()
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
@@ -189,23 +195,33 @@ export default function MobilePage(): React.JSX.Element {
   })
 
   const loadNetworkInterfaces = useCallback(async () => {
+    const requestId = ++networkInterfacesRequestIdRef.current
+    const visit = pairingFlowVisit
     if (mountedRef.current) {
       setRefreshingNetworkInterfaces(true)
     }
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
-      if (mountedRef.current) {
+      // Why: a superseded lookup must not move the selection a newer one already
+      // resolved — that address change remints over the offer just advertised.
+      if (mountedRef.current && requestId === networkInterfacesRequestIdRef.current) {
         setNetworkInterfaces(result.interfaces)
         selectAddressAfterRefresh(result.interfaces)
       }
     } catch {
       // Network list is non-critical; the QR will still mint with default routing.
     } finally {
-      if (mountedRef.current) {
+      // Why: only the newest lookup may report a completion — a superseded one
+      // marking its visit addressed releases the mint against an address its own
+      // replacement is about to change. Plain assignment is safe because entering
+      // a flow bumps the visit and starts its own lookup, so the newest request
+      // always carries the highest visit.
+      if (mountedRef.current && requestId === networkInterfacesRequestIdRef.current) {
+        setAddressedFlowVisit(visit)
         setRefreshingNetworkInterfaces(false)
       }
     }
-  }, [mountedRef, selectAddressAfterRefresh])
+  }, [mountedRef, pairingFlowVisit, selectAddressAfterRefresh])
 
   useEffect(() => {
     if (stage !== 'flow') {
@@ -264,30 +280,39 @@ export default function MobilePage(): React.JSX.Element {
     if (!canGenerate) {
       return
     }
+    // Why: entering Step 2 also starts this visit's address lookup, and minting
+    // before it settles advertises an address the lookup is about to replace — the
+    // replacement then rotates away the credential this mint just created, so one
+    // Continue runs two overlapping offers through main for one pending token.
+    if (!pairingAddressSettled) {
+      return
+    }
     void generatePairing(false)
-  }, [stage, stepIdx, canGenerate, generatePairing])
+  }, [stage, stepIdx, canGenerate, generatePairing, pairingAddressSettled])
 
   // Why: entering the flow must mint a fresh pairing token — clear stale QR
   // state so we never flash an expired code from a previous session.
-  const enterFlow = (): void => {
+  const beginPairingVisit = (): void => {
+    pairingRequestIdRef.current += 1
+    setPairLoading(false)
+    setPairingFlowVisit((visit) => visit + 1)
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairQrSize(null)
     setPairingUrl(null)
     setPairingQrError(false)
     setRelayMintFailure(null)
+  }
+
+  const enterFlow = (): void => {
+    beginPairingVisit()
     showFirstPairingFlow()
   }
 
   // Why: from the paired summary, "Pair another device" jumps straight to
   // Step 2 since the app is presumably already installed on the user's phone.
   const pairAnotherDevice = (): void => {
-    hasGeneratedRef.current = false
-    setPairQrDataUrl(null)
-    setPairQrSize(null)
-    setPairingUrl(null)
-    setPairingQrError(false)
-    setRelayMintFailure(null)
+    beginPairingVisit()
     showPairAnotherDeviceFlow()
   }
 
@@ -312,12 +337,13 @@ export default function MobilePage(): React.JSX.Element {
 
   useMobilePageEscape(closeMobilePage)
 
-  // Why: when a desktop window is open on this host, another renderer already owns the
-  // QR-mint UI. Surface the paired-device list with a "pair from desktop" notice instead
-  // of letting the page ask the user to scan a code that's coming from another window.
-  const hostStatusState = useMobileHostStatus()
-  const isRemoteRendererReadOnly =
-    hostStatusState.state === 'loaded' && hostStatusState.status.desktopWindowStatus === 'available'
+  // Why: while the deferred first mint waits on the address, Step 2 would
+  // otherwise read "Generate a pairing code to continue" — a prompt for work it
+  // is already about to do on the user's behalf. Kept separate from pairLoading:
+  // that one feeds the invalidation hook's shouldRegenerate, so folding this into
+  // it would let a mode switch mint before the address settles.
+  const awaitingPairingAddress =
+    stage === 'flow' && stepIdx === 1 && canGenerate && !pairingAddressSettled
 
   return (
     <MobilePageContent
@@ -344,7 +370,7 @@ export default function MobilePage(): React.JSX.Element {
       openAndroidInstallGuide={openAndroidInstallGuide}
       openInstallUrl={openInstallUrl}
       pairAnotherDevice={pairAnotherDevice}
-      pairLoading={pairLoading}
+      pairLoading={pairLoading || awaitingPairingAddress}
       connectionMode={connectionMode}
       handleConnectionModeChange={handleConnectionModeChange}
       pairQrDataUrl={pairQrDataUrl}
@@ -368,8 +394,6 @@ export default function MobilePage(): React.JSX.Element {
       stage={stage}
       stepIdx={stepIdx}
       toggleMobileSidebarButton={toggleMobileSidebarButton}
-      isRemoteRendererReadOnly={isRemoteRendererReadOnly}
-      hostStatus={hostStatusState.state === 'loaded' ? hostStatusState.status : null}
     />
   )
 }

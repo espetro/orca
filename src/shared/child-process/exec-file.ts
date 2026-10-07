@@ -8,4 +8,8 @@ import type { ExecFileFn } from '../resource-recorder-types'
  * exporter of the promisified form.
  */
 export const execFileAsync: ExecFileFn = (file, args) =>
-  promisify(nodeExecFile)(file, args) as unknown as Promise<{ stdout: string; stderr: string }>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: promisify(execFile) resolves {stdout, stderr} by node's documented callback shape.
+  promisify(nodeExecFile)(file, args) as unknown as Promise<{
+    stdout: string
+    stderr: string
+  }>

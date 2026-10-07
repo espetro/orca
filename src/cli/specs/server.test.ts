@@ -20,6 +20,7 @@ describe('server command specs', () => {
     )
     // Why: spec lookup is by command path, so drive normalize directly on the spec.
     const withSpec = normalizeCommandPositionals(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preceding expect(spec).toBeDefined() narrows for the reader; normalizeCommandPositionals needs the non-optional type.
       [{ ...(spec as NonNullable<typeof spec>) }],
       parseArgs(['server', 'add', 'orca://pair?code=secret', '--name', 'homelab'], [])
     )

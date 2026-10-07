@@ -2,8 +2,12 @@
 // (runtime-rpc-websocket-dispatch.ts:76-86); this set is for runtime/desktop/CLI.
 // The runtime exposes a `getMobilePairingRpcAccessors()` seam that the main process wires up to
 // the live RPC server (so handlers can mint offers / manage devices without back-references).
-import { z } from 'zod'
 import { defineMethod } from '../core'
+import {
+  MobileGetPairingQrParamsSchema,
+  MobileGetRuntimePairingUrlParamsSchema,
+  MobileRevokeDeviceParamsSchema
+} from '../../../../shared/mobile-pairing-rpc-contract'
 import { resolveAdvertisedPairingHostname } from '../../pairing-endpoint'
 import { classifyRemotePairingHostname } from '../../../../shared/remote-pairing-address'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../../network-exposure-guidance'
@@ -24,30 +28,9 @@ import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-rea
 // rejects `mobile.*` for phone-scope tokens, but the handlers double-check on device-touching methods.
 function ensureRuntimeScope(ctx: { clientKind?: 'mobile' | 'runtime' }): void {
   if (ctx.clientKind === 'mobile') {
-    const err = new Error('mobile_scope_denied') as Error & { code?: string }
-    err.code = 'forbidden'
-    throw err
+    throw Object.assign(new Error('mobile_scope_denied'), { code: 'forbidden' })
   }
 }
-
-const MobileGetPairingQrParamsSchema = z
-  .object({
-    address: z.string().optional(),
-    connectionMode: z.union([z.literal('local-only'), z.literal('automatic')]).optional(),
-    rotate: z.boolean().optional()
-  })
-  .optional()
-
-const MobileRevokeDeviceParamsSchema = z.object({ deviceId: z.string().min(1) })
-
-const MobileGetRuntimePairingUrlParamsSchema = z
-  .object({
-    address: z.string().optional(),
-    rotate: z.boolean().optional(),
-    reach: z.union([z.literal('this-computer'), z.literal('network')]).optional(),
-    ttlMs: z.number().int().positive().max(2592000000).optional()
-  })
-  .optional()
 
 export type MobilePairingRpcAccessors = {
   getWebSocketEndpoint(): string | null
@@ -81,7 +64,6 @@ export type MobilePairingRpcAccessors = {
     rotate?: boolean
     scope?: 'mobile' | 'runtime'
     reach?: RuntimePairingReach
-    ttlMs?: number
   }):
     | {
         available: true
@@ -111,21 +93,6 @@ export type MobilePairingRpcAccessors = {
   >
 }
 
-type RuntimeWithMobilePairingAccessors = {
-  getMobilePairingRpcAccessors?(): MobilePairingRpcAccessors | null
-  getStatus(): {
-    desktopWindowStatus?: string | null
-    hostMode?: MobileHostMode
-    relayAvailable?: boolean
-    webSocketEndpoint?: string | null
-  }
-}
-
-function resolveAccessors(
-  runtime: RuntimeWithMobilePairingAccessors
-): MobilePairingRpcAccessors | null {
-  return runtime.getMobilePairingRpcAccessors?.() ?? null
-}
 // Why: derives the host mode without a dedicated accessor — the runtime's own getStatus already
 // reports `desktopWindowStatus: 'available'` only when a live renderer is attached, so 'desktop' iff
 // 'available', otherwise 'serve'.
@@ -139,7 +106,7 @@ export const MOBILE_PAIRING_METHODS = [
     params: null,
     handler: (_params, ctx): MobileHostStatusResult => {
       const status = ctx.runtime.getStatus()
-      const accessors = resolveAccessors(ctx.runtime as RuntimeWithMobilePairingAccessors)
+      const accessors = ctx.runtime.getMobilePairingRpcAccessors()
       const relayAvailable = accessors
         ? accessors.isDesktopRelayProviderAttached()
         : Boolean(status.relayAvailable)
@@ -147,8 +114,7 @@ export const MOBILE_PAIRING_METHODS = [
         ? accessors.getWebSocketEndpoint()
         : (status.webSocketEndpoint ?? null)
       const result: MobileHostStatus = {
-        desktopWindowStatus: (status.desktopWindowStatus ??
-          null) as MobileHostStatus['desktopWindowStatus'],
+        desktopWindowStatus: status.desktopWindowStatus ?? null,
         hostMode: status.hostMode ?? deriveHostMode(status),
         relayAvailable,
         webSocketEndpoint
@@ -161,7 +127,7 @@ export const MOBILE_PAIRING_METHODS = [
     name: 'mobile.listNetworkInterfaces',
     params: null,
     handler: async (_params, ctx): Promise<MobileNetworkInterfacesResult> => {
-      const accessors = resolveAccessors(ctx.runtime as RuntimeWithMobilePairingAccessors)
+      const accessors = ctx.runtime.getMobilePairingRpcAccessors()
       if (!accessors) {
         return { interfaces: [] }
       }
@@ -174,7 +140,7 @@ export const MOBILE_PAIRING_METHODS = [
     name: 'mobile.getPairingQR',
     params: MobileGetPairingQrParamsSchema,
     handler: async (params, ctx): Promise<MobilePairingQrResult> => {
-      const accessors = resolveAccessors(ctx.runtime as RuntimeWithMobilePairingAccessors)
+      const accessors = ctx.runtime.getMobilePairingRpcAccessors()
       if (!accessors) {
         return {
           available: false,
@@ -227,7 +193,7 @@ export const MOBILE_PAIRING_METHODS = [
       // Why: defence-in-depth — phone-scope callers are already rejected at the dispatcher,
       // but device-touching handlers enforce scope independently.
       ensureRuntimeScope(ctx)
-      const accessors = resolveAccessors(ctx.runtime as RuntimeWithMobilePairingAccessors)
+      const accessors = ctx.runtime.getMobilePairingRpcAccessors()
       const registry = accessors?.getDeviceRegistry()
       if (!registry) {
         return { devices: [] }
@@ -253,7 +219,7 @@ export const MOBILE_PAIRING_METHODS = [
     params: MobileRevokeDeviceParamsSchema,
     handler: async (params, ctx): Promise<MobileRevokeDeviceResult> => {
       ensureRuntimeScope(ctx)
-      const accessors = resolveAccessors(ctx.runtime as RuntimeWithMobilePairingAccessors)
+      const accessors = ctx.runtime.getMobilePairingRpcAccessors()
       if (!accessors) {
         return { revoked: false }
       }
@@ -265,7 +231,7 @@ export const MOBILE_PAIRING_METHODS = [
     name: 'mobile.getRuntimePairingUrl',
     params: MobileGetRuntimePairingUrlParamsSchema,
     handler: async (params, ctx): Promise<MobileRuntimePairingUrlResult> => {
-      const accessors = resolveAccessors(ctx.runtime as RuntimeWithMobilePairingAccessors)
+      const accessors = ctx.runtime.getMobilePairingRpcAccessors()
       if (!accessors) {
         return { available: false, reason: 'rpc_accessors_unavailable' }
       }
@@ -302,8 +268,7 @@ export const MOBILE_PAIRING_METHODS = [
         address: ip ?? undefined,
         rotate: params?.rotate,
         scope: 'runtime',
-        reach,
-        ttlMs: params?.ttlMs
+        reach
       })
       if (!offer.available) {
         return { available: false, reason: offer.reason, guidance: offer.guidance }

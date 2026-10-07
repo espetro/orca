@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTerminalClientTab
+} from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { buildMirroredTerminalTabs } from './terminal-build'
@@ -9,9 +12,12 @@ const HOST_TAB_ID = 'host-tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SURFACE_ID = `${HOST_TAB_ID}::${LEAF_ID}`
 const LOCAL_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
+const NO_LAYOUTS: Record<string, TerminalLayoutSnapshot> = {}
 
 function makeSnapshot(
-  surfaceOverrides: Record<string, unknown> = {}
+  surfaceOverrides: Partial<
+    Pick<RuntimeMobileSessionTerminalClientTab, 'customTitle' | 'title'>
+  > = {}
 ): RuntimeMobileSessionTabsResult {
   return {
     worktree: WT,
@@ -31,7 +37,7 @@ function makeSnapshot(
         status: 'ready',
         terminal: 'terminal-1',
         ...surfaceOverrides
-      } as RuntimeMobileSessionTabsResult['tabs'][number]
+      }
     ]
   }
 }
@@ -62,7 +68,7 @@ function mirror(
     snapshot,
     'web-env-1',
     existing ?? new Map(),
-    {} as Record<string, TerminalLayoutSnapshot>,
+    NO_LAYOUTS,
     0,
     1_700_000_000_000
   )

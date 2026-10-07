@@ -38,6 +38,7 @@ function readEnvironmentTombstones(): Set<string> {
   }
   try {
     const raw = window.localStorage.getItem(ENVIRONMENT_TOMBSTONES_STORAGE_KEY)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse returns any; Array.isArray narrows it on the next line.
     const parsed = raw ? (JSON.parse(raw) as unknown) : null
     if (!Array.isArray(parsed)) {
       return new Set()
@@ -174,6 +175,7 @@ export async function syncEnvironmentsFromServer(): Promise<StoredWebRuntimeEnvi
 // log only the shape of the error, never tokens or endpoints.
 function describeSyncError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the typeof code === 'string' check directly below validates the field.
     const code = (error as { code?: unknown }).code
     if (typeof code === 'string') {
       return code
@@ -230,6 +232,7 @@ export async function addEnvironmentOnServer(args: {
   // Why: the server mints its own id and re-derives endpoints from the pairing code,
   // so the local entry is replaced by the server's record under its stable id.
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store's add response always carries the stored environment id.
     const added = (await callEnvironmentStore<{ id: string }>('environmentStore.add', {
       name: args.environment.name,
       pairingCode: args.pairingCode
@@ -258,7 +261,9 @@ export async function removeEnvironmentOnServer(selector: string): Promise<void>
     return
   }
   try {
-    await callEnvironmentStore<{ id: string }>('environmentStore.remove', { selector })
+    await callEnvironmentStore<{ id: string }>('environmentStore.remove', {
+      selector
+    })
   } catch (error) {
     console.warn('[web-environment-sync] environmentStore.remove failed:', describeSyncError(error))
     throw error

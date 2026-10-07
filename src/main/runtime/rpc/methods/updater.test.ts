@@ -31,7 +31,12 @@ describe('runtime updater RPC methods', () => {
   }))
   const runtime = {
     getRuntimeId: () => 'runtime-rpc',
-    getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 2, liveLeafCount: 3 })
+    machineNameReady: async () => undefined,
+    getStatus: () => ({
+      runtimeId: 'runtime-rpc',
+      liveTabCount: 2,
+      liveLeafCount: 3
+    })
   }
 
   beforeEach(() => {
@@ -40,6 +45,7 @@ describe('runtime updater RPC methods', () => {
   })
 
   it('exposes status and each update transition', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
     const context = { runtime } as never
     expect(await handler(UPDATER_METHODS, 'updater.getStatus')(undefined, context)).toBe(snapshot)
     expect(
@@ -60,7 +66,10 @@ describe('runtime updater RPC methods', () => {
   })
 
   it('enriches status.get without changing the runtime status source', async () => {
-    const result = await handler(STATUS_METHODS, 'status.get')(undefined, { runtime } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores ctx in this unit test.
+    const result = await handler(STATUS_METHODS, 'status.get')(undefined, {
+      runtime
+    } as never)
     expect(result).toEqual({
       runtimeId: 'runtime-rpc',
       liveTabCount: 2,
@@ -73,6 +82,7 @@ describe('runtime updater RPC methods', () => {
   it('passes preferredActiveWorktreeId through status.get when the runtime publishes it', async () => {
     const runtimeWithPreferred = {
       getRuntimeId: () => 'runtime-rpc',
+      machineNameReady: async () => undefined,
       getStatus: vi.fn(() => ({
         runtimeId: 'runtime-rpc',
         liveTabCount: 0,
@@ -80,6 +90,7 @@ describe('runtime updater RPC methods', () => {
         preferredActiveWorktreeId: 'wt-x'
       }))
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the runtime members status.get reads.
     const result = (await handler(STATUS_METHODS, 'status.get')(undefined, {
       runtime: runtimeWithPreferred
     } as never)) as Record<string, unknown>
@@ -90,8 +101,14 @@ describe('runtime updater RPC methods', () => {
   it('omits preferredActiveWorktreeId from status.get when the runtime does not publish it', async () => {
     const runtimeWithoutPreferred = {
       getRuntimeId: () => 'runtime-rpc',
-      getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 0, liveLeafCount: 0 })
+      machineNameReady: async () => undefined,
+      getStatus: () => ({
+        runtimeId: 'runtime-rpc',
+        liveTabCount: 0,
+        liveLeafCount: 0
+      })
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the runtime members status.get reads.
     const result = (await handler(STATUS_METHODS, 'status.get')(undefined, {
       runtime: runtimeWithoutPreferred
     } as never)) as Record<string, unknown>
@@ -105,7 +122,12 @@ describe('runtime updater RPC methods', () => {
       liveLeafCount: 0,
       preferredActiveWorktreeId: 'wt-y'
     }))
-    const runtimeWithDevice = { getRuntimeId: () => 'runtime-rpc', getStatus }
+    const runtimeWithDevice = {
+      getRuntimeId: () => 'runtime-rpc',
+      machineNameReady: async () => undefined,
+      getStatus
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the runtime members status.get reads.
     await handler(STATUS_METHODS, 'status.get')(undefined, {
       runtime: runtimeWithDevice,
       pairedDeviceId: 'paired-device-1'

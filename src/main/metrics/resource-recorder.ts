@@ -28,6 +28,7 @@ type ResolvedOptions = Required<RecorderOptions>
 /** Electron `app` read lazily so unit tests import this module without electron. */
 function readElectronAppVersion(): string | null {
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only app.getVersion is read and it is optional-chained.
     const electron = require('electron') as { app?: { getVersion(): string } }
     return electron.app?.getVersion() ?? null
   } catch {
@@ -257,7 +258,10 @@ function resolveOptions(options?: Partial<RecorderOptions>): ResolvedOptions {
     now: partial.now ?? Date.now,
     execFile: partial.execFile ?? execFileAsync,
     getAppMetrics:
-      partial.getAppMetrics ?? (() => (getAppEnvironment() as AppEnvironment).getAppMetrics()),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: AppEnvironment is installed before metrics collection starts; only getAppMetrics is read.
+      partial.getAppMetrics ??
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: AppEnvironment is installed before metrics collection starts; only getAppMetrics is read.
+      (() => (getAppEnvironment() as AppEnvironment).getAppMetrics()),
     hostMemory: partial.hostMemory ?? collectHostMemory
   }
 }

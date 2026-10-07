@@ -1,3 +1,4 @@
+import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { deriveHostMemoryBudget } from '../startup/host-memory-budget'
 
 const DAEMON_SESSION_SCROLLBACK_ENV_VAR = 'ORCA_DAEMON_SESSION_SCROLLBACK_ROWS'
@@ -12,7 +13,7 @@ export const DAEMON_LOW_MEMORY_SESSION_SCROLLBACK_ROWS = 500
 // Why: keep any override within sane terminal bounds — 0 would lose the visible screen's context and
 // huge values silently reintroduce the unbounded-retention failure this window exists to prevent.
 const MIN_OVERRIDE_ROWS = 100
-const MAX_OVERRIDE_ROWS = 5000
+const MAX_OVERRIDE_ROWS = DAEMON_RESTORE_SCROLLBACK_ROWS
 
 export function resolveDaemonSessionScrollbackRows(
   env: NodeJS.ProcessEnv = process.env,

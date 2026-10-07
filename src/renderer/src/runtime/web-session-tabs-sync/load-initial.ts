@@ -4,7 +4,6 @@ import { useAppStore } from '../../store'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   isSessionTabsListAllResult,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
@@ -55,6 +54,7 @@ export function loadInitialWebSessionTabs({
   // `getStatus` on `runtimeEnvironments`; without this guard, an absent method
   // throws synchronously inside the boot path and aborts the subscribeAll
   // subscription the rest of the renderer relies on.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads an optional method older preload installs may not carry.
   const runtimeEnvironmentsApi = window.api.runtimeEnvironments as {
     getStatus?: (args: {
       selector: string
@@ -74,9 +74,12 @@ export function loadInitialWebSessionTabs({
         if (statusResponse.ok !== true) {
           return
         }
-        const preferred = (
-          statusResponse.result as { preferredActiveWorktreeId?: string | null } | null | undefined
-        )?.preferredActiveWorktreeId
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads an optional field older hosts may not publish.
+        const statusResult = statusResponse.result as
+          | { preferredActiveWorktreeId?: string | null }
+          | null
+          | undefined
+        const preferred = statusResult?.preferredActiveWorktreeId
         const decision = decideAdoptPreferredWorktree(useAppStore.getState(), preferred)
         if (decision.adopt) {
           applyAdoptedPreferredWorktree(useAppStore.setState, decision)
@@ -146,91 +149,78 @@ export function loadInitialWebSessionTabs({
           'bootstrap'
         )
       )
-      const finishRecoveries = result.snapshots.map((snapshot, index) =>
-        beginWebSessionTabsSnapshotRecovery(
-          environmentId,
-          snapshot.worktree,
-          receivedFrames[index]!
-        )
-      )
-      try {
-        const recovered = await Promise.all(
-          result.snapshots.map((snapshot) =>
-            recoverWebSessionTerminalOrphansBeforeApply(
-              useAppStore.getState(),
-              snapshot,
-              environmentId,
-              {
-                expectedEnvironmentPairingRevision,
-                expectedRuntimeId: runtimeId,
-                getCurrentState: () => useAppStore.getState()
-              }
-            )
+      const recovered = await Promise.all(
+        result.snapshots.map((snapshot) =>
+          recoverWebSessionTerminalOrphansBeforeApply(
+            useAppStore.getState(),
+            snapshot,
+            environmentId,
+            {
+              expectedEnvironmentPairingRevision,
+              expectedRuntimeId: runtimeId,
+              getCurrentState: () => useAppStore.getState()
+            }
           )
         )
-        if (
-          !isCurrent() ||
-          getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-        ) {
-          return
-        }
-        const initialInventorySuperseded =
-          (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) >
-          requestReceivedFrame
-        const applicable = recovered.filter(
-          (snapshot, index): snapshot is RuntimeMobileSessionTabsResult =>
-            snapshot !== null &&
-            !initialInventorySuperseded &&
-            shouldApplyRecoveredWebSessionTabsSnapshot(
-              environmentId,
-              snapshot,
-              receivedFrames[index]!,
-              runtimeId
-            )
-        )
-        const decisions = applicable.map((snapshot) =>
-          decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
-        )
-        const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
-        const initialInventoryStillCurrent =
-          latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
-          (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
-            requestReceivedFrame
-        settleHydration = applyWebSessionTabsStorePatch(
-          (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
-          {
-            frames: applicable.map((snapshot, index) => ({
-              environmentId,
-              worktreeId: snapshot.worktree,
-              decision: decisions[index]!,
-              expectedEnvironmentConnectionGeneration,
-              expectedEnvironmentPairingRevision,
-              expectedTrackingGeneration
-            })),
-            ...(initialInventoryStillCurrent
-              ? {
-                  fullInventory: {
-                    environmentId,
-                    authoritative: result.authoritative === true,
-                    expectedEnvironmentConnectionGeneration,
-                    expectedEnvironmentPairingRevision,
-                    expectedTrackingGeneration,
-                    // Why: a workspace the mirror never writes is not part of the
-                    // inventory the environment-wide verdict has to account for.
-                    publishedSnapshotCount: result.snapshots.filter((snapshot) =>
-                      isHostMirroredWorktree(snapshot.worktree)
-                    ).length
-                  }
-                }
-              : {})
-          },
-          applicable
-        )
-      } finally {
-        for (const finishRecovery of finishRecoveries) {
-          finishRecovery()
-        }
+      )
+      if (
+        !isCurrent() ||
+        getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+      ) {
+        return
       }
+      const initialInventorySuperseded =
+        (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) >
+        requestReceivedFrame
+      const applicable = recovered.filter(
+        (snapshot, index): snapshot is RuntimeMobileSessionTabsResult =>
+          snapshot !== null &&
+          !initialInventorySuperseded &&
+          shouldApplyRecoveredWebSessionTabsSnapshot(
+            environmentId,
+            snapshot,
+            receivedFrames[index]!,
+            runtimeId
+          )
+      )
+      const decisions = applicable.map((snapshot) =>
+        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+      )
+      const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
+      const initialInventoryStillCurrent =
+        latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
+        (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
+          requestReceivedFrame
+      settleHydration = applyWebSessionTabsStorePatch(
+        (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
+        {
+          frames: applicable.map((snapshot, index) => ({
+            environmentId,
+            worktreeId: snapshot.worktree,
+            decision: decisions[index]!,
+            expectedEnvironmentConnectionGeneration,
+            expectedEnvironmentPairingRevision,
+            expectedTrackingGeneration
+          })),
+          ...(initialInventoryStillCurrent
+            ? {
+                fullInventory: {
+                  environmentId,
+                  authoritative: result.authoritative === true,
+                  expectedEnvironmentConnectionGeneration,
+                  expectedEnvironmentPairingRevision,
+                  expectedTrackingGeneration,
+                  // Why: a workspace the mirror never writes is not part of the
+                  // inventory the environment-wide verdict has to account for.
+                  publishedSnapshotCount: result.snapshots.filter((snapshot) =>
+                    isHostMirroredWorktree(snapshot.worktree)
+                  ).length
+                }
+              }
+            : {})
+        },
+        applicable
+      )
     })
     .catch((error) => {
       if (isCurrent()) {

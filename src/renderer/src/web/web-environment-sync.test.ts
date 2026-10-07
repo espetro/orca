@@ -45,12 +45,14 @@ function callerFromResponses(
   responses: Record<string, RuntimeRpcResponse<unknown>>
 ): EnvironmentStoreCaller {
   const calls: { method: string; params: unknown }[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
   const caller = (async <TResult>(method: string, params?: unknown) => {
     calls.push({ method, params })
     const response = responses[method]!
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     return response.result as TResult
   }) as EnvironmentStoreCaller
   void calls
@@ -58,6 +60,7 @@ function callerFromResponses(
 }
 
 function callerThrowing(message: string): EnvironmentStoreCaller {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
   return (async () => {
     throw new Error(message)
   }) as EnvironmentStoreCaller
@@ -124,6 +127,7 @@ describe('web environment sync', () => {
     const globals = installBrowserGlobals()
     writeStoredRuntimeEnvironment(globals.storage)
     const calls: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async (method: string) => {
       calls.push(method)
       throw new Error('method_not_found')
@@ -141,12 +145,14 @@ describe('web environment sync', () => {
     const globals = installBrowserGlobals()
     writeStoredRuntimeEnvironment(globals.storage)
     const calls: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async (method: string) => {
       calls.push(method)
       throw new Error('runtime_unavailable')
     }) as EnvironmentStoreCaller)
     await syncEnvironmentsFromServer()
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async (method: string) => {
       calls.push(method)
       return [serverEnvironment('srv-env-1', 'Server runtime')]
@@ -171,8 +177,10 @@ describe('web environment sync', () => {
       })
     )
     const calls: { method: string; params: unknown }[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async (method: string, params?: unknown) => {
       calls.push({ method, params })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
       return [serverEnvironment('srv-1', 'CLI server')] as never
     }) as EnvironmentStoreCaller)
 
@@ -206,7 +214,11 @@ describe('web environment sync', () => {
     await syncEnvironmentsFromServer()
 
     const local = readStoredWebRuntimeEnvironments()
-    const paired = { ...local.environments[0]!, id: 'local-draft', name: 'Browser host' }
+    const paired = {
+      ...local.environments[0]!,
+      id: 'local-draft',
+      name: 'Browser host'
+    }
     globals.storage.setItem(
       'orca.web.runtimeEnvironments.v2',
       JSON.stringify({
@@ -233,6 +245,7 @@ describe('web environment sync', () => {
     const globals = installBrowserGlobals()
     writeStoredRuntimeEnvironment(globals.storage)
     const calls: { method: string; params: unknown }[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async (method: string, params?: unknown) => {
       calls.push({ method, params })
       return method === 'environmentStore.list'
@@ -291,6 +304,7 @@ describe('web environment sync', () => {
       scope: 'runtime'
     })
     const encoded = new URL(code).searchParams.get('code')!
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the base64url fixture is well-formed by construction; the assertion only unwraps the result.
     const json = JSON.parse(
       atob(encoded.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice((encoded.length + 3) % 4))
     ) as { scope?: string }
@@ -305,6 +319,7 @@ describe('web environment sync', () => {
       serverEnvironment('srv-active', 'active'),
       serverEnvironment('srv-gone', 'stale')
     ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((async (method: string, params?: unknown) => {
       if (method === 'environmentStore.list') {
         return serverEnvironments
@@ -314,8 +329,10 @@ describe('web environment sync', () => {
           throw new Error('remove unavailable')
         }
         serverEnvironments = serverEnvironments.filter(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
           (entry) => entry.id !== (params as { selector: string }).selector
         )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
         return { id: (params as { selector: string }).selector }
       }
       throw new Error(`unexpected method: ${String(method)}`)
@@ -384,6 +401,7 @@ describe('web environment sync', () => {
     writeStoredRuntimeEnvironment(globals.storage)
     let resolveProbe!: (value: unknown) => void
     let probePromise!: Promise<unknown>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements the caller signature the sync layer invokes.
     setEnvironmentStoreCaller((() => {
       probePromise = new Promise((resolve) => {
         resolveProbe = resolve

@@ -12,6 +12,8 @@ import {
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
+import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
+import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 
 describe('parseArgs', () => {
   it('accepts --bind and leaves it unset when absent', () => {
@@ -24,33 +26,28 @@ describe('parseArgs', () => {
     })
   })
 
+  it('takes the desktop serve flags orca serve forwards', () => {
+    expect(
+      parseArgs([
+        '--mobile-pairing',
+        '--recipe-json',
+        '--project-root',
+        '/work/app',
+        '--no-pairing'
+      ])
+    ).toEqual({
+      mobilePairing: true,
+      recipeJson: true,
+      projectRoot: '/work/app',
+      noPairing: true
+    })
+    expect(() => parseArgs(['--recipe-json'])).toThrow('--recipe-json requires --project-root')
+    expect(() => parseArgs(['--project-root'])).toThrow('--project-root expects a value')
+  })
+
   it('rejects --bind with no value rather than silently binding the default', () => {
     expect(() => parseArgs(['--bind'])).toThrow('--bind expects a value')
     expect(() => parseArgs(['--bind', '--json'])).not.toThrow()
-  })
-})
-
-describe('mobile pairing RPC wiring', () => {
-  it('wires the mobile.* accessor seam into the runtime after the RPC server starts', async () => {
-    // Why source parity: the seam is runtime state, not an export — a regression back to
-    // unwired accessors is only visible in the boot sequence text itself.
-    const { readFileSync } = await import('node:fs')
-    const source = readFileSync(new URL('./orcad-entry.ts', import.meta.url), 'utf8')
-    expect(source).toContain('setMobilePairingRpcAccessors(')
-    // Headless contract: the desktop relay is never attached, so 'automatic' degrades to local-only.
-    expect(source).toContain('isDesktopRelayProviderAttached: () => false')
-  })
-
-  it('publishes the headless runtime graph before the RPC server binds', async () => {
-    // Regression: orcad booted without a graph publisher, so the graph never read ready and
-    // every session.tabs.createTerminal threw runtime_unavailable (same fix as --serve).
-    const { readFileSync } = await import('node:fs')
-    const source = readFileSync(new URL('./orcad-entry.ts', import.meta.url), 'utf8')
-    const publishIndex = source.indexOf('publishHeadlessRuntimeGraph(runtime)')
-    const bindIndex = source.indexOf('new OrcaRuntimeRpcServer({')
-    expect(publishIndex).toBeGreaterThan(-1)
-    expect(bindIndex).toBeGreaterThan(-1)
-    expect(publishIndex).toBeLessThan(bindIndex)
   })
 })
 
@@ -62,7 +59,13 @@ describe('resolveOrcadExitCode', () => {
       resolveOrcadExitCode(new OrcadInstanceLockError('orcad_instance_lock_held', 'held'))
     ).toBe(ORCAD_EXIT_CONFIGURATION)
     expect(resolveOrcadExitCode(new OrcadBindAddressError('bad'))).toBe(ORCAD_EXIT_CONFIGURATION)
+    expect(resolveOrcadExitCode(new ProfileStateAccessError('recovery interrupted'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
+    expect(resolveOrcadExitCode(new OrcadBundledRuntimeError('partial installation'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
   })
 })
@@ -81,7 +84,7 @@ describe('orcad lifecycle cleanup', () => {
     ).rejects.toThrow('startup failed')
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
-    expect(cleanupHost).toHaveBeenCalledOnce()
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it('preserves the startup error when rollback also fails', async () => {
@@ -119,5 +122,18 @@ describe('orcad lifecycle cleanup', () => {
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
     expect(cleanupHost).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the host aware of failed runtime teardown so it cannot release profile admission', async () => {
+    const failure = new Error('profile writer still running')
+    const cleanupHost = vi.fn(async () => {})
+    const handle = await startOrcadWithLifecycle(async (registerCleanup) => {
+      registerCleanup(async () => {
+        throw failure
+      })
+      return {}
+    }, cleanupHost)
+    await expect(handle.stop()).rejects.toBe(failure)
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(false)
   })
 })

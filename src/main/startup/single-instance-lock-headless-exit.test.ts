@@ -20,7 +20,7 @@ function readSystemdUnitBlocks(doc: string): Map<string, string[]> {
 
 describe('headless lock-loss exit contract', () => {
   const preflightSource = readFileSync(
-    join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+    join(process.cwd(), 'src/main/startup/main-process-instance-admission.ts'),
     'utf8'
   )
   const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')

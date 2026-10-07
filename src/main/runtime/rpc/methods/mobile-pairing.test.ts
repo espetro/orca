@@ -25,7 +25,11 @@ function createAccessors(server: OrcaRuntimeRpcServer): MobilePairingRpcAccessor
       reason: 'mock_unavailable',
       guidance: 'mock'
     }),
-    createPairingOffer: () => ({ available: false as const, reason: 'mock', guidance: 'mock' }),
+    createPairingOffer: () => ({
+      available: false as const,
+      reason: 'mock',
+      guidance: 'mock'
+    }),
     getDeviceRegistry: () => server.getDeviceRegistry(),
     revokeMobileDevice: async () => false,
     isDesktopRelayProviderAttached: () => false,
@@ -54,14 +58,17 @@ async function createRuntimeWithDevice(scope: 'runtime' | 'mobile' = 'runtime') 
   return { userDataPath, runtime, server, device, accessors }
 }
 
-async function dispatch(
+async function dispatch<T extends Record<string, unknown> = Record<string, unknown>>(
   server: OrcaRuntimeRpcServer,
   request: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  const replies: Record<string, unknown>[] = []
+): Promise<T> {
+  const replies: T[] = []
   await server['handleWebSocketMessage'](
     JSON.stringify(request),
-    (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+    (response) => {
+      const parsed: T = JSON.parse(response)
+      replies.push(parsed)
+    },
     () => {}
   )
   if (replies.length === 0) {
@@ -141,9 +148,11 @@ describe('mobile.hostStatus', () => {
   it('reports hostMode: desktop when a live renderer is attached', async () => {
     const ctx = await createRuntimeWithDevice()
     server = ctx.server
-    ;(
-      ctx.runtime as unknown as { getAvailableAuthoritativeWindow: () => unknown }
-    ).getAvailableAuthoritativeWindow = () => ({})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub supplies only the runtime members this method reads.
+    const runtimeWindowStub = ctx.runtime as unknown as {
+      getAvailableAuthoritativeWindow: () => unknown
+    }
+    runtimeWindowStub.getAvailableAuthoritativeWindow = () => ({})
     const reply = await dispatch(ctx.server, {
       id: 'hostStatus_desktop',
       method: 'mobile.hostStatus',
@@ -169,7 +178,10 @@ describe('mobile.hostStatus', () => {
     })
     expect(reply).toMatchObject({
       ok: true,
-      result: expect.objectContaining({ hostMode: 'serve', relayAvailable: false })
+      result: expect.objectContaining({
+        hostMode: 'serve',
+        relayAvailable: false
+      })
     })
   })
 
@@ -237,13 +249,16 @@ describe('mobile.listDevices', () => {
     const runtimeDevice = registry.getOrCreatePendingDevice('Runtime device', 'runtime')
     registry.updateLastSeen(runtimeDevice.deviceId)
 
-    const reply = await dispatch(ctx.server, {
+    const reply = await dispatch<{
+      ok: true
+      result: { devices: { deviceId: string }[] }
+    }>(ctx.server, {
       id: 'listDevices_filter',
       method: 'mobile.listDevices',
       deviceToken: ctx.device.token
     })
     expect(reply).toMatchObject({ ok: true })
-    const result = (reply as { result: { devices: { deviceId: string }[] } }).result
+    const result = reply.result
     const ids = result.devices.map((d) => d.deviceId).sort()
     expect(ids).toEqual([pairedMobile.deviceId].sort())
     expect(ids).not.toContain(pendingMobile.deviceId)
@@ -273,7 +288,10 @@ describe('mobile.revokeDevice', () => {
       deviceToken: ctx.device.token,
       params: { deviceId: 'not-a-real-device' }
     })
-    expect(replyUnknown).toMatchObject({ ok: true, result: { revoked: false } })
+    expect(replyUnknown).toMatchObject({
+      ok: true,
+      result: { revoked: false }
+    })
 
     const replyRuntime = await dispatch(ctx.server, {
       id: 'revoke_runtime',
@@ -281,7 +299,10 @@ describe('mobile.revokeDevice', () => {
       deviceToken: ctx.device.token,
       params: { deviceId: runtimeDevice.deviceId }
     })
-    expect(replyRuntime).toMatchObject({ ok: true, result: { revoked: false } })
+    expect(replyRuntime).toMatchObject({
+      ok: true,
+      result: { revoked: false }
+    })
   })
 })
 
@@ -391,7 +412,9 @@ describe('mobile.listNetworkInterfaces', () => {
     })
     expect(reply).toMatchObject({
       ok: true,
-      result: { interfaces: [{ name: 'en0', address: '192.168.1.10', family: 'IPv4' }] }
+      result: {
+        interfaces: [{ name: 'en0', address: '192.168.1.10', family: 'IPv4' }]
+      }
     })
   })
 })

@@ -1,7 +1,6 @@
-import { lstat } from 'node:fs/promises'
+import { lstat, opendir } from 'node:fs/promises'
 import { compareFileNames } from './file-name-sort'
 import { isFileListingCancellation, throwIfFileListingCancelled } from './file-listing-cancellation'
-import { withDir } from './fs-opendir-scope'
 import { isQuickOpenReadableDirectory } from './quick-open-directory-validation'
 import {
   assertQuickOpenReaddirDeadline,
@@ -29,30 +28,31 @@ export async function readQuickOpenDirectoryEntries(opts: {
     }
 
     const entries: QuickOpenDirectoryEntry[] = []
-    await withDir(
-      opts.absPath,
-      async (directory) => {
+    const directory = await opendir(opts.absPath)
+    try {
+      throwIfFileListingCancelled(opts.signal)
+      assertQuickOpenReaddirDeadline(opts.budget)
+      for await (const entry of directory) {
         throwIfFileListingCancelled(opts.signal)
         assertQuickOpenReaddirDeadline(opts.budget)
-        for await (const entry of directory) {
-          throwIfFileListingCancelled(opts.signal)
-          assertQuickOpenReaddirDeadline(opts.budget)
-          consumeQuickOpenReaddirEntryBudget(opts.budget)
-          consumeQuickOpenReaddirPathBudget(opts.budget, entry.name)
-          entries.push({
-            name: entry.name,
-            kind: entry.isDirectory()
-              ? 'directory'
-              : entry.isFile()
-                ? 'file'
-                : entry.isSymbolicLink()
-                  ? 'symlink'
-                  : 'other'
-          })
-        }
-      },
-      { signal: opts.signal }
-    )
+        consumeQuickOpenReaddirEntryBudget(opts.budget)
+        consumeQuickOpenReaddirPathBudget(opts.budget, entry.name)
+        entries.push({
+          name: entry.name,
+          kind: entry.isDirectory()
+            ? 'directory'
+            : entry.isFile()
+              ? 'file'
+              : entry.isSymbolicLink()
+                ? 'symlink'
+                : 'other'
+        })
+      }
+    } finally {
+      try {
+        await directory.close()
+      } catch {}
+    }
     entries.sort((left, right) => compareFileNames(left.name, right.name))
 
     // Why: discard buffered names if the path became a symlink while its

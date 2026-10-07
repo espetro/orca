@@ -1,27 +1,60 @@
 import { spawn } from 'node:child_process'
 import { availableParallelism, totalmem } from 'node:os'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-// The three projects overlap heavily in src/shared but have no build dependency on
-// each other, so tsc can check them concurrently instead of in a `&&` chain.
-const projects = ['tsconfig.node.json', 'tsconfig.tc.cli.json', 'tsconfig.tc.web.json']
+const BYTES_PER_GIB = 1024 ** 3
+
+// Peak heap per project, read from `tsc --extendedDiagnostics` and rounded up. node and
+// web are the expensive pair: run together they exceed a 16 GB CI runner, and an
+// out-of-memory runner is killed mid-check, so the job reports a lost runner instead of a
+// type error. Admission is therefore by memory, not by core count alone.
+export const TYPECHECK_PROJECTS = [
+  { config: 'tsconfig.node.json', heapGib: 7 },
+  { config: 'tsconfig.tc.web.json', heapGib: 6 },
+  { config: 'tsconfig.tc.cli.json', heapGib: 2 }
+]
+
+// The OS, node itself, and the runner agent need their share; the rest is what tsc may hold.
+export function admissibleHeapGib(totalBytes) {
+  return Math.max(1, (totalBytes / BYTES_PER_GIB) * 0.75)
+}
+
+/**
+ * Heaviest first, admitting another project only while it fits both the memory budget and
+ * the core count. A project larger than the whole budget still runs, alone, so a small
+ * machine makes progress rather than producing an empty batch forever.
+ */
+export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
+  const pending = [...projects].sort((left, right) => right.heapGib - left.heapGib)
+  const batches = []
+
+  while (pending.length > 0) {
+    const batch = []
+    let claimed = 0
+
+    for (let index = 0; index < pending.length;) {
+      const project = pending[index]
+      const admit =
+        batch.length === 0 || (batch.length < parallelism && claimed + project.heapGib <= budgetGib)
+
+      if (admit) {
+        batch.push(project)
+        claimed += project.heapGib
+        pending.splice(index, 1)
+      } else {
+        index += 1
+      }
+    }
+
+    batches.push(batch)
+  }
+
+  return batches
+}
+
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 
-// Worker budget: each tsc process peaks near 4 GB and wants multiple cores. The
-// default auto-sizes from RAM for 32 GB-class dev machines (6 GB/worker + 2 GB OS
-// headroom, bounded by cores/2). Low-RAM machines should export
-// ORCA_TC_WORKERS=1 in their shell profile to avoid swap-thrash.
-function resolveWorkerLimit() {
-  const override = Number(process.env.ORCA_TC_WORKERS ?? '')
-  if (Number.isInteger(override) && override > 0) {
-    return Math.min(override, projects.length)
-  }
-  const memGb = totalmem() / 2 ** 30
-  const memWorkers = Math.max(1, Math.floor((memGb - 2) / 6))
-  const coreWorkers = Math.max(1, availableParallelism() >> 1)
-  return Math.min(memWorkers, coreWorkers, projects.length)
-}
 function checkProject(project) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [tsc, '--noEmit', '-p', `config/${project}`], {
@@ -42,28 +75,32 @@ function checkProject(project) {
   })
 }
 
-async function runWithWorkerLimit(workerLimit) {
-  const queue = [...projects]
+async function runTypecheckProjects() {
+  const batches = planTypecheckBatches(TYPECHECK_PROJECTS, {
+    budgetGib: admissibleHeapGib(totalmem()),
+    parallelism: availableParallelism()
+  })
+
+  // Every batch runs even after one fails, so a single broken project still reports the rest.
   const failures = []
-  await Promise.all(
-    Array.from({ length: workerLimit }, async () => {
-      for (let project = queue.shift(); project; project = queue.shift()) {
-        try {
-          await checkProject(project)
-        } catch (error) {
-          failures.push(error)
-        }
+  for (const batch of batches) {
+    const results = await Promise.allSettled(batch.map((project) => checkProject(project.config)))
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        failures.push(result.reason)
       }
-    })
-  )
+    }
+  }
+
   return failures
 }
 
-const failures = await runWithWorkerLimit(resolveWorkerLimit())
-
-if (failures.length > 0) {
-  for (const failure of failures) {
-    console.error(failure.message ?? failure)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const failures = await runTypecheckProjects()
+  if (failures.length > 0) {
+    for (const failure of failures) {
+      console.error(failure.message ?? failure)
+    }
+    process.exit(1)
   }
-  process.exit(1)
 }

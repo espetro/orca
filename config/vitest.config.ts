@@ -1,115 +1,115 @@
 import { resolve } from 'node:path'
-import { defineConfig } from 'vitest/config'
-import type { ViteUserConfig } from 'vitest/config'
+import { defaultExclude, defineConfig } from 'vitest/config'
+import { UNIT_INCLUDE, UNIT_EXCLUDE } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
+import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
+import { NODE_RUNTIME_INCLUDE } from './scripts/vitest-node-runtime-files.mjs'
+import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
-// Why: default to cpus-1 (win32 keeps a low fixed count) — fine for 32 GB-class dev
-// machines. ORCA_VITEST_WORKERS=<n> (>= 2: Vitest needs a main thread plus a worker)
-// lets low-RAM machines pin a lower count instead of thrashing swap.
-
-// Shared options every project must carry: Vitest 4 projects do NOT inherit
-// root-level test options like setupFiles/timeouts/execArgv.
-const sharedTestOptions = {
-  // Why: upstream shard balancing sequences tests by recorded timings; off by default locally.
-  ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
-    ? { sequence: { sequencer: TimingSequencer } }
-    : {}),
-  // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
-  setupFiles: [
-    resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
-    resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
-    resolve('config/scripts/vitest-host-ports-setup.ts')
-  ],
-  // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
-  // the Vitest 5s defaults are too tight for the slowest integration cases.
-  hookTimeout: 60_000,
-  testTimeout: 30_000
-} satisfies ViteUserConfig['test']
-
-// Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
-// Why --expose-gc: retention tests need a deterministic collection point to measure what a queue really holds.
-// Not passed to the threads pool: worker_threads cannot honor --expose-gc and the workers die at startup.
-const forkedPoolExecArgv = { execArgv: ['--no-experimental-webstorage', '--expose-gc'] }
-
-// Why: Vitest 4 projects build independent Vite configs and do not inherit root resolve.alias.
-const sharedResolve = {
-  alias: {
-    '@renderer': resolve('src/renderer/src'),
-    '@': resolve('src/renderer/src')
-  }
-}
-
-export default defineConfig({
-  define: {
-    ORCA_FEATURE_WALL_ENABLED: 'true'
-  },
+const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+const vitestWorkerOverride = Number(process.env.ORCA_VITEST_WORKERS ?? '')
+const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
+const transforms = {
+  define: { ORCA_FEATURE_WALL_ENABLED: 'true' },
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src')
+      '@': resolve('src/renderer/src'),
+      'fs/promises': 'node:fs/promises',
+      fs: 'node:fs',
+      os: 'node:os'
     }
-  },
+  }
+}
+const testOptions = {
+  environment: 'node',
+  clearMocks: false,
+  fsModuleCache: true,
+  env: { ORCA_VITEST_RUNTIME: 'node' },
+  server: { deps: { inline: ['zod'] } },
+  // Node's storage globals and V8 retention checks require the existing child flags.
+  execArgv: ['--no-experimental-webstorage', '--expose-gc'],
+  setupFiles: [
+    resolve('config/scripts/vitest-real-agent-home-write-guard.ts'),
+    resolve('config/scripts/vitest-bun-node-builtins.ts'),
+    resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
+    resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
+    resolve('config/scripts/vitest-host-ports-setup.ts'),
+    resolve('config/scripts/vitest-caller-identity-env-setup.ts')
+  ],
+  include: UNIT_INCLUDE,
+  exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
+  hookTimeout: 60_000,
+  testTimeout: 30_000,
+  // CI-only: one retry keeps a flaky test from failing a required shard; local
+  // runs stay retry-free so flakiness surfaces for devs. Retried-but-passed
+  // tests are printed by the default reporter and scraped into the job summary.
+  retry: process.env.CI ? 1 : 0
+}
+const nodeProject = {
+  extends: false,
+  ...transforms,
   test: {
-    ...sharedTestOptions,
-    // Why: win32 keeps a low fixed count; other platforms use Vitest's default (cpus-1),
-    // right for 32 GB-class dev machines. ORCA_VITEST_WORKERS=<n> (>= 2) pins lower on low-RAM machines.
-    ...(process.platform === 'win32' ? { minWorkers: 4, maxWorkers: 4 } : {}),
-    projects: [
-      {
-        resolve: sharedResolve,
-        test: {
-          ...sharedTestOptions,
-          ...forkedPoolExecArgv,
-          name: 'fast',
-          environment: 'node',
-          // Why: forks, not threads — tests here call process.umask(), which
-          // worker_threads cannot set, and pass per-process env to git/node children.
-          pool: 'forks',
-          isolate: true,
-          include: [
-            'src/shared/**/*.test.{ts,tsx}',
-            'src/relay/**/*.test.{ts,tsx}',
-            'src/cli/**/*.test.{ts,tsx}',
-            'config/scripts/**/*.test.ts',
-            'config/scripts/**/*.test.mjs',
-            'tests/tools/**/*.test.mjs'
-          ]
+    ...testOptions,
+    name: process.versions.bun ? 'node-runtime' : 'node',
+    env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
+    include: process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE,
+    exclude: [...testOptions.exclude, measurementFile],
+    sequence: { groupOrder: 1 },
+    ...(process.versions.bun
+      ? { pool: 'node-runtime', poolRunner: nodeRuntimePool }
+      : { pool: 'forks' })
+  }
+}
+const projects = [
+  ...(process.versions.bun
+    ? [
+        {
+          extends: false,
+          ...transforms,
+          test: {
+            ...testOptions,
+            name: 'bun',
+            env: { ORCA_VITEST_RUNTIME: 'bun' },
+            pool: 'forks',
+            exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE, measurementFile],
+            sequence: { groupOrder: 1 }
+          }
         }
-      },
-      {
-        resolve: sharedResolve,
-        test: {
-          ...sharedTestOptions,
-          ...forkedPoolExecArgv,
-          name: 'main',
-          environment: 'node',
-          // Why: main-process tests touch real processes/fs state; keep fork isolation.
-          pool: 'forks',
-          isolate: true,
-          include: ['src/main/**/*.test.{ts,tsx}']
+      ]
+    : []),
+  nodeProject,
+  // Keep the event-loop measurement free of other suites without weakening its limits.
+  {
+    ...nodeProject,
+    test: {
+      ...nodeProject.test,
+      name: 'node-measurement',
+      include: [measurementFile],
+      exclude: testOptions.exclude,
+      maxWorkers: 1,
+      sequence: { groupOrder: 2 }
+    }
+  }
+]
+
+export default defineConfig({
+  ...transforms,
+  test: {
+    ...testOptions,
+    sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
+    ...(balancedShards
+      ? {
+          reporters: ['default', resolve('config/scripts/ci-unit-timing-reporter.mjs')]
         }
-      },
-      {
-        resolve: sharedResolve,
-        test: {
-          ...sharedTestOptions,
-          ...forkedPoolExecArgv,
-          name: 'renderer',
-          // Per-file @vitest-environment happy-dom docblocks still apply within this node-default project.
-          environment: 'node',
-          include: ['src/renderer/**/*.test.{ts,tsx}', 'src/preload/**/*.test.{ts,tsx}']
-        }
-      },
-      {
-        resolve: sharedResolve,
-        test: {
-          ...sharedTestOptions,
-          ...forkedPoolExecArgv,
-          name: 'e2e-unit',
-          environment: 'node',
-          include: ['tests/e2e/**/*.unit.test.ts']
-        }
-      }
-    ]
+      : {}),
+    projects,
+    // Why: ORCA_VITEST_WORKERS=<n> pins the pool for machines where the default
+    // oversubscribes or starves other work; win32 keeps its low fixed count.
+    ...(Number.isInteger(vitestWorkerOverride) && vitestWorkerOverride >= 2
+      ? { minWorkers: vitestWorkerOverride, maxWorkers: vitestWorkerOverride }
+      : process.platform === 'win32'
+        ? { maxWorkers: 4 }
+        : {})
   }
 })

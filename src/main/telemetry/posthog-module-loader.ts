@@ -22,6 +22,7 @@ const requireFromMain = createRequire(__filename)
 let cached: PostHogModule | null = null
 
 export function loadPostHogModule(): PostHogModule {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the posthog-node entrypoint shape is fixed by the package contract.
   cached ??= requireFromMain('posthog-node') as PostHogModule
   return cached
 }

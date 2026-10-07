@@ -103,10 +103,7 @@ beforeEach(() => {
   }))
   projectsList.mockResolvedValue([localProject])
   listHostSetups.mockResolvedValue([setup(SHARED_PROJECT_ID, 'local-repo', '/local/orca')])
-  runtimeEnvironmentsList.mockResolvedValue({
-    environments: [{ id: 'env-1', name: 'awin' }],
-    activeEnvironmentId: null
-  })
+  runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1', name: 'awin' }])
   runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => ({
     id: `rpc-${args.method}`,
     ok: true,
