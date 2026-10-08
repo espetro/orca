@@ -22,6 +22,7 @@ import {
 } from './orcad-app-paths'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import { buildOrcadMobilePairingAccessors } from './orcad-mobile-pairing-accessors'
+import { resolveOrcadVersion } from './orcad-release-version'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
@@ -65,7 +66,7 @@ function createNodeAppEnvironment(): AppEnvironment {
   return {
     getPath: resolveOrcadPath,
     getAppPath: () => resolveOrcadInstallRoot(),
-    getVersion: () => process.env.ORCA_VERSION ?? '0.0.0-orcad',
+    getVersion: resolveOrcadVersion,
     // Why still true: consumers read this as "production build, not a dev checkout" —
     // it gates HTTPS-only skill downloads, the real CLI command name, and shell-PATH
     // hydration. Answering false to satisfy a path resolver would relax a security
@@ -146,7 +147,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
       }
     }
   )
-  const version = process.env.ORCA_VERSION ?? '0.0.0-orcad'
+  const version = resolveOrcadVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
 }
 

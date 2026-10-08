@@ -14,6 +14,7 @@ import {
 } from './orcad-idle-stop-record'
 import type { OrcadShutdownTrigger } from './orcad-lifecycle'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
+import { resolveOrcadVersion } from './orcad-release-version'
 
 let requestIdleShutdown: OrcadShutdownTrigger | null = null
 
@@ -47,7 +48,7 @@ export function beginOrcadIdleExit(userDataPath: string): {
   if (previousIdleStop) {
     console.error(`[orcad] the previous run stopped idle at ${previousIdleStop.stoppedAt}`)
   }
-  const version = process.env.ORCA_VERSION ?? '0.0.0-orcad'
+  const version = resolveOrcadVersion()
   return {
     previousIdleStop,
     start: (ports) => startOrcadManagedIdleExit({ ...ports, config, userDataPath, version })

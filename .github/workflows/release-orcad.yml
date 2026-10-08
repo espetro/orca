@@ -64,6 +64,9 @@ jobs:
           pnpm run build:cli
 
       - name: Assemble release tree
+        env:
+          # Baked into orcad-release.json so a bare `node orcad.js` reports the tag.
+          ORCAD_RELEASE_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version_tag }}
         run: node config/scripts/assemble-orcad-release.mjs --platform ${{ matrix.platform }}
 
       - name: Smoke boot orcad

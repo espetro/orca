@@ -5,7 +5,15 @@
 //
 // Usage: node config/scripts/assemble-orcad-release.mjs --platform <linux-x64|darwin-arm64>
 
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -63,6 +71,14 @@ if (!existsSync(runtimesOut)) {
 copyDir(orcadOut, join(outDir, 'orcad'))
 copyDir(webOut, join(outDir, 'web'))
 copyDir(runtimesOut, join(outDir, 'runtimes'))
+
+// A bare `node orcad.js` has no launcher to export ORCA_VERSION, so the tag is
+// baked in beside the entry — resolveOrcadVersion() reads it at boot.
+const releaseVersion = (process.env.ORCAD_RELEASE_VERSION ?? 'dev').replace(/^orcad-v|^v/, '')
+writeFileSync(
+  join(outDir, 'orcad', 'orcad-release.json'),
+  JSON.stringify({ version: releaseVersion }) + '\n'
+)
 
 const packages = [
   'node-pty',
