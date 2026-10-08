@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { extname, isAbsolute, posix, relative, resolve } from 'node:path'
 
-const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
+const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html', '/favicon.svg', '/favicon.png'])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
 const STATIC_WEB_CONTENT_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -133,8 +133,10 @@ function parseStaticPathname(rawUrl: string | undefined): string | null {
 }
 
 function mapProxyPrefixedStaticPathname(pathname: string): string {
-  if (pathname === '/web-index.html' || pathname.endsWith('/web-index.html')) {
-    return '/web-index.html'
+  for (const allowed of STATIC_WEB_ALLOWED_PATHS) {
+    if (pathname === allowed || pathname.endsWith(allowed)) {
+      return allowed
+    }
   }
   if (pathname === '/web/index.html' || pathname.endsWith('/web/index.html')) {
     return '/web-index.html'
