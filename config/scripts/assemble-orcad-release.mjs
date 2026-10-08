@@ -77,7 +77,7 @@ copyDir(runtimesOut, join(outDir, 'runtimes'))
 const releaseVersion = (process.env.ORCAD_RELEASE_VERSION ?? 'dev').replace(/^orcad-v|^v/, '')
 writeFileSync(
   join(outDir, 'orcad', 'orcad-release.json'),
-  JSON.stringify({ version: releaseVersion }) + '\n'
+  `${JSON.stringify({ version: releaseVersion })}\n`
 )
 
 const packages = [
