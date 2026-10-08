@@ -4,6 +4,7 @@ import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
 } from '../../../shared/remote-runtime-client-error-classification'
+import { healUnreachableActiveEnvironment } from './startup-unreachable-host-heal'
 import { useAppStore } from '../store'
 import { getStartupErrorFallbackUI } from '../lib/startup-ui-hydration'
 import {
@@ -155,4 +156,5 @@ function recoverFromUnreachableStartup(args: {
     }
   })
   abortSignal.addEventListener('abort', unsubscribe, { once: true })
+  void healUnreachableActiveEnvironment({ isCancelled, abortSignal }).catch(() => {})
 }
